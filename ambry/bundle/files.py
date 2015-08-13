@@ -13,9 +13,9 @@ This module connects the filesystem to the File records in a dataset. A parallel
 ambry.orm.files, connects between the File records and the other types of records in a Dataset
 
 Build source file data is stored in File records in msgpack format. Files that are essentially spreadsheets,
-such as schema, column_map and sources, are stored as a list of lists, one list per row.YAML files are stored as dicts,
-and python files are stored as strings. Msgpack format is used because it is fast and small, which is important for
-larget schema files, such as those in the US Census.
+such as schema, column_map and sources, are stored as a list of lists, one list per row.YAML files
+are stored as dicts, and python files are stored as strings. Msgpack format is used because it is
+fast and small, which is important for largest schema files, such as those in the US Census.
 
 """
 
@@ -28,13 +28,13 @@ import sys
 import time
 import yaml
 
+from six import string_types, iteritems
+
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import File
-from ..util import Constant, get_logger
+from ambry.util import Constant, get_logger
 
-import logging
 logger = get_logger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class FileTypeError(Exception):
@@ -57,7 +57,7 @@ class BuildSourceFile(object):
         :return:
         """
 
-        assert not isinstance(filesystem, basestring)  # Old Datatypes are leaking through.
+        assert not isinstance(filesystem, string_types)  # Old Datatypes are leaking through.
 
         self._bundle = bundle
         self._dataset = dataset
@@ -114,7 +114,6 @@ class BuildSourceFile(object):
 
         with self._fs.open(fn_path) as f:
             return md5_for_file(f)
-
 
     def sync_dir(self):
         """ Report on which direction a synchronization should be done.
@@ -256,8 +255,8 @@ class DictBuildSourceFile(BuildSourceFile):
         fn_path = file_name(self._file_const)
 
         if fr.contents:
-            # FIXME: f is unused?
             with self._fs.open(fn_path, 'wb') as f:
+                # FIXME: f is unused?
                 yaml.dump(fr.unpacked_contents, default_flow_style=False)
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
@@ -386,7 +385,7 @@ class PythonSourceFile(StringSourceFile):
             from ambry.bundle import Bundle
             return Bundle
 
-        exec bf.contents in module.__dict__
+        exec(bf.contents, module.__dict__)
 
         #print self._file_const, bundle.__dict__.keys()
         #print bf.contents
@@ -398,7 +397,6 @@ class PythonSourceFile(StringSourceFile):
 
         try:
             import ambry.build
-
             module = sys.modules['ambry.build']
         except ImportError:
             module = imp.new_module('ambry.build')
@@ -409,12 +407,13 @@ class PythonSourceFile(StringSourceFile):
         if not bf.has_contents:
             return
 
-        exec bf.contents in module.__dict__
+        exec(bf.contents, module.__dict__)
 
-        #print self._file_const, bundle.__dict__.keys()
-        #print bf.contents
+        # print self._file_const, bundle.__dict__.keys()
+        # print bf.contents
 
         return module
+
 
 class SourcesFile(RowBuildSourceFile):
 
@@ -433,11 +432,14 @@ class SourcesFile(RowBuildSourceFile):
         if not contents:
             return
 
-        # Zip transposes an array when in the form of a list of lists, so this transposes so each row starts with the heading
-        # and the rest of the row are the values for that row. The bool and filter return false when none of the values
+        # Zip transposes an array when in the form of a list of lists, so this transposes so
+        # each row starts with the heading and the rest of the row are the values
+        # for that row. The bool and filter return false when none of the values
         # are non-empty. Then zip again to transpose to original form.
 
-        non_empty_rows = zip(*[ row for row in zip(*contents) if bool(filter(bool,row[1:])) ])
+        # TODO: next row is so complicated. Try to refactor.
+        # FIXME: Needs smart 2to3 conversion. Auto conversion breaks tests.
+        non_empty_rows = zip(*[row for row in zip(*contents) if bool(filter(bool, row[1:]))])
 
         s = self._dataset._database.session
 
@@ -446,10 +448,10 @@ class SourcesFile(RowBuildSourceFile):
             if i == 0:
                 header = row
             else:
-                d = dict(zip(header, row))
+                d = dict(list(zip(header, row)))
 
                 if 'widths' in d:
-                    del d['widths'] # Obsolete column in old spreadsheets.
+                    del d['widths']  # Obsolete column in old spreadsheets.
 
                 if 'table' in d:
                     d['dest_table_name'] = d['table']
@@ -483,10 +485,11 @@ class SourcesFile(RowBuildSourceFile):
         rows = sorted([s.row for s in self._dataset.sources], key=sorter)
 
         if rows:
-            rows = [rows[0].keys()] + [r.values() for r in rows]
+            rows = [list(rows[0].keys())] + [list(r.values()) for r in rows]
 
             # Transpose trick to remove empty columns
-            rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
+            # FIXME: needs smart 2to3 conversion. Auto conversion breaks tests.
+            rows = zip(*[row for row in zip(*rows) if bool(filter(bool, row[1:]))])
         else:
             # No contents, so use the default file
             import csv
@@ -511,7 +514,7 @@ class SchemaFile(RowBuildSourceFile):
                 return None
             elif isinstance(i, int):
                 return i
-            elif isinstance(i, basestring):
+            elif isinstance(i, string_types):
                 if len(i) == 0:
                     return None
 
@@ -524,16 +527,12 @@ class SchemaFile(RowBuildSourceFile):
         if not contents:
             return
 
-        t = None
-
-        new_table = True
-        last_table = None
         line_no = 1  # Accounts for file header. Data starts on line 2
 
         errors = []
         warnings = []
 
-        extant_tables = {t.name:t for t in self._dataset.tables}
+        extant_tables = {t.name: t for t in self._dataset.tables}
 
         def get_or_new_table(row):
 
@@ -541,8 +540,9 @@ class SchemaFile(RowBuildSourceFile):
 
             if table_name not in extant_tables:
 
-                t = self._dataset.new_table(table_name,
-                                            description = row.get('description') if row['column'] == 'id' else '')
+                t = self._dataset.new_table(
+                    table_name,
+                    description=row.get('description') if row['column'] == 'id' else '')
 
                 extant_tables[table_name] = t
 
@@ -557,34 +557,31 @@ class SchemaFile(RowBuildSourceFile):
                 continue
 
             if not row.get('column', False):
-                raise ConfigurationError("Row error: no column on line {}".format(line_no))
+                raise ConfigurationError('Row error: no column on line {}'.format(line_no))
             if not row.get('table', False):
-                raise ConfigurationError("Row error: no table on line {}".format(line_no))
+                raise ConfigurationError('Row error: no table on line {}'.format(line_no))
             if not row.get('datatype', False):
-                raise ConfigurationError("Row error: no type on line {}".format(line_no))
+                raise ConfigurationError('Row error: no type on line {}'.format(line_no))
 
             table = get_or_new_table(row)
 
-            data = {k.replace('d_', '', 1): v for k, v in row.items() if k and k.startswith('d_')}
+            data = {k.replace('d_', '', 1): v for k, v in list(row.items()) if k and k.startswith('d_')}
 
-            col = table.add_column(row['column'],
-                               fk_vid=row['is_fk'] if row.get('is_fk', False) else None,
-                               description=(row.get('description', '') or  '' ).strip().encode('utf-8'),
-                               datatype=row['datatype'].strip().lower(),
-                               proto_vid=row.get('proto_vid'),
-                               derivedfrom=row.get('derivedfrom'),
-                               size=_clean_int(row.get('size', None)),
-                               width=_clean_int(row.get('width', None)),
-                               data=data,
-                               keywords=row.get('keywords'),
-                               measure=row.get('measure'),
-                               caster=row.get('caster'),
-                               units=row.get('units', None),
-                               universe=row.get('universe'))
-
-
-
-
+            table.add_column(
+                row['column'],
+                fk_vid=row['is_fk'] if row.get('is_fk', False) else None,
+                description=(row.get('description', '') or '').strip().encode('utf-8'),
+                datatype=row['datatype'].strip().lower(),
+                proto_vid=row.get('proto_vid'),
+                derivedfrom=row.get('derivedfrom'),
+                size=_clean_int(row.get('size', None)),
+                width=_clean_int(row.get('width', None)),
+                data=data,
+                keywords=row.get('keywords'),
+                measure=row.get('measure'),
+                caster=row.get('caster'),
+                units=row.get('units', None),
+                universe=row.get('universe'))
 
         return warnings, errors
 
@@ -592,23 +589,22 @@ class SchemaFile(RowBuildSourceFile):
 
         rows = []
 
-        last_table = None
         for table in self._dataset.tables:
             for col in table.columns:
                 row = col.row
 
                 if not rows:
-                    rows.append( list(e if e != 'name' else 'column' for e in row.keys() ))
+                    rows.append([e if e != 'name' else 'column' for e in list(row.keys())])
 
-                rows.append(row.values())
+                rows.append(list(row.values()))
 
-            rows.append([None for e in rows[0]]) # Transpose trick fails if rows not all same size
+            rows.append([None for e in rows[0]])  # Transpose trick fails if rows not all same size
 
         # Transpose trick to remove empty columns
         if rows:
             rows_before_transpose = len(rows)
-            rows = zip(*[row for row in zip(*rows) if bool(filter(bool, row[1:]))])
-
+            # FIXME: Needs smart 2to3 conversion. Auto-conversion breaks tests.
+            rows = zip(*[r for r in zip(*rows) if bool(filter(bool, r[1:]))])
             assert rows_before_transpose == len(rows)  # The transpose trick removes all of the rows if anything goes wrong
 
         else:
@@ -660,7 +656,7 @@ class SourceSchemaFile(RowBuildSourceFile):
                 rows.append(column.row)
 
         if rows:
-            rows = [rows[0].keys()] + [r.values() for r in rows]
+            rows = [list(rows[0].keys())] + [list(r.values()) for r in rows]
 
         else:
             # No contents, so use the default file
@@ -673,7 +669,7 @@ class SourceSchemaFile(RowBuildSourceFile):
         self._dataset.commit()
 
 file_info_map = {
-    File.BSFILE.BUILD : (File.path_map[File.BSFILE.BUILD],PythonSourceFile),
+    File.BSFILE.BUILD: (File.path_map[File.BSFILE.BUILD], PythonSourceFile),
     File.BSFILE.LIB: (File.path_map[File.BSFILE.LIB], PythonSourceFile),
     File.BSFILE.DOC: (File.path_map[File.BSFILE.DOC], StringSourceFile),
     File.BSFILE.META: (File.path_map[File.BSFILE.META], MetadataFile),
@@ -708,7 +704,7 @@ def file_default(const):
 class BuildSourceFileAccessor(object):
 
     def __init__(self, bundle, dataset, filesystem=None):
-        assert not isinstance(filesystem, basestring)  # Bundle fs changed from FS to URL; catch use of old values
+        assert not isinstance(filesystem, string_types)  # Bundle fs changed from FS to URL; catch use of old values
         self._bundle = bundle
         self._dataset = dataset
         self._fs = filesystem
@@ -733,7 +729,7 @@ class BuildSourceFileAccessor(object):
         """Create objects from files, or merge the files into the objects. """
         from ambry.orm.file import File
 
-        for file_const, (file_name, clz) in file_info_map.items():
+        for file_const, (file_name, clz) in iteritems(file_info_map):
             f = self.file(file_const)
 
             pref = preference if preference else f.record.preference
@@ -750,7 +746,7 @@ class BuildSourceFileAccessor(object):
         """Create file records from objects. """
         from ambry.orm.file import File
 
-        for file_const, (file_name, clz) in file_info_map.items():
+        for file_const, (file_name, clz) in iteritems(file_info_map):
             f = self.file(file_const)
 
             pref = preference if preference else f.record.preference
@@ -763,7 +759,7 @@ class BuildSourceFileAccessor(object):
 
         syncs = []
 
-        for file_const, (file_name, clz) in file_info_map.items():
+        for file_const, (file_name, clz) in iteritems(file_info_map):
 
             f = self.file(file_const)
 
@@ -789,9 +785,8 @@ class BuildSourceFileAccessor(object):
 
             syncs.append(sync_info)
 
-
         return syncs
 
     def sync_dirs(self):
         return [(file_const, self.file(file_const).sync_dir())
-                for file_const, (file_name, clz) in file_info_map.items()]
+                for file_const, (file_name, clz) in iteritems(file_info_map)]

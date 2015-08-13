@@ -9,6 +9,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 from sqlalchemy.orm.exc import NoResultFound
 
+from six import iteritems
+
 from ..identity import PartitionIdentity, PartitionNameQuery, NameQuery  # , PartitionName
 
 
@@ -64,34 +66,32 @@ class Partitions(object):
         elif isinstance(id_, PartialPartitionName):
             id_ = id_.promote(self.bundle.identity.name)
 
-        s = self.bundle.dataset._database.session
-
-        q = (s.query(OrmPartition).filter(OrmPartition.d_vid == self.bundle.dataset.vid)
-            .filter(or_(
-                 OrmPartition.id == str(id_).encode('ascii'),
-                 OrmPartition.vid == str(id_).encode('ascii')
-             )))
+        session = self.bundle.dataset._database.session
+        q = session\
+            .query(OrmPartition)\
+            .filter(OrmPartition.d_vid == self.bundle.dataset.vid)\
+            .filter(or_(OrmPartition.id == str(id_).encode('ascii'),
+                        OrmPartition.vid == str(id_).encode('ascii')))
 
         try:
             orm_partition = q.one()
-
-            return  PartitionProxy(self.bundle,orm_partition)
+            return PartitionProxy(self.bundle, orm_partition)
         except NoResultFound:
             orm_partition = None
 
         if not orm_partition:
-            q = (s.query(OrmPartition).filter(OrmPartition.d_vid == self.bundle.dataset.vid)
-                 .filter(OrmPartition.name == str(id_).encode('ascii')))
+            q = session\
+                .query(OrmPartition)\
+                .filter(OrmPartition.d_vid == self.bundle.dataset.vid)\
+                .filter(OrmPartition.name == str(id_).encode('ascii'))
 
             try:
                 orm_partition = q.one()
-
-                return  PartitionProxy(self.bundle,orm_partition)
+                return PartitionProxy(self.bundle, orm_partition)
             except NoResultFound:
                 orm_partition = None
 
-        return orm_partition # Always None
-
+        return orm_partition  # Always None
 
     def _find_orm(self, pnq):
         """Return a Partition object from the database based on a PartitionId.
@@ -142,7 +142,7 @@ class Partitions(object):
 
                     if not tr:
                         raise ValueError("Didn't find table named {} in {} bundle path = {}".format(
-                                pnq.table, pnq.vname, self.bundle.database.path))
+                            pnq.table, pnq.vname, self.bundle.database.path))
 
                     q = q.filter(OrmPartition.t_vid == tr.vid)
 
@@ -165,29 +165,28 @@ class Partitions(object):
 
         return self
 
-    def new_partition(self, name = None, data=None, **kwargs):
+    def new_partition(self, name=None, data=None, **kwargs):
 
         from ambry.identity import PartialPartitionName
 
         if name:
-            kwargs.update( (k,str(v)) for k,v in name.dict.items()
-                           if k in [ e[0] for e in PartialPartitionName._name_parts] )
+            name_parts = [e[0] for e in PartialPartitionName._name_parts]
+            kwargs.update((k, str(v)) for k, v in iteritems(name.dict)
+                          if k in name_parts)
 
-        p = self.bundle.dataset.new_partition(data=data,**kwargs)
+        p = self.bundle.dataset.new_partition(data=data, **kwargs)
 
         return PartitionProxy(self.bundle, p)
 
-    def get_or_new_partition(self,pname, data=None, **kwargs):
+    def get_or_new_partition(self, pname, data=None, **kwargs):
 
         p = self.bundle.partitions.partition(pname)
         if not p:
-            from ..orm.partition import Partition
-            p = self.bundle.partitions.new_partition(pname, data = data, **kwargs)
+            p = self.bundle.partitions.new_partition(pname, data=data, **kwargs)
 
         assert p.d_vid == self.bundle.dataset.vid
 
         return p
-
 
     def __iter__(self):
         """Iterate over the type 'p' partitions, ignoring the 's' type. """
@@ -196,7 +195,7 @@ class Partitions(object):
             if p.type == Partition.TYPE.UNION:
                 yield PartitionProxy(self.bundle, p)
 
-    def new_db_from_pandas(self,frame,table=None,data=None,load=True, **kwargs):
+    def new_db_from_pandas(self, frame, table=None, data=None, load=True, **kwargs):
         """Create a new db partition from a pandas data frame.
 
         If the table does not exist, it will be created
@@ -216,13 +215,14 @@ class Partitions(object):
             else:
                 id_name = 'id'
 
-            sch.add_column(t,id_name,
-                datatype=Column.convert_numpy_type(frame.index.dtype),is_primary_key=True)
+            sch.add_column(t, id_name,
+                           datatype=Column.convert_numpy_type(frame.index.dtype),
+                           is_primary_key=True)
 
             for name, type_ in zip([row for row in frame.columns],
                                    [row for row in frame.convert_objects(convert_numeric=True,
                                                                          convert_dates=True).dtypes]):
-                sch.add_column(t,name,datatype=Column.convert_numpy_type(type_))
+                sch.add_column(t, name, datatype=Column.convert_numpy_type(type_))
                 sch.write_schema()
 
         p = self.new_partition(table=table, data=data, **kwargs)
@@ -258,14 +258,13 @@ class PartitionProxy(Proxy):
     @property
     def datafile(self):
 
-        #if self.type != self.TYPE.SEGMENT:
-        #    from ambry.dbexceptions import BundleError
-        #    raise BundleError("Only segment partitions can have datafiles")
+        # if self.type != self.TYPE.SEGMENT:
+        #     from ambry.dbexceptions import BundleError
+        #     raise BundleError("Only segment partitions can have datafiles")
 
         if self._datafile is None:
             from ambry.etl.partition import new_partition_data_file
-
-            self._datafile =  new_partition_data_file(self._bundle.build_fs, self.cache_key)
+            self._datafile = new_partition_data_file(self._bundle.build_fs, self.cache_key)
 
         return self._datafile
 
@@ -278,7 +277,7 @@ class PartitionProxy(Proxy):
 
         if self._bundle.build_fs.exists(base_location):
             if self._bundle.build_fs.hashsyspath(base_location):
-                return  self._bundle.build_fs.getsyspath(base_location)
+                return self._bundle.build_fs.getsyspath(base_location)
 
         return base_location
 
@@ -312,21 +311,23 @@ class PartitionProxy(Proxy):
 
             itr = iter(reader)
 
-            header = itr.next()
+            header = next(itr)
 
             # Check that header is sensible.
             for i, (a, b) in enumerate(zip(header, (c.name for c in self.table.columns))):
                 if a != b:
-                    raise Exception(
-                        "For {} at position {}, partition header {} is different from column name {}. {}\n{}"
-                            .format(self.identity.name, i, a, b, list(header), [c.name for c in self.table.columns] ))
+                    exc_msg = 'For {} at position {}, partition header {} is different '\
+                        'from column name {}. {}\n{}'\
+                        .format(self.identity.name, i, a, b, list(header),
+                                [c.name for c in self.table.columns])
+                    raise Exception(exc_msg)
 
             if not as_dict:
                 yield header
 
             if as_dict:
                 for row in itr:
-                    yield dict(zip(header, row))
+                    yield dict(list(zip(header, row)))
             else:
                 for row in itr:
                     yield row
@@ -336,6 +337,6 @@ class PartitionProxy(Proxy):
         itr = iter(generator())
 
         if skip_header:
-            itr.next()
+            next(itr)
 
         return itr
