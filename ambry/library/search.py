@@ -35,6 +35,7 @@ class Search(object):
                 backend_name = 'whoosh'
 
             backend = BACKENDS[backend_name](library)
+
         self.backend = backend
         self.library = library
 
@@ -48,6 +49,22 @@ class Search(object):
     def index_partition(self, partition, force=False):
         """ Adds given partition to the index. """
         self.backend.partition_index.index_one(partition, force=force)
+
+    def index_bundle(self, bundle, force = False):
+        """
+        Indexes a bundle/dataset and all of its partitions
+        :param bundle: A bundle or dataset object
+        :param force: If true, index the document even if it already exists
+        :return:
+        """
+        from ambry.orm.dataset import Dataset
+
+        dataset = bundle if isinstance(bundle, Dataset) else bundle.dataset
+
+        self.index_dataset(dataset, force)
+
+        for partition in dataset.partitions:
+            self.index_partition(partition, force)
 
     def index_library_datasets(self, tick_f=None):
         """ Indexes all datasets of the library.
@@ -80,6 +97,19 @@ class Search(object):
     def search_datasets(self, search_phrase, limit=None):
         """ Search for datasets. """
         return self.backend.dataset_index.search(search_phrase, limit=limit)
+
+    def list_documents(self, limit = None):
+        """
+        Return a list of the documents
+        :param limit:
+        :return:
+        """
+        from itertools import chain
+
+        return chain(self.backend.dataset_index.list_documents(limit=limit),
+               self.backend.partition_index.list_documents(limit=limit),
+               self.backend.identifier_index.list_documents(limit=limit) )
+
 
     def get_parsed_query(self):
         """ Returns string with last query parsed. Assuming called after search_datasets."""

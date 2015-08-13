@@ -601,7 +601,6 @@ class Test(TestBase):
             augment=["Add({'a': lambda e,r,v: 1 }) "],
         )
 
-
         with b.source_fs.open('bundle.yaml', 'wb') as f:
             yaml.dump(config, f)
 
@@ -631,6 +630,60 @@ class Test(TestBase):
             if i > 5:
                 break
 
+    def test_pipe_config_2(self):
+        """Test that the = and - location specifiers work """
+        b = self.setup_bundle('simple')
+        l = b._library
+
+        import yaml
+
+        b.sync_in()
+
+        # Re-write the metadata to include a pipeline
+        with b.source_fs.open('bundle.yaml') as f:
+            config = yaml.load(f)
+
+        config['pipelines']['build'] = dict(
+            augment=["+Add({'a': lambda e,r,v: 1 }) "],
+            last=["PrintRows(print_at='end')"],
+        )
+
+        config['pipelines']['source'] = dict(
+            intuit =["-Add({'a': lambda e,r,v: 1 })"]
+        )
+
+        config['pipelines']['schema'] = dict(
+            augment=["+Add({'a': lambda e,r,v: 1 }) "],
+        )
+
+        with b.source_fs.open('bundle.yaml', 'wb') as f:
+            yaml.dump(config, f)
+
+        b.sync_in()  # force b/c not enough time for modtime to change
+
+        b.run_phase('source')
+
+        b.run_phase('schema')
+
+        b.build()
+
+        print list(b.build_fs.walkfiles())
+
+        self.assertTrue(10001, b.build_fs.exists('/example.com/simple-0.1.3/simple.msg'))
+
+        p = list(b.partitions)[0]
+        self.assertEquals(10001, len(list(p.stream())))
+
+        print b.build_fs.getcontents('/pipeline/build-simple.txt')
+
+        for i, row in enumerate(p.stream()):
+
+            if i == 0:
+                self.assertEqual('a', row[-1])
+            else:
+                self.assertEqual(1, row[-1])
+            if i > 5:
+                break
 
     def test_edit(self):
         """Test the Edit pipe, for altering the structure of data"""
@@ -826,8 +879,14 @@ class Test(TestBase):
         b.sync_in()
         b = b.cast_to_subclass()
         b.check_subclass()
+
+        pl = b.pipeline('build')
+
         b.meta()
         b.build()
+
+        print [str(p.identity.name) for p in b.partitions]
+
         self.assertItemsEqual(['example.com-generators-demo', 'example.com-generators-demo-build2'],
                               [str(p.identity.name) for p in b.partitions])
 

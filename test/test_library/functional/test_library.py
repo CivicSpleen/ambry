@@ -10,8 +10,6 @@ class Test(TestBase):
         from test import bundlefiles
         from os.path import dirname
 
-        source_fs = fsopendir(dirname(bundlefiles.__file__))
-
         rc = self.get_rc()
 
         l = new_library(rc)

@@ -4,13 +4,15 @@ import logging
 from sqlalchemy.sql.expression import text
 import struct
 
+from ambry.orm.dataset import Dataset
+
 from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex,\
     BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult,\
     DatasetSearchResult, PartitionSearchResult, SearchTermParser
 
 from ambry.util import get_logger
 
-logger = get_logger(__name__, level=logging.INFO, propagate=False)
+logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
 
 
 class SQLiteSearchBackend(BaseSearchBackend):
@@ -106,6 +108,21 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             datasets[partition.dataset_vid].partitions.add(partition.vid)
         return list(datasets.values())
 
+    def list_documents(self, limit = None):
+        """
+        List document vids.
+
+        :param limit: If not empty, the maximum number of results to return
+        :return:
+        """
+        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+
+        query = ("SELECT vid FROM dataset_index "+limit_str)
+
+        for row in self.backend.library.database.connection.execute(query).fetchall():
+            yield row['vid']
+
+
     def _as_document(self, dataset):
         """ Converts dataset to document indexed by to FTS index.
 
@@ -116,6 +133,8 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             dict with structure matches to BaseDatasetIndex._schema.
 
         """
+        assert isinstance(dataset, Dataset)
+
         doc = super(self.__class__, self)._as_document(dataset)
 
         # SQLite FTS can't find terms with `-`, replace it with underscore here and while searching.
@@ -219,6 +238,20 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
             yield IdentifierSearchResult(
                 score=score, vid=vid,
                 type=type, name=name)
+
+    def list_documents(self, limit=None):
+        """
+        List document vids.
+
+        :param limit: If not empty, the maximum number of results to return
+        :return:
+        """
+        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+
+        query = ("SELECT identifier FROM identifier_index " + limit_str)
+
+        for row in self.backend.library.database.connection.execute(query).fetchall():
+            yield row['identifier']
 
     def _index_document(self, identifier, force=False):
         """ Adds identifier document to the index. """
@@ -351,6 +384,20 @@ class PartitionSQLiteIndex(BasePartitionIndex):
                 continue
             yield PartitionSearchResult(
                 vid=vid, dataset_vid=dataset_vid, score=score)
+
+    def list_documents(self, limit=None):
+        """
+        List document vids.
+
+        :param limit: If not empty, the maximum number of results to return
+        :return:
+        """
+        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+
+        query = ("SELECT vid FROM partition_index " + limit_str)
+
+        for row in self.backend.library.database.connection.execute(query).fetchall():
+            yield row['vid']
 
     def _as_document(self, partition):
         """ Converts partition to document indexed by to FTS index.

@@ -373,15 +373,12 @@ class Transform(object):
         for k, v in iteritems(self.custom_types):
             localvars[k] = v
 
-        print
-
         self.dict_transform = eval(self.dict_transform_code,  localvars)
 
         self.row_transform = eval(self.row_transform_code,  localvars)
 
     def cast_error(self, type_, name, v, e):
         self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
-
 
 class DictTransform(Transform):
 

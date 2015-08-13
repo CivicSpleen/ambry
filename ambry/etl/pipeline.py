@@ -1261,7 +1261,8 @@ class Pipeline(OrderedDict):
         import ambry.etl
         import sys
         # ambry.build comes from ambry.bundle.files.PythonSourceFile#import_bundle
-        eval_locals = dict(list(locals().items()) + list(ambry.etl.__dict__.items()) + list(sys.modules['ambry.build'].__dict__.items()))
+        eval_locals = dict(list(locals().items()) + list(ambry.etl.__dict__.items()) +
+                           list(sys.modules['ambry.build'].__dict__.items()))
 
         replacements = {}
 
@@ -1275,7 +1276,19 @@ class Pipeline(OrderedDict):
             else:
                 return pipe
 
+        def pipe_location(pipe):
+
+            if not isinstance(pipe, basestring):
+                return None
+
+            elif pipe[0] in '+-$!':
+                return pipe[0]
+
+            else:
+                return None
+
         for segment_name, pipes in list(pipe_config.items()):
+
             if segment_name == 'final':
                 # The 'final' segment is actually a list of names of BUndle methods to call afer the pipeline
                 # completes
@@ -1284,12 +1297,47 @@ class Pipeline(OrderedDict):
                 for frm, to in iteritems(pipes):
                     self.replace(eval_pipe(frm), eval_pipe(to))
             else:
-                self[segment_name] = [eval_pipe(pipe) for pipe in pipes]
 
-    def replace(self, repl_class, replacement):
+                # Check if any of the pipes have a location command. If not, the pipe is cleared and the set of
+                # pipes replaces the ones that are there.
+                if not any( bool(pipe_location(pipe)) for pipe in pipes ):
+                    # Nope, they are all clean
+                    self[segment_name] = [eval_pipe(pipe) for pipe in pipes]
+                else:
+                    for i,pipe in enumerate(pipes):
+
+                        if pipe_location(pipe) : # The pipe is prefixed with a location command
+                            location = pipe_location(pipe)
+                            pipe = pipe[1:]
+                        else:
+                            raise PipelineError("If any pipes in a section have a location command, they all must"
+                                                " Segment: {} pipes: {}".format(segment_name, pipes))
+
+                        ep = eval_pipe(pipe)
+
+                        if location == '+': #append to the segment
+                            self[segment_name].append(ep)
+                        elif location == '-': # Prepend to the segment
+                            self[segment_name].prepend(ep)
+                        elif location == '!': # Replace a pipe of the same class
+
+                            if isinstance(ep, type):
+                                repl_class = ep
+                            else:
+                                repl_class = ep.__class__
+
+                            self.replace(repl_class, ep, segment_name)
+
+
+    def replace(self, repl_class, replacement, target_segment_name = None):
         """Replace a pipe segment, specified by its class, with another segment"""
 
         for segment_name, pipes in iteritems(self):
+
+            if target_segment_name and segment_name != target_segment_name:
+                raise Exception()
+                continue
+
             repl_pipes = []
             found = False
             for pipe in pipes:

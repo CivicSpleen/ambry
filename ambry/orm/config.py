@@ -59,11 +59,10 @@ class Config(Base):
 
             assert bool(target.d_vid)
 
-            # This is a bit of a mess, much longer than it should be. Unfortunately, there seem to be few other options
+            # FIXME This is a bit of a mess, much longer than it should be. Unfortunately, there seem to be few other options
             # since the trick used in partitions doesn't work for mass updates to many configs.
-            target.id = hashlib.md5(
-                "{}{}{}{}{}".format(target.d_vid, target.type, target.group, target.key, time.time())
-            ).hexdigest()
+            target.id = "{}{}{}".format(target.d_vid, target.type,
+                                        hashlib.md5(str(target.group)+str(target.key)+str(target.parent_id)).hexdigest()[:8] )
 
         Config.before_update(mapper, conn, target)
 
@@ -73,10 +72,8 @@ class Config(Base):
         if object_session(target).is_modified(target, include_collections=False):
             target.modified = time()
 
-
 event.listen(Config, 'before_insert', Config.before_insert)
 event.listen(Config, 'before_update', Config.before_update)
-
 
 class ConfigTypeGroupAccessor(object):
 

@@ -8,12 +8,3 @@ class Bundle(ambry.bundle.Bundle):
         
         augment_pipeline(pl, PrintRows)
         
-        
-    def build(self):
-        from ambry.etl.pipeline import sink
-        
-        pl = sink(self.do_meta_pipeline('types3'))
-
-        print str(pl)
-            
-        return True

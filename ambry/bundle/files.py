@@ -647,7 +647,7 @@ class SourceSchemaFile(RowBuildSourceFile):
         if failures:
             raise ConfigurationError("Failed to load source schema, missing sources: {} ".format(failures))
 
-        self._dataset._database.commit()
+        self._dataset.commit()
 
     def objects_to_record(self):
 
@@ -670,7 +670,7 @@ class SourceSchemaFile(RowBuildSourceFile):
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
 
-        self._dataset._database.commit()
+        self._dataset.commit()
 
 file_info_map = {
     File.BSFILE.BUILD : (File.path_map[File.BSFILE.BUILD],PythonSourceFile),

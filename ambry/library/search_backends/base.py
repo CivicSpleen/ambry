@@ -19,6 +19,8 @@ from geoid.util import iallval
 
 from ambry.util import get_logger
 
+from ambry.orm.dataset import Dataset
+
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 
@@ -256,6 +258,9 @@ class BaseDatasetIndex(BaseIndex):
         """
 
         # find tables.
+
+        assert isinstance(dataset, Dataset)
+
         execute = object_session(dataset).connection().execute
 
         query = text("""
@@ -264,7 +269,7 @@ class BaseDatasetIndex(BaseIndex):
             JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = :dataset_vid;""")
 
         columns = '\n'.join(
-            [' '.join(list(t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
+            [' '.join(list(str(e) for e in t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
 
         doc = '\n'.join([unicode(x) for x in [dataset.config.metadata.about.title,
                                               dataset.config.metadata.about.summary,
@@ -286,13 +291,20 @@ class BaseDatasetIndex(BaseIndex):
         def resum(g):
             try:
                 return str(GVid.parse(g).summarize())
-            except KeyError:
+            except (KeyError, ValueError):
                 return g
 
+        try:
+            about_time = list(dataset.config.metadata.about.time)
+        except TypeError:
+            about_time = [dataset.config.metadata.about.time]
+
         keywords = (
-            list(dataset.config.metadata.about.groups) + list(dataset.config.metadata.about.tags) +
+            list(dataset.config.metadata.about.groups) +
+            list(dataset.config.metadata.about.tags) +
+            about_time +
             [resum(g) for g in dataset.config.metadata.about.grain] +
-            list(dataset.config.metadata.about.time) + sources)
+            sources)
 
         document = dict(
             vid=unicode(dataset.identity.vid),

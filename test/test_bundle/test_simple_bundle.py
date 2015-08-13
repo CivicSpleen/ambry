@@ -504,7 +504,6 @@ class Test(TestBase):
         l = b._library
 
         b.sync_in()
-        b.meta()
 
         b.run()
 

@@ -16,7 +16,7 @@ library:
   database: test-database
   warehouse: sqlite://
   remotes:
-    test: 's3://devtest.sandiegodata.org/ambry10'
+    test: 's3://test.library.civicknowledge.com'
     test-orig: '{root}/test-remote'
     example: '{root}/example-remote'
 

@@ -748,7 +748,7 @@ class Bundle(object):
                     #print 'MATCH ', source.stage, stage
                     sources.append(source)
         else:
-            # Use the named soruces, but ensure they are all source objects.
+            # Use the named sources, but ensure they are all source objects.
             source_objs = []
 
             if not isinstance(sources, (list,tuple)):
@@ -799,6 +799,7 @@ class Bundle(object):
 
     def run_phase(self, phase, stage='main', sources = None):
         from ambry.dbexceptions import PhaseError
+        from functools import partial
 
         assert isinstance(stage, basestring) or stage is None
 
@@ -808,17 +809,17 @@ class Bundle(object):
         if hasattr(self, phase_pre_name):
             phase_pre = getattr(self, phase_pre_name)
         else:
-            phase_pre = self.pre_phase
+            phase_pre = partial(self.pre_phase, phase)
 
         if hasattr(self, phase_post_name):
             phase_post = getattr(self, phase_post_name)
         else:
-            phase_post = self.post_phase
+            phase_post = partial(self.post_phase, phase)
 
         try:
 
             step_name = 'Pre-{}'.format(phase)
-            if not phase_pre(phase):
+            if not phase_pre():
                 self.log("---- Skipping {} ---- ".format(phase))
                 return False
 
@@ -827,7 +828,7 @@ class Bundle(object):
             self.phase_main(phase, stage=stage, sources=sources)
 
             step_name = 'Post-{}'.format(phase)
-            phase_post(phase)
+            phase_post()
 
         except Exception as e:
             self.rollback()
@@ -890,7 +891,7 @@ Pipeline Headers
             else:
                 c = st.add_column(tic.position, source_header=tic.header, dest_header=tic.header,
                                             datatype=tic.resolved_type_name)
-                self.log('Created soruce table column: {}.{}'.format(st.name, c.source_header ))
+                self.log('Created source table column: {}.{}'.format(st.name, c.source_header ))
 
     def final_make_dest_tables(self, pl):
         from ambry.etl.intuit import TypeIntuiter

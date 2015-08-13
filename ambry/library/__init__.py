@@ -21,7 +21,7 @@ from requests.exceptions import HTTPError
 from ambry.bundle import Bundle
 from ambry.dbexceptions import ConfigurationError
 from ambry.identity import Identity, ObjectNumber, NotObjectNumberError, NumberServer, DatasetNumber
-from ambry.library.search import Search
+from ambry.library.search import Search, BACKENDS as SEARCH_BACKENDS
 from ambry.orm import Partition, File, Config
 from ambry.orm.database import Database
 from ambry.orm.dataset import Dataset
@@ -42,29 +42,40 @@ def new_library(config=None):
 
     lfs = LibraryFilesystem(config)
 
-    db_config = config.library()['database']
+    library_config = config.library()
+
+    db_config = library_config['database']
 
     db = Database(db_config)
     warehouse = None
 
+    if 'search' in library_config:
+        search_backend = SEARCH_BACKENDS[library_config['search']]
+    else:
+        search_backend = None
+
     l = Library(config=config,
                 database=db,
                 filesystem=lfs,
-                warehouse=warehouse)
+                warehouse=warehouse,
+                search = search_backend)
 
     return l
 
 
 class Library(object):
 
-    def __init__(self, config, database, filesystem, warehouse):
+    def __init__(self, config, database, filesystem, warehouse, search=None):
 
         self._config = config
         self._db = database
         self._db.open()
         self._fs = filesystem
         self._warehouse = warehouse
-        self._search = None
+        if search:
+            self._search = Search(self,search)
+        else:
+            self._search = None
         self.logger = logger
 
     def resolve_object_number(self, ref):
