@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+from collections import defaultdict
 import logging
-from sqlalchemy.sql.expression import text
 import struct
+
+from sqlalchemy.sql.expression import text
 
 from ambry.orm.dataset import Dataset
 
@@ -95,7 +97,7 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
 
         logger.debug('Searching datasets using `{}` query.'.format(match_query))
         results = self.backend.library.database.connection.execute(query, match_query=match_query).fetchall()
-        datasets = {}
+        datasets = defaultdict(DatasetSearchResult)
         for result in results:
             vid, score = result
             datasets[vid] = DatasetSearchResult()

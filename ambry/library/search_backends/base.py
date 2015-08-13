@@ -342,7 +342,7 @@ class BaseDatasetIndex(BaseIndex):
         if 'source' in terms:
             source = terms['source']
 
-        cterms = None
+        cterms = ''
 
         if doc:
             cterms = self.backend._and_join(doc)
@@ -362,7 +362,6 @@ class BaseDatasetIndex(BaseIndex):
                 cterms = source_terms
 
         logger.debug('Dataset terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
-        assert cterms is not None, 'Failed to create dataset query from {} terms.'.format(terms)
         return cterms
 
 
