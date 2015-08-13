@@ -299,11 +299,16 @@ class BaseDatasetIndex(BaseIndex):
         except TypeError:
             about_time = [dataset.config.metadata.about.time]
 
+        try:
+            about_grain = list(dataset.config.metadata.about.grain)
+        except TypeError:
+            about_grain = [dataset.config.metadata.about.grain]
+
         keywords = (
             list(dataset.config.metadata.about.groups) +
             list(dataset.config.metadata.about.tags) +
             about_time +
-            [resum(g) for g in dataset.config.metadata.about.grain] +
+            [resum(g) for g in about_grain] +
             sources)
 
         document = dict(

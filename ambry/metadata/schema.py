@@ -14,7 +14,7 @@ class About(DictGroup):
     summary = ScalarTerm()
     space = ScalarTerm()
     time = ScalarTerm()
-    grain = ListTerm()
+    grain = ScalarTerm()
     remote = ScalarTerm(store_none=False)  # If empty, take the remote name from access
     access = ScalarTerm(
         store_none=False,
