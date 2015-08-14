@@ -67,6 +67,68 @@ class PartitionSearchResult(object):
         self.score = score
 
 
+class IndexField(object):
+    """ Base class for all fields in the schema. """
+
+    def __init__(self, name):
+        self.name = name
+
+
+class Id(IndexField):
+    """ Indexes the entire value of the field as one token.
+
+    Note: This is useful for data you don’t want to tokenize, such as the path of a file or vid.
+
+    Examples:
+        Whoosh Id - http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.ID
+        Sqlite ?
+        Postgresql ?
+    """
+    pass
+
+
+class NGram(IndexField):
+    """ Field to chop the words into N-grams.
+
+    Note: Is helpfull for autocomplete feature. For example, the set of ngrams in the
+        string "cat" is " c", " ca", "cat", and "at ".
+
+    Examples:
+        whoosh - NGRAMWORDS, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.NGRAMWORDS
+        sqlite - ?
+        postgresql - pg_trgm, http://www.postgresql.org/docs/current/static/pgtrgm.html
+
+    """
+    pass
+
+
+class Keyword(IndexField):
+    """ Field for space- or comma-separated keywords.
+
+    Note:
+        This type is indexed and searchable (and optionally stored). Used to search for exact match of any
+        keyword FIXME: is it really exact match?.
+
+    Examples:
+        Whoosh - KEYWORD, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.KEYWORD
+        SQLite - FIXME:
+        PostgreSQL - FIXME:
+    """
+
+
+class Text(IndexField):
+    """ Field for text data (for example, the body text of an article). Allows phrase searching.
+
+    Note:
+        This field type is always scorable.
+    Examples:
+        Whoosh - TEXT, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.TEXT
+        SQLite - FIXME:
+        PostgreSQL - FIXME:
+    """
+    pass
+
+
 class BaseSearchBackend(object):
     """
     Base class for full text search backends implementations.
@@ -241,10 +303,10 @@ class BaseIndex(object):
 
 class BaseDatasetIndex(BaseIndex):
     _schema = [
-        'vid',
-        'title',
-        'keywords',
-        'doc']
+        Id('vid'),
+        NGram('title'),
+        Keyword('keywords'),
+        Text('doc')]
 
     def _as_document(self, dataset):
         """ Converts dataset to document indexed by to FTS index.
@@ -373,11 +435,11 @@ class BaseDatasetIndex(BaseIndex):
 class BasePartitionIndex(BaseIndex):
 
     _schema = [
-        'vid',
-        'dataset_vid',
-        'title',
-        'keywords',
-        'doc']
+        Id('vid'),
+        Id('dataset_vid'),
+        NGram('title'),
+        Keyword('keywords'),
+        Text('doc')]
 
     def _as_document(self, partition):
         """ Converts given partition to the document indexed by FTS backend.
@@ -557,9 +619,9 @@ class BasePartitionIndex(BaseIndex):
 class BaseIdentifierIndex(BaseIndex):
 
     _schema = [
-        'identifier',
-        'type',
-        'name',
+        Id('identifier'),  # Partition versioned id (partition vid)
+        Id('type'),  # Type. FIXME: What is type? Add examples.
+        NGram('name'),
     ]
 
     def _as_document(self, identifier):
