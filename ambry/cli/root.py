@@ -12,13 +12,16 @@ from . import prt
 def root_parser(cmd):
     import argparse
 
-
     sp = cmd.add_parser('list', help='List bundles and partitions')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='list')
-    sp.add_argument('-F', '--fields', type=str,
+    sp.add_argument('-f', '--fields', type=str,
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
-    sp.add_argument('-s', '--sort', help='Show partitions')
+    sp.add_argument('-s', '--sort', help='Sort partitions')
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-t', '--tab', action='store_true', help='Print field tab seperated, without pretty table and header')
+    group.add_argument('-j', '--json', action='store_true',
+                    help='Output as a list of JSON dicts')
     sp.add_argument('term', nargs='?', type=str,
                     help='Name or ID of the bundle or partition')
 
@@ -74,12 +77,8 @@ def root_parser(cmd):
                     help='List documents instead of search')
     sp.add_argument('-i', '--identifiers', default=False, action='store_true',
                     help='Search only the identifiers index')
-    sp.add_argument('-R', '--reindex', default=False, action='store_true',
+    sp.add_argument('-r', '--reindex', default=False, action='store_true',
                     help='Generate documentation files and index the full-text search')
-    sp.add_argument('-d', '--document', default=False, action='store_true',
-                    help='Return the search document for an object id')
-    sp.add_argument('-u', '--unparsed', default=False, action='store_true',
-                    help='Pass the search term to the engine without parsing')
 
     sp = cmd.add_parser('sync', help='Sync with the remotes')
     sp.set_defaults(command='root')
@@ -94,6 +93,17 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='import')
     sp.add_argument('term', nargs=1, type=str, help='Base directory')
+
+    #
+    # Search Command
+    #
+
+    sp = cmd.add_parser('search', help='Search for bundles and partitions')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='search')
+    sp.add_argument('-r', '--reindex', default=False, action='store_true',
+                           help='Reindex the bundles')
+    sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
 
 
 def root_command(args, rc):
@@ -110,6 +120,7 @@ def root_command(args, rc):
     except Exception as e:
 
         warn('Failed to instantiate library: {}'.format(e))
+        raise
 
         l = None
 
@@ -121,21 +132,16 @@ def root_makemigration(args, l, rc):
     file_name = create_migration_template(args.migration_name)
     print 'New empty migration created. Now populate {} with appropriate sql.'.format(file_name)
 
-
 def root_list(args, l, rc):
+    from tabulate import tabulate
+    import json
 
     if args.fields:
-        fields = args.fields.split(',')
+        header = ['vid'] + list( str(e).strip() for e in args.fields.split(','))
 
     else:
-        fields = ['locations', 'vid', 'vname']
+        header = ['vid', 'vname', 'state', 'source_fs']
 
-    root_list_datasets(args, l, rc, args.sort)
-
-def root_list_datasets(args, l, rc, sort = None):
-    from tabulate import tabulate
-
-    header = ['vid', 'vname', 'state', 'source_fs']
     records = []
 
     for b in l.bundles:
@@ -145,7 +151,29 @@ def root_list_datasets(args, l, rc, sort = None):
         idx = header.index(args.sort)
         records = sorted(records, key=lambda r: r[idx])
 
-    print tabulate(records, headers=header)
+    if args.term:
+
+        matched_records = []
+
+        for r in records:
+            if args.term in ' '.join( str(e) for e in r):
+                matched_records.append(r)
+
+        records = matched_records
+
+    if args.tab:
+        for row in records:
+            print '\t'.join(str(e) for e in row)
+    elif args.json:
+
+        rows = {}
+
+        for row in records:
+            rows[row[0]] = dict(zip(header, row))
+
+        print json.dumps(rows)
+    else:
+        print tabulate(records, headers=header)
 
 
 def root_info(args, l, rc):
@@ -181,15 +209,9 @@ def root_sync(args, l, config):
         l.sync_remote(r)
 
 
-def root_search(args, l, config):
-    # This will fetch the data, but the return values aren't quite right
-
-    term = ' '.join(args.term)
+def root_search(args, l, rc):
 
     if args.reindex:
-
-        print 'Updating the identifier'
-
         def tick(message):
             """Writes a tick to the stdout, without a space or newline."""
             import sys
@@ -197,62 +219,20 @@ def root_search(args, l, config):
             sys.stdout.write("\033[K{}\r".format(message))
             sys.stdout.flush()
 
-        records = []
-
-        source = 'civicknowledge.com-terms-geoterms'
-
-        p = l.get(source).partition
-
-        for row in p.rows:
-            records.append(dict(identifier=row['gvid'], type=row['type'], name=row['name']))
-
-        l.search.index_identifiers(records)
-
-        print 'Reindexing docs'
-        l.search.index_library_datasets(tick_f=tick)
-
+        l.search.index_library_datasets(tick)
         return
 
-    if args.document:
-        import json
+    terms = ' '.join(args.terms)
+    print terms
 
-        b = l.get(term)
+    #print l.search.list_documents()
 
-        if b.partition:
-            print json.dumps(l.search.partition_doc(b.partition), indent=4)
-        else:
-            print json.dumps(l.search.dataset_doc(b), indent=4)
+    results = l.search.search(terms)
 
-        return
-
-    elif args.identifiers:
-
-        if args.list:
-            for x in l.search.identifiers:
-                print x
-
-        else:
-            for identifier in l.search.search_identifiers(term, limit=30):
-                print '{:6.2f} {:9s} {} {}'.format(
-                    identifier.score, identifier.vid, identifier.type, identifier.name)
-
-    else:
-
-        if args.list:
-
-            for x in l.search.datasets:
-                print x
-                ds = l.dataset(x)
-                print x, ds.name, ds.data.get('title')
-
-        else:
-            print 'search for ', term
-
-            datasets = l.search.search_datasets(term)
-
-            for result in sorted(datasets, key=lambda e: e.score, reverse=True):
-                ds = l.dataset(result.vid)
-                print result.score, result.vid, ds.name, ds.data.get('title'), list(result.partitions)[:5]
+    for r in results:
+        print r.vid, r.bundle.metadata.about.title
+        for p in r.partition_records:
+            print '    ', p.vid, p.vname
 
 
 def root_doc(args, l, rc):
@@ -318,7 +298,7 @@ def root_import(args, l, rc):
 
         b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
 
-        b.sync()
+        b.sync_in()
 
         prt("Loaded bundle: {}".format(b.identity.fqname))
 

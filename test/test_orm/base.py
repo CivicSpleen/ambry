@@ -73,7 +73,7 @@ class BasePostgreSQLTest(unittest.TestCase):
         connection.execute('commit')
         connection.close()
 
-        # now create connection for tests. Disable polling to make close() easier.
+        # now create connection for tests. Disable pooling to make close() easier.
         self.pg_engine = create_engine(self.postgres_test_dsn, poolclass=NullPool)
         pg_connection = self.pg_engine.connect()
         self._active_pg_connection = pg_connection

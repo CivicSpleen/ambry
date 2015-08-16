@@ -226,12 +226,13 @@ class StructuredPropertyTree(object):
             valid_ids = [x.id for x in self._valid_configs]
             missed_configs = session\
                 .query(Config)\
-                .filter(~Config.id.in_(valid_ids), Config.type == self._type)\
+                .filter(~Config.id.in_(valid_ids),
+                        Config.d_vid == self._config.dataset.vid,
+                        Config.type == self._type)\
                 .all()
 
             for conf in missed_configs:
-                logger.debug(
-                    'Deleting {} config from database because it was removed from file.'.format(conf))
+                logger.debug('Deleting {} config from database because it was removed from file.'.format(conf))
                 session.delete(conf)
                 session.commit()
 

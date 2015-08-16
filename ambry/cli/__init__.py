@@ -61,8 +61,10 @@ def warn(template, *args, **kwargs):
     global command
     global subcommand
 
-    global_logger.warning(template.format(*args, **kwargs))
-
+    try:
+        global_logger.warning(template.format(*args, **kwargs))
+    except:
+        global_logger.warning(';'.join(str(e) for e in [template] + list(args) + list(kwargs.items())))
 
 def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=None):
     fields = fields or []

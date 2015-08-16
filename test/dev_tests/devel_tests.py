@@ -8,6 +8,7 @@ from ambry.bundle import Bundle
 
 class Test(TestBase):
 
+    @unittest.skip("Development Test")
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
         from boto.exception import S3ResponseError
@@ -38,6 +39,7 @@ class Test(TestBase):
 
         print remote_name, path
 
+    @unittest.skip("Development Test")
     def test_search(self):
         """Test copying a bundle to a remote, then streaming it back"""
         from ambry.library import new_library
@@ -68,4 +70,25 @@ class Test(TestBase):
         print search.search_datasets('Example')[0].vid
 
         print search.search_datasets('2010')
+
+    @unittest.skip("Development Test")
+    def test_sequence(self):
+        from urlparse import urlparse
+        from ambry.orm import Database
+
+        conf = self.get_rc()
+
+        if 'database' in conf.dict and 'postgresql-test' in conf.dict['database']:
+            dsn = conf.dict['database']['postgresql-test']
+            parsed_url = urlparse(dsn)
+            db_name = parsed_url.path.replace('/', '')
+            self.postgres_dsn = parsed_url._replace(path='postgres').geturl()
+            self.postgres_test_db = '{}_test_db1ae'.format(db_name)
+            self.postgres_test_dsn = parsed_url._replace(path=self.postgres_test_db).geturl()
+
+        db = Database(self.postgres_test_dsn)
+
+        for i in range(10):
+
+            print b.dataset.next_number('foobar')
 

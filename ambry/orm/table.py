@@ -49,6 +49,8 @@ class Table(Base, DictableMixin):
     columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
                            cascade="all, delete-orphan", lazy='joined')
 
+    _next_column_number = None  # Set in next_config_number()
+
     def link_columns(self, other):
         """Return columns that can be used to link another table to this one"""
 
@@ -92,12 +94,45 @@ class Table(Base, DictableMixin):
     def oid(self):
         return TableNumber(self.d_id, self.sequence_id)
 
+    @property
+    def next_column_number(self):
+        """Return the next column sequence id for a table . On the first call, will load the max sequence number
+        from the database, but subsequent calls will run in process, so this isn't suitable for
+        multi-process operation -- all of the columns in a dataset should be created by one process"""
+
+        from sqlalchemy import text
+        from sqlalchemy.orm import object_session
+
+        if not self._next_column_number:
+
+            session = object_session(self)
+
+            if session:
+                sql = text("SELECT max(c_sequence_id)+1 FROM columns WHERE c_t_vid = '{}'".format(self.vid))
+                max_id, = session.execute(sql).fetchone()
+            else:
+                # Let's hope this always means that the table is new, and therefore there are
+                # no columns yet.
+                max_id = None
+
+            if not max_id:
+                max_id = 0
+
+            self._next_column_number = max_id + 1
+        else:
+            self._next_column_number += 1
+
+        return self._next_column_number
+
     def column(self, ref):
         # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
         # so iterating over the collection only involves one SELECT.
+        from column import Column
+
+        column_name = Column.mangle_name(str(ref))
 
         for c in self.columns:
-            if str(ref) == c.name or str(ref) == c.id or str(ref) == c.vid:
+            if str(column_name) == c.name or str(ref) == c.id or str(ref) == c.vid:
                 return c
 
         raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
@@ -109,7 +144,7 @@ class Table(Base, DictableMixin):
             c = self.column(name)
             extant = True
         except NotFoundError:
-            c = Column(t_vid=self.vid, sequence_id=len(self.columns), name=name, datatype='varchar')
+            c = Column(t_vid=self.vid, sequence_id=self.next_column_number, name=name, datatype='varchar')
             extant = False
 
         # Update possibly existing data
@@ -140,10 +175,6 @@ class Table(Base, DictableMixin):
 
         if not extant:
             self.columns.append(c)
-        else:
-            from sqlalchemy.orm import object_session
-
-            object_session(self).merge(c)
 
         return c
 

@@ -63,6 +63,8 @@ class Dataset(Base):
     codes = relationship('Code', backref='dataset', cascade="all, delete-orphan")
 
     _database = None # Reference to the database, when dataset is retrieved from a database object
+    _next_table_number =None # Set in next_table_number()
+    _next_partition_number = None  # Set in next_partition_number()
 
     def __init__(self, *args, **kwargs):
 
@@ -106,6 +108,10 @@ class Dataset(Base):
         self._database.commit()
 
     @property
+    def session(self):
+        return self._database.session
+
+    @property
     def identity(self):
         from ..identity import Identity
         return Identity.from_dict(self.dict)
@@ -114,12 +120,37 @@ class Dataset(Base):
     def config(self):
         return ConfigAccessor(self)
 
-    def table(self, ref):
+    @property
+    def next_table_number(self):
+        """Return the next sequence id for a table. On the first call, will load the max sequence numebr
+        from the database, but subsequence calls will run in process, so this isn't suitable for
+        multi-process operation -- all of the tables in a dataset should be created by one process"""
 
+        from sqlalchemy import text
+        if not self._next_table_number:
+
+            sql = text("SELECT max(t_sequence_id)+1 FROM tables WHERE t_d_vid = '{}'".format(self.vid))
+
+            max_id, = self.session.execute(sql).fetchone()
+
+            if not max_id:
+                max_id = 0
+
+            self._next_table_number = int(max_id) + 1
+
+        else:
+            self._next_table_number += 1
+
+        return self._next_table_number
+
+    def table(self, ref):
         from .exc import NotFoundError
+        from table import Table
+
+        table_name = Table.mangle_name(str(ref))
 
         for t in self.tables:
-            if str(ref) == t.name or str(ref) == t.id or str(ref) == t.vid:
+            if table_name == t.name or str(ref) == t.id or str(ref) == t.vid:
                 return t
 
         raise NotFoundError("Failed to find table for ref '{}' in dataset '{}'".format(ref, self.name))
@@ -136,9 +167,17 @@ class Dataset(Base):
             table = self.table(name)
             extant = True
         except NotFoundError:
+
             extant = False
+
+            if 'sequence_id' in kwargs:
+                sequence_id = kwargs['sequence_id']
+                del kwargs['sequence_id']
+            else:
+                sequence_id =  self.next_table_number
+
             table = Table(d_id = self.id, d_vid = self.vid, name = name,
-                          sequence_id = len(self.tables)+1)
+                          sequence_id = sequence_id, **kwargs)
 
         # Update possibly extant data
         table.data = dict( (list(table.data.items()) if table.data else []) + list(kwargs.get('data', {}).items()) )
@@ -155,12 +194,33 @@ class Dataset(Base):
 
         if not extant:
             self.tables.append(table)
-        else:
-            object_session(self).merge(table)
 
-        self.commit() # Required to get the table a VID, but probably slow.
 
         return table
+
+    @property
+    def next_partition_number(self):
+        """Return the next sequence id for a table. On the first call, will load the max sequence numebr
+        from the database, but subsequence calls will run in process, so this isn't suitable for
+        multi-process operation -- all of the tables in a dataset should be created by one process"""
+
+        from sqlalchemy import text
+
+        if not self._next_partition_number:
+
+            sql = text("SELECT max(p_sequence_id)+1 FROM partitions WHERE p_d_vid = '{}'".format(self.vid))
+
+            max_id, = self.session.execute(sql).fetchone()
+
+            if not max_id:
+                max_id = 0
+
+            self._next_partition_number = int(max_id) + 1
+
+        else:
+            self._next_partition_number += 1
+
+        return self._next_partition_number
 
     def new_partition(self, table, **kwargs):
         '''
@@ -172,7 +232,14 @@ class Dataset(Base):
         if isinstance(table, basestring):
             table = self.table(table)
 
+        if 'sequence_id' in kwargs:
+            sequence_id = kwargs['sequence_id']
+            del kwargs['sequence_id']
+        else:
+            sequence_id = self.next_table_number
+
         p = Partition(
+            sequence_id=sequence_id,
             t_vid=table.vid,
             d_vid=self.vid,
             table_name=table.name,
@@ -180,7 +247,8 @@ class Dataset(Base):
         )
 
         self.partitions.append(p)
-        object_session(self).commit()
+
+        #object_session(self).commit()
 
         return p
 
@@ -193,6 +261,12 @@ class Dataset(Base):
                 return p
 
         raise NotFoundError("Failed to find partition for ref '{}' in dataset '{}'".format(ref, self.name))
+
+    def delete_tables_partitions(self):
+        return self._database.delete_tables_partitions(self)
+
+    def delete_partitions(self):
+        return self._database.delete_partitions(self)
 
     def new_source(self, name, **kwargs):
         from .source import DataSource
@@ -301,6 +375,7 @@ class Dataset(Base):
                 row[i] = d[f]
 
         return row
+
 
     def __repr__(self):
         return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} rev={}>""".format(

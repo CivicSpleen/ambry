@@ -342,7 +342,14 @@ def get_s3(url, account_accessor):
 
 
 def download(url, cache_fs, account_accessor=None):
+    """
+    Download a URL and store it in the cache.
 
+    :param url:
+    :param cache_fs:
+    :param account_accessor:
+    :return:
+    """
     import os.path
     import requests
     from ambry.util.flo import copy_file_or_flo
@@ -366,27 +373,37 @@ def download(url, cache_fs, account_accessor=None):
 
         with filelock.FileLock(lock_file):
 
-            if url.startswith('s3:'):
-                s3 = get_s3(url, account_accessor)
-                pd = parse_url_to_dict(url)
+            try:
+                logger.info("Downloading {}".format(url))
 
-                with cache_fs.open(cache_path, 'wb') as fout:
-                    with s3.open(pd['path'], 'rb') as fin:
-                        copy_file_or_flo(fin, fout)
+                if url.startswith('s3:'):
+                    s3 = get_s3(url, account_accessor)
+                    pd = parse_url_to_dict(url)
 
-            elif url.startswith('ftp:'):
-                import shutil
-                from contextlib import closing
-
-                with closing(urlopen(url)) as fin:
                     with cache_fs.open(cache_path, 'wb') as fout:
-                        shutil.copyfileobj(fin, fout)
-            else:
+                        with s3.open(pd['path'], 'rb') as fin:
+                            copy_file_or_flo(fin, fout)
 
-                r = requests.get(url, stream=True)
+                elif url.startswith('ftp:'):
+                    import shutil
+                    from contextlib import closing
 
-                with cache_fs.open(cache_path, 'wb') as f:
-                    copy_file_or_flo(r.raw, f)
+                    with closing(urlopen(url)) as fin:
+                        with cache_fs.open(cache_path, 'wb') as fout:
+                            shutil.copyfileobj(fin, fout)
+                else:
+
+                    r = requests.get(url, stream=True)
+
+                    with cache_fs.open(cache_path, 'wb') as f:
+                        copy_file_or_flo(r.raw, f)
+
+            except KeyboardInterrupt:
+                logger.info("Removing partially downloaded file. ")
+                if cache_fs.exists(cache_path):
+                    cache_fs.remove(cache_path)
+                raise
+
 
     return cache_path
 

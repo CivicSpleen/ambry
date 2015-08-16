@@ -10,8 +10,7 @@ import os
 
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
 from sqlalchemy.orm.exc import NoResultFound
-from sqlalchemy import create_engine, event
-
+from sqlalchemy import create_engine, event, DDL
 from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, ConflictError
 
 from ambry.util import get_logger, parse_url_to_dict
@@ -22,6 +21,8 @@ ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
 SCHEMA_VERSION = 105
+
+POSTGRES_SCHEMA_NAME = 'ambrylib'
 
 # Database connection information
 Dbci = namedtuple('Dbc', 'dsn_template sql')
@@ -73,14 +74,15 @@ class Database(object):
         self._session = None
         self._engine = None
         self._connection = None
-        self._schema = None
         self._echo = echo
 
-        self.logger = logger
+        if self.driver in ['postgres', 'postgis']:
+            self._schema = POSTGRES_SCHEMA_NAME
 
-    def is_in_memory_db(self):
-        """ Returns True if in memory database is used. Otherwise returns False. """
-        return self.dsn == 'sqlite://' or (self.dsn.startswith('sqlite') and 'memory' in self.dsn)
+        else:
+            self._schema = None
+
+        self.logger = logger
 
     def create(self):
         """Create the database from the base SQL."""
@@ -127,14 +129,12 @@ class Database(object):
         try:
             # Since we are using the connection, rather than the session, need to
             # explicitly set the search path.
-            if self.driver in ('postgres', 'postgis') and self._schema:
-                self.connection.execute('SET search_path TO {}'.format(self._schema))
 
             from sqlalchemy.engine.reflection import Inspector
 
             inspector = Inspector.from_engine(self.engine)
 
-            if not 'config' in inspector.get_table_names():
+            if not 'config' in inspector.get_table_names(schema = self._schema):
                 return False
             else:
                 return True
@@ -180,15 +180,13 @@ class Database(object):
         if not self._connection:
             self._connection = self.engine.connect()
 
-            if self.driver in ['postgres', 'postgis']:
-                self._connection.execute('SET search_path TO library')
-
         return self._connection
 
     @property
     def session(self):
         """Return a SqlAlchemy session."""
         from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.event import listen
 
         if not self.Session:
             self.Session = sessionmaker(bind=self.engine, expire_on_commit=True)
@@ -197,8 +195,11 @@ class Database(object):
             self._session = self.Session()
             # set the search path
 
-        if self.driver in ('postgres', 'postgis') and self._schema:
-            self._session.execute('SET search_path TO {}'.format(self._schema))
+        if self._schema:
+            def after_begin(session, transaction, connection):
+                session.execute('SET search_path TO {}'.format(self._schema))
+
+            listen(self._session, 'after_begin', after_begin)
 
         return self._session
 
@@ -300,6 +301,7 @@ class Database(object):
     def create_tables(self):
 
         from sqlalchemy.exc import OperationalError
+        from sqlalchemy import DDL
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
@@ -309,6 +311,11 @@ class Database(object):
             self.drop()
         except (OperationalError, ProgrammingError):
             pass
+
+        # Working on the theory that this routine is only ever run once, when the database is created.
+        # See http://stackoverflow.com/a/22212214 for how to use events and DDL to create the schema.
+
+
 
         orig_schemas = {}
 
@@ -327,13 +334,13 @@ class Database(object):
                 it.schema = self._schema
 
             it.create(bind=self.engine)
-            self.commit()
+
+        self.commit()
 
         # We have to put the schemas back because when installing to a warehouse.
         # the same library classes can be used to access a Sqlite database, which
         # does not handle schemas.
         if self._schema:
-
             for it, orig_schema in list(orig_schemas.items()):
                 it.schema = orig_schema
 
@@ -404,15 +411,32 @@ class Database(object):
         try:
             ds = self.session.query(Dataset).filter(Dataset.vid == str(ref)).one()
         except NoResultFound:
+            ds = None
+
+        if not ds:
             try:
                 ds = self.session.query(Dataset).filter(Dataset.id == str(ref))\
-                    .order_by(Dataset.revision.desc())\
-                    .first()
+                    .order_by(Dataset.revision.desc()).first()
             except NoResultFound:
-                raise NotFoundError('No partition in library for vid : {} '.format(ref))
+                ds = None
+
+        if not ds:
+            try:
+                ds = self.session.query(Dataset).filter(Dataset.vname == str(ref)).one()
+            except NoResultFound:
+                ds = None
+
+        if not ds:
+            try:
+                ds = self.session.query(Dataset).filter(Dataset.name == str(ref))\
+                    .order_by(Dataset.revision.desc()).first()
+            except NoResultFound:
+                ds = None
 
         if ds:
             ds._database = self
+        else:
+            raise NotFoundError('No partition in library for vid : {} '.format(ref))
 
         return ds
 
@@ -431,6 +455,25 @@ class Database(object):
         if ds:
             self.session.delete(ds)
             self.session.commit()
+
+    def delete_tables_partitions(self, ds):
+        """Fast delete of all of a datasets codes, columns, partitions and tables"""
+        from ambry.orm import Code, Column, Table, Partition
+
+        ssq = self.session.query
+
+        ssq(Code).filter(Code.d_vid == ds.vid).delete()
+        ssq(Column).filter(Column.d_vid == ds.vid).delete()
+        ssq(Table).filter(Table.d_vid == ds.vid).delete()
+        ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
+
+    def delete_partitions(self, ds):
+        """Fast delete of all of a datasets codes, columns, partitions and tables"""
+        from ambry.orm import Code, Column, Table, Partition
+
+        ssq = self.session.query
+
+        ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
     def copy_dataset(self, ds):
         from ..util import toposort
@@ -467,6 +510,7 @@ class Database(object):
         self.session.commit()
 
         return self.dataset(ds.vid)
+
 
 
 class BaseMigration(object):
@@ -581,7 +625,7 @@ def get_stored_version(connection):
         return version
     elif connection.engine.name == 'postgresql':
         try:
-            version = connection.execute('SELECT version FROM user_version;').fetchone()[0]
+            version = connection.execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone()[0]
         except ProgrammingError:
             # This happens when the user_version table doesn't exist
             raise VersionIsNotStored
@@ -677,15 +721,20 @@ def _update_version(connection, version):
     if connection.engine.name == 'sqlite':
         connection.execute('PRAGMA user_version = {}'.format(version))
     elif connection.engine.name == 'postgresql':
-        connection.execute('CREATE TABLE IF NOT EXISTS user_version(version INTEGER NOT NULL);')
+
+        connection.execute(DDL("CREATE SCHEMA IF NOT EXISTS {}".format(POSTGRES_SCHEMA_NAME)))
+
+        connection.execute('CREATE TABLE IF NOT EXISTS {}.user_version(version INTEGER NOT NULL);'
+                           .format(POSTGRES_SCHEMA_NAME))
 
         # upsert.
-        if connection.execute('SELECT * FROM user_version;').fetchone():
+        if connection.execute('SELECT * FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone():
             # update
             connection.execute('UPDATE user_version SET version = {};'.format(version))
         else:
             # insert
-            connection.execute('INSERT INTO user_version (version) VALUES ({})'.format(version))
+            connection.execute('INSERT INTO {}.user_version (version) VALUES ({})'
+                               .format(POSTGRES_SCHEMA_NAME,version))
     else:
         raise DatabaseMissingError('Do not know how to migrate {} engine.'.format(connection.engine.driver))
 

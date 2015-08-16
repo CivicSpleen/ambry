@@ -23,7 +23,6 @@ from ..util import get_logger, Constant
 
 indent = '    '  # Indent for structured log output
 
-
 class Bundle(object):
 
     STATES = Constant()
@@ -128,6 +127,8 @@ class Bundle(object):
         self._source_fs = None
         self._build_fs = None
 
+        self._identity = None
+
     def set_file_system(self, source_url=None, build_url=None):
         """Set the source file filesystem and/or build  file system"""
 
@@ -198,7 +199,10 @@ class Bundle(object):
 
     @property
     def identity(self):
-        return self.dataset.identity
+        if not self._identity:
+            self._identity =  self.dataset.identity
+
+        return self._identity
 
     @property
     def library(self):
@@ -210,10 +214,19 @@ class Bundle(object):
         :param source_name: Source name. The URL field must be a bundle or partition reference
         :return:
         """
+        from ambry.orm.exc import NotFoundError
 
         source = self.source(source_name)
 
-        return self.library.partition(source.url)
+        try:
+            return self.library.partition(source.url)
+        except NotFoundError:
+            return self.library.bundle(source.url)
+
+    def init_log_rate(self, N=None, message='', print_rate=None):
+        from ..util import init_log_rate as ilr
+
+        return ilr(self.log, N=N, message=message, print_rate=print_rate)
 
     @property
     def partitions(self):
@@ -228,8 +241,43 @@ class Bundle(object):
                 return p
         return None
 
+    def new_partition(self, table, **kwargs):
+        """
+        Add a partition to the bundle
+        :param table:
+        :param kwargs:
+        :return:
+        """
+
+        return self.dataset.new_partition(table, **kwargs)
+
     def table(self, ref):
+        """
+        Return a table object for a name or id
+        :param ref: Table name, vid or id
+        :return:
+        """
         return self.dataset.table(ref)
+
+    @property
+    def tables(self):
+        """
+        Return a iterator of tables in this bundle
+        :return:
+        """
+
+        return self.dataset.tables
+
+    def new_table(self, name, add_id=True, **kwargs):
+        """
+        Create a new table, if it does not exist, or update an existing table if it does
+        :param name:  Table name
+        :param add_id: If True, add an id field ( default is True )
+        :param kwargs: Other options passed to table object
+        :return:
+        """
+
+        return self.dataset.new_table(name = name, add_id = add_id, **kwargs)
 
     def wrap_partition(self, p):
         from .partitions import PartitionProxy
@@ -361,6 +409,10 @@ class Bundle(object):
         """Log the messsage."""
         self.logger.info(message)
 
+    def debug(self, message, **kwargs):
+        """Log the messsage."""
+        self.logger.debug(message)
+
     def error(self, message):
         """Log an error messsage.
 
@@ -426,6 +478,8 @@ class Bundle(object):
         self.log("---- Synchronized ----")
         self.dataset.commit()
 
+        self.library.search.index_bundle(self, force = True)
+
         return syncs
 
     def sync_in(self):
@@ -433,6 +487,8 @@ class Bundle(object):
         from ambry.bundle.files import BuildSourceFile
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
+
+        self.library.search.index_bundle(self, force = True)
         # self.state = self.STATES.SYNCED
 
     def sync_objects_in(self):
@@ -453,6 +509,14 @@ class Bundle(object):
     def sync_objects(self):
         self.build_source_files.record_to_objects()
         self.build_source_files.objects_to_record()
+
+    def sync_code(self):
+        """Sync in code files and the meta file, avoiding syncing the larger files"""
+        from ambry.orm.file import File
+        from ambry.bundle.files import BuildSourceFile
+
+        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB]:
+            self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
 
     #
     # Do All; Run the full process
@@ -772,9 +836,9 @@ class Bundle(object):
 
             pl.run()
 
-            self.log('Final methods')
+            self.debug('Final methods')
             for m in pl.final:
-                self.log(indent + b(m))
+                self.debug(indent + b(m))
                 getattr(self, m)(pl)
 
             if pl.stopped:
@@ -934,7 +998,12 @@ Pipeline Headers
 
         self.build_post_write_bundle_file()
 
+        self.library.search.index_bundle(self, force = True)
+
         self.state = phase + '_done'
+
+        self.log("Finished {}".format(phase))
+
 
         return True
 
@@ -976,7 +1045,7 @@ Pipeline Headers
 
         for name, segments in iteritems(partitions):
 
-            self.log('Coalescing segments for partition {} '.format(name))
+            self.debug('Coalescing segments for partition {} '.format(name))
 
             parent = self.partitions.get_or_new_partition(name, type=Partition.TYPE.UNION)
             stats = Stats(parent.table)
@@ -984,7 +1053,7 @@ Pipeline Headers
             pdf = parent.datafile
             for seg in sorted(segments, key=lambda x: b(x.name)):
 
-                self.log(indent + 'Coalescing segment  {} '.format(seg.identity.name))
+                self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
 
                 reader = self.wrap_partition(seg).datafile.reader()
                 header = None
@@ -1001,7 +1070,7 @@ Pipeline Headers
                         stats.process_body(row)
 
                 reader.close()
-                self.log(indent + "Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time()-start_time)))
+                self.debug(indent + "Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time()-start_time)))
 
             pdf.close()
             self.commit()
@@ -1016,7 +1085,7 @@ Pipeline Headers
 
         try:
             for p in pl[ambry.etl.PartitionWriter].partitions:
-                self.logger.info(indent + indent + 'Finalizing {}'.format(p.identity.name))
+                self.debug(indent + indent + 'Finalizing {}'.format(p.identity.name))
                 # We're passing the datafile path into filanize b/c finalize is on the ORM object,
                 # and datafile is on the proxy.
                 p.finalize()
@@ -1200,6 +1269,9 @@ Pipeline Headers
                 row[i] = self.state
             elif f == 'source_fs':
                 row[i] = self.source_fs
+            elif f.startswith('about'):
+                _,key = f.split('.')
+                row[i] = self.metadata.about[key]
 
         return row
 

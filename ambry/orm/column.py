@@ -82,6 +82,7 @@ class Column(Base):
 
     __table_args__ = (
         UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_c_sequence_id'),
+        UniqueConstraint('c_name', 'c_t_vid', name='_uc_c_name'),
     )
 
     DATATYPE_CHAR = 'char'
@@ -367,6 +368,35 @@ class Column(Base):
 
         return cd
 
+    @property
+    def row(self):
+        from collections import OrderedDict
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+
+        d = OrderedDict([('table', self.table.name)] +
+                        [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
+                                          'sequence_id', 'id', 'is_primary_key']])
+
+        d['column'] = d['name']
+        del d['name']
+
+        if self.name == 'id':
+            t = self.table
+            d['description'] = t.description
+            data = t.data
+        else:
+            data = self.data
+
+        for k, v in data.items():
+            d[k] = v
+
+        return d
+
+    def __repr__(self):
+        return '<column: {}, {}>'.format(self.name, self.vid)
+
     @staticmethod
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the seqience_id for this
@@ -403,21 +433,8 @@ class Column(Base):
         target.id = str(con.rev(None))
         target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
 
-    @property
-    def row(self):
-        from collections import OrderedDict
 
-        # Use an Ordered Dict to make it friendly to creating CSV files.
 
-        d = OrderedDict([('table', self.table.name)] +
-                        [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                        if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
-                                         'sequence_id','id', 'is_primary_key']])
-
-        return d
-
-    def __repr__(self):
-        return '<column: {}, {}>'.format(self.name, self.vid)
 
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)

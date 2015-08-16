@@ -193,7 +193,7 @@ class RowBuildSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
         rows = []
-        with self._fs.open(fn_path) as f:
+        with self._fs.open(fn_path, 'rb') as f:
             for row in csv.reader(f):
                 row = [e if e.strip() != '' else None for e in row]
                 if any(bool(e) for e in row):
@@ -500,7 +500,6 @@ class SourcesFile(RowBuildSourceFile):
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
 
-
 class SchemaFile(RowBuildSourceFile):
 
     def clean_objects(self):
@@ -570,7 +569,7 @@ class SchemaFile(RowBuildSourceFile):
             table.add_column(
                 row['column'],
                 fk_vid=row['is_fk'] if row.get('is_fk', False) else None,
-                description=(row.get('description', '') or '').strip().encode('utf-8'),
+                description=(row.get('description', '') or '').strip(),
                 datatype=row['datatype'].strip().lower(),
                 proto_vid=row.get('proto_vid'),
                 derivedfrom=row.get('derivedfrom'),
@@ -587,18 +586,44 @@ class SchemaFile(RowBuildSourceFile):
 
     def objects_to_record(self):
 
-        rows = []
+        initial_rows = []
+
+        headers = []
 
         for table in self._dataset.tables:
             for col in table.columns:
                 row = col.row
+                initial_rows.append(row)
 
-                if not rows:
-                    rows.append([e if e != 'name' else 'column' for e in list(row.keys())])
+                # this should put all of the data fields at the end of the headers
+                for v in row.keys():
+                    if v not in headers:
+                        headers.append(v)
 
-                rows.append(list(row.values()))
+        rows = list()
 
-            rows.append([None for e in rows[0]])  # Transpose trick fails if rows not all same size
+        # Move description to the end
+        if 'description' in headers:
+            headers.remove('description')
+            headers.append('description')
+
+        if initial_rows:
+            rows.append(headers)
+            name_index = headers.index('column')
+        else:
+            name_index = None
+
+        for row in initial_rows:
+
+            this_row = list()
+            for h in headers: # Every row is the same length, with combined set of headers
+                this_row.append(row.get(h, None))
+
+            if name_index and this_row[name_index] == 'id':
+                #Blank to separate tables, but transpose trick fails if rows not all same size
+                rows.append([None for e in this_row])
+
+            rows.append(this_row)
 
         # Transpose trick to remove empty columns
         if rows:

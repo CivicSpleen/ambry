@@ -48,3 +48,22 @@ class Test(unittest.TestCase):
         db.commit()
         # uncomment to see database content.
         # self.dump_database(db, 'columns')
+
+    def test_a_lot_of_tables(self):
+        from contexttimer import Timer
+
+        db = Database(self.dsn)
+        db.open()
+
+        ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
+
+        with Timer() as t:
+            for i in range(100):
+                ds.new_table('table'+str(i))
+
+            ds.commit()
+
+        print len(ds.tables), len(ds.tables)/t.elapsed
+
+        self.assertEqual(100, len(ds.tables))
+

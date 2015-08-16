@@ -261,8 +261,8 @@ class Slice(Pipe):
         parts = []
 
         for slice in args:
-            parts.append("row[{}:{}]".format(slice[0], slice[1])
-                         if isinstance(slice, (tuple, list)) else "[row[{}]]".format(slice))
+            parts.append("tuple(row[{}:{}])".format(slice[0], slice[1])
+                         if isinstance(slice, (tuple, list)) else "(row[{}],)".format(slice))
 
             code = 'lambda row: {}'.format('+'.join(parts))
             func = eval(code)
@@ -274,13 +274,14 @@ class Slice(Pipe):
         args = self._args
 
         if not args:
-            args = [self.source.segment]
+            args = self.source.segment
 
         try:
             self.slicer, code = Slice.make_slicer(args)
         except Exception as e:
             raise PipelineError(self, "Failed to eval slicer for parts: {} for source {} "
                                 .format(args, self.source.name))
+
 
         try:
             return self.slicer(row)
@@ -290,7 +291,6 @@ class Slice(Pipe):
     def process_body(self, row):
 
         return self.slicer(row)
-
 
 class Head(Pipe):
     """ Pass-through only the first N rows
@@ -355,11 +355,11 @@ class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one, by returning the header for the first row. """
 
     def __init__(self, header):
-        self.headers = header
+        self._added_headers = header
 
     def __iter__(self):
 
-        yield self.headers
+        yield self._added_headers
 
         for row in self._source_pipe:
             yield row
@@ -900,16 +900,16 @@ class PrintRows(Pipe):
         self.count += self.count_inc
 
     def process_header(self, row):
-
         return row
 
     def __str__(self):
 
         if self.rows:
-            aug_header = ['0'] + ['#' + str(j) + ' ' + str(c) for j, c in enumerate(self.headers)]
+            aug_header =  ['0'] + ['#' + str(j) + ' ' + str(c) for j, c in enumerate(self.headers)]
+
             return (qualified_class_name(self) +
                     ' {} rows total\n'.format(self.i) +
-                    tabulate(self.rows, aug_header[self.offset:self.columns], tablefmt='pipe'))
+                    tabulate(self.rows, headers=aug_header[self.offset:self.columns], tablefmt='pipe'))
         else:
             return qualified_class_name(self) + ' 0 rows'
 

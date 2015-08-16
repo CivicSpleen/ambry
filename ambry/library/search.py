@@ -30,7 +30,7 @@ class Search(object):
                 backend_name = library.database.driver
 
             if backend_name not in BACKENDS:
-                logger.warning(
+                logger.debug(
                     'Missing backend: ambry does not have {} search backend. Using whoosh search.'.format(backend_name))
                 backend_name = 'whoosh'
 
@@ -97,6 +97,24 @@ class Search(object):
     def search_datasets(self, search_phrase, limit=None):
         """ Search for datasets. """
         return self.backend.dataset_index.search(search_phrase, limit=limit)
+
+    def search(self, search_phrase, limit=None):
+        """Search for datasets, and expand to database records"""
+        from ambry.identity import ObjectNumber
+
+        results = self.search_datasets(search_phrase, limit)
+
+        for r in results:
+            vid = r.vid or ObjectNumber.parse(iter(r.partitions).next()).as_dataset
+
+            r.vid = vid
+
+            r.bundle = self.library.bundle(r.vid)
+
+            yield r
+
+
+
 
     def list_documents(self, limit = None):
         """

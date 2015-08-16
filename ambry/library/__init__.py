@@ -81,7 +81,11 @@ class Library(object):
     def resolve_object_number(self, ref):
         """Resolve a variety of object numebrs to a dataset number"""
 
-        on = ObjectNumber.parse(ref)
+        if not isinstance(ref, ObjectNumber):
+            on = ObjectNumber.parse(ref)
+        else:
+            on = ref
+
         ds_on = on.as_dataset
 
         return ds_on
@@ -204,19 +208,25 @@ class Library(object):
 
         b.state = Bundle.STATES.NEW
         b.set_last_access(Bundle.STATES.NEW)
-        b.set_file_system(source_url=self._fs.source(ds.name),
-                          build_url=self._fs.build(ds.name))
+
+        #b.set_file_system(source_url=self._fs.source(ds.name),
+        #                  build_url=self._fs.build(ds.name))
 
         return b
 
     def bundle(self, ref):
         """Return a bundle build on a dataset, with the given vid or id reference"""
+        from ..identity import NotObjectNumberError
+        from ..orm.exc import NotFoundError
 
         if isinstance(ref, Dataset):
             ds = ref
         else:
-            ref = self.resolve_object_number(ref)
-            ds = self._db.dataset(ref)
+            try:
+                ds = self._db.dataset(ref)
+            except NotFoundError:
+                ds = None
+
 
         if not ds:
             raise NotFoundError('Failed to find dataset for ref: {}'.format(ref))
@@ -398,6 +408,8 @@ class Library(object):
 
                 b = self.bundle(ds.vid)
                 b.state = Bundle.STATES.INSTALLED
+
+                self.search.index_bundle(b)
 
                 self.logger.info('Synced {}'.format(ds.vname))
             except Exception as e:

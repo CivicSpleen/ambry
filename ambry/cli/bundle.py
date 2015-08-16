@@ -211,18 +211,10 @@ def bundle_parser(cmd):
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
     command_p.add_argument('-p', '--print_pipe', default=False, action='store_true',
                            help='Print out the pipeline as it runs')
-
-    #
-    # Prepare Command
-    #
-    command_p = sub_cmd.add_parser('prepare', help='Prepare by creating the database and schemas')
-    command_p.set_defaults(subcommand='prepare')
-
-    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
-                           help='Syncrhonize before building')
+                           help='Syncrhonize before and after')
 
-    command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
+
 
     #
     # Build Command
@@ -233,6 +225,8 @@ def bundle_parser(cmd):
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Build even built or finalized bundles')
+    command_p.add_argument('-s', '--sync', default=False, action='store_true',
+                           help='Syncrhonize before building')
 
     command_p.add_argument('sources', nargs='*', type=str,
                            help='Sources to run, instead of running all sources')
@@ -246,7 +240,9 @@ def bundle_parser(cmd):
 
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
-                           help='Syncrhonize before building')
+                           help='Synchronize before and after')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Build even built or finalized bundles')
 
     command_p.add_argument('phase', nargs='?', type=str, help='Name of phase')
     command_p.add_argument('sources', nargs='*', type=str, help='Sources to run, instead of running all sources')
@@ -291,6 +287,8 @@ def bundle_parser(cmd):
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Force running on a built or finalized bundle')
+    command_p.add_argument('-s', '--sync', default=False, action='store_true',
+                           help='Syncrhonize before and after')
     command_p.add_argument('method', metavar='Method', type=str, help='Name of the method to run')
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
 
@@ -342,6 +340,8 @@ def bundle_parser(cmd):
     command_p.add_argument('-l', '--limit', type=int, default=None, help='Limit on number of rwos per file')
     command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to export')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
+
+
 
 
 def bundle_info(args, l, rc):
@@ -512,7 +512,9 @@ def bundle_sync(args, l, rc):
     except BundleError as e:
         err("Failed to load bundle code file: {}".format(e))
 
+    prt("Sync in")
     b.sync_in()
+    prt("Sync out")
     b.sync_out()
     b.set_last_access(Bundle.STATES.SYNCED)
 
@@ -525,14 +527,16 @@ def bundle_meta(args, l, rc):
         b.clean()
         b.set_last_access(Bundle.STATES.CLEANED)
 
-    b.sync_in()
+    if args.sync:
+        b.sync_in()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l).cast_to_subclass()
     b.meta()
     b.set_last_access(Bundle.STATES.META)
 
-    b.sync_out()
+    if args.sync:
+        b.sync_out()
 
 
 def bundle_build(args, l, rc):
@@ -549,20 +553,26 @@ def bundle_build(args, l, rc):
         b.set_last_access(Bundle.STATES.CLEANED)
         b.commit()
 
-    b.sync_in()
+    if args.sync:
+        b.sync_in()
+    else:
+        b.sync_code()
 
     b = b.cast_to_subclass()
 
     b.build(sources=args.sources)
-    b.sync_out()
-    b.set_last_access(Bundle.STATES.BUILT)
 
+    if args.sync:
+        b.sync_out()
+
+    b.set_last_access(Bundle.STATES.BUILT)
 
 def bundle_phase(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
 
-    check_built(b)
+    if not args.force:
+        check_built(b)
 
     if args.clean:
         if not b.clean():
@@ -571,9 +581,15 @@ def bundle_phase(args, l, rc):
         b.set_last_access(Bundle.STATES.META)
         b.commit()
 
-    b.sync_in()
+    if args.sync:
+        b.sync_in()
+    else:
+        b.sync_code()
+
     b.run_phase(args.phase, sources = args.sources)
-    b.sync_out()
+
+    if args.sync:
+        b.sync_out()
 
     b.set_last_access(Bundle.STATES.META)
     b.commit()
@@ -590,12 +606,15 @@ def bundle_run(args, l, rc):
     if not args.force:
         check_built(b)
 
-    b.sync()
-
-    b = b.cast_to_subclass()
-
     if args.clean:
         b.clean()
+
+    if args.sync:
+        b.sync_in()
+    else:
+        b.sync_code()
+
+    b = b.cast_to_subclass()
 
     b.load_requirements()
 
@@ -614,7 +633,9 @@ def bundle_run(args, l, rc):
     b.logger.info("Running: {}({})".format(str(args.method), ','.join(args.args)))
 
     r = f(*args.args)
-    b.sync_out()
+
+    if args.sync:
+        b.sync_out()
 
     print "RETURN: ", r
 
@@ -691,11 +712,12 @@ def bundle_dump(args, l, rc):
     elif args.table == 'partitions':
 
         records = []
-        headers = 'Name Count'.split()
+        headers = 'Vid Name State'.split()
         for row in b.dataset.partitions:
             records.append((
+                row.vid,
                 row.name,
-                row.stats_dict.id.count
+                row.state
             )
             )
         records = sorted(records, key=lambda row: (row[0]))
@@ -740,14 +762,15 @@ def bundle_dump(args, l, rc):
         for t in b.dataset.tables:
             for i, c in enumerate(t.columns):
                 row = OrderedDict((k, v) for k, v in c.row.items() if k in
-                                  ['table', 'name', 'id', 'datatype', 'caster', 'description'])
+                                  ['table', 'column', 'id', 'datatype', 'caster', 'description'])
 
                 if i == 0:
                     records.append(row.keys())  # once for each table
 
                 records.append(row.values())
 
-        records = zip(*[r for r in zip(*records) if bool(filter(bool, row[1:]))])
+
+        records = zip(*[r for r in zip(*records) if bool(filter(bool, records[1:]))])
 
         if records:
             headers, records = records[0], records[1:]
@@ -1074,3 +1097,4 @@ def bundle_extract(args, l, rc):
                 w.writerow(row)
 
     b.logger.info('Extracted to: {}'.format(bfs.getsyspath('/')))
+

@@ -744,7 +744,7 @@ class ObjectNumber(object):
             raise NotObjectNumberError("Got null input")
 
         if not isinstance(on_str, string_types):
-            raise NotObjectNumberError("Must be a string")
+            raise NotObjectNumberError("Must be a string. Got a {} ".format(type(on_str)))
 
         # if isinstance(on_str, unicode):
         #     dataset = on_str.encode('ascii')

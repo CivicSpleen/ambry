@@ -27,9 +27,18 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 class DatasetSearchResult(object):
     def __init__(self):
         self.vid = None
+        self.bundle = None # Set in search()
         self.b_score = 0
         self.p_score = 0
         self.partitions = set()
+
+    @property
+    def partition_records(self):
+
+        assert bool(self.bundle)
+
+        for p in self.partitions:
+            yield self.bundle.partition(p)
 
     @property
     def score(self):
@@ -280,7 +289,7 @@ class BaseDatasetIndex(BaseIndex):
                                               dataset.identity.vname,
                                               columns]])
 
-        # From the source, make a varity of combinations for keywords:
+        # From the source, make a variety of combinations for keywords:
         # foo.bar.com -> "foo foo.bar foo.bar.com bar.com"
         parts = unicode(dataset.identity.source).split('.')
         sources = (['.'.join(g) for g in [parts[-i:] for i in range(2, len(parts) + 1)]]
