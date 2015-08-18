@@ -361,7 +361,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         self.backend.library.database.connection.execute(query)
 
     def _make_query_from_terms(self, terms):
-        """ Creates a query for dataset from decomposed search terms.
+        """ Creates a query for partition from decomposed search terms.
 
         Args:
             terms (dict or unicode or string):
@@ -372,7 +372,8 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         """
         expanded_terms = self._expand_terms(terms)
 
-        # FIXME: add score, year_from, year_to to the query.
+        # FIXME: add score, year_from, year_to to the query. Order by score.
+
         query_parts = [
             'SELECT vid, dataset_vid, 1, 1, 1',
             'FROM partition_index'

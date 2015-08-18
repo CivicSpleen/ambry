@@ -342,7 +342,6 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
         self._assert_finds_dataset(dataset, 'title')
 
     # @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    @unittest.skip('Broken')
     def test_search_dataset_by_summary(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         dataset.config.metadata.about.summary = 'Some summary of the dataset'

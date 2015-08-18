@@ -389,7 +389,7 @@ class BaseDatasetIndex(BaseIndex):
         return document
 
     def _expand_terms(self, terms):
-        """ Expands terms to the appropriate fields.
+        """ Expands terms of the dataset to the appropriate fields.
 
         Args:
             terms (dict or str):
@@ -496,9 +496,7 @@ class BasePartitionIndex(BaseIndex):
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
-            terms = stp.parse(terms)
-
-        # The top level (title, names, keywords, doc) will get ANDed together
+            terms = stp.parse(terms, or_join=self.backend._or_join)
 
         if 'about' in terms:
             ret['doc'].append(terms['about'])
