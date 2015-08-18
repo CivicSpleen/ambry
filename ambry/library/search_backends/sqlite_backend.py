@@ -14,7 +14,7 @@ from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIn
 
 from ambry.util import get_logger
 
-logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
+logger = get_logger(__name__, propagate=False)
 
 
 class SQLiteSearchBackend(BaseSearchBackend):

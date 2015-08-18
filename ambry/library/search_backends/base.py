@@ -121,6 +121,7 @@ class Text(IndexField):
 
     Note:
         This field type is always scorable.
+
     Examples:
         Whoosh - TEXT, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.TEXT
         SQLite - FIXME:
@@ -181,6 +182,11 @@ class BaseSearchBackend(object):
                 return terms[0]
         else:
             return terms
+
+    def _join_keywords(self, keywords):
+        if isinstance(keywords, (list, tuple)):
+            return 'keywords:(' + self._and_join(keywords) + ')'
+        return 'keywords:{}'.format(keywords)
 
     def _and_join(self, terms):
         """ Joins terms using AND operator.
@@ -382,6 +388,33 @@ class BaseDatasetIndex(BaseIndex):
 
         return document
 
+    def _expand_terms(self, terms):
+        """ Expands terms to the appropriate fields.
+
+        Args:
+            terms (dict or str):
+
+        Returns:
+            dict: keys are field names, values are query strings
+        """
+
+        ret = {
+            'keywords': list(),
+            'doc': list()}
+
+        if not isinstance(terms, dict):
+            stp = SearchTermParser()
+            terms = stp.parse(terms, or_join=self.backend._or_join)
+
+        # The top level ( title, names, keywords, doc ) will get ANDed together
+
+        if 'about' in terms:
+            ret['doc'].append(terms['about'])
+
+        if 'source' in terms:
+            ret['keywords'] = self.backend._join_keywords(terms['source'])
+        return ret
+
     def _make_query_from_terms(self, terms):
         """ Creates a query for dataset from decomposed search terms.
 
@@ -389,44 +422,23 @@ class BaseDatasetIndex(BaseIndex):
             terms (dict or unicode or string):
 
         Returns:
-            str with FTS query.
+            tuple: First element is str with FTS query, second is parameters of the query.
+
         """
+        # FIXME: move to the whoosh and sqlite backends.
 
-        if not isinstance(terms, dict):
-            stp = SearchTermParser()
-            terms = stp.parse(terms)
-
-        keywords = list()
-        doc = list()
-
-        source = None
-
-        # The top level ( title, names, keywords, doc ) will get ANDed together
-
-        if 'about' in terms:
-            doc.append(terms['about'])
-
-        if 'source' in terms:
-            source = terms['source']
+        expanded_terms = self._expand_terms(terms)
 
         cterms = ''
 
-        if doc:
-            cterms = self.backend._and_join(doc)
+        if expanded_terms['doc']:
+            cterms = self.backend._and_join(expanded_terms['doc'])
 
-        if keywords:
-            keywords_terms = 'keywords:(' + self.backend._and_join(keywords) + ')'
+        if expanded_terms['keywords']:
             if cterms:
-                cterms = self.backend._and_join(cterms, keywords_terms)
+                cterms = self.backend._and_join(cterms, expanded_terms['keywords'])
             else:
-                cterms = keywords_terms
-
-        if source:
-            source_terms = 'keywords:{}'.format(source)
-            if cterms:
-                cterms = self.backend._and_join(cterms, source_terms)
-            else:
-                cterms = source_terms
+                cterms = expanded_terms['keywords']
 
         logger.debug('Dataset terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
         return cterms
@@ -497,6 +509,43 @@ class BasePartitionIndex(BaseIndex):
 
         return document
 
+    def _expand_terms(self, terms):
+        """ Expands terms to the appropriate fields.
+
+        Args:
+            terms (dict or str):
+
+        Returns:
+            dict: keys are field names, values are query strings
+        """
+        ret = {
+            'keywords': list(),
+            'doc': list()}
+
+        if not isinstance(terms, dict):
+            stp = SearchTermParser()
+            terms = stp.parse(terms)
+
+        # The top level (title, names, keywords, doc) will get ANDed together
+
+        if 'about' in terms:
+            ret['doc'].append(terms['about'])
+
+        if 'with' in terms:
+            ret['doc'].append(terms['with'])
+
+        if 'in' in terms:
+            place_vids = self._expand_place_ids(terms['in'])
+            ret['keywords'].append(place_vids)
+
+        if 'by' in terms:
+            ret['keywords'].append(terms['by'])
+        frm_to = self._from_to_as_term(terms.get('from', None), terms.get('to', None))
+
+        if frm_to:
+            ret['keywords'].append(frm_to)
+        return ret
+
     def _make_query_from_terms(self, terms):
         """ Returns a FTS query for partition created from decomposed search terms.
 
@@ -508,41 +557,18 @@ class BasePartitionIndex(BaseIndex):
 
         """
 
-        if not isinstance(terms, dict):
-            stp = SearchTermParser()
-            terms = stp.parse(terms)
-
-        keywords = list()
-        doc = list()
-
-        # The top level ( title, names, keywords, doc ) will get ANDed together
-
-        if 'about' in terms:
-            doc.append(terms['about'])
-
-        if 'with' in terms:
-            doc.append(terms['with'])
-
-        if 'in' in terms:
-            place_vids = self._expand_place_ids(terms['in'])
-            keywords.append(place_vids)
-
-        if 'by' in terms:
-            keywords.append(terms['by'])
-        frm_to = self._from_to_as_term(terms.get('from', None), terms.get('to', None))
-
-        if frm_to:
-            keywords.append(frm_to)
+        expanded_terms = self._expand_terms(terms)
 
         cterms = ''
-        if doc:
-            cterms = self.backend._or_join(doc)
+        if expanded_terms['doc']:
+            cterms = self.backend._or_join(expanded_terms['doc'])
 
-        if keywords:
+        if expanded_terms['keywords']:
             if cterms:
-                cterms = self.backend._and_join([cterms, self.backend._field_term('keywords', keywords)])
+                cterms = self.backend._and_join(
+                    [cterms, self.backend._field_term('keywords', expanded_terms['keywords'])])
             else:
-                cterms = self.backend._field_term('keywords', keywords)
+                cterms = self.backend._field_term('keywords', expanded_terms['keywords'])
 
         logger.debug('Partition terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
 
@@ -715,7 +741,10 @@ class SearchTermParser(object):
     def stem(self, w):
         return self.stemmer.stem(w)
 
-    def parse(self, s):
+    def parse(self, s, or_join=None):
+        """ FIXME: """
+        if not or_join:
+            or_join = lambda x: '(' + ' OR '.join(x) + ')'
 
         toks = self.scan(s)
 
@@ -758,7 +787,7 @@ class SearchTermParser(object):
                 if marker in 'in':
                     groups[marker] = ' '.join(terms)
                 else:
-                    groups[marker] = '(' + ' OR '.join(terms) + ')'
+                    groups[marker] = or_join(terms)
             elif len(terms) == 1:
                 groups[marker] = terms[0]
             else:

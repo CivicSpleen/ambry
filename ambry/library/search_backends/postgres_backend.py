@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import logging
-
 from sqlalchemy.sql.expression import text
 
 from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex,\
@@ -10,9 +8,7 @@ from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIn
 
 from ambry.util import get_logger
 
-logger = get_logger(__name__, level=logging.INFO, propagate=False)
-
-# FIXME: Implement.
+logger = get_logger(__name__)
 
 
 class PostgreSQLSearchBackend(BaseSearchBackend):
@@ -28,6 +24,27 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
     def _get_identifier_index(self):
         """ Returns identifier index. """
         return IdentifierPostgreSQLIndex(backend=self)
+
+    def _or_join(self, terms):
+        """ Joins terms using OR operator.
+
+        Args:
+            terms (list): terms to join
+
+        Examples:
+            self._or_join(['term1', 'term2']) -> 'term1 OR term2'
+
+        Returns:
+            str
+        """
+
+        if isinstance(terms, (tuple, list)):
+            if len(terms) > 1:
+                return '(' + ' | '.join(terms) + ')'
+            else:
+                return terms[0]
+        else:
+            return terms
 
     def _and_join(self, terms):
         """ AND join of the terms.
@@ -46,6 +63,12 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
         else:
             return self._or_join(terms[0])
 
+    def _join_keywords(self, keywords):
+        if isinstance(keywords, (list, tuple)):
+            # FIXME: Test me.
+            return '(' + self._and_join(keywords) + ')'
+        return keywords
+
 
 class DatasetPostgreSQLIndex(BaseDatasetIndex):
 
@@ -53,18 +76,68 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         assert backend is not None, 'backend argument can not be None.'
         super(self.__class__, self).__init__(backend=backend)
 
-        logger.debug('Creating dataset FTS table.')
-        '''
+        logger.debug('Creating dataset FTS table and index.')
+
+        # create table for dataset documents. Create special table for search to make it easy to replace one
+        # FTS engine with another.
         query = """\
-            CREATE VIRTUAL TABLE dataset_index USING fts3(
+            CREATE TABLE dataset_index (
                 vid VARCHAR(256) NOT NULL,
                 title TEXT,
-                keywords TEXT,
-                doc TEXT
+                keywords VARCHAR(256)[],
+                doc tsvector
             );
         """
         self.backend.library.database.connection.execute(query)
-        '''
+
+        # create FTS index on doc field. # FIXME:
+        query = """\
+            CREATE INDEX dataset_index_idx ON dataset_index USING gin(doc);
+        """
+        self.backend.library.database.connection.execute(query)
+
+        # Create index on keyword field
+        query = """\
+            CREATE INDEX dataset_index_title_idx on dataset_index USING gin(keywords);
+        """
+        self.backend.library.database.connection.execute(query)
+
+    def _make_query_from_terms(self, terms):
+        """ Creates a query for dataset from decomposed search terms.
+
+        Args:
+            terms (dict or unicode or string):
+
+        Returns:
+            tuple of (str, dict): First element is str with FTS query, second is parameters of the query.
+
+        """
+        # FIXME: move to the whoosh and sqlite backends.
+
+        expanded_terms = self._expand_terms(terms)
+
+        query_parts = [
+            'SELECT vid',
+            'FROM dataset_index'
+        ]
+        query_params = {}
+
+        if expanded_terms['doc']:
+            query_parts.append('WHERE doc @@ to_tsquery(:doc)')
+            query_params['doc'] = self.backend._and_join(expanded_terms['doc'])
+
+        if expanded_terms['keywords']:
+            query_params['keywords'] = expanded_terms['keywords']
+            if expanded_terms['doc']:
+                # FIXME: test me.
+                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \');')
+            else:
+                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \');')
+
+        deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
+            .format(terms, query_parts, query_params)
+        logger.debug(deb_msg)
+        return text('\n'.join(query_parts)), query_params
 
     def search(self, search_phrase, limit=None):
         """ Finds datasets by search phrase.
@@ -77,26 +150,32 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             list of DatasetSearchResult instances.
 
         """
-        # PostgreSQL FTS can't find terms with `-`, therefore all hyphens replaced with underscore before save.
-        # Now to make proper query we need to replace all hypens in the search phrase.
-        # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-PostgreSQL-fts3-queries
-        search_phrase = search_phrase.replace('-', '_')
-        match_query = self._make_query_from_terms(search_phrase)
+        # FIXME: Implement limit.
+        query, query_params = self._make_query_from_terms(search_phrase)
+        results = self.backend.library.database.connection.execute(query, **query_params)
         datasets = {}
-        # TODO: Implement
+        for result in results:
+            vid = result[0]
+            b_score = 0
+            p_score = 0
+            partitions = set()
+            res = DatasetSearchResult()
+            res.b_score = b_score
+            res.p_score = p_score
+            res.partitions = partitions
+            res.vid = vid
+            datasets[vid] = res
+        # TODO: Implement partition query
         return list(datasets.values())
 
     def _index_document(self, document, force=False):
         """ Adds document to the index. """
         # TODO: Implement
-        pass
-        '''
         query = text("""
             INSERT INTO dataset_index(vid, title, keywords, doc)
-            VALUES(:vid, :title, :keywords, :doc);
+            VALUES(:vid, :title, string_to_array(:keywords, ' '), to_tsvector('english', :doc));
         """)
         self.backend.library.database.connection.execute(query, **document)
-        '''
 
     def reset(self):
         """ Drops index table. """
@@ -133,7 +212,6 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
 
     def all(self):
         """ Returns list with all indexed datasets. """
-        # FIXME: Test
         datasets = []
 
         query = text("""
