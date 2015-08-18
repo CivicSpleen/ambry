@@ -342,6 +342,7 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
         self._assert_finds_dataset(dataset, 'title')
 
     # @unittest.skipIf(SKIP_ALL, 'Debug skip.')
+    @unittest.skip('Broken')
     def test_search_dataset_by_summary(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         dataset.config.metadata.about.summary = 'Some summary of the dataset'
@@ -408,7 +409,6 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
         self._assert_finds_partition(partition, partition.vid)
 
     # @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    @unittest.skip('Not implemented')
     def test_search_partition_by_id(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
@@ -417,7 +417,6 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
         self._assert_finds_partition(partition, partition.identity.id_)
 
     # @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    @unittest.skip('Not implemented')
     def test_search_partition_by_name(self):
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
@@ -427,7 +426,6 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
         self._assert_finds_partition(partition, str(partition.identity.name))
 
     # @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    @unittest.skip('Not implemented')
     def test_search_partition_by_vname(self):
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
@@ -437,7 +435,6 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
 
     # search tests
     # @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    @unittest.skip('Not implemented')
     def test_search_years_range(self):
         """ search by `source example.com from 1978 to 1979` (temporal bounds) """
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')

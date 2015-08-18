@@ -4,7 +4,7 @@ from sqlalchemy.sql.expression import text
 
 from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex,\
     BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult,\
-    DatasetSearchResult, PartitionSearchResult, SearchTermParser
+    DatasetSearchResult, PartitionSearchResult
 
 from ambry.util import get_logger
 
@@ -112,7 +112,6 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             tuple of (str, dict): First element is str with FTS query, second is parameters of the query.
 
         """
-        # FIXME: move to the whoosh and sqlite backends.
 
         expanded_terms = self._expand_terms(terms)
 
@@ -127,7 +126,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             query_params['doc'] = self.backend._and_join(expanded_terms['doc'])
 
         if expanded_terms['keywords']:
-            query_params['keywords'] = expanded_terms['keywords']
+            query_params['keywords'] = self.backend._and_join(expanded_terms['keywords'])
             if expanded_terms['doc']:
                 # FIXME: test me.
                 query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \');')
@@ -165,7 +164,12 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             res.partitions = partitions
             res.vid = vid
             datasets[vid] = res
-        # TODO: Implement partition query
+
+        logger.debug('Extending datasets with partitions.')
+        for partition in self.backend.partition_index.search(search_phrase):
+            datasets[partition.dataset_vid].p_score += partition.score
+            datasets[partition.dataset_vid].partitions.add(partition.vid)
+
         return list(datasets.values())
 
     def _index_document(self, document, force=False):
@@ -374,18 +378,39 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             'FROM partition_index'
         ]
         query_params = {}
+        where_count = 0
 
         if expanded_terms['doc']:
             query_parts.append('WHERE doc @@ to_tsquery(:doc)')
             query_params['doc'] = self.backend._and_join(expanded_terms['doc'])
+            where_count += 1
 
         if expanded_terms['keywords']:
             query_params['keywords'] = expanded_terms['keywords']
-            if expanded_terms['doc']:
+            if where_count:
                 # FIXME: test me.
                 query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \');')
             else:
                 query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \');')
+            where_count += 1
+
+        if expanded_terms['from']:
+            if where_count:
+                # at least one WHERE exists
+                query_parts.append('AND from_year >= :from_year')
+            else:
+                query_parts.append('WHERE from_year >= :from_year')
+            query_params['from_year'] = expanded_terms['from']
+            where_count += 1
+
+        if expanded_terms['to']:
+            if where_count:
+                # at least one WHERE exists
+                query_parts.append('AND to_year <= :to_year')
+            else:
+                query_parts.append('to_year <= :to_year')
+            query_params['to_year'] = expanded_terms['to']
+            where_count += 1
 
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
@@ -410,6 +435,22 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             yield PartitionSearchResult(
                 vid=vid, dataset_vid=dataset_vid, score=score)
 
+    def _as_document(self, partition):
+        """ Converts partition to document indexed by to FTS index.
+
+        Args:
+            partition (orm.Partition): partition to convert.
+
+        Returns:
+            dict with structure matches to BasePartitionIndex._schema.
+
+        """
+        doc = super(self.__class__, self)._as_document(partition)
+
+        # pass time_coverage to the _index_document.
+        doc['time_coverage'] = partition.time_coverage
+        return doc
+
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
 
@@ -427,6 +468,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
                 string_to_array(:keywords, ' '),
                 to_tsvector('english', :doc),
                 :from_year, :to_year); """)
+
         self.backend.library.database.connection.execute(
             query, from_year=from_year, to_year=to_year, **document)
 

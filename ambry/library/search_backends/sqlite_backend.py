@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from collections import defaultdict
-import logging
 import struct
 
 from sqlalchemy.sql.expression import text
@@ -68,6 +67,39 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         """
         self.backend.library.database.connection.execute(query)
 
+    def _make_query_from_terms(self, terms):
+        """ Creates a query for dataset from decomposed search terms.
+
+        Args:
+            terms (dict or unicode or string):
+
+        Returns:
+            tuple of (str, dict): First element is str with FTS query, second is parameters of the query.
+
+        """
+        match_query = ''
+
+        expanded_terms = self._expand_terms(terms)
+        if expanded_terms['doc']:
+            match_query = self.backend._or_join(expanded_terms['doc'])
+        if expanded_terms['keywords']:
+            if match_query:
+                match_query += self.backend._and_join(
+                    match_query, self.backend._join_keywords(expanded_terms['keywords']))
+            else:
+                match_query = self.backend._join_keywords(expanded_terms['keywords'])
+
+        query = text("""
+            SELECT vid, rank(matchinfo(dataset_index)) AS score
+            FROM dataset_index
+            WHERE dataset_index MATCH :match_query
+            ORDER BY score DESC;
+        """)
+        query_params = {
+            'match_query': match_query}
+
+        return query, query_params
+
     def search(self, search_phrase, limit=None):
         """ Finds datasets by search phrase.
 
@@ -79,24 +111,17 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             list of DatasetSearchResult instances.
 
         """
-        # SQLite FTS can't find terms with `-`, therefore all hyphens replaced with underscore before save.
-        # Now to make proper query we need to replace all hypens in the search phrase.
+        # SQLite FTS can't find terms with `-`, therefore all hyphens were replaced with underscore
+        # before save. Now to get appropriate result we need to replace all hyphens in the search phrase.
         # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
         search_phrase = search_phrase.replace('-', '_')
-        match_query = self._make_query_from_terms(search_phrase)
+        query, query_params = self._make_query_from_terms(search_phrase)
 
         raw_connection = self.backend.library.database.engine.raw_connection()
         raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
 
-        query = ("""
-            SELECT vid, rank(matchinfo(dataset_index)) AS score
-            FROM dataset_index
-            WHERE dataset_index MATCH :match_query
-            ORDER BY score DESC;
-        """)
-
-        logger.debug('Searching datasets using `{}` query.'.format(match_query))
-        results = self.backend.library.database.connection.execute(query, match_query=match_query).fetchall()
+        logger.debug('Searching datasets using `{}` query.'.format(query))
+        results = self.backend.library.database.connection.execute(query, **query_params).fetchall()
         datasets = defaultdict(DatasetSearchResult)
         for result in results:
             vid, score = result
@@ -349,34 +374,20 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         from_year = terms.pop('from', None)
         to_year = terms.pop('to', None)
 
-        match_query = self._make_query_from_terms(terms)
+        query, query_params = self._make_query_from_terms(terms)
 
         raw_connection = self.backend.library.database.engine.raw_connection()
         raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
-
 
         # SQLite FTS implementation does not allow to create indexes on FTS tables.
         # see https://sqlite.org/fts3.html 1.5. Summary, p 1:
         # ... it is not possible to create indices ...
         #
         # So, filter years range here.
-        if match_query:
-            query = text("""
-                SELECT vid, dataset_vid, rank(matchinfo(partition_index)) AS score, from_year, to_year
-                FROM partition_index
-                WHERE partition_index MATCH :match_query
-                ORDER BY score DESC;
-            """)
-            results = self.backend.library.database.connection\
-                .execute(query, match_query=match_query)\
-                .fetchall()
-        else:
-            query = text("""
-                SELECT vid, dataset_vid, rank(matchinfo(partition_index)), from_year, to_year AS score
-                FROM partition_index""")
-            results = self.backend.library.database.connection\
-                .execute(query)\
-                .fetchall()
+
+        results = self.backend.library.database.connection\
+            .execute(query, query_params)\
+            .fetchall()
 
         for result in results:
             vid, dataset_vid, score, db_from_year, db_to_year = result
@@ -422,6 +433,47 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         # pass time_coverage to the _index_document.
         doc['time_coverage'] = partition.time_coverage
         return doc
+
+    def _make_query_from_terms(self, terms):
+        """ Creates a query for partition from decomposed search terms.
+
+        Args:
+            terms (dict or unicode or string):
+
+        Returns:
+            tuple of (str, dict): First element is str with FTS query, second is parameters of the query.
+
+        """
+
+        match_query = ''
+
+        expanded_terms = self._expand_terms(terms)
+        if expanded_terms['doc']:
+            match_query = self.backend._and_join(expanded_terms['doc'])
+
+        if expanded_terms['keywords']:
+            if match_query:
+                match_query = self.backend._and_join(
+                    [match_query, self.backend._join_keywords(expanded_terms['keywords'])])
+            else:
+                match_query = self.backend._join_keywords(expanded_terms['keywords'])
+
+        if match_query:
+            query = text("""
+                SELECT vid, dataset_vid, rank(matchinfo(partition_index)) AS score, from_year, to_year
+                FROM partition_index
+                WHERE partition_index MATCH :match_query
+                ORDER BY score DESC;
+            """)
+            query_params = {
+                'match_query': match_query}
+        else:
+            query = text("""
+                SELECT vid, dataset_vid, rank(matchinfo(partition_index)), from_year, to_year AS score
+                FROM partition_index""")
+            query_params = {}
+
+        return query, query_params
 
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """

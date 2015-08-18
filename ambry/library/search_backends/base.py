@@ -406,42 +406,12 @@ class BaseDatasetIndex(BaseIndex):
             stp = SearchTermParser()
             terms = stp.parse(terms, or_join=self.backend._or_join)
 
-        # The top level ( title, names, keywords, doc ) will get ANDed together
-
         if 'about' in terms:
             ret['doc'].append(terms['about'])
 
         if 'source' in terms:
-            ret['keywords'] = self.backend._join_keywords(terms['source'])
+            ret['keywords'].append(terms['source'])
         return ret
-
-    def _make_query_from_terms(self, terms):
-        """ Creates a query for dataset from decomposed search terms.
-
-        Args:
-            terms (dict or unicode or string):
-
-        Returns:
-            tuple: First element is str with FTS query, second is parameters of the query.
-
-        """
-        # FIXME: move to the whoosh and sqlite backends.
-
-        expanded_terms = self._expand_terms(terms)
-
-        cterms = ''
-
-        if expanded_terms['doc']:
-            cterms = self.backend._and_join(expanded_terms['doc'])
-
-        if expanded_terms['keywords']:
-            if cterms:
-                cterms = self.backend._and_join(cterms, expanded_terms['keywords'])
-            else:
-                cterms = expanded_terms['keywords']
-
-        logger.debug('Dataset terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
-        return cterms
 
 
 class BasePartitionIndex(BaseIndex):
@@ -510,7 +480,7 @@ class BasePartitionIndex(BaseIndex):
         return document
 
     def _expand_terms(self, terms):
-        """ Expands terms to the appropriate fields.
+        """ Expands partition terms to the appropriate fields.
 
         Args:
             terms (dict or str):
@@ -520,7 +490,9 @@ class BasePartitionIndex(BaseIndex):
         """
         ret = {
             'keywords': list(),
-            'doc': list()}
+            'doc': list(),
+            'from': None,
+            'to': None}
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
@@ -540,74 +512,9 @@ class BasePartitionIndex(BaseIndex):
 
         if 'by' in terms:
             ret['keywords'].append(terms['by'])
-        frm_to = self._from_to_as_term(terms.get('from', None), terms.get('to', None))
-
-        if frm_to:
-            ret['keywords'].append(frm_to)
+        ret['from'] = terms.get('from', None)
+        ret['to'] = terms.get('to', None)
         return ret
-
-    def _make_query_from_terms(self, terms):
-        """ Returns a FTS query for partition created from decomposed search terms.
-
-        Args:
-            terms (dict or str):
-
-        Returns:
-            str containing FTS query.
-
-        """
-
-        expanded_terms = self._expand_terms(terms)
-
-        cterms = ''
-        if expanded_terms['doc']:
-            cterms = self.backend._or_join(expanded_terms['doc'])
-
-        if expanded_terms['keywords']:
-            if cterms:
-                cterms = self.backend._and_join(
-                    [cterms, self.backend._field_term('keywords', expanded_terms['keywords'])])
-            else:
-                cterms = self.backend._field_term('keywords', expanded_terms['keywords'])
-
-        logger.debug('Partition terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
-
-        return cterms
-
-    def _from_to_as_term(self, frm, to):
-        """ Turns from and to into the query format.
-
-        Args:
-            frm (str): from year
-            to (str): to year
-
-        Returns:
-            FTS query str with years range.
-
-        """
-
-        # The wackiness with the conversion to int and str, and adding ' ', is because there
-        # can't be a space between the 'TO' and the brackets in the time range
-        # when one end is open
-        from_year = ''
-        to_year = ''
-
-        def year_or_empty(prefix, year, suffix):
-            try:
-                return prefix + str(int(year)) + suffix
-            except (ValueError, TypeError):
-                return ''
-
-        if frm:
-            from_year = year_or_empty('', frm, ' ')
-
-        if to:
-            to_year = year_or_empty(' ', to, '')
-
-        if bool(from_year) or bool(to_year):
-            return '[{}TO{}]'.format(from_year, to_year)
-        else:
-            return None
 
     def _expand_place_ids(self, terms):
         """ Lookups all of the place identifiers to get gvids
