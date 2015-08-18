@@ -356,6 +356,42 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         """
         self.backend.library.database.connection.execute(query)
 
+    def _make_query_from_terms(self, terms):
+        """ Creates a query for dataset from decomposed search terms.
+
+        Args:
+            terms (dict or unicode or string):
+
+        Returns:
+            tuple of (str, dict): First element is str with FTS query, second is parameters of the query.
+
+        """
+        expanded_terms = self._expand_terms(terms)
+
+        # FIXME: add score, year_from, year_to to the query.
+        query_parts = [
+            'SELECT vid, dataset_vid, 1, 1, 1',
+            'FROM partition_index'
+        ]
+        query_params = {}
+
+        if expanded_terms['doc']:
+            query_parts.append('WHERE doc @@ to_tsquery(:doc)')
+            query_params['doc'] = self.backend._and_join(expanded_terms['doc'])
+
+        if expanded_terms['keywords']:
+            query_params['keywords'] = expanded_terms['keywords']
+            if expanded_terms['doc']:
+                # FIXME: test me.
+                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \');')
+            else:
+                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \');')
+
+        deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
+            .format(terms, query_parts, query_params)
+        logger.debug(deb_msg)
+        return text('\n'.join(query_parts)), query_params
+
     def search(self, search_phrase, limit=None):
         """ Finds partitions by search phrase.
 
@@ -366,12 +402,8 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         Generates:
             PartitionSearchResult instances.
         """
-
-        search_phrase = search_phrase.replace('-', '_')
-        terms = SearchTermParser().parse(search_phrase)
-        match_query = self._make_query_from_terms(terms)
-        results = []
-        # FIXME:
+        query, query_params = self._make_query_from_terms(search_phrase)
+        results = self.backend.library.database.connection.execute(query, **query_params)
 
         for result in results:
             vid, dataset_vid, score, db_from_year, db_to_year = result

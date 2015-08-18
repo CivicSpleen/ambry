@@ -400,7 +400,6 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
 
     # partition search
     # @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    @unittest.skip('Not implemented')
     def test_search_partition_by_vid(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
