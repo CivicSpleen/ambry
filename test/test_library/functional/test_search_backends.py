@@ -389,7 +389,6 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
 
     # partition add
     # @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    @unittest.skip('Not implemented')
     def test_add_partition_to_the_index(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session

@@ -92,13 +92,13 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
 
         # create FTS index on doc field. # FIXME:
         query = """\
-            CREATE INDEX dataset_index_idx ON dataset_index USING gin(doc);
+            CREATE INDEX dataset_index_doc_idx ON dataset_index USING gin(doc);
         """
         self.backend.library.database.connection.execute(query)
 
         # Create index on keyword field
         query = """\
-            CREATE INDEX dataset_index_title_idx on dataset_index USING gin(keywords);
+            CREATE INDEX dataset_index_keywords_idx on dataset_index USING gin(keywords);
         """
         self.backend.library.database.connection.execute(query)
 
@@ -169,8 +169,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         return list(datasets.values())
 
     def _index_document(self, document, force=False):
-        """ Adds document to the index. """
-        # TODO: Implement
+        """ Adds dataset document to the index. """
         query = text("""
             INSERT INTO dataset_index(vid, title, keywords, doc)
             VALUES(:vid, :title, string_to_array(:keywords, ' '), to_tsvector('english', :doc));
@@ -329,21 +328,33 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         super(self.__class__, self).__init__(backend=backend)
 
         logger.debug('Creating partition FTS table.')
-        # FIXME:
-        '''
+
+        # create table for partition documents. Create special table for search to make it easy to replace one
+        # FTS engine with another.
         query = """\
-            CREATE VIRTUAL TABLE IF NOT EXISTS partition_index USING fts3(
+            CREATE TABLE partition_index (
                 vid VARCHAR(256) NOT NULL,
                 dataset_vid VARCHAR(256) NOT NULL,
                 from_year INTEGER,
                 to_year INTEGER,
                 title TEXT,
-                keywords TEXT,
-                doc TEXT
+                keywords VARCHAR(256)[],
+                doc tsvector
             );
         """
         self.backend.library.database.connection.execute(query)
-        '''
+
+        # create FTS index on doc field. # FIXME:
+        query = """\
+            CREATE INDEX partition_index_doc_idx ON partition_index USING gin(doc);
+        """
+        self.backend.library.database.connection.execute(query)
+
+        # Create index on keywords field
+        query = """\
+            CREATE INDEX partition_index_keywords_idx on partition_index USING gin(keywords);
+        """
+        self.backend.library.database.connection.execute(query)
 
     def search(self, search_phrase, limit=None):
         """ Finds partitions by search phrase.
@@ -370,15 +381,22 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
 
-        '''
+        time_coverage = document.pop('time_coverage', [])
+        from_year = None
+        to_year = None
+        if time_coverage:
+            from_year = int(time_coverage[0])
+            to_year = int(time_coverage[-1])
+
         query = text("""
             INSERT INTO partition_index(vid, dataset_vid, title, keywords, doc, from_year, to_year)
-            VALUES(:vid, :dataset_vid, :title, :keywords, :doc, :from_year, :to_year); """)
+            VALUES(
+                :vid, :dataset_vid, :title,
+                string_to_array(:keywords, ' '),
+                to_tsvector('english', :doc),
+                :from_year, :to_year); """)
         self.backend.library.database.connection.execute(
             query, from_year=from_year, to_year=to_year, **document)
-        '''
-        # FIXME:
-        pass
 
     def reset(self):
         """ Drops index table. """
