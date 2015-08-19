@@ -92,7 +92,7 @@ will be created from that template. If postgres does not have such template all 
 
 .. code-block:: bash
 
-    $ psql postgres -c 'create database template0_trgm TEMPLATE template0;'
+    $ psql postgres -c 'CREATE DATABASE template0_trgm TEMPLATE template0;'
     $ psql template0_trgm -c 'CREATE EXTENSION pg_trgm;'
 
     # To create database from template we need copy permission.
