@@ -199,8 +199,20 @@ class PostgreSQLTestBase(TestBase):
             connection.execute('rollback')
 
         # create test database
-        query = 'CREATE DATABASE {} OWNER {} template template0 encoding \'UTF8\';'\
-            .format(test_db_name, postgres_user)
+        template = 'template0'
+
+        # check for template with pg_tgrm extension.
+        cls.pg_trgm_is_installed = connection\
+            .execute(
+                'SELECT 1 FROM pg_database WHERE datname=\'template0_trgm\';')\
+            .fetchall() == [(1,)]
+
+        if not cls.pg_trgm_is_installed:
+            raise unittest.SkipTest(
+                'Can not find template with pg_trgm support. See README.rst for details.')
+
+        query = 'CREATE DATABASE {} OWNER {} TEMPLATE template0_trgm encoding \'UTF8\';'\
+            .format(test_db_name, postgres_user, template)
         connection.execute(query)
         connection.execute('commit')
         connection.close()

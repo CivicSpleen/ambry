@@ -17,6 +17,8 @@ from test.test_orm.factories import PartitionFactory
 SKIP_ALL = False
 
 
+# FIXME: Add identifier index tests.
+
 class AmbryReadyMixin(object):
     """ Basic functionality for all search backends. Requires self.library and self.backend attributes.
 

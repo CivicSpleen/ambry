@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
+
 from test.test_base import PostgreSQLTestBase
 
 from sqlalchemy.exc import ProgrammingError
@@ -132,4 +133,97 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
         # delete and test
         self.backend.dataset_index._delete(vid=ds1.vid)
         ret = self.backend.dataset_index.all()
+        self.assertEquals(len(ret), 0)
+
+
+class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
+
+    def test_creates_identifier_index(self):
+        with self.library.database._engine.connect() as conn:
+            query = """
+                SELECT * from identifier_index;
+            """
+            result = conn.execute(query).fetchall()
+            self.assertEqual(result, [])
+
+    # search() tests
+    def test_returns_found_identifiers(self):
+        self.backend.identifier_index.index_one({
+            'identifier': 'id1',
+            'type': 'dataset',
+            'name': 'name1'})
+        self.backend.identifier_index.index_one({
+            'identifier': 'id2',
+            'type': 'dataset',
+            'name': 'name2'})
+
+        # testing.
+        ret = list(self.backend.identifier_index.search('name'))
+        self.assertEqual(len(ret), 2)
+        self.assertListEqual(['id1', 'id2'], [x.vid for x in ret])
+
+    def test_returns_limited_identifiers(self):
+        for n in range(4):
+            self.backend.identifier_index.index_one({
+                'identifier': 'id{}'.format(n),
+                'type': 'dataset',
+                'name': 'name-{}'.format(n)})
+
+        ret = list(self.backend.identifier_index.search('name'))
+        self.assertEqual(len(ret), 4)
+
+        # testing
+        ret = list(self.backend.identifier_index.search('name', limit=2))
+        self.assertEqual(len(ret), 2)
+
+    # reset tests
+    def test_drops_identifier_index_table(self):
+        self.backend.identifier_index.reset()
+        with self.assertRaises(ProgrammingError):
+            self.backend.library.database._engine.execute('SELECT * FROM identifier_index;')
+
+    # is_indexed tests
+    def test_returns_true_if_dataset_is_indexed(self):
+        identifier = {
+            'identifier': 'id1',
+            'type': 'dataset',
+            'name': 'name1'}
+        self.backend.identifier_index.index_one(identifier)
+        ret = self.backend.identifier_index.is_indexed(identifier)
+        self.assertTrue(ret)
+
+    def test_returns_false_if_identifier_is_not_indexed(self):
+        ret = self.backend.identifier_index.is_indexed({'identifier': 'id1'})
+        self.assertFalse(ret)
+
+    # all() tests
+    def test_returns_list_with_all_indexed_identifiers(self):
+        identifier1 = {
+            'identifier': 'id1',
+            'type': 'dataset',
+            'name': 'name1'}
+        identifier2 = {
+            'identifier': 'id2',
+            'type': 'dataset',
+            'name': 'name2'}
+        self.backend.identifier_index.index_one(identifier1)
+        self.backend.identifier_index.index_one(identifier2)
+        ret = self.backend.identifier_index.all()
+        self.assertEquals(len(ret), 2)
+
+    # _delete tests
+    def test_deletes_given_identifier_from_index(self):
+        identifier2 = {
+            'identifier': 'id2',
+            'type': 'dataset',
+            'name': 'name2'}
+        self.backend.identifier_index.index_one(identifier2)
+
+        # was it really added?
+        ret = self.backend.identifier_index.all()
+        self.assertEquals(len(ret), 1)
+
+        # delete and test
+        self.backend.identifier_index._delete(identifier='id2')
+        ret = self.backend.identifier_index.all()
         self.assertEquals(len(ret), 0)

@@ -239,18 +239,20 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
         super(self.__class__, self).__init__(backend=backend)
 
         logger.debug('Creating identifier FTS table.')
-        # FIXME: Implement
-        '''
 
-        query = """\
-            CREATE VIRTUAL TABLE identifier_index USING fts3(
+        query = """
+            CREATE TABLE identifier_index (
                 identifier VARCHAR(256) NOT NULL,
                 type VARCHAR(256) NOT NULL,
-                name TEXT
-            );
+                name TEXT);
         """
         self.backend.library.database.connection.execute(query)
-        '''
+
+        # create index for name.
+        query = """
+            CREATE INDEX identifier_index_name_idx ON identifier_index USING gist (name gist_trgm_ops);
+        """
+        self.backend.library.database.connection.execute(query)
 
     def search(self, search_phrase, limit=None):
         """ Finds identifiers by search phrase.
@@ -263,24 +265,40 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
             list of IdentifierSearchResult instances.
 
         """
-        # FIXME: Implement
-        return []
+        query_parts = [
+            'SELECT identifier, type, name, similarity(name, :word) AS sml',
+            'FROM identifier_index',
+            'WHERE name % :word',
+            'ORDER BY sml DESC, name']
+        query_params = {
+            'word': search_phrase}
+
+        if limit:
+            query_parts.append('LIMIT :limit')
+            query_params['limit'] = limit
+
+        query_parts.append(';')
+
+        query = text('\n'.join(query_parts))
+
+        results = self.backend.library.database.connection.execute(query, **query_params).fetchall()
+        for result in results:
+            vid, type, name, score = result
+            yield IdentifierSearchResult(
+                score=score, vid=vid,
+                type=type, name=name)
 
     def _index_document(self, identifier, force=False):
         """ Adds identifier document to the index. """
-        # FIXME:
-        '''
+
         query = text("""
             INSERT INTO identifier_index(identifier, type, name)
             VALUES(:identifier, :type, :name);
         """)
         self.backend.library.database.connection.execute(query, **identifier)
-        '''
-        pass
 
     def reset(self):
-        """ Drops index table. """
-        # FIXME: Test
+        """ Drops identifier index table. """
         query = """
             DROP TABLE identifier_index;
         """
@@ -293,7 +311,6 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
             identifier (str): identifier of the document to delete.
 
         """
-        # FIXME: Test
         query = text("""
             DELETE FROM identifier_index
             WHERE identifier = :identifier;
@@ -302,7 +319,6 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
 
     def is_indexed(self, identifier):
         """ Returns True if identifier is already indexed. Otherwise returns False. """
-        # FIXME: Test
         query = text("""
             SELECT identifier
             FROM identifier_index
@@ -314,7 +330,6 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
     def all(self):
         """ Returns list with all indexed identifiers. """
         identifiers = []
-        # FIXME: test
 
         query = text("""
             SELECT identifier, type, name
