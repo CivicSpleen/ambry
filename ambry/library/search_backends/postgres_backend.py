@@ -120,14 +120,16 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             'FROM dataset_index'
         ]
         query_params = {}
+        where_counter = 0
 
         if expanded_terms['doc']:
+            where_counter += 1
             query_parts.append('WHERE doc @@ to_tsquery(:doc)')
             query_params['doc'] = self.backend._and_join(expanded_terms['doc'])
 
         if expanded_terms['keywords']:
             query_params['keywords'] = self.backend._and_join(expanded_terms['keywords'])
-            if expanded_terms['doc']:
+            if where_counter:
                 # FIXME: test me.
                 query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \');')
             else:
@@ -387,12 +389,12 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             where_count += 1
 
         if expanded_terms['keywords']:
-            query_params['keywords'] = expanded_terms['keywords']
+            query_params['keywords'] = ' '.join(expanded_terms['keywords'])
             if where_count:
                 # FIXME: test me.
-                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \');')
+                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \')')
             else:
-                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \');')
+                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \')')
             where_count += 1
 
         if expanded_terms['from']:
@@ -413,6 +415,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             query_params['to_year'] = expanded_terms['to']
             where_count += 1
 
+        query_parts.append(';')
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
