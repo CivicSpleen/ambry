@@ -32,7 +32,7 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
             terms (list): terms to join
 
         Examples:
-            self._or_join(['term1', 'term2']) -> 'term1 OR term2'
+            self._or_join(['term1', 'term2']) -> 'term1 | term2'
 
         Returns:
             str
@@ -40,7 +40,7 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
 
         if isinstance(terms, (tuple, list)):
             if len(terms) > 1:
-                return '(' + ' | '.join(terms) + ')'
+                return ' | '.join(terms)
             else:
                 return terms[0]
         else:
@@ -65,7 +65,6 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
 
     def _join_keywords(self, keywords):
         if isinstance(keywords, (list, tuple)):
-            # FIXME: Test me.
             return '(' + self._and_join(keywords) + ')'
         return keywords
 
@@ -102,7 +101,81 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         """
         self.backend.library.database.connection.execute(query)
 
-    def _make_query_from_terms(self, terms):
+    def search(self, search_phrase, limit=None):
+        """ Finds datasets by search phrase.
+
+        Args:
+            search_phrase (str or unicode):
+            limit (int, optional): how many results to return. None means without limit.
+
+        Returns:
+            list of DatasetSearchResult instances.
+
+        """
+        # FIXME: Implement limit.
+        query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+        results = self.backend.library.database.connection.execute(query, **query_params)
+        datasets = {}
+        for result in results:
+            vid = result[0]
+            b_score = 0
+            p_score = 0
+            partitions = set()
+            res = DatasetSearchResult()
+            res.b_score = b_score
+            res.p_score = p_score
+            res.partitions = partitions
+            res.vid = vid
+            datasets[vid] = res
+
+        logger.debug('Extending datasets with partitions.')
+        for partition in self.backend.partition_index.search(search_phrase):
+            datasets[partition.dataset_vid].p_score += partition.score
+            datasets[partition.dataset_vid].partitions.add(partition.vid)
+
+        return list(datasets.values())
+
+    def reset(self):
+        """ Drops index table. """
+        query = """
+            DROP TABLE dataset_index;
+        """
+        self.backend.library.database.connection.execute(query)
+
+    def is_indexed(self, dataset):
+        """ Returns True if dataset is already indexed. Otherwise returns False. """
+        query = text("""
+            SELECT vid
+            FROM dataset_index
+            WHERE vid = :vid;
+        """)
+        result = self.backend.library.database.connection.execute(query, vid=dataset.vid)
+        return bool(result.fetchall())
+
+    def all(self):
+        """ Returns list with all indexed datasets. """
+        datasets = []
+
+        query = text("""
+            SELECT vid
+            FROM dataset_index;""")
+
+        for result in self.backend.library.database.connection.execute(query):
+            res = DatasetSearchResult()
+            res.vid = result[0]
+            res.b_score = 1
+            datasets.append(res)
+        return datasets
+
+    def _index_document(self, document, force=False):
+        """ Adds dataset document to the index. """
+        query = text("""
+            INSERT INTO dataset_index(vid, title, keywords, doc)
+            VALUES(:vid, :title, string_to_array(:keywords, ' '), to_tsvector('english', :doc));
+        """)
+        self.backend.library.database.connection.execute(query, **document)
+
+    def _make_query_from_terms(self, terms, limit=None):
         """ Creates a query for dataset from decomposed search terms.
 
         Args:
@@ -130,65 +203,19 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         if expanded_terms['keywords']:
             query_params['keywords'] = self.backend._and_join(expanded_terms['keywords'])
             if where_counter:
-                # FIXME: test me.
-                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \');')
+                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \')')
             else:
-                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \');')
+                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \')')
 
+        if limit:
+            query_parts.append('LIMIT :limit')
+            query_params['limit'] = limit
+
+        query_parts.append(';')
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
         return text('\n'.join(query_parts)), query_params
-
-    def search(self, search_phrase, limit=None):
-        """ Finds datasets by search phrase.
-
-        Args:
-            search_phrase (str or unicode):
-            limit (int, optional): how many results to return. None means without limit.
-
-        Returns:
-            list of DatasetSearchResult instances.
-
-        """
-        # FIXME: Implement limit.
-        query, query_params = self._make_query_from_terms(search_phrase)
-        results = self.backend.library.database.connection.execute(query, **query_params)
-        datasets = {}
-        for result in results:
-            vid = result[0]
-            b_score = 0
-            p_score = 0
-            partitions = set()
-            res = DatasetSearchResult()
-            res.b_score = b_score
-            res.p_score = p_score
-            res.partitions = partitions
-            res.vid = vid
-            datasets[vid] = res
-
-        logger.debug('Extending datasets with partitions.')
-        for partition in self.backend.partition_index.search(search_phrase):
-            datasets[partition.dataset_vid].p_score += partition.score
-            datasets[partition.dataset_vid].partitions.add(partition.vid)
-
-        return list(datasets.values())
-
-    def _index_document(self, document, force=False):
-        """ Adds dataset document to the index. """
-        query = text("""
-            INSERT INTO dataset_index(vid, title, keywords, doc)
-            VALUES(:vid, :title, string_to_array(:keywords, ' '), to_tsvector('english', :doc));
-        """)
-        self.backend.library.database.connection.execute(query, **document)
-
-    def reset(self):
-        """ Drops index table. """
-        # FIXME: test
-        query = """
-            DROP TABLE dataset_index;
-        """
-        self.backend.library.database.connection.execute(query)
 
     def _delete(self, vid=None):
         """ Deletes given dataset from index.
@@ -197,38 +224,12 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             vid (str): dataset vid.
 
         """
-        # FIXME: test
+        assert vid is not None
         query = text("""
             DELETE FROM dataset_index
             WHERE vid = :vid;
         """)
         self.backend.library.database.connection.execute(query, vid=vid)
-
-    def is_indexed(self, dataset):
-        """ Returns True if dataset is already indexed. Otherwise returns False. """
-        # FIXME: Test
-        query = text("""
-            SELECT vid
-            FROM dataset_index
-            WHERE vid = :vid;
-        """)
-        result = self.backend.library.database.connection.execute(query, vid=dataset.vid)
-        return bool(result.fetchall())
-
-    def all(self):
-        """ Returns list with all indexed datasets. """
-        datasets = []
-
-        query = text("""
-            SELECT vid
-            FROM dataset_index;""")
-
-        for result in self.backend.library.database.connection.execute(query):
-            res = DatasetSearchResult()
-            res.vid = result[0]
-            res.b_score = 1
-            datasets.append(res)
-        return datasets
 
 
 class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
