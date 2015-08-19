@@ -60,26 +60,40 @@ Test command options:
   --failfast - if given, stop testing on first fail.
 
 Examples:
+
 .. code-block:: bash
+
     $ python setup.py test --verbosity=2 --failfast
 
 
 FTS (Full text search) notes
 ===========================
 Datasets search implemented on top of PostgreSQL requires postgresql-contrib and pg_trgm extension.
-1. Install postgresql-contrib package.
-   sudo apt-get install postgresql-contrib
-2. Install pg_trgm extension:
-   # switch to postgres user
-.. code-block:: bash
-   $ sudo su - postgres
-   $ psql <db_name> -c 'CREATE EXTENSION pg_trgm;'
 
-# Postgres tests need pg_trgm extension. It's not possible to add it to the test db on the fly, so you
-# need to create template and add extension to the template to pass postgres tests. Later test database
-# will be created from that template. If postgres does not have such template all postgres tests will be skipped.
+1. Install postgresql-contrib package.
+
 .. code-block:: bash
-   $ psql postgres -c 'create database template0_trgm TEMPLATE template0;'
-   $ psql template0_trgm -c 'CREATE EXTENSION pg_trgm;'
-   # To create database from template we need copy permission.
-   $ psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_trgm';"
+
+    sudo apt-get install postgresql-contrib
+   
+2. Install pg_trgm extension:
+
+.. code-block:: bash
+    
+    # switch to postgres user
+    $ sudo su - postgres
+
+    # create extension
+    $ psql <db_name> -c 'CREATE EXTENSION pg_trgm;'
+
+Postgres tests need pg_trgm extension. It's not possible to add it to the test db on the fly, so you
+need to create template and add extension to the template to pass postgres tests. Later test database
+will be created from that template. If postgres does not have such template all postgres tests will be skipped.
+
+.. code-block:: bash
+
+    $ psql postgres -c 'create database template0_trgm TEMPLATE template0;'
+    $ psql template0_trgm -c 'CREATE EXTENSION pg_trgm;'
+
+    # To create database from template we need copy permission.
+    $ psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_trgm';"
