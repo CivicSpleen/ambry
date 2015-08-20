@@ -89,7 +89,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         """
         self.backend.library.database.connection.execute(query)
 
-        # create FTS index on doc field. # FIXME:
+        # create FTS index on doc field.
         query = """\
             CREATE INDEX dataset_index_doc_idx ON dataset_index USING gin(doc);
         """
@@ -112,19 +112,16 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             list of DatasetSearchResult instances.
 
         """
-        # FIXME: Implement limit.
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
         results = self.backend.library.database.connection.execute(query, **query_params)
         datasets = {}
         for result in results:
-            vid = result[0]
-            b_score = 0
-            p_score = 0
-            partitions = set()
+            vid, dataset_score = result
             res = DatasetSearchResult()
-            res.b_score = b_score
-            res.p_score = p_score
-            res.partitions = partitions
+            res.b_score = dataset_score
+            # p_score and partitions will be populated while gathering partitions.
+            res.p_score = 0
+            res.partitions = set()
             res.vid = vid
             datasets[vid] = res
 
@@ -189,16 +186,21 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             terms (dict or unicode or string):
 
         Returns:
-            tuple of (str, dict): First element is str with FTS query, second is parameters of the query.
+            tuple of (str, dict): First element is str with FTS query, second is parameters
+                of the query. Element of the execution of the query is pair: (vid, score).
 
         """
 
         expanded_terms = self._expand_terms(terms)
 
-        query_parts = [
-            'SELECT vid',
-            'FROM dataset_index'
-        ]
+        if expanded_terms['doc']:
+            # create query with real score.
+            query_parts = ['SELECT vid, ts_rank_cd(doc, to_tsquery(:doc)) as score']
+        else:
+            # create query with score = 1 because query will not touch doc field.
+            query_parts = ['SELECT vid, 1 as score']
+
+        query_parts.append('FROM dataset_index')
         query_params = {}
         where_counter = 0
 
@@ -214,6 +216,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             else:
                 query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \')')
 
+        query_parts.append('ORDER BY score DESC')
         if limit:
             query_parts.append('LIMIT :limit')
             query_params['limit'] = limit
@@ -373,7 +376,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         """
         self.backend.library.database.connection.execute(query)
 
-        # create FTS index on doc field. # FIXME:
+        # create FTS index on doc field.
         query = """\
             CREATE INDEX partition_index_doc_idx ON partition_index USING gin(doc);
         """
@@ -385,24 +388,28 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         """
         self.backend.library.database.connection.execute(query)
 
-    def _make_query_from_terms(self, terms):
+    def _make_query_from_terms(self, terms, limit=None):
         """ Creates a query for partition from decomposed search terms.
 
         Args:
             terms (dict or unicode or string):
 
         Returns:
-            tuple of (str, dict): First element is str with FTS query, second is parameters of the query.
+            tuple of (str, dict): First element is str with FTS query, second is
+            parameters of the query. Element of the execution of the query is
+            tuple of three elements: (vid, dataset_vid, score).
 
         """
         expanded_terms = self._expand_terms(terms)
 
-        # FIXME: add score, year_from, year_to to the query. Order by score.
+        if expanded_terms['doc']:
+            # create query with real score.
+            query_parts = ['SELECT vid, dataset_vid, ts_rank_cd(doc, to_tsquery(:doc)) as score']
+        else:
+            # create query with score = 1 because query will not touch doc field.
+            query_parts = ['SELECT vid, dataset_vid, 1 as score']
 
-        query_parts = [
-            'SELECT vid, dataset_vid, 1, 1, 1',
-            'FROM partition_index'
-        ]
+        query_parts.append('FROM partition_index')
         query_params = {}
         where_count = 0
 
@@ -414,7 +421,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         if expanded_terms['keywords']:
             query_params['keywords'] = ' '.join(expanded_terms['keywords'])
             if where_count:
-                # FIXME: test me.
                 query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \')')
             else:
                 query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \')')
@@ -437,7 +443,10 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
                 query_parts.append('to_year <= :to_year')
             query_params['to_year'] = expanded_terms['to']
             where_count += 1
-
+        query_parts.append('ORDER BY score DESC')
+        if limit:
+            query_parts.append('LIMIT :limit')
+            query_params['limit'] = limit
         query_parts.append(';')
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
@@ -454,11 +463,11 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         Generates:
             PartitionSearchResult instances.
         """
-        query, query_params = self._make_query_from_terms(search_phrase)
+        query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
         results = self.backend.library.database.connection.execute(query, **query_params)
 
         for result in results:
-            vid, dataset_vid, score, db_from_year, db_to_year = result
+            vid, dataset_vid, score = result
             yield PartitionSearchResult(
                 vid=vid, dataset_vid=dataset_vid, score=score)
 
@@ -532,7 +541,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
 
     def all(self):
         """ Returns list with vids of all indexed partitions. """
-        # FIXME: Test
         partitions = []
 
         query = text("""
