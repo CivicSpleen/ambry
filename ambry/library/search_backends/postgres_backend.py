@@ -143,7 +143,14 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         self.backend.library.database.connection.execute(query)
 
     def is_indexed(self, dataset):
-        """ Returns True if dataset is already indexed. Otherwise returns False. """
+        """ Returns True if dataset is already indexed. Otherwise returns False.
+
+        Args:
+            dataset (orm.Dataset):
+
+        Returns:
+            bool: True if dataset is indexed, False otherwise.
+        """
         query = text("""
             SELECT vid
             FROM dataset_index
@@ -494,7 +501,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
 
     def reset(self):
         """ Drops index table. """
-        # FIXME: Test
         query = """
             DROP TABLE partition_index;
         """
@@ -507,7 +513,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             vid (str): vid of the partition document to delete.
 
         """
-        # FIXME: Test
+        assert vid is not None
         query = text("""
             DELETE FROM partition_index
             WHERE vid = :vid;
@@ -516,7 +522,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
 
     def is_indexed(self, partition):
         """ Returns True if partition is already indexed. Otherwise returns False. """
-        # FIXME: Test
         query = text("""
             SELECT vid
             FROM partition_index

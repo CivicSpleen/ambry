@@ -3,8 +3,10 @@ from __future__ import unicode_literals
 
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
+from ambry.util import AttrDict
 
 from test.test_base import PostgreSQLTestBase
+from test.test_orm.factories import PartitionFactory
 
 from sqlalchemy.exc import ProgrammingError
 
@@ -183,7 +185,7 @@ class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
             self.backend.library.database._engine.execute('SELECT * FROM identifier_index;')
 
     # is_indexed tests
-    def test_returns_true_if_dataset_is_indexed(self):
+    def test_returns_true_if_identifier_is_indexed(self):
         identifier = {
             'identifier': 'id1',
             'type': 'dataset',
@@ -226,4 +228,65 @@ class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
         # delete and test
         self.backend.identifier_index._delete(identifier='id2')
         ret = self.backend.identifier_index.all()
+        self.assertEquals(len(ret), 0)
+
+
+class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
+
+    def test_creates_partition_index(self):
+        with self.library.database._engine.connect() as conn:
+            query = """
+                SELECT * from partition_index;
+            """
+            result = conn.execute(query).fetchall()
+            self.assertEqual(result, [])
+
+    # search() tests
+    def test_returns_found_partitions(self):
+        dataset = self.new_db_dataset(self.library.database, n=0)
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        partition = PartitionFactory(dataset=dataset)
+        self.backend.partition_index.index_one(partition)
+
+        # testing.
+        ret = list(self.backend.partition_index.search(partition.vid))
+        self.assertEqual(len(ret), 1)
+        self.assertListEqual([partition.vid], [x.vid for x in ret])
+
+    # reset tests
+    def test_drops_partition_index_table(self):
+        self.backend.partition_index.reset()
+        with self.assertRaises(ProgrammingError):
+            self.backend.library.database._engine.execute('SELECT * FROM partition_index;')
+
+    # is_indexed tests
+    def test_returns_true_if_partition_is_indexed(self):
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        dataset = self.new_db_dataset(self.library.database, n=0)
+        partition = PartitionFactory(dataset=dataset)
+        self.backend.partition_index.index_one(partition)
+        ret = self.backend.partition_index.is_indexed(partition)
+        self.assertTrue(ret)
+
+    def test_returns_false_if_partition_is_not_indexed(self):
+        # to test we need just vid from the given object. So do not create partition, create partition like
+        # instead. It makes that test more quick.
+        partition = AttrDict(vid='vid1')
+        ret = self.backend.partition_index.is_indexed(partition)
+        self.assertFalse(ret)
+
+    # _delete tests
+    def test_deletes_given_partition_from_index(self):
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        dataset = self.new_db_dataset(self.library.database, n=0)
+        partition = PartitionFactory(dataset=dataset)
+        self.backend.partition_index.index_one(partition)
+
+        # was it really added?
+        ret = self.backend.partition_index.all()
+        self.assertEquals(len(ret), 1)
+
+        # delete and test
+        self.backend.partition_index._delete(vid=partition.vid)
+        ret = self.backend.partition_index.all()
         self.assertEquals(len(ret), 0)
