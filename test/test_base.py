@@ -145,11 +145,11 @@ class PostgreSQLTestBase(TestBase):
         # we need config from user to properly construct postgresql test database.
         conf = get_runconfig()
         if 'database' in conf.dict and 'postgresql-test' in conf.dict['database']:
-            # create database and populate required fields.
-            db_data = self._create_postgres_test_db(conf)
-            self.dsn = db_data['test_db_dsn']
-            self.postgres_dsn = db_data['postgres_db_dsn']
-            self.postgres_test_db = db_data['test_db_name']
+            # Create database and populate required fields.
+            self._create_postgres_test_db(conf)
+            self.dsn = self.__class__.postgres_test_db_data['test_db_dsn']
+            self.postgres_dsn = self.__class__.postgres_test_db_data['postgres_db_dsn']
+            self.postgres_test_db = self.__class__.postgres_test_db_data['test_db_name']
         else:
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
             self.postgres_dsn = None
@@ -174,7 +174,9 @@ class PostgreSQLTestBase(TestBase):
         connection.close()
 
     @classmethod
-    def _create_postgres_test_db(cls, conf):
+    def _create_postgres_test_db(cls, conf=None):
+        if not conf:
+            conf = get_runconfig()
         postgres_user = 'ambry'  # FIXME: take it from the conf.
         dsn = conf.dict['database']['postgresql-test']
         parsed_url = urlparse(dsn)
@@ -191,28 +193,31 @@ class PostgreSQLTestBase(TestBase):
         connection.execute('commit')
 
         # drop test database created by previuos run (control + c case).
-        try:
+        if cls.postgres_db_exists(test_db_name, engine):
             assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
-            connection.execute('DROP DATABASE {};'.format(test_db_name))
-            connection.execute('commit')
-        except:
-            connection.execute('rollback')
+            while True:
+                delete_it = raw_input(
+                    '\nTest database with {} name already exists. Can I delete it (Yes|No): '.format(test_db_name))
+                if delete_it.lower() == 'yes':
+                    try:
+                        connection.execute('DROP DATABASE {};'.format(test_db_name))
+                        connection.execute('commit')
+                    except:
+                        connection.execute('rollback')
+                    break
 
-        # create test database
-        template = 'template0'
+                elif delete_it.lower() == 'no':
+                    break
 
         # check for template with pg_tgrm extension.
-        cls.pg_trgm_is_installed = connection\
-            .execute(
-                'SELECT 1 FROM pg_database WHERE datname=\'template0_trgm\';')\
-            .fetchall() == [(1,)]
+        cls.pg_trgm_is_installed = cls.postgres_db_exists('template0_trgm', connection)
 
         if not cls.pg_trgm_is_installed:
             raise unittest.SkipTest(
                 'Can not find template with pg_trgm support. See README.rst for details.')
 
         query = 'CREATE DATABASE {} OWNER {} TEMPLATE template0_trgm encoding \'UTF8\';'\
-            .format(test_db_name, postgres_user, template)
+            .format(test_db_name, postgres_user)
         connection.execute(query)
         connection.execute('commit')
         connection.close()
@@ -222,3 +227,13 @@ class PostgreSQLTestBase(TestBase):
             'test_db_dsn': test_db_dsn,
             'postgres_db_dsn': postgres_db_dsn}
         return cls.postgres_test_db_data
+
+    @classmethod
+    def postgres_db_exists(self, db_name, conn):
+        """ Returns True if database with given name exists in the postgresql. """
+        from sqlalchemy.sql.expression import text
+        result = conn\
+            .execute(
+                text('SELECT 1 FROM pg_database WHERE datname=:db_name;'), db_name=db_name)\
+            .fetchall()
+        return result == [(1,)]
