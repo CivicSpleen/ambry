@@ -44,7 +44,7 @@ class PostgreSQLSearchBackendTest(PostgreSQLBackendBaseTest):
     # _and_join tests
     def test_joins_string_with_and(self):
         ret = self.backend._or_join(['term1', 'term2'])
-        self.assertEqual(ret, 'term1 & term2')
+        self.assertEqual(ret, 'term1 | term2')
 
     # _join_keywords tests
     def test_joins_keywords_with_and(self):
