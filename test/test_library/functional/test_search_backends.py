@@ -276,6 +276,21 @@ class AmbryReadyMixin(object):
         self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
+    def test_search_identifier_by_part_of_the_name(self):
+        self.backend.identifier_index.index_one({
+            'identifier': 'id1',
+            'type': 'dataset',
+            'name': 'name1'})
+        self.backend.identifier_index.index_one({
+            'identifier': 'id2',
+            'type': 'dataset',
+            'name': 'name2'})
+
+        # testing.
+        ret = list(self.backend.identifier_index.search('name'))
+        self.assertEqual(len(ret), 2)
+        self.assertListEqual(['id1', 'id2'], [x.vid for x in ret])
+
 
 class WhooshBackendTest(TestBase, AmbryReadyMixin):
 

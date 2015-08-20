@@ -253,13 +253,21 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
             list of IdentifierSearchResult instances.
 
         """
+        query_parts = [
+            'SELECT identifier, type, name, 0',
+            'FROM identifier_index',
+            'WHERE name MATCH :part']
+        query_params = {
+            'part': '*{}*'.format(search_phrase)}
 
-        query = ("""
-            SELECT identifier, type, name, 0
-            FROM identifier_index
-            WHERE identifier MATCH :part; """)
+        if limit:
+            query_parts.append('LIMIT :limit')
+            query_params['limit'] = limit
+        query_parts.append('ORDER BY name')
+        query_parts.append(';')
+        query = text('\n'.join(query_parts))
 
-        results = self.backend.library.database.connection.execute(query, part=search_phrase).fetchall()
+        results = self.backend.library.database.connection.execute(query, **query_params).fetchall()
         for result in results:
             vid, type, name, score = result
             yield IdentifierSearchResult(
