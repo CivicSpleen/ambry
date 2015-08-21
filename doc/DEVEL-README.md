@@ -93,9 +93,14 @@ $ sudo apt-get install pgxnclient
 ```bash
 $ sudo apt-get install postgresql-server-dev-(your version here)
 ```
-3. Install multicorn
+3. Install multicorn postgres extension
 ```bash
 $ sudo pgxn install multicorn
+```
+4. Install multicorn python package
+# FIXME: Add to requirements and test.
+```bash
+pip install https://github.com/Kozea/Multicorn/archive/v1.0.1.zip
 ```
 
 ### To write python2/python3 compatible code:
