@@ -84,8 +84,19 @@ python setup.py fetch --all build --enable-all-extensions install test
 ```
 See http://apidoc.apsw.googlecode.com/hg/build.html#recommended for more details.
 
-#### PostgreSQL (Foreign Data Wrapper)
-FIXME:
+#### PostgreSQL (Foreign Data Wrapper) - Debian/Ubuntu
+1. Install pgxn
+```bash
+$ sudo apt-get install pgxnclient
+```
+2. Install postgresql-server-dev package
+```bash
+$ sudo apt-get install postgresql-server-dev-(your version here)
+```
+3. Install multicorn
+```bash
+$ sudo pgxn install multicorn
+```
 
 ### To write python2/python3 compatible code:
 Ambry uses one code base for both - python2 and python3. This requires some extra work.
