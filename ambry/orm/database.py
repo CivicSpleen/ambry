@@ -136,7 +136,7 @@ class Database(object):
 
             inspector = Inspector.from_engine(self.engine)
 
-            if not 'config' in inspector.get_table_names(schema = self._schema):
+            if  'config' not in inspector.get_table_names(schema = self._schema):
                 return False
             else:
                 return True
@@ -151,7 +151,6 @@ class Database(object):
 
         finally:
             self.close_connection()
-
 
     @property
     def engine(self):
@@ -168,12 +167,18 @@ class Database(object):
             # Easier than constructing the pool
             # self._engine.pool._use_threadlocal = True
 
-            self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
+            # FIXME: Find another way to initiate postgres
+            if 'postgresql' in self.driver:
+                from sqlalchemy.pool import NullPool
+                self._engine = create_engine(self.dsn, echo=self._echo,  poolclass=NullPool)
+            else:
+                self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
 
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
-            _validate_version(self.connection)
 
+            with self._engine.connect() as conn:
+                _validate_version(conn)
         return self._engine
 
     @property

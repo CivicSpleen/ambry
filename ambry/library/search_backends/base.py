@@ -76,6 +76,69 @@ class PartitionSearchResult(object):
         self.score = score
 
 
+class IndexField(object):
+    """ Base class for all fields in the schema. """
+
+    def __init__(self, name):
+        self.name = name
+
+
+class Id(IndexField):
+    """ Indexes the entire value of the field as one token.
+
+    Note: This is useful for data you don’t want to tokenize, such as the path of a file or vid.
+
+    Examples:
+        Whoosh Id - http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.ID
+        Sqlite ?
+        Postgresql ?
+    """
+    pass
+
+
+class NGram(IndexField):
+    """ Field to chop the words into N-grams.
+
+    Note: Is helpfull for autocomplete feature. For example, the set of ngrams in the
+        string "cat" is " c", " ca", "cat", and "at ".
+
+    Examples:
+        whoosh - NGRAMWORDS, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.NGRAMWORDS
+        sqlite - ?
+        postgresql - pg_trgm, http://www.postgresql.org/docs/current/static/pgtrgm.html
+
+    """
+    pass
+
+
+class Keyword(IndexField):
+    """ Field for space- or comma-separated keywords.
+
+    Note:
+        This type is indexed and searchable (and optionally stored). Used to search for exact match of any
+        keyword FIXME: is it really exact match?.
+
+    Examples:
+        Whoosh - KEYWORD, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.KEYWORD
+        SQLite - FIXME:
+        PostgreSQL - FIXME:
+    """
+
+
+class Text(IndexField):
+    """ Field for text data (for example, the body text of an article). Allows phrase searching.
+
+    Note:
+        This field type is always scorable.
+
+    Examples:
+        Whoosh - TEXT, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.TEXT
+        SQLite - FIXME:
+        PostgreSQL - FIXME:
+    """
+    pass
+
+
 class BaseSearchBackend(object):
     """
     Base class for full text search backends implementations.
@@ -128,6 +191,11 @@ class BaseSearchBackend(object):
                 return terms[0]
         else:
             return terms
+
+    def _join_keywords(self, keywords):
+        if isinstance(keywords, (list, tuple)):
+            return 'keywords:(' + self._and_join(keywords) + ')'
+        return 'keywords:{}'.format(keywords)
 
     def _and_join(self, terms):
         """ Joins terms using AND operator.
@@ -250,10 +318,10 @@ class BaseIndex(object):
 
 class BaseDatasetIndex(BaseIndex):
     _schema = [
-        'vid',
-        'title',
-        'keywords',
-        'doc']
+        Id('vid'),
+        NGram('title'),
+        Keyword('keywords'),
+        Text('doc')]
 
     def _as_document(self, dataset):
         """ Converts dataset to document indexed by to FTS index.
@@ -308,11 +376,16 @@ class BaseDatasetIndex(BaseIndex):
         except TypeError:
             about_time = [dataset.config.metadata.about.time]
 
+        try:
+            about_grain = list(dataset.config.metadata.about.grain)
+        except TypeError:
+            about_grain = [dataset.config.metadata.about.grain]
+
         keywords = (
             list(dataset.config.metadata.about.groups) +
             list(dataset.config.metadata.about.tags) +
             about_time +
-            [resum(g) for g in dataset.config.metadata.about.grain] +
+            [resum(g) for g in about_grain] +
             sources)
 
         document = dict(
@@ -324,65 +397,40 @@ class BaseDatasetIndex(BaseIndex):
 
         return document
 
-    def _make_query_from_terms(self, terms):
-        """ Creates a query for dataset from decomposed search terms.
+    def _expand_terms(self, terms):
+        """ Expands terms of the dataset to the appropriate fields.
 
         Args:
-            terms (dict or unicode or string):
+            terms (dict or str):
 
         Returns:
-            str with FTS query.
+            dict: keys are field names, values are query strings
         """
+
+        ret = {
+            'keywords': list(),
+            'doc': list()}
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
-            terms = stp.parse(terms)
-
-        keywords = list()
-        doc = list()
-
-        source = None
-
-        # The top level ( title, names, keywords, doc ) will get ANDed together
+            terms = stp.parse(terms, or_join=self.backend._or_join)
 
         if 'about' in terms:
-            doc.append(terms['about'])
+            ret['doc'].append(terms['about'])
 
         if 'source' in terms:
-            source = terms['source']
-
-        cterms = None
-
-        if doc:
-            cterms = self.backend._and_join(doc)
-
-        if keywords:
-            keywords_terms = 'keywords:(' + self.backend._and_join(keywords) + ')'
-            if cterms:
-                cterms = self.backend._and_join(cterms, keywords_terms)
-            else:
-                cterms = keywords_terms
-
-        if source:
-            source_terms = 'keywords:{}'.format(source)
-            if cterms:
-                cterms = self.backend._and_join(cterms, source_terms)
-            else:
-                cterms = source_terms
-
-        logger.debug('Dataset terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
-        assert cterms is not None, 'Failed to create dataset query from {} terms.'.format(terms)
-        return cterms
+            ret['keywords'].append(terms['source'])
+        return ret
 
 
 class BasePartitionIndex(BaseIndex):
 
     _schema = [
-        'vid',
-        'dataset_vid',
-        'title',
-        'keywords',
-        'doc']
+        Id('vid'),
+        Id('dataset_vid'),
+        NGram('title'),
+        Keyword('keywords'),
+        Text('doc')]
 
     def _as_document(self, partition):
         """ Converts given partition to the document indexed by FTS backend.
@@ -444,91 +492,40 @@ class BasePartitionIndex(BaseIndex):
 
         return document
 
-    def _make_query_from_terms(self, terms):
-        """ Returns a FTS query for partition created from decomposed search terms.
+    def _expand_terms(self, terms):
+        """ Expands partition terms to the appropriate fields.
 
         Args:
             terms (dict or str):
 
         Returns:
-            str containing FTS query.
-
+            dict: keys are field names, values are query strings
         """
+        ret = {
+            'keywords': list(),
+            'doc': list(),
+            'from': None,
+            'to': None}
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
-            terms = stp.parse(terms)
-
-        keywords = list()
-        doc = list()
-
-        # The top level ( title, names, keywords, doc ) will get ANDed together
+            terms = stp.parse(terms, or_join=self.backend._or_join)
 
         if 'about' in terms:
-            doc.append(terms['about'])
+            ret['doc'].append(terms['about'])
 
         if 'with' in terms:
-            doc.append(terms['with'])
+            ret['doc'].append(terms['with'])
 
         if 'in' in terms:
             place_vids = self._expand_place_ids(terms['in'])
-            keywords.append(place_vids)
+            ret['keywords'].append(place_vids)
 
         if 'by' in terms:
-            keywords.append(terms['by'])
-        frm_to = self._from_to_as_term(terms.get('from', None), terms.get('to', None))
-
-        if frm_to:
-            keywords.append(frm_to)
-
-        cterms = ''
-        if doc:
-            cterms = self.backend._or_join(doc)
-
-        if keywords:
-            if cterms:
-                cterms = self.backend._and_join([cterms, self.backend._field_term('keywords', keywords)])
-            else:
-                cterms = self.backend._field_term('keywords', keywords)
-
-        logger.debug('Partition terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
-
-        return cterms
-
-    def _from_to_as_term(self, frm, to):
-        """ Turns from and to into the query format.
-
-        Args:
-            frm (str): from year
-            to (str): to year
-
-        Returns:
-            FTS query str with years range.
-
-        """
-
-        # The wackiness with the conversion to int and str, and adding ' ', is because there
-        # can't be a space between the 'TO' and the brackets in the time range
-        # when one end is open
-        from_year = ''
-        to_year = ''
-
-        def year_or_empty(prefix, year, suffix):
-            try:
-                return prefix + str(int(year)) + suffix
-            except (ValueError, TypeError):
-                return ''
-
-        if frm:
-            from_year = year_or_empty('', frm, ' ')
-
-        if to:
-            to_year = year_or_empty(' ', to, '')
-
-        if bool(from_year) or bool(to_year):
-            return '[{}TO{}]'.format(from_year, to_year)
-        else:
-            return None
+            ret['keywords'].append(terms['by'])
+        ret['from'] = terms.get('from', None)
+        ret['to'] = terms.get('to', None)
+        return ret
 
     def _expand_place_ids(self, terms):
         """ Lookups all of the place identifiers to get gvids
@@ -566,9 +563,9 @@ class BasePartitionIndex(BaseIndex):
 class BaseIdentifierIndex(BaseIndex):
 
     _schema = [
-        'identifier',
-        'type',
-        'name',
+        Id('identifier'),  # Partition versioned id (partition vid)
+        Id('type'),  # Type. FIXME: What is type? Add examples.
+        NGram('name'),
     ]
 
     def _as_document(self, identifier):
@@ -662,7 +659,10 @@ class SearchTermParser(object):
     def stem(self, w):
         return self.stemmer.stem(w)
 
-    def parse(self, s):
+    def parse(self, s, or_join=None):
+        """ FIXME: """
+        if not or_join:
+            or_join = lambda x: '(' + ' OR '.join(x) + ')'
 
         toks = self.scan(s)
 
@@ -705,7 +705,7 @@ class SearchTermParser(object):
                 if marker in 'in':
                     groups[marker] = ' '.join(terms)
                 else:
-                    groups[marker] = '(' + ' OR '.join(terms) + ')'
+                    groups[marker] = or_join(terms)
             elif len(terms) == 1:
                 groups[marker] = terms[0]
             else:

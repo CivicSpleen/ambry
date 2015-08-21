@@ -104,6 +104,34 @@ class DatasetWhooshIndex(BaseDatasetIndex):
             datasets[partition.dataset_vid].partitions.add(partition.vid)
         return list(datasets.values())
 
+    def _make_query_from_terms(self, terms):
+        """ Creates a query for dataset from decomposed search terms.
+
+        Args:
+            terms (dict or unicode or string):
+
+        Returns:
+            tuple: First element is str with FTS query, second is parameters of the query.
+
+        """
+
+        expanded_terms = self._expand_terms(terms)
+
+        cterms = ''
+
+        if expanded_terms['doc']:
+            cterms = self.backend._and_join(expanded_terms['doc'])
+
+        if expanded_terms['keywords']:
+            if cterms:
+                cterms = self.backend._and_join(
+                    cterms, self.backend._join_keywords(expanded_terms['keywords']))
+            else:
+                cterms = self.backend._join_keywords(expanded_terms['keywords'])
+
+        logger.debug('Dataset terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
+        return cterms
+
     def _index_document(self, document, force=False):
         """ Adds dataset document to the index. """
         # Assuming document does not exist in the index, because existance is checked in the index_one method.
@@ -276,6 +304,76 @@ class PartitionWhooshIndex(BasePartitionIndex):
         with self.index.searcher() as searcher:
             result = searcher.search(Term('vid', partition.vid))
             return bool(result)
+
+    def _make_query_from_terms(self, terms):
+        """ returns a FTS query for partition created from decomposed search terms.
+
+        args:
+            terms (dict or str):
+
+        returns:
+            str containing fts query.
+
+        """
+
+        expanded_terms = self._expand_terms(terms)
+
+        cterms = ''
+        if expanded_terms['doc']:
+            cterms = self.backend._or_join(expanded_terms['doc'])
+
+        keywords = expanded_terms['keywords']
+
+        frm_to = self._from_to_as_term(expanded_terms['from'], expanded_terms['to'])
+
+        if frm_to:
+            keywords.append(frm_to)
+
+        if keywords:
+            if cterms:
+                cterms = self.backend._and_join(
+                    [cterms, self.backend._field_term('keywords', expanded_terms['keywords'])])
+            else:
+                cterms = self.backend._field_term('keywords', expanded_terms['keywords'])
+
+        logger.debug('partition terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
+
+        return cterms
+
+    def _from_to_as_term(self, frm, to):
+        """ Turns from and to into the query format.
+
+        Args:
+            frm (str): from year
+            to (str): to year
+
+        Returns:
+            FTS query str with years range.
+
+        """
+
+        # The wackiness with the conversion to int and str, and adding ' ', is because there
+        # can't be a space between the 'TO' and the brackets in the time range
+        # when one end is open
+        from_year = ''
+        to_year = ''
+
+        def year_or_empty(prefix, year, suffix):
+            try:
+                return prefix + str(int(year)) + suffix
+            except (ValueError, TypeError):
+                return ''
+
+        if frm:
+            from_year = year_or_empty('', frm, ' ')
+
+        if to:
+            to_year = year_or_empty(' ', to, '')
+
+        if bool(from_year) or bool(to_year):
+            return '[{}TO{}]'.format(from_year, to_year)
+        else:
+            return None
 
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """

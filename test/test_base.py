@@ -4,13 +4,24 @@ Created on Jun 22, 2012
 @author: eric
 """
 
-# Monkey patch logging, because I really don't understand logging
-
 import unittest
 
-from ambry.identity import DatasetNumber
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
+from six.moves.urllib.parse import urlparse
+
+from ambry.identity import DatasetNumber
 from ambry.orm import Database, Dataset
+from ambry.run import get_runconfig
+
+
+MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql-test '\
+    'to the database config of the ambry config.'
+SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
+
+# FIXME: use real example.
+# example of the config - dsn: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
 
 
 class TestBase(unittest.TestCase):
@@ -25,11 +36,14 @@ class TestBase(unittest.TestCase):
 
         self.db = None
 
+    def tearDown(self):
+        if hasattr(self, 'library'):
+            self.library.database.close()
+
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
     def get_rc(self, name='ambry.yaml'):
-        from ambry.run import get_runconfig
         import os
         from test import bundlefiles
 
@@ -63,9 +77,9 @@ class TestBase(unittest.TestCase):
             print row
 
     def new_database(self):
+        # FIXME: this connection will not be closed properly in a postgres case.
         db = Database(self.dsn)
         db.open()
-
         return db
 
     def setup_bundle(self, name, source_url=None, build_url=None, library=None):
@@ -120,3 +134,106 @@ class TestBase(unittest.TestCase):
         self.db = self.library._db
 
         return Bundle(self.new_db_dataset(self.db), self.library, build_url='mem://', source_url='mem://')
+
+
+class PostgreSQLTestBase(TestBase):
+    """ Base class for database tests who requires postgresql database. """
+
+    def setUp(self):
+        super(PostgreSQLTestBase, self).setUp()
+
+        # we need config from user to properly construct postgresql test database.
+        conf = get_runconfig()
+        if 'database' in conf.dict and 'postgresql-test' in conf.dict['database']:
+            # Create database and populate required fields.
+            self._create_postgres_test_db(conf)
+            self.dsn = self.__class__.postgres_test_db_data['test_db_dsn']
+            self.postgres_dsn = self.__class__.postgres_test_db_data['postgres_db_dsn']
+            self.postgres_test_db = self.__class__.postgres_test_db_data['test_db_name']
+        else:
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+            self.postgres_dsn = None
+            self.dsn = None
+            self.postgres_test_db = None
+
+    def tearDown(self):
+        super(PostgreSQLTestBase, self).tearDown()
+        self._drop_postgres_test_db()
+
+    @classmethod
+    def _drop_postgres_test_db(cls):
+        # drop test database
+        test_db_name = cls.postgres_test_db_data['test_db_name']
+        assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
+
+        engine = create_engine(cls.postgres_test_db_data['postgres_db_dsn'])
+        connection = engine.connect()
+        connection.execute('commit')
+        connection.execute('DROP DATABASE {};'.format(test_db_name))
+        connection.execute('commit')
+        connection.close()
+
+    @classmethod
+    def _create_postgres_test_db(cls, conf=None):
+        if not conf:
+            conf = get_runconfig()
+        postgres_user = 'ambry'  # FIXME: take it from the conf.
+        dsn = conf.dict['database']['postgresql-test']
+        parsed_url = urlparse(dsn)
+        db_name = parsed_url.path.replace('/', '')
+        test_db_name = '{}_test_{}'.format(db_name, SAFETY_POSTFIX)
+        postgres_db_dsn = parsed_url._replace(path='postgres').geturl()
+        test_db_dsn = parsed_url._replace(path=test_db_name).geturl()
+
+        # connect to postgres database because we need to create database for tests.
+        engine = create_engine(postgres_db_dsn, poolclass=NullPool)
+        connection = engine.connect()
+
+        # we have to close opened transaction.
+        connection.execute('commit')
+
+        # drop test database created by previuos run (control + c case).
+        if cls.postgres_db_exists(test_db_name, engine):
+            assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
+            while True:
+                delete_it = raw_input(
+                    '\nTest database with {} name already exists. Can I delete it (Yes|No): '.format(test_db_name))
+                if delete_it.lower() == 'yes':
+                    try:
+                        connection.execute('DROP DATABASE {};'.format(test_db_name))
+                        connection.execute('commit')
+                    except:
+                        connection.execute('rollback')
+                    break
+
+                elif delete_it.lower() == 'no':
+                    break
+
+        # check for template with pg_tgrm extension.
+        cls.pg_trgm_is_installed = cls.postgres_db_exists('template0_trgm', connection)
+
+        if not cls.pg_trgm_is_installed:
+            raise unittest.SkipTest(
+                'Can not find template with pg_trgm support. See README.rst for details.')
+
+        query = 'CREATE DATABASE {} OWNER {} TEMPLATE template0_trgm encoding \'UTF8\';'\
+            .format(test_db_name, postgres_user)
+        connection.execute(query)
+        connection.execute('commit')
+        connection.close()
+
+        cls.postgres_test_db_data = {
+            'test_db_name': test_db_name,
+            'test_db_dsn': test_db_dsn,
+            'postgres_db_dsn': postgres_db_dsn}
+        return cls.postgres_test_db_data
+
+    @classmethod
+    def postgres_db_exists(self, db_name, conn):
+        """ Returns True if database with given name exists in the postgresql. """
+        from sqlalchemy.sql.expression import text
+        result = conn\
+            .execute(
+                text('SELECT 1 FROM pg_database WHERE datname=:db_name;'), db_name=db_name)\
+            .fetchall()
+        return result == [(1,)]

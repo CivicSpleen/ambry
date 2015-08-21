@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import unittest
 
-from test.test_base import TestBase
+from test.test_base import TestBase, PostgreSQLTestBase
 
 from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
 from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
+from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
 
 from test.test_orm.factories import PartitionFactory
@@ -15,6 +16,8 @@ from test.test_orm.factories import PartitionFactory
 # To debug set SKIP_ALL to True and comment @skip decorator on test you want to run.
 SKIP_ALL = False
 
+
+# FIXME: Add identifier index tests.
 
 class AmbryReadyMixin(object):
     """ Basic functionality for all search backends. Requires self.library and self.backend attributes.
@@ -37,8 +40,7 @@ class AmbryReadyMixin(object):
     # tests
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_add_dataset_to_the_index(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         self.backend.dataset_index.index_one(dataset)
 
         datasets = self.backend.dataset_index.all()
@@ -47,8 +49,7 @@ class AmbryReadyMixin(object):
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_vid(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         self.backend.dataset_index.index_one(dataset)
 
         found = self.backend.dataset_index.search(dataset.vid)
@@ -57,55 +58,48 @@ class AmbryReadyMixin(object):
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_title(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         dataset.config.metadata.about.title = 'title'
         self.backend.dataset_index.index_one(dataset)
         self._assert_finds_dataset(dataset, 'title')
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_summary(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         dataset.config.metadata.about.summary = 'Some summary of the dataset'
         self.backend.dataset_index.index_one(dataset)
         self._assert_finds_dataset(dataset, 'summary of the')
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_id(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         self.backend.dataset_index.index_one(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.id_))
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_source(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0, source='example.com')
+        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         assert dataset.identity.source
         self.backend.dataset_index.index_one(dataset)
         self._assert_finds_dataset(dataset, 'source example.com')
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_name(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0, source='example.com')
+        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         assert str(dataset.identity.name)
         self.backend.dataset_index.index_one(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.name))
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_vname(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0, source='example.com')
+        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         assert str(dataset.identity.vname)
         self.backend.dataset_index.index_one(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.vname))
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_does_not_add_dataset_twice(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         self.backend.dataset_index.index_one(dataset)
 
         datasets = self.backend.dataset_index.all()
@@ -118,9 +112,8 @@ class AmbryReadyMixin(object):
     # partition add
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_add_partition_to_the_index(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        dataset = self.new_db_dataset(self.library.database, n=0)
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)
         partitions = self.backend.partition_index.all()
@@ -130,37 +123,33 @@ class AmbryReadyMixin(object):
     # partition search
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_vid(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        dataset = self.new_db_dataset(self.library.database, n=0)
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, partition.vid)
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_id(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        dataset = self.new_db_dataset(self.library.database, n=0)
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, partition.identity.id_)
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_name(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0, source='example.com')
+        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(table, time=1, name='Partition1')
-        db.commit()
+        self.library.database.commit()
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, str(partition.identity.name))
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_vname(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0, source='example.com')
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, str(partition.identity.vname))
@@ -169,13 +158,12 @@ class AmbryReadyMixin(object):
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_years_range(self):
         """ search by `source example.com from 1978 to 1979` (temporal bounds) """
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0, source='example.com')
+        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(
             table, time=1,
             time_coverage=['1978', '1979'])
-        db.commit()
+        self.library.database.commit()
         self.backend.partition_index.index_one(partition)
         self.backend.dataset_index.index_one(dataset)
 
@@ -191,13 +179,12 @@ class AmbryReadyMixin(object):
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_about(self):
         """ search by `* about cucumber` """
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(table, time=1)
-        db.commit()
+        self.library.database.commit()
         partition.table.add_column('column1', description='cucumber')
-        db.commit()
+        self.library.database.commit()
         self.backend.dataset_index.index_one(dataset)
         self.backend.partition_index.index_one(partition)
 
@@ -213,13 +200,12 @@ class AmbryReadyMixin(object):
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_with(self):
         """ search by `* with cucumber` """
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(table, time=1)
-        db.commit()
+        self.library.database.commit()
         partition.table.add_column('column1', description='cucumber')
-        db.commit()
+        self.library.database.commit()
         self.backend.dataset_index.index_one(dataset)
         self.backend.partition_index.index_one(partition)
 
@@ -235,11 +221,10 @@ class AmbryReadyMixin(object):
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_in(self):
         """ search by `source example.com in California` (geographic bounds) """
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0, source='example.com')
+        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(table, time=1, space_coverage=['california'])
-        db.commit()
+        self.library.database.commit()
         self.backend.dataset_index.index_one(dataset)
         self.backend.partition_index.index_one(partition)
 
@@ -255,11 +240,10 @@ class AmbryReadyMixin(object):
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_by(self):
         """ search by `source example.com by county` (granularity search) """
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0, source='example.com')
+        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(table, time=1, grain_coverage=['county'])
-        db.commit()
+        self.library.database.commit()
         self.backend.dataset_index.index_one(dataset)
         self.backend.partition_index.index_one(partition)
 
@@ -276,14 +260,13 @@ class AmbryReadyMixin(object):
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_range_and_in(self):
         """ search by `table2 from 1978 to 1979 in california` (geographic bounds and temporal bounds) """
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        db.session.commit()
+        dataset = self.new_db_dataset(self.library.database, n=0)
+        self.library.database.session.commit()
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(
             table, time=1, space_coverage=['california'],
             time_coverage=['1978', '1979'])
-        db.commit()
+        self.library.database.commit()
         self.backend.dataset_index.index_one(dataset)
         self.backend.partition_index.index_one(partition)
 
@@ -292,6 +275,21 @@ class AmbryReadyMixin(object):
         self.assertEqual(len(found), 1)
         self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
+
+    def test_search_identifier_by_part_of_the_name(self):
+        self.backend.identifier_index.index_one({
+            'identifier': 'id1',
+            'type': 'dataset',
+            'name': 'name1'})
+        self.backend.identifier_index.index_one({
+            'identifier': 'id2',
+            'type': 'dataset',
+            'name': 'name2'})
+
+        # testing.
+        ret = list(self.backend.identifier_index.search('name'))
+        self.assertEqual(len(ret), 2)
+        self.assertListEqual(['id1', 'id2'], [x.vid for x in ret])
 
 
 class WhooshBackendTest(TestBase, AmbryReadyMixin):
@@ -313,3 +311,23 @@ class SQLiteBackendTest(TestBase, AmbryReadyMixin):
         rc = self.get_rc()
         self.library = new_library(rc)
         self.backend = SQLiteSearchBackend(self.library)
+
+
+class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
+
+    def setUp(self):
+        super(PostgreSQLBackendTest, self).setUp()
+
+        # create test database
+        rc = self.get_rc()
+        self._real_test_database = rc.config['database']['test-database']
+        rc.config['database']['test-database'] = self.dsn
+        self.library = new_library(rc)
+        self.backend = PostgreSQLSearchBackend(self.library)
+
+    def tearDown(self):
+        super(PostgreSQLBackendTest, self).tearDown()
+
+        # restore database config
+        rc = self.get_rc()
+        rc.config['database']['test-database'] = self._real_test_database

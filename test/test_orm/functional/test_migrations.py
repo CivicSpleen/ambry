@@ -10,11 +10,12 @@ from sqlalchemy.pool import NullPool
 from ambry.orm.database import Database
 from ambry.orm import database
 from ambry.orm import migrations
+from ambry.run import get_runconfig
 
-from test.test_orm.base import BasePostgreSQLTest, MISSING_POSTGRES_CONFIG_MSG
+from test.test_base import TestBase, PostgreSQLTestBase
 
 
-class MigrationTest(BasePostgreSQLTest):
+class MigrationTest(TestBase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
@@ -83,9 +84,6 @@ class MigrationTest(BasePostgreSQLTest):
         'ambry.orm.database._get_all_migrations')
     def test_applies_new_migration_to_postgresql_database(self, fake_get):
         # replace real migrations with tests migrations.
-        if not self.postgres_test_dsn:
-            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-
         test_migrations = [
             (100, 'test.test_orm.functional.migrations.0100_init'),
             (101, 'test.test_orm.functional.migrations.0101_add_column'),
@@ -96,27 +94,30 @@ class MigrationTest(BasePostgreSQLTest):
         fake_get.expects_call().returns(test_migrations)
 
         # create postgresql db
-        self.pg_connection()
+        try:
+            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
 
-        # populate database with initial schema
-        with fudge.patched_context(database, 'SCHEMA_VERSION', 100):
-            db = Database(self.postgres_test_dsn)
-            db.create()
-            db.close()
-
-        # switch version and reconnect. Now both migrations should apply.
-        with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
-            db = Database(self.postgres_test_dsn, engine_kwargs={'poolclass': NullPool})
-            try:
-                # check column created by migration 101.
-                db.connection.execute('SELECT column1 FROM datasets;').fetchall()
-
-                # check table created by migration 102.
-                db.connection.execute('SELECT column1 FROM table1;').fetchall()
-
-                # db version changed to 102
-                self.assertEqual(
-                    db.connection.execute('SELECT version FROM user_version;').fetchone()[0],
-                    102)
-            finally:
+            # populate database with initial schema
+            with fudge.patched_context(database, 'SCHEMA_VERSION', 100):
+                db = Database(postgres_test_db_dsn, engine_kwargs={'poolclass': NullPool})
+                db.create()
                 db.close()
+
+            # switch version and reconnect. Now both migrations should apply.
+            with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
+                db = Database(postgres_test_db_dsn, engine_kwargs={'poolclass': NullPool})
+                try:
+                    # check column created by migration 101.
+                    db.connection.execute('SELECT column1 FROM datasets;').fetchall()
+
+                    # check table created by migration 102.
+                    db.connection.execute('SELECT column1 FROM table1;').fetchall()
+
+                    # db version changed to 102
+                    self.assertEqual(
+                        db.connection.execute('SELECT version FROM user_version;').fetchone()[0],
+                        102)
+                finally:
+                    db.close()
+        finally:
+            PostgreSQLTestBase._drop_postgres_test_db()

@@ -131,7 +131,7 @@ class IdentifierSQLiteIndexTest(TestBase):
         self.assertEqual(result, [('gvid',)])
 
         # search and found result.
-        found = list(self.backend.identifier_index.search('gvid'))
+        found = list(self.backend.identifier_index.search('name'))
         self.assertIsInstance(found[0], IdentifierSearchResult)
         names = [x.name for x in found]
         self.assertIn('name1', names)

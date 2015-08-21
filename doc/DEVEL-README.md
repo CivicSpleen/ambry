@@ -70,6 +70,39 @@ $ mkvirtualenv --python=/usr/bin/python3 ambry3
 Python 3.4.2
 ```
 
+### Foreign Data Wrapper (PostgreSQL) / Virtual tables (SQLite)
+#### SQLite
+Install python-apsw (sqlite virtual tables support).
+python-apsw requires at least sqlite v 3.8.8. Some systems may have lower version, in such case
+you can install private version of the sqlite for the python-apsw.
+    1. Download apsw source code.
+        http://rogerbinns.github.io/apsw/download.html
+    2. Unzip it, cd to unzipped directory.
+    3. Install
+```bash
+python setup.py fetch --all build --enable-all-extensions install test
+```
+See http://apidoc.apsw.googlecode.com/hg/build.html#recommended for more details.
+
+#### PostgreSQL (Foreign Data Wrapper) - Debian/Ubuntu
+1. Install pgxn
+```bash
+$ sudo apt-get install pgxnclient
+```
+2. Install postgresql-server-dev package
+```bash
+$ sudo apt-get install postgresql-server-dev-(your version here)
+```
+3. Install multicorn postgres extension
+```bash
+$ sudo pgxn install multicorn
+```
+4. Install multicorn python package
+# FIXME: Add to requirements and test.
+```bash
+pip install https://github.com/Kozea/Multicorn/archive/v1.0.1.zip
+```
+
 ### To write python2/python3 compatible code:
 Ambry uses one code base for both - python2 and python3. This requires some extra work.
 1. Tests should be run in both - python2 and python3. FIXME: Not ready yet.

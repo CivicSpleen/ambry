@@ -56,7 +56,7 @@ class Test(TestBase):
         db.session.add(dupe)
         try:
             db.session.commit()
-            raise AssertionError('Dupe unexpectadly saved. It seems unique constraint is broken.')
+            raise AssertionError('Dupe unexpectedly saved. It seems unique constraint is broken.')
         except IntegrityError as exc:
             self.assertIn('UNIQUE constraint failed', exc.message)
 

@@ -5,27 +5,28 @@ import unittest
 import fudge
 
 from sqlalchemy import create_engine
-from sqlalchemy.engine import Connection as SQLAlchemyConnection
+from sqlalchemy.engine import Connection as SQLAlchemyConnection, Engine
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.exc import ProgrammingError, OperationalError
-
+from sqlalchemy.pool import NullPool
 
 from ambry.orm.database import get_stored_version, _validate_version, _migration_required, SCHEMA_VERSION,\
     _update_version, _is_missed, migrate
 from ambry.orm.exc import DatabaseError, DatabaseMissingError
-
 from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
 from ambry.orm.dataset import Dataset
+
+from ambry.run import get_runconfig
 
 from test.test_orm.factories import DatasetFactory, TableFactory,\
     ColumnFactory, PartitionFactory
 
 from test.test_library.asserts import assert_spec
 
-from test.test_orm.base import BasePostgreSQLTest, MISSING_POSTGRES_CONFIG_MSG
+from test.test_base import TestBase, PostgreSQLTestBase
 
 
-class DatabaseTest(unittest.TestCase):
+class DatabaseTest(TestBase):
 
     def setUp(self):
         self.sqlite_db = Database('sqlite://')
@@ -187,28 +188,19 @@ class DatabaseTest(unittest.TestCase):
 
     # engine() tests.
     @fudge.patch(
-        'ambry.orm.database.create_engine',
         'ambry.orm.database._validate_version')
-    def test_engine_creates_and_caches_sqlalchemy_engine(self, fake_create, fake_validate):
+    def test_engine_creates_and_caches_sqlalchemy_engine(self, fake_validate):
         fake_validate.expects_call()
-        engine_stub = fudge.Fake().is_a_stub()
-        fake_create.expects_call()\
-            .returns(engine_stub)
         db = Database('sqlite://')
-        self.assertEqual(db.engine, engine_stub)
-        self.assertEqual(db._engine, engine_stub)
+        self.assertIsInstance(db.engine, Engine)
+        self.assertIsInstance(db._engine, Engine)
 
     @fudge.patch(
-        'ambry.orm.database.create_engine',
         'ambry.orm.database.event',
         'ambry.orm.database._validate_version')
-    def test_listens_to_connect_signal_for_sqlite_driver(self, fake_create,
-                                                         fake_event, fake_validate):
+    def test_listens_to_connect_signal_for_sqlite_driver(self, fake_event, fake_validate):
         fake_validate.expects_call()
         fake_event.provides('listen')
-        engine_stub = fudge.Fake().is_a_stub()
-        fake_create.expects_call()\
-            .returns(engine_stub)
         Database('sqlite://').engine
 
     # connection tests.
@@ -427,7 +419,7 @@ class DatabaseTest(unittest.TestCase):
             'Dataset was not removed.')
 
 
-class GetVersionTest(BasePostgreSQLTest):
+class GetVersionTest(TestBase):
 
     def test_returns_user_version_from_sqlite_pragma(self):
         engine = create_engine('sqlite://')
@@ -437,23 +429,21 @@ class GetVersionTest(BasePostgreSQLTest):
         self.assertEqual(version, 22)
 
     def test_returns_user_version_from_postgres_table(self):
-        if not self.postgres_dsn:
-            # FIXME: it seems failing is better choice here.
-            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+        try:
+            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
+            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
+            with engine.connect() as conn:
+                create_table_query = '''
+                    CREATE TABLE user_version (
+                        version INTEGER NOT NULL); '''
 
-        pg_connection = self.pg_connection()
-
-        pg_connection.execute("CREATE SCHEMA ambrylib")
-
-        create_table_query = '''
-            CREATE TABLE ambrylib.user_version (
-                version INTEGER NOT NULL); '''
-
-        pg_connection.execute(create_table_query)
-        pg_connection.execute('INSERT INTO ambrylib.user_version VALUES (22);')
-        pg_connection.execute('commit')
-        version = get_stored_version(pg_connection)
-        self.assertEqual(version, 22)
+                conn.execute(create_table_query)
+                conn.execute('INSERT INTO user_version VALUES (22);')
+                conn.execute('commit')
+                version = get_stored_version(conn)
+                self.assertEqual(version, 22)
+        finally:
+            PostgreSQLTestBase._drop_postgres_test_db()
 
 
 class ValidateVersionTest(unittest.TestCase):
@@ -503,7 +493,7 @@ class MigrationRequiredTest(unittest.TestCase):
         self.assertFalse(_migration_required(self.connection))
 
 
-class UpdateVersionTest(BasePostgreSQLTest):
+class UpdateVersionTest(TestBase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
@@ -516,31 +506,34 @@ class UpdateVersionTest(BasePostgreSQLTest):
         self.assertEqual(stored_version, 122)
 
     def test_creates_user_version_postgresql_table(self):
-        if not self.postgres_dsn:
-            # FIXME: it seems failing is better choice here.
-            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-        pg_connection = self.pg_connection()
-        _update_version(pg_connection, 123)
-        version = pg_connection.execute('SELECT version FROM ambrylib.user_version;').fetchone()[0]
-        self.assertEqual(version, 123)
+        try:
+            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
+            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
+            with engine.connect() as conn:
+                _update_version(conn, 123)
+                version = conn.execute('SELECT version FROM user_version;').fetchone()[0]
+                self.assertEqual(version, 123)
+        finally:
+            PostgreSQLTestBase._drop_postgres_test_db()
 
     def test_updates_user_version_postgresql_table(self):
-        if not self.postgres_dsn:
-            # FIXME: it seems failing is better choice here.
-            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+        try:
+            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
+            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
+            with engine.connect() as conn:
+                create_table_query = '''
+                    CREATE TABLE user_version (
+                        version INTEGER NOT NULL); '''
 
-        pg_connection = self.pg_connection()
-        create_table_query = '''
-            CREATE TABLE user_version (
-                version INTEGER NOT NULL); '''
+                conn.execute(create_table_query)
+                conn.execute('INSERT INTO user_version VALUES (22);')
+                conn.execute('commit')
 
-        pg_connection.execute(create_table_query)
-        pg_connection.execute('INSERT INTO user_version VALUES (22);')
-        pg_connection.execute('commit')
-
-        _update_version(pg_connection, 123)
-        version = pg_connection.execute('SELECT version FROM ambrylib.user_version;').fetchone()[0]
-        self.assertEqual(version, 123)
+                _update_version(conn, 123)
+                version = conn.execute('SELECT version FROM user_version;').fetchone()[0]
+                self.assertEqual(version, 123)
+        finally:
+            PostgreSQLTestBase._drop_postgres_test_db()
 
     def test_raises_DatabaseMissingError_error(self):
         with fudge.patched_context(self.sqlite_connection.engine, 'name', 'foo'):
