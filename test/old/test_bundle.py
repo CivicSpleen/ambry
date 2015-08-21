@@ -113,7 +113,7 @@ class Test(TestBase):
 
             t1 = s.new_table('table1')
 
-            s.add_column(t1, name='col1', datatype=Column.DATATYPE_REAL)
+            s.add_column(t1, name='col1', datatype=Column.DATATYPE_FLOAT)
             s.add_column(t1, name='col2', datatype=Column.DATATYPE_INTEGER)
             s.add_column(t1, name='col3', datatype=Column.DATATYPE_TEXT)
 
@@ -123,7 +123,7 @@ class Test(TestBase):
             s.add_column(t2, name='col3')
 
             t3 = s.new_table('table3')
-            s.add_column(t3, name='col1', datatype=Column.DATATYPE_REAL)
+            s.add_column(t3, name='col1', datatype=Column.DATATYPE_FLOAT)
             s.add_column(t3, name='col2', datatype=Column.DATATYPE_INTEGER)
             s.add_column(t3, name='col3', datatype=Column.DATATYPE_TEXT)
 
@@ -139,7 +139,7 @@ class Test(TestBase):
             t = s.new_table('table3')
             s.add_column(t, name='col1', datatype=Column.DATATYPE_INTEGER, default=-1, illegal_value='999')
             s.add_column(t, name='col2', datatype=Column.DATATYPE_TEXT)
-            s.add_column(t, name='col3', datatype=Column.DATATYPE_REAL)
+            s.add_column(t, name='col3', datatype=Column.DATATYPE_FLOAT)
 
             c1 = t.column('col1')
 

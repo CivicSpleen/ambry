@@ -14,7 +14,7 @@ class Test(TestBase):
 
         source = ds.new_source('st')
 
-        ds.commit()  # Should not have to do this.
+        ds.commit()  # FIXME Should not have to do this.
 
         source = ds.source_file('st')
         st = source.source_table
@@ -32,3 +32,15 @@ class Test(TestBase):
 
         self.assertEqual({'1': '1_1', '0': '0_0', '2': '2_2'}, source.column_map)
         self.assertEqual({'1': 1, '0': 0, '2': 2}, source.column_index_map)
+
+        #for s in ds.sources:
+        #    print s.source_table
+        #    print s.dest_table
+
+        for i in range(10):
+            source = ds.new_source("source"+str(i))
+            ds.commit()
+            t  = source.source_table
+            self.assertEquals("source"+str(i), t.name)
+
+

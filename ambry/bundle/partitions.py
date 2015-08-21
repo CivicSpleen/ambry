@@ -15,8 +15,7 @@ from ..identity import PartitionIdentity, PartitionNameQuery, NameQuery  # , Par
 
 
 # from util.typecheck import accepts, returns
-from ..util import Constant, Proxy
-
+from ..util import Constant
 
 class Partitions(object):
 
@@ -75,7 +74,7 @@ class Partitions(object):
 
         try:
             orm_partition = q.one()
-            return PartitionProxy(self.bundle, orm_partition)
+            return self.bundle.wrap_partition(orm_partition)
         except NoResultFound:
             orm_partition = None
 
@@ -87,7 +86,7 @@ class Partitions(object):
 
             try:
                 orm_partition = q.one()
-                return PartitionProxy(self.bundle, orm_partition)
+                return self.bundle.wrap_partition(orm_partition)
             except NoResultFound:
                 orm_partition = None
 
@@ -176,13 +175,14 @@ class Partitions(object):
 
         p = self.bundle.dataset.new_partition(data=data, **kwargs)
 
-        return PartitionProxy(self.bundle, p)
+        return self.bundle.wrap_partition(p)
 
     def get_or_new_partition(self, pname, data=None, **kwargs):
 
         p = self.bundle.partitions.partition(pname)
         if not p:
             p = self.bundle.partitions.new_partition(pname, data=data, **kwargs)
+            self.bundle.commit()
 
         assert p.d_vid == self.bundle.dataset.vid
 
@@ -193,7 +193,7 @@ class Partitions(object):
         from ambry.orm.partition import Partition
         for p in self.bundle.dataset.partitions:
             if p.type == Partition.TYPE.UNION:
-                yield PartitionProxy(self.bundle, p)
+                yield self.bundle.wrap_partition(p)
 
     def new_db_from_pandas(self, frame, table=None, data=None, load=True, **kwargs):
         """Create a new db partition from a pandas data frame.
@@ -238,105 +238,3 @@ class Partitions(object):
         return p
 
 
-class PartitionProxy(Proxy):
-
-    def __init__(self, bundle, obj):
-        super(PartitionProxy, self).__init__(obj)
-        self._partition = obj
-        self._bundle = bundle
-        self._datafile = None
-
-    def clean(self):
-        """Remove all built files and return the partition to a newly-created state"""
-
-        self.datafile.delete()
-
-    def database(self):
-        """Returns self, to deal with old bundles that has a direct reference to their database. """
-        return self
-
-    @property
-    def datafile(self):
-
-        # if self.type != self.TYPE.SEGMENT:
-        #     from ambry.dbexceptions import BundleError
-        #     raise BundleError("Only segment partitions can have datafiles")
-
-        if self._datafile is None:
-            from ambry.etl.partition import new_partition_data_file
-            self._datafile = new_partition_data_file(self._bundle.build_fs, self.cache_key)
-
-        return self._datafile
-
-    @property
-    def location(self):
-
-        base_location = self._partition.location
-
-        assert bool(base_location)
-
-        if self._bundle.build_fs.exists(base_location):
-            if self._bundle.build_fs.hashsyspath(base_location):
-                return self._bundle.build_fs.getsyspath(base_location)
-
-        return base_location
-
-    def stream(self, skip_header=False, as_dict=False):
-        """Yield rows of a partition, as an intyerator. Data is taken from one of these locations:
-        - The warehouse, for installed data
-        - The build directory, for built data
-        - The remote, for checked in data.
-        """
-
-        from ..orm.exc import NotFoundError
-        from fs.errors import ResourceNotFoundError
-
-        if self.location == 'build':
-            try:
-                reader = self.datafile.reader()
-            except ResourceNotFoundError:
-                raise NotFoundError("Partition {} not found in location '{}'. System Path: {} "
-                                    .format(self.identity.fqname, self.location, self.datafile.syspath))
-
-        elif self.location == 'remote':
-            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
-            remote = self._bundle.library.remote(b)
-
-            reader = self.datafile.reader(remote.open(self.datafile.munged_path, 'rb'))
-
-        elif self.location == 'warehouse':
-            raise NotImplementedError()
-
-        def generator():
-
-            itr = iter(reader)
-
-            header = next(itr)
-
-            # Check that header is sensible.
-            for i, (a, b) in enumerate(zip(header, (c.name for c in self.table.columns))):
-                if a != b:
-                    exc_msg = 'For {} at position {}, partition header {} is different '\
-                        'from column name {}. {}\n{}'\
-                        .format(self.identity.name, i, a, b, list(header),
-                                [c.name for c in self.table.columns])
-                    raise Exception(exc_msg)
-
-            if not as_dict:
-                yield header
-
-            if as_dict:
-                for row in itr:
-                    yield dict(list(zip(header, row)))
-            else:
-                for row in itr:
-                    yield row
-
-            reader.close()
-
-        itr = iter(generator())
-
-        if skip_header:
-            next(itr)
-
-        return itr

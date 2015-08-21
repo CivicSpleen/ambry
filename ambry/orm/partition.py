@@ -49,16 +49,16 @@ class Partition(Base, DictableMixin):
     TYPE.UNION = 'u'
 
     sequence_id = SAColumn('p_sequence_id', Integer)
-    vid = SAColumn('p_vid', String(20), primary_key=True, nullable=False)
-    id = SAColumn('p_id', String(20), nullable=False)
-    d_vid = SAColumn('p_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
-    t_vid = SAColumn('p_t_vid', String(20), ForeignKey('tables.t_vid'), nullable=False, index=True)
+    vid = SAColumn('p_vid', String(16), primary_key=True, nullable=False)
+    id = SAColumn('p_id', String(13), nullable=False)
+    d_vid = SAColumn('p_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False, index=True)
+    t_vid = SAColumn('p_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=False, index=True)
     name = SAColumn('p_name', String(200), nullable=False, index=True)
     vname = SAColumn('p_vname', String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('p_fqname', String(200), unique=True, nullable=False, index=True)
     cache_key = SAColumn('p_cache_key', String(200), unique=True, nullable=False, index=True)
-    parent_vid = SAColumn('p_p_vid', String(20), ForeignKey('partitions.p_vid'), nullable=True, index=True)
-    ref = SAColumn('p_ref', String(20), index=True,
+    parent_vid = SAColumn('p_p_vid', String(16), ForeignKey('partitions.p_vid'), nullable=True, index=True)
+    ref = SAColumn('p_ref', String(16), index=True,
         doc='VID reference to an eariler version to use instead of this one.')
     type = SAColumn('p_type', String(20), default=TYPE.UNION,
         doc='u - normal partition, s - segment')
@@ -81,7 +81,7 @@ class Partition(Base, DictableMixin):
     grain_coverage = SAColumn('p_gcov', MutationList.as_mutable(JSONEncodedObj))
 
     installed = SAColumn('p_installed', String(100))
-    location = SAColumn('p_location', String(100))  # Location of the data file
+    _location = SAColumn('p_location', String(100))  # Location of the data file
 
     __table_args__ = (
         # ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
@@ -95,6 +95,9 @@ class Partition(Base, DictableMixin):
     stats = relationship(ColumnStat, backref='partition', cascade='all, delete, delete-orphan')
 
     children = relationship('Partition', backref=backref('parent', remote_side=[vid]), cascade='all')
+
+    _bundle  = None # Set when returned from a bundle.
+    _datafile = None
 
     @property
     def identity(self):
@@ -150,6 +153,8 @@ class Partition(Base, DictableMixin):
 
         sd = dict(stats)
 
+        self.stats[:] = [] # Delete existing stats
+
         for c in self.table.columns:
 
             if c.name not in sd:
@@ -188,20 +193,23 @@ class Partition(Base, DictableMixin):
         grains = set()
 
         for c in self.table.columns:
+
             if c.name not in sd:
                 continue
 
-            if sd[c.name].is_gvid:
-                scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[c.name].uniques))
-                grains |= set(GVid.parse(gvid).summarize() for gvid in sd[c.name].uniques)
-            elif sd[c.name].is_year:
+            try:
+                if sd[c.name].is_gvid:
+                    scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[c.name].uniques))
+                    grains |= set(GVid.parse(gvid).summarize() for gvid in sd[c.name].uniques)
+                elif sd[c.name].is_year:
 
-                tcov |= set(int(x) for x in sd[c.name].uniques)
-            elif sd[c.name].is_date:
-                # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
-                tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, basestring) else x.year for x in sd[c.name].uniques)
-
-        #
+                    tcov |= set(int(x) for x in sd[c.name].uniques)
+                elif sd[c.name].is_date:
+                    # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
+                    tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, basestring) else x.year for x in sd[c.name].uniques)
+            except Exception as e:
+                self._bundle.error("Failed to set coverage for column '{}', partition '{}': {}"
+                                   .format(c.name, self.identity.vname, e))
         # Space Coverage
 
         if 'source_data' in self.data:
@@ -318,7 +326,7 @@ class Partition(Base, DictableMixin):
 
     def finalize(self, stats=None):
 
-        self.state = self._partition.STATES.BUILT
+        self.state = self.STATES.BUILT
 
         # Write the stats for this partition back into the partition
 
@@ -327,9 +335,109 @@ class Partition(Base, DictableMixin):
             self.set_coverage(stats.stats())
             self.table.update_from_stats(stats.stats())
 
-        self.location = 'build'
+        self._location = 'build'
 
-        self.state = self._partition.STATES.FINALIZED
+        self.state = self.STATES.FINALIZED
+
+    # =============
+    # These methods are a bit non-cohesive, since they require the _bundle value to be set, which is
+    # set externally, when the object is retured from a bundle.
+
+    def clean(self):
+        """Remove all built files and return the partition to a newly-created state"""
+
+        self.datafile.delete()
+
+    @property
+    def datafile(self):
+
+        if self._datafile is None:
+            from ambry.etl.partition import new_partition_data_file
+            assert bool(self.cache_key)
+            self._datafile = new_partition_data_file(self._bundle.build_fs, self.cache_key)
+
+        return self._datafile
+
+    @property
+    def location(self):
+
+        base_location = self._location
+
+        assert bool(base_location)
+
+        if self._bundle.build_fs.exists(base_location):
+            if self._bundle.build_fs.hashsyspath(base_location):
+                return self._bundle.build_fs.getsyspath(base_location)
+
+        return base_location
+
+    @location.setter
+    def location(self, v):
+        self._location = v
+
+    def stream(self, skip_header=False, as_dict=False):
+        """Yield rows of a partition, as an intyerator. Data is taken from one of these locations:
+        - The warehouse, for installed data
+        - The build directory, for built data
+        - The remote, for checked in data.
+        """
+
+        from ..orm.exc import NotFoundError
+        from fs.errors import ResourceNotFoundError
+
+        if self.location == 'build':
+            try:
+                reader = self.datafile.reader()
+            except ResourceNotFoundError:
+                raise NotFoundError("Partition {} not found in location '{}'. System Path: {} "
+                                    .format(self.identity.fqname, self.location, self.datafile.syspath))
+
+        elif self.location == 'remote':
+            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+            remote = self._bundle.library.remote(b)
+
+            reader = self.datafile.reader(remote.open(self.datafile.munged_path, 'rb'))
+
+        elif self.location == 'warehouse':
+            raise NotImplementedError()
+
+        def generator():
+
+            itr = iter(reader)
+
+            header = next(itr)
+
+            # Check that header is sensible.
+            for i, (a, b) in enumerate(zip(header, (c.name for c in self.table.columns))):
+                if a != b:
+                    exc_msg = 'For {} at position {}, partition header {} is different ' \
+                              'from column name {}. {}\n{}' \
+                        .format(self.identity.name, i, a, b, list(header),
+                                [c.name for c in self.table.columns])
+                    raise Exception(exc_msg)
+
+            if not as_dict:
+                yield header
+
+            if as_dict:
+                for row in itr:
+                    yield dict(list(zip(header, row)))
+            else:
+                for row in itr:
+                    yield row
+
+            reader.close()
+
+        itr = iter(generator())
+
+        if skip_header:
+            next(itr)
+
+        return itr
+
+
+
+    # ============================
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -338,13 +446,8 @@ class Partition(Base, DictableMixin):
         from sqlalchemy import text
 
         if not target.sequence_id:
-
-            sql = text('SELECT max(p_sequence_id)+1 FROM partitions WHERE p_d_vid = :did')
-
-            target.sequence_id, = conn.execute(sql, did=target.d_vid).fetchone()
-
-            if not target.sequence_id:
-                target.sequence_id = 1
+            from exc import DatabaseError
+            raise DatabaseError("Sequence ID must be set before insertion")
 
         if not target.vid:
             assert bool(target.d_vid)

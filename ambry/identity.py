@@ -673,7 +673,8 @@ class ObjectNumber(object):
     TYPE.PARTITION = 'p'
     TYPE.TABLE = 't'
     TYPE.COLUMN = 'c'
-    TYPE.OTHER = 'other'
+    TYPE.OTHER1 = 'other1'
+    TYPE.OTHER2 = 'other2'
 
     VERSION_SEP = ''
 
@@ -691,7 +692,8 @@ class ObjectNumber(object):
     DLEN.COLUMN = 3
     DLEN.REVISION = (0, 3)
 
-    DLEN.OTHER = 4
+    DLEN.OTHER1 = 4
+    DLEN.OTHER2 = 4
 
     # Because the dataset number can be 3, 5, 7 or 9 characters,
     # And the revision is optional, the datasets ( and thus all
@@ -722,7 +724,9 @@ class ObjectNumber(object):
                   'p': DLEN.PARTITION,
                   't': DLEN.TABLE,
                   'c': DLEN.TABLE + DLEN.COLUMN,
-                  'other': DLEN.OTHER}
+                  'other1': DLEN.OTHER1,
+                  'other2': DLEN.OTHER1 + DLEN.OTHER2
+                  }
 
     TCMAXVAL = 62 ** DLEN.TABLE - 1  # maximum for table values.
     CCMAXVAL = 62 ** DLEN.COLUMN - 1  # maximum for column values.
@@ -732,7 +736,7 @@ class ObjectNumber(object):
     EPOCH = 1389210331  # About Jan 8, 2014
 
     @classmethod
-    def parse(cls, on_str, is_other=False):  # @ReservedAssignment
+    def parse(cls, on_str, force_type=None):  # @ReservedAssignment
         """Parse a string into one of the object number classes."""
 
         on_str_orig = on_str
@@ -749,8 +753,8 @@ class ObjectNumber(object):
         # if isinstance(on_str, unicode):
         #     dataset = on_str.encode('ascii')
 
-        if is_other:
-            type_ = 'other'
+        if force_type:
+            type_ = force_type
         else:
             type_ = on_str[0]
 
@@ -802,12 +806,20 @@ class ObjectNumber(object):
                     TableNumber(DatasetNumber(dataset, assignment_class=assignment_class), table),
                     column, revision=revision)
 
-            elif type_ == cls.TYPE.OTHER:
+            elif type_ == cls.TYPE.OTHER1:
 
-                return OtherNumber(on_str_orig[0],
-                                   DatasetNumber(dataset, assignment_class=assignment_class),
-                                   int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.OTHER])),
-                                   revision=revision)
+                    return GeneralNumber1(on_str_orig[0],
+                                       DatasetNumber(dataset, assignment_class=assignment_class),
+                                       int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.OTHER1])),
+                                       revision=revision)
+
+            elif type_ == cls.TYPE.OTHER2:
+                    return GeneralNumber2(on_str_orig[0],
+                                          DatasetNumber(dataset, assignment_class=assignment_class),
+                                          int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.OTHER1])),
+                                          int(ObjectNumber.base62_decode(
+                                              on_str[cls.DLEN.OTHER1:cls.DLEN.OTHER1+cls.DLEN.OTHER2])),
+                                          revision=revision)
 
             else:
 
@@ -1129,7 +1141,7 @@ class PartitionNumber(ObjectNumber):
             ObjectNumber._rev_str(self.revision))
 
 
-class OtherNumber(ObjectNumber):
+class GeneralNumber1(ObjectNumber):
     """Other types of number. Can have any type code, and 4 digits of number, directly
      descended from the dataset"""
 
@@ -1161,7 +1173,43 @@ class OtherNumber(ObjectNumber):
         return (
             self.type_code +
             self.dataset._ds_str() +
-            ObjectNumber.base62_encode(self.number).rjust(self.DLEN.OTHER, '0') +
+            ObjectNumber.base62_encode(self.number).rjust(self.DLEN.OTHER1, '0') +
+            ObjectNumber._rev_str(self.revision))
+
+class GeneralNumber2(ObjectNumber):
+    """Like General Number 2, but has a second level"""
+
+    def __init__(self, type_code, dataset, num1, num2, revision=None):
+
+        if isinstance(dataset, string_types):
+            dataset = ObjectNumber.parse(dataset).as_dataset
+
+        try:
+            dataset = dataset.as_dataset
+        except AttributeError:
+            raise ValueError(
+                'Constructor requires a DatasetNumber or ObjectNumber that converts to a DatasetNumber')
+
+        self.type_code = type_code
+        self.dataset = dataset
+        self.num1 = num1
+        self.num2 = num2
+        self.revision = revision
+
+        if not self.revision and dataset.revision:
+            self.revision = dataset.revision
+
+    @property
+    def as_dataset(self):
+        """Unlike the .dataset property, this will include the revision."""
+        return self.dataset.rev(self.revision)
+
+    def __str__(self):
+        return (
+            self.type_code +
+            self.dataset._ds_str() +
+            ObjectNumber.base62_encode(self.num1).rjust(self.DLEN.OTHER1, '0') +
+            ObjectNumber.base62_encode(self.num2).rjust(self.DLEN.OTHER2, '0') +
             ObjectNumber._rev_str(self.revision))
 
 

@@ -156,9 +156,9 @@ class Library(object):
         """Return all datasets"""
         return self._db.datasets
 
-    def dataset(self, ref, load_all=False):
+    def dataset(self, ref, load_all=False, exception=True):
         """Return all datasets"""
-        return self.database.dataset(ref, load_all=load_all)
+        return self.database.dataset(ref, load_all=load_all, exception = exception)
 
     def new_bundle(self, assignment_class=None, **kwargs):
         """
@@ -196,10 +196,10 @@ class Library(object):
         """
         identity = Identity.from_dict(config['identity'])
 
-        ds = self._db.dataset(identity.vid)
+        ds = self._db.dataset(identity.vid, exception = False)
 
         if not ds:
-            ds = self._db.dataset(identity.name)
+            ds = self._db.dataset(identity.name, exception = False)
 
         if not ds:
             ds = self._db.new_dataset(**identity.dict)
@@ -386,6 +386,7 @@ class Library(object):
         return remote_name, db_ck
 
     def sync_remote(self, remote_name):
+        from ambry.orm.exc import NotFoundError
         remote = self.remote(remote_name)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
@@ -402,8 +403,9 @@ class Library(object):
 
                 ds = list(db.datasets)[0]
 
-                extant = self.dataset(ds.vid)
-                if not extant:
+                try:
+                    self.dataset(ds.vid)
+                except NotFoundError:
                     self.database.copy_dataset(ds)
 
                 b = self.bundle(ds.vid)
@@ -413,7 +415,7 @@ class Library(object):
 
                 self.logger.info('Synced {}'.format(ds.vname))
             except Exception as e:
-                self.logger.error('Failed to sync {}, {}: {}'.format(fn, temp.getsyspath(fn), e))
+                self.logger.error('Failed to sync {} from {}, {}: {}'.format(fn, remote_name, temp.getsyspath(fn), e))
                 raise
 
         self.database.commit()

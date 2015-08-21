@@ -225,15 +225,13 @@ def root_search(args, l, rc):
     terms = ' '.join(args.terms)
     print terms
 
-    #print l.search.list_documents()
-
     results = l.search.search(terms)
 
     for r in results:
         print r.vid, r.bundle.metadata.about.title
         for p in r.partition_records:
-            print '    ', p.vid, p.vname
-
+            if p:
+                print '    ', p.vid, p.vname
 
 def root_doc(args, l, rc):
 
@@ -293,14 +291,21 @@ def root_import(args, l, rc):
 
         try:
             b = l.bundle(bid)
+
+            prt("Skipping existing  bundle: {}".format(b.identity.fqname))
+
+            continue
+
         except NotFoundError:
             b = l.new_from_bundle_config(config)
 
-        b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
+            prt("Loading bundle: {}".format(b.identity.fqname))
 
-        b.sync_in()
+            b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
 
-        prt("Loaded bundle: {}".format(b.identity.fqname))
+            b.sync_in()
+
+
 
 
 

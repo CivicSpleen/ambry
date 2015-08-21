@@ -20,7 +20,7 @@ from . import Column, Partition, Table, Dataset, Config, File,\
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 105
+SCHEMA_VERSION = 106
 
 POSTGRES_SCHEMA_NAME = 'ambrylib'
 
@@ -83,6 +83,8 @@ class Database(object):
             self._schema = None
 
         self.logger = logger
+
+
 
     def create(self):
         """Create the database from the base SQL."""
@@ -298,6 +300,7 @@ class Database(object):
     def clone(self):
         return self.__class__(self.dsn)
 
+
     def create_tables(self):
 
         from sqlalchemy.exc import OperationalError
@@ -314,8 +317,6 @@ class Database(object):
 
         # Working on the theory that this routine is only ever run once, when the database is created.
         # See http://stackoverflow.com/a/22212214 for how to use events and DDL to create the schema.
-
-
 
         orig_schemas = {}
 
@@ -398,7 +399,7 @@ class Database(object):
         """Return the root dataset, which hold configuration values for the library"""
         return self.dataset(ROOT_CONFIG_NAME_V)
 
-    def dataset(self, ref, load_all=False):
+    def dataset(self, ref, load_all=False, exception = True):
         """Return a dataset, given a vid or id
 
         :param ref: Vid or id  for a dataset. If an id is provided, will it will return the one with the
@@ -408,37 +409,40 @@ class Database(object):
 
         """
 
+        ref = str(ref)
+
         try:
-            ds = self.session.query(Dataset).filter(Dataset.vid == str(ref)).one()
+            ds = self.session.query(Dataset).filter(Dataset.vid == ref).one()
         except NoResultFound:
             ds = None
 
         if not ds:
             try:
-                ds = self.session.query(Dataset).filter(Dataset.id == str(ref))\
+                ds = self.session.query(Dataset).filter(Dataset.id == ref)\
                     .order_by(Dataset.revision.desc()).first()
             except NoResultFound:
                 ds = None
 
         if not ds:
             try:
-                ds = self.session.query(Dataset).filter(Dataset.vname == str(ref)).one()
+                ds = self.session.query(Dataset).filter(Dataset.vname == ref).one()
             except NoResultFound:
                 ds = None
 
         if not ds:
             try:
-                ds = self.session.query(Dataset).filter(Dataset.name == str(ref))\
+                ds = self.session.query(Dataset).filter(Dataset.name == ref)\
                     .order_by(Dataset.revision.desc()).first()
             except NoResultFound:
                 ds = None
 
         if ds:
             ds._database = self
+            return ds
+        elif exception:
+            raise NotFoundError('No dataset in library for vid : {} '.format(ref))
         else:
-            raise NotFoundError('No partition in library for vid : {} '.format(ref))
-
-        return ds
+            return None
 
     @property
     def datasets(self):
@@ -510,7 +514,6 @@ class Database(object):
         self.session.commit()
 
         return self.dataset(ds.vid)
-
 
 
 class BaseMigration(object):
@@ -730,7 +733,7 @@ def _update_version(connection, version):
         # upsert.
         if connection.execute('SELECT * FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone():
             # update
-            connection.execute('UPDATE user_version SET version = {};'.format(version))
+            connection.execute('UPDATE {}.user_version SET version = {};'.format(POSTGRES_SCHEMA_NAME, version))
         else:
             # insert
             connection.execute('INSERT INTO {}.user_version (version) VALUES ({})'

@@ -416,10 +416,14 @@ class BasePartitionIndex(BaseIndex):
                 return str(GVid.parse(g).summarize())
             except KeyError:
                 return g
+            except ValueError:
+                logger.debug("Failed to parse gvid '{}' from partition '{}' grain coverage"
+                             .format(g, partition.identity.vname ))
+
 
         keywords = (
             ' '.join(partition.space_coverage) + ' ' +
-            ' '.join([resum(g) for g in partition.grain_coverage]) + ' ' +
+            ' '.join([resum(g) for g in partition.grain_coverage if resum(g)]) + ' ' +
             ' '.join(str(x) for x in partition.time_coverage)
         )
 

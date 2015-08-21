@@ -116,45 +116,11 @@ class JSONEncodedObj(TypeDecorator):
 
     def process_result_value(self, value, dialect):
         if value is not None:
-            try:
-                value = json.loads(value)
-            except:
-                # We've changed from using pickle to json, so this handles
-                # legacy cases
-                import pickle
-                value = pickle.loads(value)
+            value = json.loads(value)
 
         else:
             value = {}
         return value
-
-
-class MutationDict(Mutable, dict):
-
-    @classmethod
-    def coerce(cls, key, value):  # @ReservedAssignment
-        """Convert plain dictionaries to MutationDict."""
-
-        if not isinstance(value, MutationDict):
-            if isinstance(value, dict):
-                return MutationDict(value)
-
-            # this call will raise ValueError
-            return Mutable.coerce(key, value)
-        else:
-            return value
-
-    def __setitem__(self, key, value):
-        """Detect dictionary set events and emit change events."""
-        dict.__setitem__(self, key, value)
-
-        self.changed()
-
-    def __delitem__(self, key):
-        """Detect dictionary del events and emit change events."""
-
-        dict.__delitem__(self, key)
-        self.changed()
 
 
 class MutationObj(Mutable):
@@ -163,8 +129,10 @@ class MutationObj(Mutable):
     def coerce(cls, key, value):
         if isinstance(value, dict) and not isinstance(value, MutationDict):
             return MutationDict.coerce(key, value)
+
         if isinstance(value, list) and not isinstance(value, MutationList):
             return MutationList.coerce(key, value)
+
         return value
 
     @classmethod
@@ -211,6 +179,32 @@ class MutationObj(Mutable):
         sqlalchemy.event.listen(parent_cls,'pickle',pickle,raw=True,propagate=True)
         sqlalchemy.event.listen(parent_cls,'unpickle',unpickle,raw=True,propagate=True)
 
+class MutationDict(Mutable, dict):
+
+    @classmethod
+    def coerce(cls, key, value):  # @ReservedAssignment
+        """Convert plain dictionaries to MutationDict."""
+
+        if not isinstance(value, MutationDict):
+            if isinstance(value, dict):
+                return MutationDict(value)
+
+            # this call will raise ValueError
+            return Mutable.coerce(key, value)
+        else:
+            return value
+
+    def __setitem__(self, key, value):
+        """Detect dictionary set events and emit change events."""
+        dict.__setitem__(self, key, value)
+
+        self.changed()
+
+    def __delitem__(self, key):
+        """Detect dictionary del events and emit change events."""
+
+        dict.__delitem__(self, key)
+        self.changed()
 
 class MutationList(MutationObj, list):
 
@@ -219,7 +213,14 @@ class MutationList(MutationObj, list):
         """Convert plain list to MutationList."""
 
         if isinstance(value, basestring):
-            value = value.split(',')
+            value = value.strip()
+            if value[0] == '[': # It's json encoded, probably
+                try:
+                    value = json.loads(value)
+                except ValueError:
+                    raise ValueError("Failed to parse JSON: '{}' ".format(value))
+            else:
+                value = value.split(',')
 
         if not value:
             value = []
@@ -338,7 +339,6 @@ class DictableMixin(object):
                 assert k not in d # Data items can't overlap attributes
                 d[k] = self.data[k]
 
-
         return d
 
 
@@ -350,6 +350,60 @@ def _clean_flag(in_flag):
     return bool(in_flag)
 
 
+def next_sequence_id(session, sequence_ids, parent_vid, table_class):
+    """
+    Return the next sequence id for a object, identified by the vid of the parent object, and the database prefix
+    for the child object. On the first call, will load the max sequence number
+    from the database, but subsequence calls will run in process, so this isn't suitable for
+    multi-process operation -- all of the tables in a dataset should be created by one process
+
+    The child table must have a sequence_id value.
+
+
+    :param session: Database session or connection ( must have an execute() method )
+    :param sequence_ids: A dict for caching sequence ids
+    :param parent_vid: The VID of the parent object, which sets the namespace for the sequence
+    :param table_class: Table class of the child object, the one getting a number
+    :return:
+    """
+
+    from sqlalchemy import text
+
+    seq_col = table_class.sequence_id.property.columns[0].name
+    dvid_col = table_class.d_vid.property.columns[0].name
+
+    assert bool(parent_vid)
+
+    key = (parent_vid, table_class.__name__)
+
+    number = sequence_ids.get(key, None)
+
+    if not number and session:
+
+        sql = text("SELECT max({seq_col})+1 FROM {table} WHERE {dvid_col} = '{vid}'"
+                   .format(table=table_class.__tablename__, dvid_col=dvid_col,
+                           seq_col=seq_col, vid=parent_vid))
+
+        max_id, = session.execute(sql).fetchone()
+
+        if not max_id:
+            max_id = 0
+
+        sequence_ids[key] = int(max_id) + 1
+
+    elif not session:
+        # There was no session set. This should only happen when the parent object is new, and therefore,
+        # there are no child number, so the appropriate starting number is 1. If the object is not new,
+        # there will be conflicts.
+
+        sequence_ids[key] = 1
+
+    else:
+        # There were no previous numbers, so start with 1
+        sequence_ids[key] += 1
+
+    return sequence_ids[key]
+
 
 from ambry.orm.code import Code
 from ambry.orm.column import Column
@@ -360,5 +414,5 @@ from ambry.orm.config import Config
 from ambry.orm.dataset import Dataset
 from ambry.orm.columnstat import ColumnStat
 from ambry.orm.source_table import SourceColumn, SourceTable
-from ambry.orm.source import DataSource
+from ambry.orm.source import DataSource, TransientDataSource
 from ambry.orm.database import Database

@@ -57,13 +57,19 @@ class Test(unittest.TestCase):
 
         ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
 
-        with Timer() as t:
+        with Timer() as tr:
             for i in range(100):
-                ds.new_table('table'+str(i))
+                t = ds.new_table('table'+str(i))
+
+                for j in range(10):
+                    c = t.add_column("col"+str(j), datatype = 'integer')
 
             ds.commit()
 
-        print len(ds.tables), len(ds.tables)/t.elapsed
+        print len(ds.tables), len(ds.tables)/tr.elapsed
 
         self.assertEqual(100, len(ds.tables))
+
+        for t in ds.tables:
+            self.assertEqual(11, len(t.columns)) # 10 + id column
 

@@ -217,11 +217,24 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fn_path = file_name(self._file_const)
 
+        hl_index = None
+
+        # Some types have special representations in spreadsheets, particularly lists and dicts
+        def munge_types(v):
+            if isinstance(v, (list, tuple)):
+                return u','.join(unicode(e.replace(',','\,')) for e in v)
+            elif isinstance(v, dict):
+                import json
+                return json.dumps(v)
+            else:
+                return v
+
         if fr.contents:
             with self._fs.open(fn_path, 'wb') as f:
                 w = csv.writer(f)
-                for row in fr.unpacked_contents:
-                    w.writerow(row)
+                for i, row in enumerate(fr.unpacked_contents):
+
+                    w.writerow(munge_types(e) for e in row)
 
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
@@ -472,7 +485,9 @@ class SourcesFile(RowBuildSourceFile):
                     ds.update(**d)
 
                 else:
-                    ds = DataSource(**d)
+                    name = d['name']
+                    del d['name']
+                    ds = self._dataset.new_source(name, **d)
 
                 s.merge(ds)
 
@@ -507,6 +522,7 @@ class SchemaFile(RowBuildSourceFile):
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
+        from ambry.orm import Column
 
         def _clean_int(i):
             if i is None:
@@ -547,6 +563,12 @@ class SchemaFile(RowBuildSourceFile):
 
             return extant_tables[table_name]
 
+        old_types_map = {
+            'varchar': Column.DATATYPE_STR,
+            'integer': Column.DATATYPE_INTEGER,
+            'real': Column.DATATYPE_FLOAT,
+        }
+
         for row in bsfile.dict_row_reader:
 
             line_no += 1
@@ -561,6 +583,8 @@ class SchemaFile(RowBuildSourceFile):
                 raise ConfigurationError('Row error: no table on line {}'.format(line_no))
             if not row.get('datatype', False):
                 raise ConfigurationError('Row error: no type on line {}'.format(line_no))
+
+            row['datatype'] = old_types_map.get(row['datatype'].lower(), row['datatype'])
 
             table = get_or_new_table(row)
 

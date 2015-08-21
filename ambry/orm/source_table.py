@@ -42,21 +42,20 @@ class SourceColumn(Base):
         DATATYPE.DATETIME: unknown
     }
 
-    column_type_map = {
+    column_type_map = { # FIXME The COlumn types should be harmonized with these types
         DATATYPE.INT: Column.DATATYPE_INTEGER,
-        DATATYPE.FLOAT: Column.DATATYPE_REAL,
-        DATATYPE.STRING: Column.DATATYPE_VARCHAR,
+        DATATYPE.FLOAT: Column.DATATYPE_FLOAT,
+        DATATYPE.STRING: Column.DATATYPE_STR,
         DATATYPE.DATE: Column.DATATYPE_DATE,
         DATATYPE.TIME: Column.DATATYPE_TIME,
         DATATYPE.DATETIME: Column.DATATYPE_DATETIME,
-        DATATYPE.UNKNOWN: Column.DATATYPE_VARCHAR
+        DATATYPE.UNKNOWN: Column.DATATYPE_STR
     }
 
-    id = SAColumn('sc_id', Integer, primary_key=True)
+    vid = SAColumn('sc_vid', String(21), primary_key=True)
 
-    st_id = SAColumn('sc_st_id', Integer, ForeignKey('sourcetables.st_id'), nullable=False)
-
-    d_vid = SAColumn('sc_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False)
+    d_vid = SAColumn('sc_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False)
+    st_vid = SAColumn('sc_st_vid', String(17), ForeignKey('sourcetables.st_vid'), nullable=False)
 
     position = SAColumn('sc_position', Integer) # Integer position of column
 
@@ -75,8 +74,10 @@ class SourceColumn(Base):
 
     value_labels = SAColumn('sc_value_labels', MutationDict.as_mutable(JSONEncodedObj))
 
+    _next_column_number = None  # Set in next_config_number()
+
     __table_args__ = (
-        UniqueConstraint('sc_st_id','sc_source_header', name='_uc_sourcecolumns'),
+        UniqueConstraint('sc_st_vid','sc_source_header', name='_uc_sourcecolumns'),
     )
 
     @property
@@ -111,7 +112,7 @@ class SourceColumn(Base):
         # Use an Ordered Dict to make it friendly to creating CSV files.
 
         d = OrderedDict([('table',self.table.name)] + [(p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
-                         if p.key not in ['id', 'st_id', 'table','dataset', 'ds_id','d_vid', 'source', 'value_labels']])
+                         if p.key not in ['vid', 'st_vid', 'table','dataset', 'ds_id','d_vid', 'source', 'value_labels']])
 
         return d
 
@@ -134,7 +135,8 @@ class SourceColumn(Base):
 class SourceTable(Base):
     __tablename__ = 'sourcetables'
 
-    id = SAColumn('st_id', Integer, primary_key=True)
+    vid = SAColumn('st_vid', String(22), primary_key=True)
+    sequence_id = SAColumn('st_sequence_id', Integer, nullable=False)
     d_vid = SAColumn('st_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False)
     name = SAColumn('st_name', String(50), nullable=False)
 
@@ -149,7 +151,7 @@ class SourceTable(Base):
 
         for c in self.columns:
             if c.source_header == source_header:
-                assert c.st_id == self.id
+                assert c.st_vid == self.vid
                 return c
         else:
             return None
@@ -164,6 +166,8 @@ class SourceTable(Base):
         :return:
         """
         from sqlalchemy.orm import object_session
+        from ..identity import GeneralNumber2
+
         c = self.column(source_header)
 
         if c:
@@ -173,8 +177,13 @@ class SourceTable(Base):
                 **kwargs )
 
         else:
+
+            # Hacking an id number, since I don't want to create a new Identity ObjectNUmber type
+
             c = SourceColumn(
+            vid = str(GeneralNumber2('C', self.d_vid, self.sequence_id, int(position))),
             position=position,
+            st_vid=self.vid,
             d_vid=self.d_vid,
             datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
             source_header=source_header,

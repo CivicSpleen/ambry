@@ -352,12 +352,37 @@ class Ticker(Pipe):
         return row
 
 class AddHeader(Pipe):
-    """Adds a header to a row file that doesn't have one, by returning the header for the first row. """
+    """Adds a header to a row file that doesn't have one. If no header is specified in the
+     constructor, use the source table. """
 
-    def __init__(self, header):
-        self._added_headers = header
+    def __init__(self, headers = None):
+
+        self._added_headers = headers
 
     def __iter__(self):
+
+        if not self._added_headers:
+            self._added_headers = [c.name for c in self.source.source_table.columns]
+
+        yield self._added_headers
+
+        for row in self._source_pipe:
+            yield row
+
+class AddDestHeader(Pipe):
+    """Adds a header to a row file that doesn't have one. If no header is specified in the constructor,
+     use the destination table, excluding the first ( id ) column."""
+
+    def __init__(self, headers = None):
+
+        self._added_headers = headers
+
+    def __iter__(self):
+
+        if not self._added_headers:
+            self._added_headers = [c.name for c in self.source.dest_table.columns][1:]
+
+        print '!!!!', self.source.dest_table.name, self._added_headers
 
         yield self._added_headers
 
@@ -725,7 +750,7 @@ class Add(AddDeleteExpand):
         """Add fields using a dict of lambdas. THe new field is appended to the end of the row.
 
         >>> pl = Pipeline()
-        >>> pl.last = Add({'source_id': lambda pipe,row: pipe.source.id })
+        >>> pl.last = Add({'source_id': lambda pipe,row: pipe.source.sequence_id })
 
         """
         super(Add, self).__init__(add=add)
@@ -1007,7 +1032,7 @@ class SelectPartition(Pipe):
             self.process_body = self.process_body_default
 
     def process_header(self, row):
-        self._default = PartialPartitionName(table=self.source.dest_table.name, segment=self.source.id)
+        self._default = PartialPartitionName(table=self.source.dest_table.name, segment=self.source.sequence_id)
         self._orig_headers = row
         return row + ['_pname']
 
@@ -1027,7 +1052,7 @@ class SelectPartition(Pipe):
             name = PartialPartitionName(**name)
 
         if not name.segment:
-            name.segment = self.source.id
+            name.segment = self.source.sequence_id
 
         if not name.table:
             name.table = self.source.dest_table_name
@@ -1080,7 +1105,7 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         self._headers[self.source.name] = row
 
-        self._source_id = self.source.id
+        self._source_id = self.source.sequence_id
 
         self._start_time = time.time()
 
@@ -1108,6 +1133,7 @@ class WriteToPartition(Pipe, PartitionWriter):
                     from ..orm.partition import Partition
 
                     p = self.bundle.partitions.new_partition(pname, type=Partition.TYPE.SEGMENT)
+                    self.bundle.commit()
                     p.clean()
 
                 self._partitions[pname] = p

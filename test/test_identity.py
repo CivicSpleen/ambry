@@ -10,7 +10,7 @@ from semantic_version import Version, Spec
 
 from ambry.identity import DatasetNumber, TableNumber, ObjectNumber, ColumnNumber, PartitionNumber,\
     Name, NameQuery, PartitionName, PartitionNameQuery,\
-    Identity, PartitionIdentity, NumberServer, OtherNumber
+    Identity, PartitionIdentity, NumberServer, GeneralNumber1
 
 from test_base import TestBase
 
@@ -454,9 +454,9 @@ class Test(TestBase):
 
         self.assertEquals('d01C005', str(dn))
 
-        self.assertEquals('G01C001Z005', str(OtherNumber('G',dn, 123)))
+        self.assertEquals('G01C001Z005', str(GeneralNumber1('G',dn, 123)))
 
-        self.assertEquals('G01C001Z005', ObjectNumber.parse(str(OtherNumber('G',dn, 123)), True))
+        self.assertEquals('G01C001Z005', ObjectNumber.parse(str(GeneralNumber1('G',dn, 123)), 'other1'))
 
 def suite():
     suite = unittest.TestSuite()

@@ -31,7 +31,7 @@ def config():
 
 
 @memoize
-def library(name='default'):
+def get_library():
     import ambry.library as _l
     """Return the default library for this installation."""
-    return _l.new_library(config().library(name))
+    return _l.new_library(config())

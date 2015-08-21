@@ -317,6 +317,7 @@ def get_s3(url, account_accessor):
 
     _old_match_hostname = ssl.match_hostname
 
+    # FIXME. This issue is possibly better handled with https://pypi.python.org/pypi/backports.ssl_match_hostname
     def _new_match_hostname(cert, hostname):
         if hostname.endswith('.s3.amazonaws.com'):
             pos = hostname.find('.s3.amazonaws.com')

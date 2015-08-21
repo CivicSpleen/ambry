@@ -31,17 +31,18 @@ from ambry.identity import ColumnNumber, ObjectNumber
 class Column(Base):
     __tablename__ = 'columns'
 
-    vid = SAColumn('c_vid', String(20), primary_key=True)
-    id = SAColumn('c_id', String(20))
+    vid = SAColumn('c_vid', String(18), primary_key=True)
+    id = SAColumn('c_id', String(15))
     sequence_id = SAColumn('c_sequence_id', Integer)
     is_primary_key = SAColumn('c_is_primary_key', Boolean, default=False)
-    t_vid = SAColumn('c_t_vid', String(20), ForeignKey('tables.t_vid'), nullable=False, index=True)
-    d_vid = SAColumn('c_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
-    t_id = SAColumn('c_t_id', String(20))
+    t_vid = SAColumn('c_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=False, index=True)
+    d_vid = SAColumn('c_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False, index=True)
+    t_id = SAColumn('c_t_id', String(12))
     name = SAColumn('c_name', Text)
     fqname = SAColumn('c_fqname', Text)  # Name with the vid prefix
     altname = SAColumn('c_altname', Text)
     datatype = SAColumn('c_datatype', Text)
+    valuetype = SAColumn('c_valuetype', Text)
     start = SAColumn('c_start', Integer)
     size = SAColumn('c_size', Integer)
     width = SAColumn('c_width', Integer)
@@ -53,13 +54,6 @@ class Column(Base):
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
     lom = SAColumn('c_lom', String(1))
-
-    # Reference to a column that provides an example of how this column should
-    # be used.
-    proto_vid = SAColumn('c_proto_vid', String(20), index=True)
-
-    # Reference to a column that this column links to.
-    fk_vid = SAColumn('c_fk_vid', String(20), index=True)
 
     # A column vid, or possibly an equation, describing how this column was
     # created from other columns.
@@ -85,14 +79,11 @@ class Column(Base):
         UniqueConstraint('c_name', 'c_t_vid', name='_uc_c_name'),
     )
 
-    DATATYPE_CHAR = 'char'
-    DATATYPE_VARCHAR = 'varchar'
-    DATATYPE_TEXT = 'text'
-    DATATYPE_INTEGER = 'integer'
-    DATATYPE_INTEGER64 = 'integer64'
-    DATATYPE_REAL = 'real'
+    # FIXME. These types should be harmonized with   SourceColumn.DATATYPE
+    DATATYPE_STR = 'str'
+    DATATYPE_INTEGER = 'int'
+    DATATYPE_INTEGER64 = 'long'
     DATATYPE_FLOAT = 'float'
-    DATATYPE_NUMERIC = 'numeric'
     DATATYPE_DATE = 'date'
     DATATYPE_TIME = 'time'
     DATATYPE_TIMESTAMP = 'timestamp'
@@ -102,20 +93,16 @@ class Column(Base):
     DATATYPE_POINT = 'point'  # Spatalite, sqlite extensions for geo
     DATATYPE_LINESTRING = 'linestring'  # Spatalite, sqlite extensions for geo
     DATATYPE_POLYGON = 'polygon'  # Spatalite, sqlite extensions for geo
-
     DATATYPE_MULTIPOLYGON = 'multipolygon'  # Spatalite, sqlite extensions for geo
     DATATYPE_GEOMETRY = 'geometry'  # Spatalite, sqlite extensions for geo
 
     types = {
         # Sqlalchemy, Python, Sql,
-        DATATYPE_TEXT: (sqlalchemy.types.Text, str, 'TEXT'),
-        DATATYPE_VARCHAR: (sqlalchemy.types.String, str, 'VARCHAR'),
-        DATATYPE_CHAR: (sqlalchemy.types.String, str, 'VARCHAR'),
+
+        DATATYPE_STR: (sqlalchemy.types.String, str, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
         DATATYPE_INTEGER64: (BigIntegerType, long, 'INTEGER64'),
-        DATATYPE_REAL: (sqlalchemy.types.Float, float, 'REAL'),
         DATATYPE_FLOAT: (sqlalchemy.types.Float, float, 'REAL'),
-        DATATYPE_NUMERIC: (sqlalchemy.types.Float, float, 'REAL'),
         DATATYPE_DATE: (sqlalchemy.types.Date, datetime.date, 'DATE'),
         DATATYPE_TIME: (sqlalchemy.types.Time, datetime.time, 'TIME'),
         DATATYPE_TIMESTAMP: (sqlalchemy.types.DateTime, datetime.datetime, 'TIMESTAMP'),
@@ -139,22 +126,19 @@ class Column(Base):
             # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         # Don't allow these values to be the empty string
-        self.fk_vid = self.fk_vid or None
-        self.proto_vid = self.proto_vid or None
         self.derivedfrom = self.derivedfrom or None
 
     def type_is_int(self):
         return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64)
 
     def type_is_real(self):
-        return self.datatype in (Column.REAL, Column.FLOAT)
+        return self.datatype == Column.FLOAT
 
     def type_is_number(self):
-        return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64,
-                                 Column.DATATYPE_NUMERIC, Column.DATATYPE_REAL, Column.DATATYPE_FLOAT)
+        return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64, Column.DATATYPE_FLOAT)
 
     def type_is_text(self):
-        return self.datatype in (Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
+        return self.datatype in ( Column.DATATYPE_STR)
 
     def type_is_geo(self):
         return self.datatype in (
@@ -192,11 +176,7 @@ class Column(Base):
             if self.datatype == Column.DATATYPE_TIME:
                 dt = dt.time()
             if not isinstance(dt, self.python_type):
-                raise TypeError(
-                    '{} was parsed to {}, expected {}'.format(
-                        v,
-                        type(dt),
-                        self.python_type))
+                raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt),self.python_type))
 
             return dt
         else:
@@ -250,7 +230,8 @@ class Column(Base):
             if py_type == type_map.get(py_type_in, py_type_in):
                 if col_type == 'blob' and name and name.endswith('geometry'):
                     return cls.DATATYPE_GEOMETRY
-                else:
+
+                elif sla_type != GeometryType: # Total HACK. FIXME
                     return col_type
 
         return None
@@ -406,16 +387,8 @@ class Column(Base):
         # assert not target.fk_vid or not ObjectNumber.parse(target.fk_vid).revision
 
         if target.sequence_id is None:
-            # In case this happens in multi-process mode
-            conn.execute("BEGIN IMMEDIATE")
-            sql = text('''SELECT max(c_sequence_id)+1 FROM columns WHERE c_t_id = :tid''')
-
-            max_id, = conn.execute(sql, tid=target.t_id).fetchone()
-
-            if not max_id:
-                max_id = 1
-
-            target.sequence_id = max_id
+            from ambry.orm.exc import DatabaseError
+            raise DatabaseError("Must have sequence_id before insertion")
 
         Column.before_update(mapper, conn, target)
 

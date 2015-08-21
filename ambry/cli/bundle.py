@@ -459,9 +459,11 @@ def bundle_info(args, l, rc):
 
         rows = []
         for p in b.partitions:
-            rows.append([p.vid, p.vname, p.table.name])
+            rows.append([p.vid, p.vname, p.table.name,
+                         ', '.join(str(e) for e in p.time_coverage[:5]), ', '.join(p.space_coverage[:5]),
+                         ', '.join(p.grain_coverage[:5])])
         print '\nPartitions'
-        print tabulate(rows)
+        print tabulate(rows, headers = "Vid Name Table Time Space Grain".split())
 
 
 def check_built(b):

@@ -9,7 +9,7 @@ class Migration(BaseMigration):
     def _migrate(self, connection):
         # add column query is the same for sqlite and postgresql.
         query = '''
-            ALTER TABLE datasets ADD COLUMN column1 INTEGER;
+            ALTER TABLE ambrylib.datasets ADD COLUMN column1 INTEGER;
         '''
         connection.execute(query)
 

@@ -32,4 +32,4 @@ pipelines:
   build:
 
     replace:
-      SelectPartition: "SelectPartition(lambda s, r: dict(table=s.dest_table.name, segment=s.id, grain=s.stage))"
+      SelectPartition: "SelectPartition(lambda s, r: dict(table=s.dest_table.name, segment=s.sequence_id, grain=s.stage))"

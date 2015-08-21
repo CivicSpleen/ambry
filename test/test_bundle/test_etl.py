@@ -489,7 +489,6 @@ class Test(TestBase):
         b = self.setup_bundle('complete-load', build_url = build_url, source_url = source_url)
         b.sync_in()
 
-
         b.meta('rent07')
 
         # self.assertEquals(6, len(b.dataset.source_tables))
@@ -562,7 +561,7 @@ class Test(TestBase):
         b.commit()
 
         self.assertEqual('id int float string time date'.split(), [c.name for c in b.dataset.tables[0].columns ])
-        self.assertEqual([u'integer', u'integer', u'real', u'varchar', u'time', u'date'],
+        self.assertEqual([u'int', u'int', u'float', u'str', u'time', u'date'],
                          [unicode(c.datatype) for c in b.dataset.tables[0].columns])
 
         from ambry.orm.file import File
@@ -698,7 +697,7 @@ class Test(TestBase):
         pl.last.append(AddDeleteExpand(
                             delete = ['time','county','state'],
                             add={ "a": lambda e,r,v: r[4], "b": lambda e,r,v: r[1]},
-                            edit = {'stusab': lambda e,r,v: v.lower(), 'county_name' : lambda e,r,v: v.upper() },
+                            edit = {'stusab': lambda e,r,v: v.lower(), 'name' : lambda e,r,v: v.upper() },
                             expand = { ('x','y') : lambda e, r, v: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
         pl.last.append(PrintRows)
         pl.last.prepend(PrintRows)
@@ -708,13 +707,12 @@ class Test(TestBase):
 
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
-        row = [9, u'2002-03-21', u'la', u'MARIPOSA COUNTY, CALIFORNIA', u'43', u'09:11:40 PM', 21, 11]
+
+
+        row = [7, u'al', u'63216', u'15500US0163216115', u'ST. CLAIR COUNTY (PART), RAGLAND TOWN, ALABAMA', u'9456',
+               u'2000-03-15', u'2015-06-05 09:38:32.000436', u'2004-02-06T03:59:18', u'15500US0163216115', u'1', 0, 0]
         self.assertNotIn(row, pl.last[0].rows)
-        self.assertIn(row, pl.last[2].rows)
-
-        print pl.last[0]
-
-        print pl.last[2]
+        self.assertIn(row, pl.last[-1].rows)
 
         pl = b.pipeline('source', 'dimensions')
         pl.last = [Delete(['time'])]
@@ -763,9 +761,11 @@ class Test(TestBase):
     def test_slice(self):
         from ambry.etl.pipeline import Pipeline, Pipe, Slice, PrintRows
 
-        self.assertEquals('lambda row: row[0:3]+row[10:13]+[row[9]]+[row[-1]]', Slice.make_slicer((0,3),(10,13),9,-1)[1])
+        self.assertEquals('lambda row: tuple(row[0:3])+tuple(row[10:13])+(row[9],)+(row[-1],)',
+                          Slice.make_slicer((0,3),(10,13),9,-1)[1])
 
-        self.assertEquals('lambda row: row[0:3]+row[10:13]+[row[9]]+[row[-1]]', Slice.make_slicer("0:3,10:13,9,-1")[1])
+        self.assertEquals('lambda row: tuple(row[0:3])+tuple(row[10:13])+(row[9],)+(row[-1],)',
+                          Slice.make_slicer("0:3,10:13,9,-1")[1])
 
         return
 
@@ -924,6 +924,10 @@ class Test(TestBase):
         except Exception as exc:
             if exc.message == 'unsupported locale setting':
                 raise EnvironmentError('You need to install en_US locale to run that test.')
+            else:
+                raise
+
+        self.assertEquals(1, len(list(b.partitions)))
 
         mn = mx = 0
         for row in list(b.partitions)[0].stream(as_dict=True):

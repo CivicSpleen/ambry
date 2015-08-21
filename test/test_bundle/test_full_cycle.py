@@ -50,9 +50,11 @@ class Test(TestBase):
             print "Loaded bundle: {}".format(b.identity.fqname)
 
         for bi in l.bundles:
+
             if 'casters' in bi.identity.vid or 'process' in bi.identity.vid:
                 continue # This one has caster errors in it.
-            print bi.identity.vid
+
+            print 'Running bundle', str(bi.identity.fqname)
             b = l.bundle(bi.identity.vid)
             b.sync_in()
             b = b.cast_to_subclass()
@@ -60,26 +62,3 @@ class Test(TestBase):
             b.metadata.about.remote = 'test'
             b.checkin()
 
-    def test_sync(self):
-        from ambry.library import new_library
-
-        rc = self.get_rc()
-
-        l = new_library(rc)
-
-        l.sync_remote('test')
-
-        for b in l.bundles:
-            print b.identity.vname
-
-        s = l.search
-
-        s.index_library_datasets()
-
-        print s.search_datasets('d000simple003')[0].vid
-
-        print s.search_datasets('Example')[0].vid
-
-        print s.search_datasets('from 2010')
-
-        print s.search_datasets('Dimensions')[0].vid

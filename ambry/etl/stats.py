@@ -60,8 +60,9 @@ class StatSet(object):
                 lom = StatSet.LOM.INTERVAL
 
             self.column_name = column.name
-        except AttributeError:
+        except AttributeError as e:
             # Nope, assume it is a string
+
             self.is_gvid = self.is_year = self.is_time = self.is_date = False
             lom = StatSet.LOM.ORDINAL
             self.column_name = column

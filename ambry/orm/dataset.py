@@ -9,8 +9,8 @@ __docformat__ = 'restructuredtext en'
 from sqlalchemy import Column as SAColumn, Integer
 from sqlalchemy import String
 from sqlalchemy.orm import relationship, object_session
-from ..util import Constant
 
+from six import string_types, iteritems, u, b
 
 from . import Base, MutationDict, JSONEncodedObj, MutationList
 from .config import ConfigGroupAccessor
@@ -23,8 +23,8 @@ from ambry.orm.file import File
 class Dataset(Base):
     __tablename__ = 'datasets'
 
-    vid = SAColumn('d_vid', String(20), primary_key=True)
-    id = SAColumn('d_id', String(20), )
+    vid = SAColumn('d_vid', String(13), primary_key=True)
+    id = SAColumn('d_id', String(10), )
     name = SAColumn('d_name', String(200), nullable=False, index=True)
     vname = SAColumn('d_vname', String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('d_fqname', String(200), unique=True, nullable=False)
@@ -63,8 +63,8 @@ class Dataset(Base):
     codes = relationship('Code', backref='dataset', cascade="all, delete-orphan")
 
     _database = None # Reference to the database, when dataset is retrieved from a database object
-    _next_table_number =None # Set in next_table_number()
-    _next_partition_number = None  # Set in next_partition_number()
+
+    _sequence_ids = {}  # Cache of sequence numbers
 
     def __init__(self, *args, **kwargs):
 
@@ -120,28 +120,22 @@ class Dataset(Base):
     def config(self):
         return ConfigAccessor(self)
 
-    @property
-    def next_table_number(self):
-        """Return the next sequence id for a table. On the first call, will load the max sequence numebr
+
+    def next_sequence_id(self, table_class):
+        """Return the next sequence id for a object, identified by the vid of the parent object, and the database prefix
+        for the child object. On the first call, will load the max sequence number
         from the database, but subsequence calls will run in process, so this isn't suitable for
-        multi-process operation -- all of the tables in a dataset should be created by one process"""
+        multi-process operation -- all of the tables in a dataset should be created by one process
 
-        from sqlalchemy import text
-        if not self._next_table_number:
+        The child table must have a sequence_id value.
 
-            sql = text("SELECT max(t_sequence_id)+1 FROM tables WHERE t_d_vid = '{}'".format(self.vid))
+        """
 
-            max_id, = self.session.execute(sql).fetchone()
+        from . import next_sequence_id
+        from sqlalchemy.orm import object_session
 
-            if not max_id:
-                max_id = 0
+        return next_sequence_id(object_session(self), self._sequence_ids, self.vid, table_class)
 
-            self._next_table_number = int(max_id) + 1
-
-        else:
-            self._next_table_number += 1
-
-        return self._next_table_number
 
     def table(self, ref):
         from .exc import NotFoundError
@@ -162,6 +156,7 @@ class Dataset(Base):
         '''
         from . import Table
         from .exc import NotFoundError
+        from ..identity import TableNumber, ObjectNumber
 
         try:
             table = self.table(name)
@@ -174,9 +169,13 @@ class Dataset(Base):
                 sequence_id = kwargs['sequence_id']
                 del kwargs['sequence_id']
             else:
-                sequence_id =  self.next_table_number
 
-            table = Table(d_id = self.id, d_vid = self.vid, name = name,
+                sequence_id =  self.next_sequence_id( Table)
+
+            table = Table(d_id = self.id,
+                          d_vid = self.vid,
+                          vid=str(TableNumber(ObjectNumber.parse(self.vid), sequence_id)),
+                          name = name,
                           sequence_id = sequence_id, **kwargs)
 
         # Update possibly extant data
@@ -195,32 +194,7 @@ class Dataset(Base):
         if not extant:
             self.tables.append(table)
 
-
         return table
-
-    @property
-    def next_partition_number(self):
-        """Return the next sequence id for a table. On the first call, will load the max sequence numebr
-        from the database, but subsequence calls will run in process, so this isn't suitable for
-        multi-process operation -- all of the tables in a dataset should be created by one process"""
-
-        from sqlalchemy import text
-
-        if not self._next_partition_number:
-
-            sql = text("SELECT max(p_sequence_id)+1 FROM partitions WHERE p_d_vid = '{}'".format(self.vid))
-
-            max_id, = self.session.execute(sql).fetchone()
-
-            if not max_id:
-                max_id = 0
-
-            self._next_partition_number = int(max_id) + 1
-
-        else:
-            self._next_partition_number += 1
-
-        return self._next_partition_number
 
     def new_partition(self, table, **kwargs):
         '''
@@ -236,7 +210,7 @@ class Dataset(Base):
             sequence_id = kwargs['sequence_id']
             del kwargs['sequence_id']
         else:
-            sequence_id = self.next_table_number
+            sequence_id = self.next_sequence_id( Partition)
 
         p = Partition(
             sequence_id=sequence_id,
@@ -252,15 +226,90 @@ class Dataset(Base):
 
         return p
 
-    def partition(self, ref):
-
+    def partition(self, ref=None, **kwargs):
+        """Return the Schema acessor"""
         from .exc import NotFoundError
 
-        for p in self.partitions:
-            if str(ref) == p.name or str(ref) == p.id or str(ref) == p.vid:
-                return p
+        if ref:
 
-        raise NotFoundError("Failed to find partition for ref '{}' in dataset '{}'".format(ref, self.name))
+            for p in self.partitions:
+                if str(ref) == p.name or str(ref) == p.id or str(ref) == p.vid:
+                    return p
+
+            raise NotFoundError("Failed to find partition for ref '{}' in dataset '{}'".format(ref, self.name))
+
+        elif kwargs:
+            from ..identity import PartitionNameQuery
+
+            pnq = PartitionNameQuery(**kwargs)
+            return self._find_orm
+
+    def _find_orm(self, pnq):
+        """Return a Partition object from the database based on a PartitionId.
+
+        An ORM object is returned, so changes can be persisted.
+
+        """
+        # import sqlalchemy.orm.exc
+        from ..identity import PartitionNameQuery, NameQuery
+        from ambry.orm import Partition as OrmPartition  # , Table
+        from sqlalchemy.orm import joinedload  # , joinedload_all
+
+        assert isinstance(pnq, PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(type(pnq))
+
+        pnq = pnq.with_none()
+
+        q = self.bundle.database.session.query(OrmPartition)
+
+        if pnq.fqname is not NameQuery.ANY:
+            q = q.filter(OrmPartition.fqname == pnq.fqname)
+        elif pnq.vname is not NameQuery.ANY:
+            q = q.filter(OrmPartition.vname == pnq.vname)
+        elif pnq.name is not NameQuery.ANY:
+            q = q.filter(OrmPartition.name == str(pnq.name))
+        else:
+            if pnq.time is not NameQuery.ANY:
+                q = q.filter(OrmPartition.time == pnq.time)
+
+            if pnq.space is not NameQuery.ANY:
+                q = q.filter(OrmPartition.space == pnq.space)
+
+            if pnq.grain is not NameQuery.ANY:
+                q = q.filter(OrmPartition.grain == pnq.grain)
+
+            if pnq.format is not NameQuery.ANY:
+                q = q.filter(OrmPartition.format == pnq.format)
+
+            if pnq.segment is not NameQuery.ANY:
+                q = q.filter(OrmPartition.segment == pnq.segment)
+
+            if pnq.table is not NameQuery.ANY:
+
+                if pnq.table is None:
+                    q = q.filter(OrmPartition.t_id is None)
+                else:
+                    tr = self.bundle.schema.table(pnq.table)
+
+                    if not tr:
+                        raise ValueError(
+                            "Didn't find table named {} in {} bundle path = {}".format(
+                                pnq.table,
+                                pnq.vname,
+                                self.bundle.database.path))
+
+                    q = q.filter(OrmPartition.t_id == tr.id_)
+
+        ds = self.bundle.dataset
+
+        q = q.filter(OrmPartition.d_vid == ds.vid)
+
+        q = q.order_by(
+            OrmPartition.vid.asc()).order_by(
+            OrmPartition.segment.asc())
+
+        q = q.options(joinedload(OrmPartition.table))
+
+        return q
 
     def delete_tables_partitions(self):
         return self._database.delete_tables_partitions(self)
@@ -270,10 +319,20 @@ class Dataset(Base):
 
     def new_source(self, name, **kwargs):
         from .source import DataSource
+        from ..identity import GeneralNumber1
 
-        kwargs['d_vid'] = self.vid
+        if not 'sequence_id' in kwargs:
+            kwargs['sequence_id'] = self.next_sequence_id( DataSource)
 
-        source = DataSource(name=name, **kwargs)
+        if not 'd_vid' in kwargs:
+            kwargs['d_vid'] = self.vid
+        else:
+            assert kwargs['d_vid'] == self.vid
+
+        if not 'vid' in kwargs:
+            kwargs['vid'] = str(GeneralNumber1('S', self.vid, int(kwargs['sequence_id'])))
+
+        source = DataSource(name=name,   **kwargs)
 
         object_session(self).add(source)
 
@@ -292,13 +351,18 @@ class Dataset(Base):
 
     def new_source_table(self, name):
         from .source_table import SourceTable
+        from ..identity import GeneralNumber1
 
         extant = next(iter(e for e in self.source_tables if e.name == name), None)
 
         if extant:
             return extant
 
-        st = SourceTable(name=name, d_vid=self.vid)
+        sequence_id = self.next_sequence_id( SourceTable)
+
+        vid = str(GeneralNumber1('T', self.vid, sequence_id))
+
+        st = SourceTable(name=name, vid=vid, sequence_id = sequence_id, d_vid=self.vid)
 
         self.source_tables.append(st)
 

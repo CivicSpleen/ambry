@@ -443,12 +443,14 @@ class GetVersionTest(BasePostgreSQLTest):
 
         pg_connection = self.pg_connection()
 
+        pg_connection.execute("CREATE SCHEMA ambrylib")
+
         create_table_query = '''
-            CREATE TABLE user_version (
+            CREATE TABLE ambrylib.user_version (
                 version INTEGER NOT NULL); '''
 
         pg_connection.execute(create_table_query)
-        pg_connection.execute('INSERT INTO user_version VALUES (22);')
+        pg_connection.execute('INSERT INTO ambrylib.user_version VALUES (22);')
         pg_connection.execute('commit')
         version = get_stored_version(pg_connection)
         self.assertEqual(version, 22)
@@ -519,7 +521,7 @@ class UpdateVersionTest(BasePostgreSQLTest):
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
         pg_connection = self.pg_connection()
         _update_version(pg_connection, 123)
-        version = pg_connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        version = pg_connection.execute('SELECT version FROM ambrylib.user_version;').fetchone()[0]
         self.assertEqual(version, 123)
 
     def test_updates_user_version_postgresql_table(self):
@@ -537,7 +539,7 @@ class UpdateVersionTest(BasePostgreSQLTest):
         pg_connection.execute('commit')
 
         _update_version(pg_connection, 123)
-        version = pg_connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        version = pg_connection.execute('SELECT version FROM ambrylib.user_version;').fetchone()[0]
         self.assertEqual(version, 123)
 
     def test_raises_DatabaseMissingError_error(self):

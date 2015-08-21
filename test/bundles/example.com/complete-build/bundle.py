@@ -8,4 +8,9 @@ from ambry.etl.pipeline import Pipe
 class Bundle(Bundle):
     """ """
 
-    pass
+    def test_coverage(self):
+        
+        for p in self.partitions:
+            print 
+        
+        

@@ -212,6 +212,8 @@ def parse_int(caster, name, v, type_=int):
     except ValueError as e:
         caster.cast_error(int, name, v, e)
         return None
+    except OverflowError as e:
+        raise OverflowError("Failed to convert int in caster, for column {}, value '{}' ".format(name, v))
 
 
 def parse_float(caster, name, v):
@@ -481,6 +483,13 @@ class CasterPipe(Transform, Pipe, ):
             raise IndexError('Header has {} items, Row has {} items, caster has {}\nheaders= {}\ncaster = {}\nrow    = {}'
                              .format(len(self.headers), len(row), len(self.types),
                                      self.headers, [t[0] for t in self.types], row))
+        except Exception as e:
+            m = str(e)
+
+            print self.pipeline
+
+            raise type(e)("Failed to process row '{}'\n{}".format(row, e))
+
 
         if self.error_handler:
             row, self.error_accumulator = self.error_handler(row, self.error_accumulator)

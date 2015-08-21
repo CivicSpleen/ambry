@@ -44,3 +44,10 @@ names:
     name: example.com-complete-build
     vid: d0000build003
     vname: example.com-complete-build-0.1.3
+pipelines:
+    schema:
+        first:
+        - Head(1000)
+    source:
+        first:
+        - Head(1000)

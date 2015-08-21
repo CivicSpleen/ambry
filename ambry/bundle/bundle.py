@@ -84,15 +84,21 @@ class Bundle(object):
             ]
 
         },
+
+
         'build': {
+            'first': [],
             'body': [
                 ambry.etl.MergeHeader,
                 ambry.etl.MangleHeader,
                 ambry.etl.MapToSourceTable
             ],
+            'augment' : [],
             'cast': [
                 ambry.etl.CasterPipe
             ],
+            'intuit': [],
+            'last': [],
             'store': [
                 ambry.etl.SelectPartition,
                 ambry.etl.WriteToPartition
@@ -128,6 +134,12 @@ class Bundle(object):
         self._build_fs = None
 
         self._identity = None
+
+        self.init()
+
+    def init(self):
+        """An overridable initialization method, called in the Bundle constructor"""
+        pass
 
     def set_file_system(self, source_url=None, build_url=None):
         """Set the source file filesystem and/or build  file system"""
@@ -234,12 +246,22 @@ class Bundle(object):
         from .partitions import Partitions
         return Partitions(self)
 
-    def partition(self, ref):
+    def partition(self, ref=None, **kwargs):
         """Return the Schema acessor"""
-        for p in self.partitions:
-            if p.vid == b(ref) or p.name == b(ref):
-                return p
-        return None
+
+        if ref:
+
+            for p in self.partitions:
+                if p.vid == b(ref) or p.name == b(ref):
+                    return p
+            return None
+
+        elif kwargs:
+            from ..identity import PartitionNameQuery
+            pnq = PartitionNameQuery(**kwargs)
+
+
+        raise NotImplementedError("Haven't finished this!")
 
     def new_partition(self, table, **kwargs):
         """
@@ -280,12 +302,12 @@ class Bundle(object):
         return self.dataset.new_table(name = name, add_id = add_id, **kwargs)
 
     def wrap_partition(self, p):
-        from .partitions import PartitionProxy
 
-        if isinstance(p, PartitionProxy):
-            return p
+        # This used to return a proxy object, but those broke in the transition to python 3
 
-        return PartitionProxy(self, p)
+        p._bundle = self
+
+        return p
 
     def delete_partition(self, vid_or_p):
 
@@ -310,8 +332,11 @@ class Bundle(object):
         if isinstance(source, string_types):
             source = self.source(source)
 
+        source.dataset = self.dataset
+
         sp = source_pipe(self, source)
         sp.bundle = self
+
         return sp
 
     @property
@@ -819,6 +844,7 @@ class Bundle(object):
                     if not source_obj:
                         raise PhaseError("Could not find source named '{}' ".format(source))
                     source_objs.append(source_obj)
+
                 else:
                     source_objs.append(source)
 
@@ -826,6 +852,7 @@ class Bundle(object):
 
         log_msg = 'Processing {} sources, stage {} ; {}'\
             .format(len(sources), stage, [x.name for x in sources[:10]])
+
         self.log(log_msg)
 
         for i, source in enumerate(sources):
@@ -833,6 +860,8 @@ class Bundle(object):
             self.logger.info('Running phase {} for source {} '.format(phase, source.name))
 
             pl = self.pipeline(phase, source)
+
+            self.final_log_pipeline(pl)
 
             pl.run()
 
@@ -941,11 +970,12 @@ Pipeline Headers
             c = st.column(tic.header)
             if c:
                 c.datatype = TypeIntuiter.promote_type(c.datatype, tic.resolved_type)
-                self.log('Update column: {}.{}'.format(st.name, c.source_header))
+                self.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
             else:
+
                 c = st.add_column(tic.position, source_header=tic.header, dest_header=tic.header,
                                   datatype=tic.resolved_type_name)
-                self.log('Created source table column: {}.{}'.format(st.name, c.source_header))
+                self.log('Created source table column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
 
     def final_make_dest_tables(self, pl):
         from ambry.etl.intuit import TypeIntuiter
@@ -996,14 +1026,16 @@ Pipeline Headers
 
         self.build_post_unify_partitions()
 
-        self.build_post_write_bundle_file()
+        try:
+            self.build_post_write_bundle_file()
+        except Exception as e:
+            self.error("Failed to write bundle file: {}".format(e))
 
         self.library.search.index_bundle(self, force = True)
 
         self.state = phase + '_done'
 
         self.log("Finished {}".format(phase))
-
 
         return True
 
@@ -1239,7 +1271,7 @@ Pipeline Headers
 
         if not (self.is_finalized or self.is_prepared):
             self.error("Can't checkin; bundle state must be either finalized or prepared")
-            return False
+            return False, False
 
         self.commit()
         remote, path = self.library.checkin(self)

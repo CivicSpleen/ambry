@@ -5,7 +5,7 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 import datetime
-
+import time
 import gzip
 
 import msgpack
@@ -309,7 +309,14 @@ class PartitionMsgpackDataFileReader(object):
     def decode_obj(obj):
 
         if b'__datetime__' in obj:
-            obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%dT%H:%M:%S.%f")
+            try:
+                obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%dT%H:%M:%S")
+            except ValueError:
+                # The preferred format is without the microseconds, but there are some lingering
+                # bundle that still have it.
+                obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%dT%H:%M:%S.%f")
+        elif b'__time__' in obj:
+            obj = datetime.time(*list(time.strptime(obj["as_str"], "%H:%M:%S"))[3:6])
         elif b'__date__' in obj:
             obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%d").date()
         else:
@@ -389,8 +396,12 @@ class PartitionMsgpackDataFile(PartitionDataFile):
     def encode_obj(obj):
         if isinstance(obj, datetime.datetime):
             return {'__datetime__': True, 'as_str': obj.isoformat()}
-        if isinstance(obj, datetime.date):
+        elif isinstance(obj, datetime.date):
             return {'__date__': True, 'as_str': obj.isoformat()}
+        elif isinstance(obj, datetime.time):
+            return {'__time__': True, 'as_str': obj.strftime("%H:%M:%S")}
+        elif isinstance(obj, time.time):
+            return {'__time__': True, 'as_str': obj.strftime("%H:%M:%S")}
         else:
             raise Exception("Unknown type on encode: {}, {}".format(type(obj), obj))
 

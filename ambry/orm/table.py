@@ -21,10 +21,10 @@ from . import Base, MutationDict, JSONEncodedObj
 class Table(Base, DictableMixin):
     __tablename__ = 'tables'
 
-    vid = SAColumn('t_vid', String(20), primary_key=True)
-    id = SAColumn('t_id', String(20), primary_key=False)
-    d_id = SAColumn('t_d_id', String(20))
-    d_vid = SAColumn('t_d_vid', String(20), ForeignKey('datasets.d_vid'), index=True)
+    vid = SAColumn('t_vid', String(15), primary_key=True)
+    id = SAColumn('t_id', String(12), primary_key=False)
+    d_id = SAColumn('t_d_id', String(10))
+    d_vid = SAColumn('t_d_vid', String(13), ForeignKey('datasets.d_vid'), index=True)
 
     sequence_id = SAColumn('t_sequence_id', Integer, nullable=False)
     name = SAColumn('t_name', String(200), nullable=False)
@@ -34,6 +34,7 @@ class Table(Base, DictableMixin):
     universe = SAColumn('t_universe', String(200))
     keywords = SAColumn('t_keywords', Text)
     type = SAColumn('t_type', String(20))
+
     # Reference to a column that provides an example of how this table should be used.
     proto_vid = SAColumn('t_proto_vid', String(20), index=True)
 
@@ -49,7 +50,7 @@ class Table(Base, DictableMixin):
     columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
                            cascade="all, delete-orphan", lazy='joined')
 
-    _next_column_number = None  # Set in next_config_number()
+    _column_sequence = {}
 
     def link_columns(self, other):
         """Return columns that can be used to link another table to this one"""
@@ -94,35 +95,6 @@ class Table(Base, DictableMixin):
     def oid(self):
         return TableNumber(self.d_id, self.sequence_id)
 
-    @property
-    def next_column_number(self):
-        """Return the next column sequence id for a table . On the first call, will load the max sequence number
-        from the database, but subsequent calls will run in process, so this isn't suitable for
-        multi-process operation -- all of the columns in a dataset should be created by one process"""
-
-        from sqlalchemy import text
-        from sqlalchemy.orm import object_session
-
-        if not self._next_column_number:
-
-            session = object_session(self)
-
-            if session:
-                sql = text("SELECT max(c_sequence_id)+1 FROM columns WHERE c_t_vid = '{}'".format(self.vid))
-                max_id, = session.execute(sql).fetchone()
-            else:
-                # Let's hope this always means that the table is new, and therefore there are
-                # no columns yet.
-                max_id = None
-
-            if not max_id:
-                max_id = 0
-
-            self._next_column_number = max_id + 1
-        else:
-            self._next_column_number += 1
-
-        return self._next_column_number
 
     def column(self, ref):
         # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
@@ -137,14 +109,25 @@ class Table(Base, DictableMixin):
 
         raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
 
+
     def add_column(self, name, **kwargs):
         """Add a column to the table, or update an existing one."""
+        from . import next_sequence_id
+        from sqlalchemy.orm import object_session
+        from ..identity import ColumnNumber
 
         try:
             c = self.column(name)
             extant = True
         except NotFoundError:
-            c = Column(t_vid=self.vid, sequence_id=self.next_column_number, name=name, datatype='varchar')
+
+            sequence_id = next_sequence_id(object_session(self), self._column_sequence, self.vid, Column)
+
+            c = Column(t_vid=self.vid,
+                       sequence_id=sequence_id,
+                       vid=str(ColumnNumber(ObjectNumber.parse(self.vid), sequence_id)),
+                       name=name,
+                       datatype='varchar')
             extant = False
 
         # Update possibly existing data
@@ -179,15 +162,10 @@ class Table(Base, DictableMixin):
         return c
 
     def add_id_column(self, description=None):
-        self.add_column(name='id', datatype='integer', is_primary_key=True,
+        from . import Column
+        self.add_column(name='id', datatype=Column.DATATYPE_INTEGER, is_primary_key=True,
                         description=self.description if not description else description)
 
-    @property
-    def primary_key(self):
-        for c in self.columns:
-            if c.is_primary_key:
-                return c
-        return None
 
     def get_fixed_regex(self):
         """Using the size values for the columns for the table, construct a
@@ -376,14 +354,8 @@ class Table(Base, DictableMixin):
         """event.listen method for Sqlalchemy to set the seqience_id for this
         object and create an ObjectNumber value for the id"""
         if target.sequence_id is None:
-            sql = text('''SELECT max(t_sequence_id)+1 FROM tables WHERE t_d_id = :did''')
-
-            max_id, = conn.execute(sql, did=target.d_id).fetchone()
-
-            if not max_id:
-                max_id = 1
-
-            target.sequence_id = max_id
+            from ambry.orm.exc import DatabaseError
+            raise DatabaseError("Must have sequence id before insertion")
 
         Table.before_update(mapper, conn, target)
 

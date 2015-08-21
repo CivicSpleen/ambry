@@ -1,28 +1,28 @@
-table,column,datatype,size,description
-example,id,integer,,A Pretty Good Table
-example,uuid,varchar,36,A random UUID
-example,int,integer,3,A random integer
-example,float,real,,A Random float
-example,categorical,varchar,,A categorical variable
-example,ordinal,integer,,An ordinal variable
-example,gaussian,real,,A gaussian distribution
-example,triangle,real,,A Triangle distribution
-example,exponential,real,,An exponential distribution
-example,bg_gvid,varchar,,A Blockgroup gvid reference
-example,year,integer,,A Year
-example,date,date,,A Date
-example,time,time,,A Time
+table,datatype,size,column,description
 ,,,,
-demo,id,integer,,
-demo,uuid,varchar,,
-demo,int,integer,,
-demo,float,real,,
-demo,categorical,varchar,,
-demo,ordinal,integer,,
-demo,gaussian,real,,
-demo,triangle,real,,
-demo,exponential,real,,
-demo,year,integer,,
-demo,date,date,,
-demo,bg_gvid,varchar,,
+example,int,,id,A Pretty Good Table
+example,str,36,uuid,A random UUID
+example,int,3,int,A random integer
+example,float,,float,A Random float
+example,str,,categorical,A categorical variable
+example,int,,ordinal,An ordinal variable
+example,float,,gaussian,A gaussian distribution
+example,float,,triangle,A Triangle distribution
+example,float,,exponential,An exponential distribution
+example,str,,bg_gvid,A Blockgroup gvid reference
+example,int,,year,A Year
+example,date,,date,A Date
+example,time,,time,A Time
 ,,,,
+demo,int,,id,
+demo,str,,uuid,
+demo,int,,int,
+demo,float,,float,
+demo,str,,categorical,
+demo,int,,ordinal,
+demo,float,,gaussian,
+demo,float,,triangle,
+demo,float,,exponential,
+demo,int,,year,
+demo,date,,date,
+demo,str,,bg_gvid,
