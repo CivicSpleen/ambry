@@ -8,6 +8,7 @@ import unittest
 
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from sqlalchemy.sql.expression import text
 
 from six.moves.urllib.parse import urlparse
 
@@ -20,9 +21,6 @@ from ambry.run import get_runconfig
 MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql-test '\
     'to the database config of the ambry config.'
 SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
-
-# FIXME: use real example.
-# example of the config - dsn: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
 
 
 class TestBase(unittest.TestCase):
@@ -142,20 +140,11 @@ class PostgreSQLTestBase(TestBase):
 
     def setUp(self):
         super(PostgreSQLTestBase, self).setUp()
-
-        # we need config from user to properly construct postgresql test database.
-        conf = get_runconfig()
-        if 'database' in conf.dict and 'postgresql-test' in conf.dict['database']:
-            # Create database and populate required fields.
-            self._create_postgres_test_db(conf)
-            self.dsn = self.__class__.postgres_test_db_data['test_db_dsn']
-            self.postgres_dsn = self.__class__.postgres_test_db_data['postgres_db_dsn']
-            self.postgres_test_db = self.__class__.postgres_test_db_data['test_db_name']
-        else:
-            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-            self.postgres_dsn = None
-            self.dsn = None
-            self.postgres_test_db = None
+        # Create database and populate required fields.
+        self._create_postgres_test_db()
+        self.dsn = self.__class__.postgres_test_db_data['test_db_dsn']
+        self.postgres_dsn = self.__class__.postgres_test_db_data['postgres_db_dsn']
+        self.postgres_test_db = self.__class__.postgres_test_db_data['test_db_name']
 
     def tearDown(self):
         super(PostgreSQLTestBase, self).tearDown()
@@ -164,20 +153,32 @@ class PostgreSQLTestBase(TestBase):
     @classmethod
     def _drop_postgres_test_db(cls):
         # drop test database
-        test_db_name = cls.postgres_test_db_data['test_db_name']
-        assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
+        if hasattr(cls, 'postgres_test_db_data'):
+            test_db_name = cls.postgres_test_db_data['test_db_name']
+            assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
 
-        engine = create_engine(cls.postgres_test_db_data['postgres_db_dsn'])
-        connection = engine.connect()
-        connection.execute('commit')
-        connection.execute('DROP DATABASE {};'.format(test_db_name))
-        connection.execute('commit')
-        connection.close()
+            engine = create_engine(cls.postgres_test_db_data['postgres_db_dsn'])
+            connection = engine.connect()
+            connection.execute('commit')
+            connection.execute('DROP DATABASE {};'.format(test_db_name))
+            connection.execute('commit')
+            connection.close()
+        else:
+            # no database were created.
+            pass
 
     @classmethod
     def _create_postgres_test_db(cls, conf=None):
         if not conf:
             conf = get_runconfig()
+
+        # we need valid postgres dsn.
+        if not ('database' in conf.dict and 'postgresql-test' in conf.dict['database']):
+            # example of the config
+            # database:
+            #     postgresql-test: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+
         postgres_user = 'ambry'  # FIXME: take it from the conf.
         dsn = conf.dict['database']['postgresql-test']
         parsed_url = urlparse(dsn)
@@ -235,7 +236,6 @@ class PostgreSQLTestBase(TestBase):
     @classmethod
     def postgres_db_exists(self, db_name, conn):
         """ Returns True if database with given name exists in the postgresql. """
-        from sqlalchemy.sql.expression import text
         result = conn\
             .execute(
                 text('SELECT 1 FROM pg_database WHERE datname=:db_name;'), db_name=db_name)\
