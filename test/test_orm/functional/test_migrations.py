@@ -10,6 +10,7 @@ from sqlalchemy.pool import NullPool
 from ambry.orm.database import Database
 from ambry.orm import database
 from ambry.orm import migrations
+from ambry.orm.database import POSTGRES_SCHEMA_NAME
 from ambry.run import get_runconfig
 
 from test.test_base import TestBase, PostgreSQLTestBase
@@ -102,21 +103,25 @@ class MigrationTest(TestBase):
                 db = Database(postgres_test_db_dsn, engine_kwargs={'poolclass': NullPool})
                 db.create()
                 db.close()
-
             # switch version and reconnect. Now both migrations should apply.
             with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
                 db = Database(postgres_test_db_dsn, engine_kwargs={'poolclass': NullPool})
                 try:
                     # check column created by migration 101.
-                    db.connection.execute('SELECT column1 FROM datasets;').fetchall()
+                    db.connection\
+                        .execute('SELECT column1 FROM {}.datasets;'.format(POSTGRES_SCHEMA_NAME))\
+                        .fetchall()
 
                     # check table created by migration 102.
-                    db.connection.execute('SELECT column1 FROM table1;').fetchall()
+                    db.connection\
+                        .execute('SELECT column1 FROM {}.table1;'.format(POSTGRES_SCHEMA_NAME))\
+                        .fetchall()
 
                     # db version changed to 102
-                    self.assertEqual(
-                        db.connection.execute('SELECT version FROM user_version;').fetchone()[0],
-                        102)
+                    db_version = db.connection\
+                        .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                        .fetchone()[0]
+                    self.assertEqual(db_version, 102)
                 finally:
                     db.close()
         finally:

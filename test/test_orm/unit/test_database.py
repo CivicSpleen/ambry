@@ -13,7 +13,7 @@ from sqlalchemy.pool import NullPool
 from ambry.orm.database import get_stored_version, _validate_version, _migration_required, SCHEMA_VERSION,\
     _update_version, _is_missed, migrate
 from ambry.orm.exc import DatabaseError, DatabaseMissingError
-from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
+from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME, POSTGRES_SCHEMA_NAME
 from ambry.orm.dataset import Dataset
 
 from ambry.run import get_runconfig
@@ -434,11 +434,12 @@ class GetVersionTest(TestBase):
             engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
             with engine.connect() as conn:
                 create_table_query = '''
-                    CREATE TABLE user_version (
-                        version INTEGER NOT NULL); '''
+                    CREATE TABLE {}.user_version (
+                        version INTEGER NOT NULL); '''\
+                    .format(POSTGRES_SCHEMA_NAME)
 
                 conn.execute(create_table_query)
-                conn.execute('INSERT INTO user_version VALUES (22);')
+                conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
                 conn.execute('commit')
                 version = get_stored_version(conn)
                 self.assertEqual(version, 22)
@@ -511,7 +512,9 @@ class UpdateVersionTest(TestBase):
             engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
             with engine.connect() as conn:
                 _update_version(conn, 123)
-                version = conn.execute('SELECT version FROM user_version;').fetchone()[0]
+                version = conn\
+                    .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                    .fetchone()[0]
                 self.assertEqual(version, 123)
         finally:
             PostgreSQLTestBase._drop_postgres_test_db()
@@ -522,15 +525,18 @@ class UpdateVersionTest(TestBase):
             engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
             with engine.connect() as conn:
                 create_table_query = '''
-                    CREATE TABLE user_version (
-                        version INTEGER NOT NULL); '''
+                    CREATE TABLE {}.user_version (
+                        version INTEGER NOT NULL); '''\
+                    .format(POSTGRES_SCHEMA_NAME)
 
                 conn.execute(create_table_query)
-                conn.execute('INSERT INTO user_version VALUES (22);')
+                conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
                 conn.execute('commit')
 
                 _update_version(conn, 123)
-                version = conn.execute('SELECT version FROM user_version;').fetchone()[0]
+                version = conn\
+                    .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                    .fetchone()[0]
                 self.assertEqual(version, 123)
         finally:
             PostgreSQLTestBase._drop_postgres_test_db()

@@ -76,15 +76,12 @@ class Database(object):
         self._connection = None
         self._echo = echo
 
-        if self.driver in ['postgres', 'postgis']:
+        if self.driver in ['postgres', 'postgresql+psycopg2', 'postgis']:
             self._schema = POSTGRES_SCHEMA_NAME
-
         else:
             self._schema = None
 
         self.logger = logger
-
-
 
     def create(self):
         """Create the database from the base SQL."""
@@ -136,7 +133,7 @@ class Database(object):
 
             inspector = Inspector.from_engine(self.engine)
 
-            if  'config' not in inspector.get_table_names(schema = self._schema):
+            if 'config' not in inspector.get_table_names(schema=self._schema):
                 return False
             else:
                 return True
@@ -167,9 +164,9 @@ class Database(object):
             # Easier than constructing the pool
             # self._engine.pool._use_threadlocal = True
 
-            # FIXME: Find another way to initiate postgres
             if 'postgresql' in self.driver:
                 from sqlalchemy.pool import NullPool
+                # FIXME: Find another way to initiate postgres with NullPool (it is usefull for tests only.)
                 self._engine = create_engine(self.dsn, echo=self._echo,  poolclass=NullPool)
             else:
                 self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
@@ -305,11 +302,9 @@ class Database(object):
     def clone(self):
         return self.__class__(self.dsn)
 
-
     def create_tables(self):
 
         from sqlalchemy.exc import OperationalError
-        from sqlalchemy import DDL
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
@@ -404,7 +399,7 @@ class Database(object):
         """Return the root dataset, which hold configuration values for the library"""
         return self.dataset(ROOT_CONFIG_NAME_V)
 
-    def dataset(self, ref, load_all=False, exception = True):
+    def dataset(self, ref, load_all=False, exception=True):
         """Return a dataset, given a vid or id
 
         :param ref: Vid or id  for a dataset. If an id is provided, will it will return the one with the
@@ -478,7 +473,7 @@ class Database(object):
 
     def delete_partitions(self, ds):
         """Fast delete of all of a datasets codes, columns, partitions and tables"""
-        from ambry.orm import Code, Column, Table, Partition
+        from ambry.orm import Partition
 
         ssq = self.session.query
 
@@ -499,7 +494,7 @@ class Database(object):
 
         # Put the partitions in dependency order so the merge won't throw a Foreign key integrity error
         # The non-segment partitions go first, then the segments.
-        ds.partitions = [ p for p in ds.partitions if not p.is_segment ] + [ p for p in ds.partitions if p.is_segment ]
+        ds.partitions = [p for p in ds.partitions if not p.is_segment] + [p for p in ds.partitions if p.is_segment]
 
         self.session.merge(ds)
 
@@ -507,9 +502,9 @@ class Database(object):
         # so some with a reference to a parent get inserted before their parent. The topo sort solives this,
         # but there must be a better way to do it.
 
-        dag = { c.id:set([c.parent_id]) for c in ds.configs}
+        dag = {c.id: set([c.parent_id]) for c in ds.configs}
 
-        refs = { c.id:c for c in ds.configs }
+        refs = {c.id: c for c in ds.configs}
 
         for e in toposort(dag):
             for ref in e:
@@ -730,7 +725,7 @@ def _update_version(connection, version):
         connection.execute('PRAGMA user_version = {}'.format(version))
     elif connection.engine.name == 'postgresql':
 
-        connection.execute(DDL("CREATE SCHEMA IF NOT EXISTS {}".format(POSTGRES_SCHEMA_NAME)))
+        connection.execute(DDL('CREATE SCHEMA IF NOT EXISTS {}'.format(POSTGRES_SCHEMA_NAME)))
 
         connection.execute('CREATE TABLE IF NOT EXISTS {}.user_version(version INTEGER NOT NULL);'
                            .format(POSTGRES_SCHEMA_NAME))

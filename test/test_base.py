@@ -13,6 +13,7 @@ from six.moves.urllib.parse import urlparse
 
 from ambry.identity import DatasetNumber
 from ambry.orm import Database, Dataset
+from ambry.orm.database import POSTGRES_SCHEMA_NAME
 from ambry.run import get_runconfig
 
 
@@ -187,40 +188,43 @@ class PostgreSQLTestBase(TestBase):
 
         # connect to postgres database because we need to create database for tests.
         engine = create_engine(postgres_db_dsn, poolclass=NullPool)
-        connection = engine.connect()
+        with engine.connect() as connection:
+            # we have to close opened transaction.
+            connection.execute('commit')
 
-        # we have to close opened transaction.
-        connection.execute('commit')
+            # drop test database created by previuos run (control + c case).
+            if cls.postgres_db_exists(test_db_name, engine):
+                assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
+                while True:
+                    delete_it = raw_input(
+                        '\nTest database with {} name already exists. Can I delete it (Yes|No): '.format(test_db_name))
+                    if delete_it.lower() == 'yes':
+                        try:
+                            connection.execute('DROP DATABASE {};'.format(test_db_name))
+                            connection.execute('commit')
+                        except:
+                            connection.execute('rollback')
+                        break
 
-        # drop test database created by previuos run (control + c case).
-        if cls.postgres_db_exists(test_db_name, engine):
-            assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
-            while True:
-                delete_it = raw_input(
-                    '\nTest database with {} name already exists. Can I delete it (Yes|No): '.format(test_db_name))
-                if delete_it.lower() == 'yes':
-                    try:
-                        connection.execute('DROP DATABASE {};'.format(test_db_name))
-                        connection.execute('commit')
-                    except:
-                        connection.execute('rollback')
-                    break
+                    elif delete_it.lower() == 'no':
+                        break
 
-                elif delete_it.lower() == 'no':
-                    break
+            # check for template with pg_tgrm extension.
+            cls.pg_trgm_is_installed = cls.postgres_db_exists('template0_trgm', connection)
 
-        # check for template with pg_tgrm extension.
-        cls.pg_trgm_is_installed = cls.postgres_db_exists('template0_trgm', connection)
+            if not cls.pg_trgm_is_installed:
+                raise unittest.SkipTest(
+                    'Can not find template with pg_trgm support. See README.rst for details.')
 
-        if not cls.pg_trgm_is_installed:
-            raise unittest.SkipTest(
-                'Can not find template with pg_trgm support. See README.rst for details.')
+            query = 'CREATE DATABASE {} OWNER {} TEMPLATE template0_trgm encoding \'UTF8\';'\
+                .format(test_db_name, postgres_user)
+            connection.execute(query)
+            connection.execute('commit')
+            connection.close()
 
-        query = 'CREATE DATABASE {} OWNER {} TEMPLATE template0_trgm encoding \'UTF8\';'\
-            .format(test_db_name, postgres_user)
-        connection.execute(query)
-        connection.execute('commit')
-        connection.close()
+        # create db schemas needed by ambry.
+        engine = create_engine(test_db_dsn, poolclass=NullPool)
+        engine.execute('CREATE SCHEMA IF NOT EXISTS {}'.format(POSTGRES_SCHEMA_NAME))
 
         cls.postgres_test_db_data = {
             'test_db_name': test_db_name,
