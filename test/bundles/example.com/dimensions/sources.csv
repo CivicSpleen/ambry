@@ -1,2 +1,3 @@
-sequence_id,name,description,url
-1,dimensions,Basic test of dimensions,http://public.source.civicknowledge.com/example.com/dimensions/geofile155.csv
+name,description,urltype,url
+dimensions,Basic test of dimensions,ref,http://public.source.civicknowledge.com/example.com/dimensions/geofile155.csv
+counties,Counties,,http://public.source.civicknowledge.com/example.com/dimensions/civicknowledge.com-entities-census-counties.csv

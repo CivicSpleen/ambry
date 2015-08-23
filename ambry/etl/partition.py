@@ -293,7 +293,7 @@ class PartitionMsgpackDataFileReader(object):
 
     def __iter__(self):
 
-        unpacker = msgpack.Unpacker(self._f, object_hook=self.decode_obj)
+        unpacker = msgpack.Unpacker(self._f, object_hook=self.decode_obj,  encoding='utf-8')
 
         for row in unpacker:
             assert isinstance(row, (tuple, list)), row
@@ -385,7 +385,7 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
         assert isinstance(row, (list, tuple))
 
-        self._file.write(msgpack.packb(row))
+        self._file.write(msgpack.packb(row, encoding='utf-8'))
 
         self._nrows += 1
 
@@ -422,7 +422,7 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
         assert isinstance(row, (tuple, list)), row
 
-        self._file.write(msgpack.packb(row, default=self.encode_obj))
+        self._file.write(msgpack.packb(row, default=self.encode_obj, encoding='utf-8'))
 
         self._nrows += 1
 

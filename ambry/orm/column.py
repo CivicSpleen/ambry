@@ -101,7 +101,7 @@ class Column(Base):
 
         DATATYPE_STR: (sqlalchemy.types.String, str, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
-        DATATYPE_INTEGER64: (BigIntegerType, long, 'INTEGER64'),
+        DATATYPE_INTEGER64: (BigIntegerType, int, 'INTEGER64'),
         DATATYPE_FLOAT: (sqlalchemy.types.Float, float, 'REAL'),
         DATATYPE_DATE: (sqlalchemy.types.Date, datetime.date, 'DATE'),
         DATATYPE_TIME: (sqlalchemy.types.Time, datetime.time, 'TIME'),
@@ -129,16 +129,16 @@ class Column(Base):
         self.derivedfrom = self.derivedfrom or None
 
     def type_is_int(self):
-        return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64)
+        return self.python_type  == int
 
     def type_is_real(self):
-        return self.datatype == Column.FLOAT
+        return self.python_type  == float
 
     def type_is_number(self):
-        return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64, Column.DATATYPE_FLOAT)
+        return self.type_is_real or self.type_is_int
 
     def type_is_text(self):
-        return self.datatype in ( Column.DATATYPE_STR)
+        return self.python_type == str
 
     def type_is_geo(self):
         return self.datatype in (
@@ -159,8 +159,25 @@ class Column(Base):
         return self.types[self.datatype][0]
 
     @property
+    def valuetype_class(self):
+        """Return the valuetype class, if one is defined, or a built-in type if it isn't"""
+        from ambry.valuetype import import_valuetype
+
+        try:
+            return import_valuetype(self.datatype)
+        except AttributeError as e:
+            return self.types[self.datatype][1]
+
+    @property
     def python_type(self):
-        return self.types[self.datatype][1]
+        """Return the python type for the row, possibly getting it from a valuetype reference """
+
+        from ambry.valuetype import python_type as vl_pt
+
+        try:
+            return self.types[self.datatype][1]
+        except KeyError:
+            return vl_pt(self.datatype)
 
     def python_cast(self, v):
         """Cast a value to the type of the column.

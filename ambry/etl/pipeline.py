@@ -4,7 +4,7 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from collections import OrderedDict
+from collections import OrderedDict, MutableMapping
 import inspect
 import time
 
@@ -69,6 +69,82 @@ Pipeline:
 class StopPipe(Exception):
     pass
 
+
+class RowProxy(object):
+    '''
+    A dict-like accessor for rows which holds a constant header for the keys. Allows for faster access than
+    constructing a dict, and also provides attribute access
+
+    >>> header = list('abcde')
+    >>> rp = RowProxy(header)
+    >>> for i in range(10):
+    >>>     row = [ j for j in range(len(header)]
+    >>>     rp.set_row(row)
+    >>>     print rp['c']
+
+    '''
+
+    def __init__(self, keys):
+
+        self.__keys = keys
+        self.__row = [None] * len(keys)
+        self.__pos_map = { e:i for i, e in enumerate(keys)}
+        self.__initialized = True
+
+    def get_row(self):
+        return object.__getattribute__(self, '_RowProxy__row')
+
+    def set_row(self,v):
+        object.__setattr__(self, '_RowProxy__row', v)
+        return self
+
+    def get_keys(self):
+        return self.__getattribute__('_RowProxy__keys')
+
+    def __setitem__(self, key, value):
+        if isinstance(key, int):
+            self.__row[key] = value
+        else:
+            self.__row[self.__pos_map[key]] = value
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self.__row[key]
+        else:
+            return self.__row[self.__pos_map[key]]
+
+    def __setattr__(self, key, value):
+
+        if not self.__dict__.has_key('_RowProxy__initialized'):
+            return object.__setattr__(self, key, value)
+
+        else:
+            self.__row[self.__pos_map[key]] = value
+
+    def __getattr__(self, key):
+
+        return self.__row[self.__pos_map[key]]
+
+    def __delitem__(self, key):
+        raise NotImplementedError()
+
+    def __iter__(self):
+        return iter(self.keys)
+
+    def __len__(self):
+        return len(self.keys)
+
+    @property
+    def dict(self):
+        return dict(zip(self.__keys, self.__row))
+
+    # The final two methods aren't required, but nice for demo purposes:
+    def __str__(self):
+        '''returns simple dict representation of the mapping'''
+        return str(self.dict)
+
+    def __repr__(self):
+        return self.dict.__repr__()
 
 class Pipe(object):
     """A step in the pipeline"""
@@ -282,7 +358,6 @@ class Slice(Pipe):
             raise PipelineError(self, "Failed to eval slicer for parts: {} for source {} "
                                 .format(args, self.source.name))
 
-
         try:
             return self.slicer(row)
         except Exception as e:
@@ -350,6 +425,46 @@ class Ticker(Pipe):
     def process_header(self, row):
         print('== {} {} =='.format(self.source.name, self._name if self._name else ''))
         return row
+
+class Select(Pipe):
+    """ Pass-through only rows that satisfy a predicate. The predicate may be
+    specified as a callable, or a string, which will be evaled. The predicate has the signature f(source, row)
+    where row is a RowProxy object.
+
+    """
+
+    def __init__(self, pred):
+        """
+
+        >>> Select(' row.id == 10 or source.grain == 20 ')
+
+
+        :param pred: Callable or string. If a string, it must be just an expression which can take arguments source and row
+        :return:
+        """
+
+        if isinstance(pred, basestring):
+            self.pred_str = pred
+            self.pred = eval('lambda source, row: {}'.format(pred))
+        else:
+            self.pred = pred
+            self.pred_str = str(pred)
+
+        self._row_proxy = None
+
+    def process_body(self, row):
+
+        if self.pred(self.source, self._row_proxy.set_row(row)):
+            return row
+        else:
+            return None
+
+    def process_header(self, row):
+        self._row_proxy = RowProxy(row)
+        return row
+
+    def __str__(self):
+        return qualified_class_name(self) + ': pred = {} '.format(self.pred_str)
 
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one. If no header is specified in the
@@ -767,11 +882,27 @@ class Delete(AddDeleteExpand):
     def __init__(self, delete):
         super(Delete, self).__init__(delete=delete)
 
+    def __str__(self):
+
+        return qualified_class_name(self) + "delete = "+ ', '.join(self.delete)
 
 class Edit(AddDeleteExpand):
     def __init__(self,  edit, as_dict=False):
         super(Edit, self).__init__(edit=edit, as_dict=as_dict)
 
+
+class PassOnlyDestColumns(Delete):
+    """Delete any columns that are not in the destination table"""
+    def __init__(self):
+        super(PassOnlyDestColumns, self).__init__(delete=[])
+
+    def process_header(self, row):
+
+        dest_cols = [c.name for c in self.source.dest_table.columns ]
+
+        self.delete = [ h for h in row if h not in dest_cols]
+
+        return super(Delete, self).process_header(row)
 
 class Modify(Pipe):
     """Base class to modify a whole row, as a dict. Does not modify the header. Uses a slower method
@@ -957,7 +1088,10 @@ class PrintEvery(Pipe):
 
 class MatchPredicate(Pipe):
     """Store rows that match a predicate. THe predicate is a function that takes the row as its
-    sole parameter and returns true or false"""
+    sole parameter and returns true or false.
+
+    The matches can be retrieved from the pipeline vial the ``matches`` property
+    """
 
     def __init__(self, pred):
         self._pred = pred
@@ -998,6 +1132,8 @@ class Reduce(Pipe):
         for row in it:
             self.accumulator = self._f(self.accumulator, row)
             yield row
+
+
 
 
 def make_table_map(table, headers):

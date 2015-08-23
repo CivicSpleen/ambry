@@ -81,80 +81,6 @@ class PassthroughTransform(object):
         return self.f(row)
 
 
-class BasicTransform(object):
-
-    """A Callable class that will take a row and return a value, cleaned
-    according to the classes cleaning rules."""
-
-    @staticmethod
-    def basic_defaults(v, column, default, f):
-        """Basic defaults method, using only the column default and
-        illegal_value parameters.
-
-        WIll also convert blanks and None to the default
-
-        """
-        if v is None:
-            return default
-        elif v == '':
-            return default
-        elif str(v) == column.illegal_value:
-            return default
-        else:
-            return f(v)
-
-    def __init__(self, column, useIndex=False):
-        """"""
-        self.column = column
-
-        # for numbers try to coerce to an integer. We'd have to use a helper func
-        # with a try/catch, except in this case, integers are always all digits
-        # here
-        if str(column.datatype) == 'integer' or str(column.datatype) == 'integer64':
-            # f = lambda v: int(v)
-            msg = column.name
-            f = lambda v, msg = msg: coerce_int_except(v, msg)
-        elif column.datatype == 'real':
-            # f = lambda v: int(v)
-            msg = column.name
-            f = lambda v, msg = msg: coerce_float_except(v, msg)
-        else:
-            f = lambda v: v
-
-        if column.default is not None:
-            if column.datatype == 'text':
-                default = column.default
-            else:
-                default = int(column.default)
-        else:
-            default = None
-
-        if default:
-            f = (
-                lambda v,
-                column=column,
-                f=f,
-                default=default,
-                defaults_f=self.basic_defaults: defaults_f(
-                    v,
-                    column,
-                    default,
-                    f))
-
-        # Strip test values, but not numbers
-        f = lambda v, f=f: f(v.strip()) if isinstance(v, string_types) else f(v)
-
-        if useIndex:
-            f = lambda row, column=column, f=f: f(row[column.sequence_id - 1])
-        else:
-            f = lambda row, column=column, f=f: f(row[column.name])
-
-        self.f = f
-
-    def __call__(self, row):
-        return self.f(row)
-
-
 #
 # Functions for CasterTransformBUilder
 #
@@ -301,6 +227,12 @@ def parse_datetime(caster, name, v):
             datetime.date, name, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
         return None
 
+def derive_val(f,  caster, row, i, name, v  ):
+
+    print '!!!', code
+
+    return None
+
 
 class Transform(object):
 
@@ -323,15 +255,14 @@ class Transform(object):
         self.row_transform_code = None
 
     def append(self, name, type_):
+
         self.types.append((name, type_))
 
-        # Doing this every time is more expensive, but not much compared to row processing
-        self.compile()
+    def add_to_env(self, t, name=None):
+        if not name:
+            name = t.__name__
+        self.custom_types[name] = t
 
-    def add_type(self, t):
-        self.custom_types[t.__name__] = t
-
-        self.compile()
 
     def make_transform(self):
 
@@ -344,6 +275,9 @@ class Transform(object):
 
             if type_ in [datetime.date, datetime.time, datetime.datetime, int, float, str, unicode]:
                 o.append((i, name, 'parse_{}'.format(type_.__name__)))
+            elif isinstance(type_, basestring):
+                # It is actually a dervivedfrom reference
+                o.append((i, name, "partial(derive_val,row,'{}')".format(type_)))
             else:
                 o.append((i, name, 'partial(parse_type,{})'.format(type_.__name__)))
 
@@ -382,31 +316,6 @@ class Transform(object):
     def cast_error(self, type_, name, v, e):
         self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
 
-class DictTransform(Transform):
-
-    def __call__(self, row):
-        """Call the caster to cast all of the values in a row.
-        """
-        self.error_accumulator = {}
-        row = self.dict_transform(self, row)
-        if self.error_handler:
-            row, self.error_accumulator = self.error_handler(row, self.error_accumulator)
-
-        return row, self.error_accumulator
-
-
-class ListTransform(Transform):
-
-    def __call__(self, row):
-        """Call the caster to cast all of the values in a row.
-        """
-        self.error_accumulator = {}
-        row = self.row_transform(self, row)
-        if self.error_handler:
-            row, self.error_accumulator = self.error_handler(row, self.error_accumulator)
-
-        return row, self.error_accumulator
-
 
 class CasterPipe(Transform, Pipe, ):
 
@@ -417,62 +326,86 @@ class CasterPipe(Transform, Pipe, ):
 
         self.row_transform_code = self.dict_transform_code = ''
 
-    def caster_map(self, table):
+    def get_caster_f(self, name):
 
-        casters = {}
+        try:
+            caster_f = getattr(self.bundle, name)
+        except AttributeError:
+            pass
 
-        for c in table.columns:
+        try:
+            caster_f = getattr(sys.modules['ambry.build'], name)
+        except AttributeError:
+            pass
 
-            caster_f = None
+        if not caster_f:
+            raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(name))
 
-            if c.caster:
-
-                try:
-                    caster_f = getattr(self.bundle, c.caster)
-                except AttributeError:
-                    pass
-
-                try:
-                    caster_f = getattr(sys.modules['ambry.build'], c.caster)
-                except AttributeError:
-                    pass
-
-                if not caster_f:
-                    raise AttributeError(
-                        "Could not find caster '{}' in bundle class or bundle module ".format(c.caster))
-
-            else:
-                caster_f = c.python_type
-
-            self.add_type(caster_f)
-
-            casters[c.name] = caster_f
-
-        return casters
+        return caster_f
 
     def process_header(self, row):
+        from functools import partial
+        from ambry.valuetype import import_valuetype
 
         if self.table:
             table = self.table
         else:
             self.table = table = self.source.dest_table
 
-        ocm = self.caster_map(table)
+        env = {}
+        row_parts = []
 
-        for h in row:
+        for i,c in enumerate(self.table.columns):
 
-            try:
-                self.append(h, ocm[h])
-            except KeyError:
-                # pipeline, pipe, header, table,
-                self.headers = row # Make sure it gets into the pilpile printout.
-                raise MissingHeaderError(self, h, table,
-                    "While processing header in CasterPipe in pipe '{}' failed to find header '{}' in dest table '{}' "
-                    .format(self.pipeline.name, h, table.name))
+            f_name = "f_"+str(i)
 
-        self.compile()
+            # New columns, created from extracting data from another column, using the code described in the
+            # 'derivedfrom" column of the schema
+            # Derived columns are new; there is no source column comminf from the upstream soruce
+            if c.derivedfrom:
+                inner_f = eval("lambda row, v, caster=self, i=i, header=c.name: {}".format(c.derivedfrom))
+                env[f_name] = lambda  row, v, caster=self, i=i, header=c.name: derive_val(inner_f, caster, row, i, header, v)
 
-        return row
+            else:
+                type_f = c.valuetype_class
+
+                if c.name not in row:
+                    # There is no source column, so insert a None. Maybe this should be an error.
+                    env[f_name] = lambda row, v, caster=self, i=i, header=c.name: None
+
+                elif c.caster:
+                    # Regular casters, from the "caster" column of the schema
+                    caster_f = self.get_caster_f(c.caster)
+                    self.add_to_env(caster_f)
+                    env[f_name] = lambda row, v, caster=self, i=i, header=c.name: caster_f(v)
+
+                elif type_f.__name__ == c.datatype:
+                    # Plain python type
+
+                    env[f_name] = eval("lambda row, v, caster=self, i=i, header=c.name: parse_type(caster, header, v)"
+                                       .format(type_f.__name__))
+
+                else:
+                    # Special valuetype, not a normal python type
+                    env[f_name] = eval("lambda row, v, caster=self, i=i, header=c.name: parse_type({},caster, header, v)"
+                            .format(c.datatype))
+                    self.add_to_env(import_valuetype(c.datatype), c.datatype)
+
+            self.add_to_env(env[f_name], f_name)
+
+            row_parts.append(f_name)
+
+        print row_parts
+        print env
+
+        #self.compile()
+
+        print 'HERE'
+
+        raise StopIteration()
+
+        # Return the table header, rather than the original row header.
+        return [ c.name for c in self.table.columns ]
 
     def process_body(self, row):
 
@@ -488,8 +421,7 @@ class CasterPipe(Transform, Pipe, ):
 
             print self.pipeline
 
-            raise type(e)("Failed to process row '{}'\n{}".format(row, e))
-
+            raise Exception("Failed to process row '{}'\n{}".format(row, e))
 
         if self.error_handler:
             row, self.error_accumulator = self.error_handler(row, self.error_accumulator)

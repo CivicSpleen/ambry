@@ -7,15 +7,31 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from .. import ValueType
+from .. import StrValue
 
-import geoid
+import geoid.census, geoid.acs, geoid.civick, geoid.tiger
 
-class Geoid(ValueType):
+from sqlalchemy.engine import RowProxy
+
+class Geoid(object):
     """Two letter state Abbreviation. May be uppercase or lower case. """
 
-    __datatype__ = str
+    __pythontype__ = str
     parser = None
+
+    geoid = None
+
+    def __init__(self, v):
+        self.geoid = self.parser(v)
+
+    @classmethod
+    def parse(cls,  v):
+        """Parse a value of this type and return a list of parsed values"""
+
+        if not isinstance(v, basestring):
+            raise ValueError("Value must be a string")
+
+        return
 
     def intuit_name(self, name):
         """Return a numeric value in the range [-1,1), indicating the likelyhood that the name is for a valuable of
@@ -26,20 +42,15 @@ class Geoid(ValueType):
         else:
             return 0
 
-    def intuit_value(self, v):
-        """Return true if the input value could be a value of this type. """
-        return NotImplemented
-
-    def parse(self, v):
-        """Parse a value of this type and return a list of parsed values"""
-
-        self._parsed = self.parser(v)
-        return self
+    @property
+    def state(self):
+        from ..fips import State
+        return State(self.geoid.state)
 
     def __getattr__(self, item):
 
         try:
-            return getattr(self._parsed, item)
+            return getattr(self.geoid, item)
         except KeyError:
             return object.__getattribute__(item)
 

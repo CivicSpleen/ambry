@@ -7,34 +7,56 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+def import_valuetype(name):
+    import importlib
+    full_qual = 'ambry.valuetype.' + name
+    path, cls_name = full_qual.rsplit('.', 1)
+    mod = importlib.import_module(path)
+    cls = getattr(mod, cls_name)
+
+    return cls
+
+def python_type(name):
+    return import_valuetype(name).__pythontype__
+
 class ValueType(object):
 
-    __datatype__ = int # Preferrerd datatype
+    library = None # Externally set class property
 
-    def __init__(self, bundle, library, group = None):
-
-        self._bundle = bundle
-        self._library = library
-        self._group = group
-
-        self._parsed = None # Parsed representation of the value
-
+    @classmethod
     def intuit_name(self, name):
-        """Return a numeric value in the range [-1,1), indicating the likelyhood that the name is for a valuable of
+        """Return a numeric value in the range [-1,1), indicating the likelihood that the name is for a valuable of
         of this type. -1 indicates a strong non-match, 1 indicates a strong match, and 0 indicates uncertainty. """
         raise NotImplementedError()
 
-    def intuit_value(self, v):
-        """Return true if the input value could be a value of this type. """
-        raise NotImplementedError()
-
-    def parse(self, v):
+    @classmethod
+    def parse(cls, v):
         """Parse a value of this type and return a list of parsed values"""
 
-        self._parsed = v
-        return self
+        return cls(v)
+
+class StrValue(str,ValueType):
+
+    __pythontype__ = str
+
+    def __new__(cls, v):
+        o = super(StrValue, cls).__new__(cls, cls.parse(v))
+        return o
+
+class IntValue(int,ValueType):
+    __pythontype__ = int
+
+    def __new__(cls, v):
+        o = super(IntValue, cls).__new__(cls, cls.parse(v))
+        return o
+
+class FloatValue(float,ValueType):
+    __pythontype__ = float
+
+    def __new__(cls, v):
+        o = super(FloatValue, cls).__new__(cls, cls.parse(v))
+        return o
 
 
-
-class RegEx(ValueType):
-    __datatype__ = str  # Preferrerd datatype
+class RegEx(StrValue):
+    pass

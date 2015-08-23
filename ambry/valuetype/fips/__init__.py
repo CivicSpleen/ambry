@@ -7,12 +7,18 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from .. import ValueType
+from .. import ValueType, IntValue
 
-class County(ValueType):
+from ..usps import states
+
+class County(object):
     """Up-to 3 digit integers, or three digit strings. """
 
-    __datatype__ = str
+    __pythontype__ = str
+
+    def __init__(self, state, v):
+        pass
+
 
     def intuit_name(self, name):
         """Return a numeric value in the range [-1,1), indicating the likelyhood that the name is for a valuable of
@@ -25,13 +31,30 @@ class County(ValueType):
         else:
             return 0
 
-    def intuit_value(self, v):
-        """Return true if the input value could be a value of this type. """
 
-        try:
-            return int(v) < 1000
-        except:
-            return False
+    def county_map(self):
+        """
+        Map the FIPS codes of state and county to the county name
+        :return:
+        """
+        if not County._county_map:
+            counties = self.library.partition('census.gov-acs-geofile-2009-geofile50-20095-50')
+            states = self.library.partition('census.gov-acs-geofile-2009-geofile40-20095-40')
+
+            state_names = {}
+            for row in states.stream(as_dict=True):
+                if row['component'] == '00':
+                    state_names[row['state']] = row['name'].strip()
+
+                    County._county_map = {}
+
+            for row in counties.stream(as_dict=True):
+                name = row['name'].replace(', ' + state_names[row['state']], '')
+                name, last = name[:name.rindex(' ')], name[name.rindex(' '):]
+                County._county_map[(row['state'], row['county'])] = (name.strip(), last.strip())
+
+
+        return County._county_map
 
     def fips(self):
         return self._parsed
@@ -63,17 +86,24 @@ class County(ValueType):
         """Return the name of the county, including the state"""
         raise NotImplementedError()
 
-    def parse(self, v):
-        """Parse a value of this type and return a list of parsed values"""
 
-        self._parsed = '{:03d}'.format(int(v))
-        return self
-
-
-class State(ValueType):
+class State(IntValue):
     """Up-to 2 digit integers """
 
-    __datatype__ = str
+    _fips_map = None
+    _abr_map = None
+    _name_map = None
+
+    @classmethod
+    def parse(cls, v):
+
+        v = int(v)
+
+        if isinstance(v, int):
+            if not v in cls.abr_map():
+                raise ValueError("Integer '{}' is not a valid FIPS state code".format(v))
+
+        return v
 
     def intuit_name(self, name):
         """Return a numeric value in the range [-1,1), indicating the likelyhood that the name is for a valuable of
@@ -84,57 +114,65 @@ class State(ValueType):
         else:
             return 0
 
-    def intuit_value(self, v):
-        """Return true if the input value could be a value of this type. """
+    @classmethod
+    def fips_map(cls):
+        if not cls._fips_map:
+            cls._fips_map = {e[1]: e[2] for e in states}
 
-        try:
-            return int(v) < 100
-        except:
-            return False
+        return cls._fips_map
 
+    @classmethod
+    def abr_map(cls):
+        if not cls._abr_map:
+            cls._abr_map = {e[2]: e[1] for e in states}
+
+        return cls._abr_map
+
+    @classmethod
+    def name_map(cls):
+        if not cls._name_map:
+            cls._name_map = {e[2]: e[0] for e in states}
+
+        return cls._name_map
+
+    @property
     def usps(self):
         """Return the USPS abbreviation"""
-        raise NotImplemented()
+        from ..usps import StateAbr
+        return StateAbr(State.abr_map()[self])
 
-    def uspsl(self):
-        """Return the USPS abbreviation, lowercased"""
-        return self.usps().lower()
+    @property
+    def str(self):
+        """String version of the fips"""
+        return '{:02d}'.format(self)
 
-    def fips(self):
-        return self._parsed
-
-    def fips_i(self):
-        """Integer version of the fips"""
-        return int(self._parsed)
-
+    @property
     def geoid(self):
         """A state geoid"""
         from geoid.acs import State
+        return State(self)
 
-        return str(int(self._parsed))
-
+    @property
     def tiger(self):
         """A state geoid, in tiger format"""
         from geoid.tiger import State
+        return State(self)
 
         return str(int(self._parsed))
 
+    @property
     def gvid(self):
         """A state geoid, in CivicKnowledge format"""
         from geoid.civick import State
+        return State(self)
 
         return str( int(self._parsed))
 
+    @property
     def name(self):
         """Return the name of the county"""
-        raise NotImplementedError()
+        return State.name_map()[self]
 
     def census_name(self):
         """Return the name of the county, including the state"""
-        raise NotImplementedError()
-
-    def parse(self, v):
-        """Parse a value of this type and return a list of parsed values"""
-
-        self._parsed = '{:02d}'.format(int(v))
-        return self
+        return State.name_map()[self]

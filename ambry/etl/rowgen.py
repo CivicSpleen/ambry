@@ -45,6 +45,8 @@ def source_pipe(bundle, source):
             return ExcelSource(bundle, source)
         elif gft == 'xlsx':
             return ExcelSource(bundle, source)
+        elif gft == 'partition':
+            return PartitionSource(bundle, source)
         else:
             raise ValueError("Unknown filetype for source {}: {} ".format(source.name, gft))
 
@@ -144,6 +146,9 @@ class SourcePipe(Pipe):
         self._source = source
         self._cache_fs = bundle.library.download_cache
         self._account_accessor = bundle.library.config.account
+
+        # The fstor was a bit like a functor that delayed opening the filesystme object,
+        # but not it looks like a remant that can be factored out.
         self._fstor = None
 
     def __iter__(self):
@@ -238,6 +243,15 @@ class FixedSource(SourcePipe):
             yield row
 
         self.finish()
+
+
+class PartitionSource(SourcePipe):
+    """Generate rows from an excel file"""
+    def _get_row_gen(self):
+
+        for row in self.bundle.library.partition(self.source.url).stream():
+            yield row
+
 
 
 class ExcelSource(SourcePipe):

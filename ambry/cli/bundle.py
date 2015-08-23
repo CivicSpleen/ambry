@@ -120,7 +120,9 @@ def bundle_parser(cmd):
     sp.add_argument('-v', '--variation', default=None, help='Name of the variation')
     sp.add_argument('-n', '--dryrun', action="store_true", default=False, help='Dry run')
     sp.add_argument('-k', '--key', default='self',
-                    help='Number server key. Use \'self\' for a random, self-generated key.')
+                    help="Number server key. One of 'self', 'unregistered', 'registered', 'authority' "
+                         ' Use \'self\' for a random, self-generated key.'
+                    )
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
     #
@@ -151,6 +153,9 @@ def bundle_parser(cmd):
                        help='Dump partitions')
     group.add_argument('-t', '--dest_tables', default=False, action='store_const',
                        const='tables', dest='table',
+                       help='Dump destination tables')
+    group.add_argument('-P', '--pipes', default=False, action='store_const',
+                       const='pipes', dest='table',
                        help='Dump destination tables')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
@@ -771,7 +776,6 @@ def bundle_dump(args, l, rc):
 
                 records.append(row.values())
 
-
         records = zip(*[r for r in zip(*records) if bool(filter(bool, records[1:]))])
 
         if records:
@@ -779,7 +783,25 @@ def bundle_dump(args, l, rc):
         else:
             headers = []
 
-    print tabulate(records, headers=headers)
+    elif args.table == 'pipes':
+        terms = args.term
+
+        b.import_lib()
+
+        if len(terms) == 2:
+            phase, source = terms
+        else:
+            phase = terms
+            source = None
+
+        pl = b.pipeline(phase, source)
+
+        print pl
+
+        records = None
+
+    if records:
+        print tabulate(records, headers=headers)
 
 
 def bundle_config_scrape(args, b, st, rc):
@@ -1078,7 +1100,7 @@ def bundle_edit(args, l, rc):
 
 
 def bundle_extract(args, l, rc):
-    import csv
+    import unicodecsv as csv
 
     b = using_bundle(args, l)
 

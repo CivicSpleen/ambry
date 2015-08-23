@@ -200,7 +200,7 @@ class Test(TestBase):
         ctb.append('int', int)
         ctb.append('float', float)
         ctb.append('str', UpperCaster)
-        ctb.add_type(UpperCaster)
+        ctb.add_to_env(UpperCaster)
 
         row, errors = ctb({'int': 1, 'float': 2, 'str': 'three'})
 
@@ -283,7 +283,7 @@ class Test(TestBase):
         ctb.append('int', int)
         ctb.append('float', float)
         ctb.append('str', UpperCaster)
-        ctb.add_type(UpperCaster)
+        ctb.add_to_env(UpperCaster)
 
         row, errors = ctb([1,  2,  'three'])
 
@@ -758,6 +758,31 @@ class Test(TestBase):
 
         self.assertEquals(10, len(pl[PrintRows].rows))
 
+    def test_select(self):
+        from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Select
+
+        class Source(Pipe):
+            def __iter__(self):
+                yield ['a', 'b']
+
+                for i in range(10000):
+                    yield ([i, i])
+
+        # Sample
+        pl = Pipeline(
+            source=Source(),
+            first=Select("row.a == 100 or row.b == 1000"),
+            last=PrintRows(count=50)
+        )
+
+        pl.run()
+
+        rows = pl[PrintRows].rows
+
+        self.assertEqual(2, len(rows))
+        self.assertEqual(100, rows[0][1])
+        self.assertEqual(1000, rows[1][2])
+
     def test_slice(self):
         from ambry.etl.pipeline import Pipeline, Pipe, Slice, PrintRows
 
@@ -940,8 +965,12 @@ class Test(TestBase):
 
         self.assertEqual(0, len(b.dataset.codes))
 
+    def test_valuetypes(self):
 
+        b = self.setup_bundle('dimensions')
+        l = b._library
 
-
+        b.sync_in()
+        b.build()
 
 

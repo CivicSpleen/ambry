@@ -43,6 +43,7 @@ class StatSet(object):
 
     def __init__(self, column):
 
+
         try:
             # Try using column as an orm.Column
             self.is_gvid = bool("gvid" in column.name)

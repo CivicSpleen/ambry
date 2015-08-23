@@ -271,6 +271,7 @@ class DictBuildSourceFile(BuildSourceFile):
             with self._fs.open(fn_path, 'wb') as f:
                 # FIXME: f is unused?
                 yaml.dump(fr.unpacked_contents, default_flow_style=False)
+                raise NotImplementedError(" Why is F unused?")
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
 
@@ -295,7 +296,7 @@ class StringSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
 
-        # Not dealing with encodings in in/out here, since the recod is supposed to be a striaght copy of the
+        # Not dealing with encodings in in/out here, since the recod is supposed to be a straight copy of the
         # file.
         with self._fs.open(fn_path, 'rb') as f:
             fr.update_contents(f.read())
@@ -381,6 +382,20 @@ class PythonSourceFile(StringSourceFile):
         """The python sources can only be set from files, and there are no associated objects"""
         pass
 
+    def record_to_fs(self):
+        """Create a filesystem file from a File"""
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        if fr.contents:
+
+            with self._fs.open(file_name(self._file_const), 'wb') as f:
+                f.write(fr.contents)
+
+            fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
+
+
     def import_bundle(self):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
@@ -452,7 +467,7 @@ class SourcesFile(RowBuildSourceFile):
 
         # TODO: next row is so complicated. Try to refactor.
         # FIXME: Needs smart 2to3 conversion. Auto conversion breaks tests.
-        non_empty_rows = zip(*[row for row in zip(*contents) if bool(filter(bool, row[1:]))])
+        non_empty_rows = zip(*[col for col in zip(*contents) if bool(filter(bool, col[1:]))])
 
         s = self._dataset._database.session
 
@@ -504,7 +519,7 @@ class SourcesFile(RowBuildSourceFile):
 
             # Transpose trick to remove empty columns
             # FIXME: needs smart 2to3 conversion. Auto conversion breaks tests.
-            rows = zip(*[row for row in zip(*rows) if bool(filter(bool, row[1:]))])
+            rows = zip(*[col for col in zip(*rows) if bool(filter(bool, col[1:]))])
         else:
             # No contents, so use the default file
             import csv
@@ -584,7 +599,7 @@ class SchemaFile(RowBuildSourceFile):
             if not row.get('datatype', False):
                 raise ConfigurationError('Row error: no type on line {}'.format(line_no))
 
-            row['datatype'] = old_types_map.get(row['datatype'].lower(), row['datatype'])
+            row['datatype'] = old_types_map.get(row['datatype'].lower(),row['datatype'])
 
             table = get_or_new_table(row)
 
@@ -594,7 +609,7 @@ class SchemaFile(RowBuildSourceFile):
                 row['column'],
                 fk_vid=row['is_fk'] if row.get('is_fk', False) else None,
                 description=(row.get('description', '') or '').strip(),
-                datatype=row['datatype'].strip().lower(),
+                datatype=row['datatype'].strip().lower() if '.' not in row['datatype'] else row['datatype'],
                 proto_vid=row.get('proto_vid'),
                 derivedfrom=row.get('derivedfrom'),
                 size=_clean_int(row.get('size', None)),

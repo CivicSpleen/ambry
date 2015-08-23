@@ -713,6 +713,7 @@ class Bundle(object):
 
         pl = Pipeline(self, source=self.source_pipe(source) if source else None)
 
+        # Get the default pipeline, from the config at the head of this file.
         try:
             phase_config = self.default_pipelines[phase]
         except KeyError:
@@ -723,7 +724,7 @@ class Bundle(object):
 
         body = []
 
-        # Find the pipe configuration:
+        # Find the pipe configuration, from the metadata
         pipe_config = None
         pipe_name = None
         for name in self.phase_search_names(source, phase):
@@ -735,19 +736,26 @@ class Bundle(object):
         # The pipe_config can either be a list, in which case it is a list of pipe pipes for the body segment
         # or it could be a dict, in which case each is a list of pipes for the named segments.
 
-        if isinstance(pipe_config, (list, tuple)):
-            # Just convert it to dict form for the next section
+        def apply_config(pl, pipe_config):
+            if isinstance(pipe_config, (list, tuple)):
+                # Just convert it to dict form for the next section
 
-            # PartitionWriters are always moved to the 'store' section
-            store, body = [], []
+                # PartitionWriters are always moved to the 'store' section
+                store, body = [], []
 
-            for pipe in pipe_config:
-                store.append(pipe) if isinstance(pipe, PartitionWriter) else body.append(pipe)
+                for pipe in pipe_config:
+                    store.append(pipe) if isinstance(pipe, PartitionWriter) else body.append(pipe)
 
-            pipe_config = dict(body=body, store=store)
+                pipe_config = dict(body=body, store=store)
 
-        if pipe_config:
-            pl.configure(pipe_config)
+            if pipe_config:
+                pl.configure(pipe_config)
+
+        apply_config(pl, pipe_config)
+
+        # One more time, for the configuration for 'all' phases
+        if 'all' in self.metadata.pipelines:
+            apply_config(pl, self.metadata.pipelines['all'])
 
         if pipe_name:
             pl.name = pipe_name
@@ -756,6 +764,7 @@ class Bundle(object):
 
         pl.phase = phase
 
+        # Allows developer to over ride pipe configuration in code
         self.edit_pipeline(pl)
 
         return pl
