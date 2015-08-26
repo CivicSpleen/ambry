@@ -12,6 +12,14 @@ import msgpack
 
 import unicodecsv as csv
 
+# Note:
+#    Going to change date or time format? Do not forget to change ambryfdw formats. They have
+#    to be the same.
+DATETIME_FORMAT_NO_MS = '%Y-%m-%dT%H:%M:%S'
+DATETIME_FORMAT_WITH_MS = '%Y-%m-%dT%H:%M:%S.%f'
+TIME_FORMAT = '%H:%M:%S'
+DATE_FORMAT = '%Y-%m-%d'
+
 
 def new_partition_data_file(fs, path, stats=None):
     from os.path import split, splitext
@@ -310,17 +318,17 @@ class PartitionMsgpackDataFileReader(object):
 
         if b'__datetime__' in obj:
             try:
-                obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%dT%H:%M:%S")
+                obj = datetime.datetime.strptime(obj['as_str'], DATETIME_FORMAT_NO_MS)
             except ValueError:
                 # The preferred format is without the microseconds, but there are some lingering
                 # bundle that still have it.
-                obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%dT%H:%M:%S.%f")
+                obj = datetime.datetime.strptime(obj['as_str'], DATETIME_FORMAT_WITH_MS)
         elif b'__time__' in obj:
-            obj = datetime.time(*list(time.strptime(obj["as_str"], "%H:%M:%S"))[3:6])
+            obj = datetime.time(*list(time.strptime(obj['as_str'], TIME_FORMAT))[3:6])
         elif b'__date__' in obj:
-            obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%d").date()
+            obj = datetime.datetime.strptime(obj['as_str'], DATE_FORMAT).date()
         else:
-            raise Exception("Unknown type on decode: {} ".format(obj))
+            raise Exception('Unknown type on decode: {} '.format(obj))
 
         return obj
 
