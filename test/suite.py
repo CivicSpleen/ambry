@@ -11,21 +11,15 @@ suite.addTests(test_identity.suite())
 
 test_loader = unittest.defaultTestLoader
 
-test_bundle_suite = test_loader.discover('test_bundle', top_level_dir='test')
-suite.addTests(test_bundle_suite)
+modules_to_discover = [
+    'test_bundle',
+    'test_library',
+    'test_orm',
+    'test_metadata',
+    'test_etl']
 
-test_library_suite = test_loader.discover('test_library', top_level_dir='test')
-suite.addTests(test_library_suite)
-
-test_orm_suite = test_loader.discover('test_orm', top_level_dir='test')
-suite.addTests(test_orm_suite)
-
-test_metadata_suite = test_loader.discover('test_metadata', top_level_dir='test')
-suite.addTests(test_metadata_suite)
-
-test_etl_suite = test_loader.discover('test_etl', top_level_dir='test')
-suite.addTests(test_etl_suite)
-
+for mod in modules_to_discover:
+    suite.addTest(test_loader.discover(mod, top_level_dir='test'))
 
 if __name__ == '__main__':
     unittest.TextTestRunner().run(suite)
