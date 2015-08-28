@@ -3,7 +3,7 @@
 import apsw
 
 from ambry.util import AttrDict
-from ambry.fdw.sqlite import add_partition
+from ambry.warehouse.med.sqlite import add_partition
 
 from test.test_base import TestBase
 

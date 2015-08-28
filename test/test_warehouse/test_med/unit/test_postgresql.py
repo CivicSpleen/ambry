@@ -6,7 +6,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy import create_engine, Column as SAColumn, Integer, String
 
 from ambry.util import AttrDict
-from ambry.fdw.postgresql import add_partition, _table_name, _as_orm
+from ambry.warehouse.med.postgresql import add_partition, _table_name, _as_orm
 
 from test.test_base import TestBase, PostgreSQLTestBase
 

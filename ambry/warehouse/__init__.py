@@ -115,12 +115,12 @@ class Warehouse(object):
 
     FILE_TYPE.MANIFEST = 'manifest'
     FILE_TYPE.HTML = 'text/html'
-    FILE_TYPE.EXTRACT = Files.TYPE.EXTRACT
+    # FILE_TYPE.EXTRACT = Files.TYPE.EXTRACT
 
     FILE_GROUP = Constant()
 
-    FILE_GROUP.MANIFEST = Files.TYPE.MANIFEST
-    FILE_GROUP.DOC = Files.TYPE.DOC
+    # FILE_GROUP.MANIFEST = Files.TYPE.MANIFEST
+    # FILE_GROUP.DOC = Files.TYPE.DOC
 
     # Override these in dialect specific subclasses.
     drop_view_sql = 'DROP VIEW  IF EXISTS "{name}"'
