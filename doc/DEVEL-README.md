@@ -93,15 +93,19 @@ $ sudo apt-get install pgxnclient
 ```bash
 $ sudo apt-get install postgresql-server-dev-(your version here)
 ```
-3. Install multicorn postgres extension
+3. Install multicorn from source code.
 ```bash
 $ sudo pgxn install multicorn
+$ wget https://github.com/Kozea/Multicorn/archive/v1.2.3.zip
+$ unzip v1.2.3.zip
+$ cd Multicorn-1.2.3
+$ make
+$ make install
 ```
-4. Install multicorn python package
-# FIXME: Add to requirements and test.
-```bash
-pip install https://github.com/Kozea/Multicorn/archive/v1.0.1.zip
-```
+If you use virtualenv put a multicorn.pth file in your virtualenv's site-packages folder, with the absolute path to the directory containing your multicorn package. Example of *.pth content:
+    /usr/local/lib/python2.7/dist-packages/multicorn-1.2.3_dev-py2.7-linux-i686.egg
+You need to do so because make install installs multicorn to the global environment (dist-packages directory). FIXME: Find a better way how to setup it without magic.
+FIXME (kazbek): describe ambryfdw setup for virtualenv.
 
 ### To write python2/python3 compatible code:
 Ambry uses one code base for both - python2 and python3. This requires some extra work.

@@ -212,6 +212,7 @@ class PostgreSQLTestBase(TestBase):
 
             # check for template with pg_tgrm extension.
             cls.pg_trgm_is_installed = cls.postgres_db_exists('template0_trgm', connection)
+            # FIXME: Check for multicorn too.
 
             if not cls.pg_trgm_is_installed:
                 raise unittest.SkipTest(

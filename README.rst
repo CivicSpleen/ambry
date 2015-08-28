@@ -97,3 +97,6 @@ will be created from that template. If postgres does not have such template all 
 
     # To create database from template we need copy permission.
     $ psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_trgm';"
+
+# FIXME (kazbek): Describe postgres FDW in details.
+# FIXME (kazbek): Add multicorn extension setup instructions (with template for tests).
