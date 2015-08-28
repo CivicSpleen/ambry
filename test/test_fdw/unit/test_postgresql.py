@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 import os
 
+from sqlalchemy.orm import create_session
 from sqlalchemy.pool import NullPool
 from sqlalchemy import create_engine, Column as SAColumn, Integer, String
 
 from ambry.util import AttrDict
-from ambry.fdw.postgresql import add_partition, _table_name
+from ambry.fdw.postgresql import add_partition, _table_name, _as_orm
 
 from test.test_base import TestBase, PostgreSQLTestBase
 
@@ -18,7 +19,7 @@ class Test(TestBase):
     def _get_fake_partition(self, vid):
         table = AttrDict(
             columns=[
-                SAColumn('rowid', Integer),
+                SAColumn('rowid', Integer, primary_key=True),
                 SAColumn('col1', Integer),
                 SAColumn('col2', String(8))])
         datafile = AttrDict(
@@ -65,5 +66,29 @@ class Test(TestBase):
                     query = 'SELECT * FROM {};'.format(table_name)
                     result = connection.execute(query).fetchall()
                     self.assertEqual(len(result), 100)
+        finally:
+            PostgreSQLTestBase._drop_postgres_test_db()
+
+    def test_partition_row_orm(self):
+        # create fake partition.
+        partition_vid = 'vid1'
+        partition = self._get_fake_partition(partition_vid)
+
+        # testing.
+        try:
+            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db()['test_db_dsn']
+            engine = create_engine(postgres_test_db_dsn, poolclass=NullPool)
+            with engine.connect() as connection:
+                # create foreign table.
+                add_partition(connection, partition)
+
+                # create ORM and test it
+                PartitionRow = _as_orm(connection, partition)
+                session = create_session(bind=connection.engine)
+                all_rows = session.query(PartitionRow).all()
+                self.assertEqual(len(all_rows), 100)
+                self.assertEqual(all_rows[0].rowid, 0)
+                self.assertEqual(all_rows[0].col1, 0)
+                self.assertEqual(all_rows[0].col2, '0')
         finally:
             PostgreSQLTestBase._drop_postgres_test_db()
