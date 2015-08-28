@@ -40,13 +40,9 @@ def _as_orm(connection, partition):
 
     # FIXME: That solution is not documented by multicorn. Try documented solution again.
 
-    class PartitionRow(object):
-        pass
-
     table_name = _table_name(partition)
     metadata = MetaData(bind=connection.engine)
-    t = Table(table_name, metadata, *partition.table.columns)
-    mapper(PartitionRow, t)
+    PartitionRow = Table(table_name, metadata, *partition.table.columns)
     return PartitionRow
 
 
