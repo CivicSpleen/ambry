@@ -16,7 +16,9 @@ modules_to_discover = [
     'test_library',
     'test_orm',
     'test_metadata',
-    'test_etl']
+    'test_etl',
+    # 'test_warehouse',  # FIXME: Uncomment after documenting postgres FDW setup.
+]
 
 for mod in modules_to_discover:
     suite.addTest(test_loader.discover(mod, top_level_dir='test'))
