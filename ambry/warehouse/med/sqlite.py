@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import msgpack
 
-from sqlalchemy import Table, MetaData
+from sqlalchemy import Table as SATable, MetaData
 
 from ambry.etl.partition import PartitionMsgpackDataFileReader
 
@@ -120,7 +120,7 @@ def _as_orm(connection, partition):
         'psqlite connection used by sqlalchemy does not see module created by apsw')
     table_name = _table_name(partition)
     metadata = MetaData(bind=connection.engine)
-    PartitionRow = Table(table_name, metadata, *partition.table.columns)
+    PartitionRow = SATable(table_name, metadata, *partition.table.columns)
     return PartitionRow
 
 
