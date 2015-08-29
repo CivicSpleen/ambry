@@ -91,7 +91,7 @@ $ pip install -r requirements/dev.txt
 ```
 
     2. Provide PostgreSQL credentials
-Tests use two databases - sqlite and postgresql. SQLite does not require any setup, but PostgreSQL does. You should add postgresql-test section with dsn to the database section of the ambry config. Example:
+Tests use two databases - sqlite and postgresql. SQLite does not need any credentials, but PostgreSQL needs. You should add postgresql-test section with dsn to the database section of the ambry config. Example:
 ```yaml
 database:
     ...
@@ -114,6 +114,9 @@ $ psql template0_ambry_test -c 'CREATE EXTENSION multicorn;'
 
 # Create copy permission needed by test framework to create database.
 $ psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_ambry_test';"
+
+# User from the dsn needs USAGE permission (Assuming your db user is ambry)
+$ psql postgres -c "GRANT USAGE ON FOREIGN DATA WRAPPER multicorn TO ambry;"
 
 # Exit postgres account
 $ exit

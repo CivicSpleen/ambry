@@ -228,18 +228,18 @@ class PostgreSQLTestBase(TestBase):
 
         # create db schemas needed by ambry.
         engine = create_engine(test_db_dsn, poolclass=NullPool)
-        engine.execute('CREATE SCHEMA IF NOT EXISTS {}'.format(POSTGRES_SCHEMA_NAME))
+        engine.execute('CREATE SCHEMA IF NOT EXISTS {};'.format(POSTGRES_SCHEMA_NAME))
 
         # verify all modules needed by tests are installed.
         with engine.connect() as conn:
 
             if not cls.postgres_extension_installed('pg_trgm', conn):
                 raise unittest.SkipTest(
-                    'Can not find template with pg_trgm support. See DEVEL-README.md for details.')
+                    'Can not find template with pg_trgm extension. See DEVEL-README.md for details.')
 
             if not cls.postgres_extension_installed('multicorn', conn):
                 raise unittest.SkipTest(
-                    'Can not find template with multicorn support. See DEVEL-README.md for details.')
+                    'Can not find template with multicorn extension. See DEVEL-README.md for details.')
 
         cls.postgres_test_db_data = {
             'test_db_name': test_db_name,
