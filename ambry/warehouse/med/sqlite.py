@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import msgpack
 
+from sqlalchemy import Table, MetaData
+
 from ambry.etl.partition import PartitionMsgpackDataFileReader
 
 # TODO: Do not load all records to memory: http://www.drdobbs.com/database/query-anything-with-sqlite/202802959?pgno=3
@@ -113,10 +115,9 @@ def _as_orm(connection, partition):
     Returns:
         FIXME:
     """
-    from sqlalchemy import Table, MetaData
-
-    # FIXME: That solution is not documented by multicorn. Try documented solution again.
-
+    # FIXME:
+    raise NotImplementedError(
+        'psqlite connection used by sqlalchemy does not see module created by apsw')
     table_name = _table_name(partition)
     metadata = MetaData(bind=connection.engine)
     PartitionRow = Table(table_name, metadata, *partition.table.columns)

@@ -6,7 +6,7 @@ from sqlalchemy.sql.expression import text
 
 from ambry.util import get_logger
 
-logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
+logger = get_logger(__name__, propagate=False)
 
 
 def add_partition(connection, partition):
@@ -34,7 +34,6 @@ def _as_orm(connection, partition):
         print session.query(PartitionRow).all()
 
     Returns:
-        FIXME:
     """
 
     # FIXME: That solution is not documented by multicorn. Try documented solution again.
