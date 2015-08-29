@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+import msgpack
+
+from ambry.etl.partition import PartitionMsgpackDataFileReader
+
+# TODO: Do not load all records to memory: http://www.drdobbs.com/database/query-anything-with-sqlite/202802959?pgno=3
 
 
 def get_module_class(partition):
@@ -6,18 +11,43 @@ def get_module_class(partition):
 
     class Source:
         def Create(self, db, modulename, dbname, tablename, *args):
-            columns_str = ','.join(["'%s'" % (x,) for x in partition.columns[1:]])
-            schema = 'CREATE TABLE {}({})'.format(tablename, columns_str)
-            return schema, Table(partition.columns, partition.data)
+            columns_types = []
+            column_names = []
+            for i, c in enumerate(partition.table.columns):
+                if i == 0:
+                    # First column is already reserved for rowid. This is current release constraint
+                    # and will be removed when I discover real partitions data more deeply.
+                    continue
+                columns_types.append('{} {}'.format(c.name, c.type.compile()))
+                column_names.append(c.name)
+            columns_types_str = ',\n'.join(columns_types)
+            schema = 'CREATE TABLE {}({})'.format(tablename, columns_types_str)
+            return schema, Table(column_names, partition.datafile.syspath)
         Connect = Create
     return Source
 
 
 class Table:
     """ Represents a table """
-    def __init__(self, columns, data):
+    def __init__(self, columns, filename):
         self.columns = columns
-        self.data = data
+        self.filename = filename
+        self.data = self._read_data(self.filename)
+
+    def _read_data(self, filename):
+        data = []
+        with open(filename) as stream:
+            unpacker = msgpack.Unpacker(stream, object_hook=PartitionMsgpackDataFileReader.decode_obj)
+            header = None
+
+            for row in unpacker:
+                assert isinstance(row, (tuple, list)), row
+
+                if not header:
+                    header = row
+                    continue
+                data.append(row)
+        return data
 
     def BestIndex(self, *args):
         return None

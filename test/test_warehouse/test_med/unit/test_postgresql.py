@@ -1,31 +1,16 @@
 # -*- coding: utf-8 -*-
-import os
 
 from sqlalchemy.orm import create_session
 from sqlalchemy.pool import NullPool
-from sqlalchemy import create_engine, Column as SAColumn, Integer, String
+from sqlalchemy import create_engine
 
-from ambry.util import AttrDict
 from ambry.warehouse.med.postgresql import add_partition, _table_name, _as_orm
 
-from test.test_base import TestBase, PostgreSQLTestBase
+from test.test_base import PostgreSQLTestBase
+from test.test_warehouse.test_med.unit import BaseMEDTest
 
 
-TEST_FILES_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '../', 'files'))
-
-
-class Test(TestBase):
-
-    def _get_fake_partition(self, vid):
-        table = AttrDict(
-            columns=[
-                SAColumn('rowid', Integer, primary_key=True),
-                SAColumn('col1', Integer),
-                SAColumn('col2', String(8))])
-        datafile = AttrDict(
-            syspath=os.path.join(TEST_FILES_DIR, 'rowid_int_col1_int_col2_str_100_rows.msg'))
-        partition = AttrDict(vid=vid, table=table, datafile=datafile)
-        return partition
+class Test(BaseMEDTest):
 
     def test_creates_table(self):
         # create fake partition.

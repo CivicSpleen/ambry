@@ -1,63 +1,48 @@
 # -*- coding: utf-8 -*-
+import unittest
 
 import apsw
 
-from ambry.util import AttrDict
 from ambry.warehouse.med.sqlite import add_partition
 
-from test.test_base import TestBase
+from test.test_warehouse.test_med.unit import BaseMEDTest
 
 
-class Test(TestBase):
+class Test(BaseMEDTest):
+
     def test_creates_virtual_table(self):
         partition_vid = 'vid1'
-        partition = AttrDict(
-            vid=partition_vid,
-            columns=['rowid', 'col1', 'col2'],
-            data=[[1, '1-1', '1-2'], [2, '2-1', '2-2']])
+        partition = self._get_fake_partition(partition_vid)
         connection = apsw.Connection(':memory:')
         add_partition(connection, partition)
 
         # select from virtual table.
-        # Which 3 files are the biggest?
-        cursor = connection.cursor()
-        query = 'SELECT 1 FROM {};'.format(partition_vid)
-        expected_result = [(1,), (1,)]
-        result = cursor.execute(query).fetchall()
-        self.assertEqual(result, expected_result)
-
-    def test_creates_all_columns_of_the_partition(self):
-        partition_vid = 'vid1'
-        partition = AttrDict(
-            vid=partition_vid,
-            columns=['rowid', 'col1', 'col2'],
-            data=[[1, '1-1', '1-2'], [2, '2-1', '2-2']])
-        connection = apsw.Connection(':memory:')
-        add_partition(connection, partition)
-
         cursor = connection.cursor()
         query = 'SELECT col1, col2 FROM {};'.format(partition_vid)
-        expected_result = [('1-1', '1-2'), ('2-1', '2-2')]
         result = cursor.execute(query).fetchall()
-        self.assertEqual(result, expected_result)
+        self.assertEqual(len(result), 100)
+        self.assertEqual(result[0], (0, '0'))
+        self.assertEqual(result[-1], (99, '99'))
 
-    def test_creates_many_virtual_tables(self):
+    def test_creates_virtual_table_for_each_partition(self):
         partitions = []
         connection = apsw.Connection(':memory:')
         for i in range(1000):
             partition_vid = 'vid_{}'.format(i)
-            partition = AttrDict(
-                vid=partition_vid,
-                columns=['rowid', 'col{}_1'.format(i), 'col{}_2'.format(i)],
-                data=[[1, '{}_1-1'.format(i), '{}_1-2'.format(i)],
-                      [2, '{}_2-1'.format(i), '{}_2-2'.format(i)]])
+            partition = self._get_fake_partition(partition_vid)
             add_partition(connection, partition)
             partitions.append(partition)
 
         # check all tables and rows.
         cursor = connection.cursor()
         for partition in partitions:
-            query = 'SELECT {} FROM {};'.format(', '.join(partition.columns[1:]), partition.vid)
+            query = 'SELECT col1, col2 FROM {};'.format(partition.vid)
             result = cursor.execute(query).fetchall()
-            expected_result = [tuple(x[1:]) for x in partition.data]
-            self.assertItemsEqual(result, expected_result)
+            self.assertEqual(len(result), 100)
+            self.assertEqual(result[0], (0, '0'))
+            self.assertEqual(result[-1], (99, '99'))
+
+    @unittest.skip('Not implemented.')
+    def test_partition_row_orm(self):
+        # FIXME:
+        pass
