@@ -178,10 +178,9 @@ class PostgreSQLTestBase(TestBase):
             # database:
             #     postgresql-test: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-
-        postgres_user = 'ambry'  # FIXME: take it from the conf.
         dsn = conf.dict['database']['postgresql-test']
         parsed_url = urlparse(dsn)
+        postgres_user = parsed_url.username
         db_name = parsed_url.path.replace('/', '')
         test_db_name = '{}_test_{}'.format(db_name, SAFETY_POSTFIX)
         postgres_db_dsn = parsed_url._replace(path='postgres').geturl()
