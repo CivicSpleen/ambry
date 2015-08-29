@@ -210,12 +210,12 @@ class PostgreSQLTestBase(TestBase):
                         break
 
             # check for template with pg_tgrm extension.
-            cls.pg_trgm_is_installed = cls.postgres_db_exists('template0_trgm', connection)
-            # FIXME: Check for multicorn too.
+            cls.test_template_exists = cls.postgres_db_exists('template0_trgm', connection)
 
-            if not cls.pg_trgm_is_installed:
+            if not cls.test_template_exists:
                 raise unittest.SkipTest(
-                    'Can not find template with pg_trgm support. See README.rst for details.')
+                    'Tests require custom postgres template db named template0_ambry_test. '
+                    'See README.rst for details.')
 
             query = 'CREATE DATABASE {} OWNER {} TEMPLATE template0_trgm encoding \'UTF8\';'\
                 .format(test_db_name, postgres_user)
@@ -227,6 +227,17 @@ class PostgreSQLTestBase(TestBase):
         engine = create_engine(test_db_dsn, poolclass=NullPool)
         engine.execute('CREATE SCHEMA IF NOT EXISTS {}'.format(POSTGRES_SCHEMA_NAME))
 
+        # verify all modules needed by tests are installed.
+        with engine.connect() as conn:
+
+            if not cls.postgres_extension_installed('pg_trgm', conn):
+                raise unittest.SkipTest(
+                    'Can not find template with pg_trgm support. See README.rst for details.')
+
+            if not cls.postgres_extension_installed('multicorn', conn):
+                raise unittest.SkipTest(
+                    'Can not find template with multicorn support. See README.rst for details.')
+
         cls.postgres_test_db_data = {
             'test_db_name': test_db_name,
             'test_db_dsn': test_db_dsn,
@@ -234,10 +245,19 @@ class PostgreSQLTestBase(TestBase):
         return cls.postgres_test_db_data
 
     @classmethod
-    def postgres_db_exists(self, db_name, conn):
+    def postgres_db_exists(cls, db_name, conn):
         """ Returns True if database with given name exists in the postgresql. """
         result = conn\
             .execute(
                 text('SELECT 1 FROM pg_database WHERE datname=:db_name;'), db_name=db_name)\
+            .fetchall()
+        return result == [(1,)]
+
+    @classmethod
+    def postgres_extension_installed(cls, extension, conn):
+        """ Returns True if extension with given name exists in the postgresql. """
+        result = conn\
+            .execute(
+                text('SELECT 1 FROM pg_extension WHERE extname=:extension;'), extension=extension)\
             .fetchall()
         return result == [(1,)]
