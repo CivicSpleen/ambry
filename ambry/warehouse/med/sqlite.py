@@ -89,14 +89,42 @@ def add_partition(connection, partition):
     """ Creates virtual table for partition.
 
     Args:
-        connection (): FIXME:
-        partition (): FIXME:
+        connection (apsw.Connection):
+        partition (ambry.orm.Partiton):
+
     """
 
-    # register module.
+    # register module. FIXME: Do not create module for each partition. Create 1 module for all partitions.
     module_name = 'mod_{}'.format(partition.vid)
     connection.createmodule(module_name, get_module_class(partition)())
 
     # create virtual table.
     cursor = connection.cursor()
-    cursor.execute('CREATE VIRTUAL TABLE {} using {}'.format(partition.vid, module_name))
+    cursor.execute('CREATE VIRTUAL TABLE {} using {}'.format(_table_name(partition), module_name))
+
+
+def _as_orm(connection, partition):
+    """ Returns sqlalchemy model for partition rows.
+
+    Example:
+        PartitionRow = _as_orm(connection, partition)
+        print session.query(PartitionRow).all()
+
+    Returns:
+        FIXME:
+    """
+    from sqlalchemy import Table, MetaData
+
+    # FIXME: That solution is not documented by multicorn. Try documented solution again.
+
+    table_name = _table_name(partition)
+    metadata = MetaData(bind=connection.engine)
+    PartitionRow = Table(table_name, metadata, *partition.table.columns)
+    return PartitionRow
+
+
+def _table_name(partition):
+    """ Returns virtual table name for the given partition. """
+    # p_{vid}_ft stands for partition_vid_foreign_table
+    # FIXME: it seems prefix + partition.table.name is better choice for virtual table name.
+    return 'p_{vid}_vt'.format(vid=partition.vid)

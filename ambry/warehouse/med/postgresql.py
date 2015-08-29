@@ -2,7 +2,6 @@
 import logging
 
 from sqlalchemy import Table, MetaData
-from sqlalchemy.orm import mapper
 from sqlalchemy.sql.expression import text
 
 from ambry.util import get_logger
@@ -28,7 +27,7 @@ def add_partition(connection, partition):
 
 
 def _as_orm(connection, partition):
-    """ Returns sqlalchemy table for partition rows.
+    """ Returns sqlalchemy model for partition rows.
 
     Example:
         PartitionRow = _as_orm(connection, partition)
