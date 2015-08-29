@@ -17,7 +17,7 @@ modules_to_discover = [
     'test_orm',
     'test_metadata',
     'test_etl',
-    # 'test_warehouse',  # FIXME: Uncomment after documenting postgres FDW setup.
+    'test_warehouse',
 ]
 
 for mod in modules_to_discover:
