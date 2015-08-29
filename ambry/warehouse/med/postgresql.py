@@ -4,6 +4,7 @@ import logging
 from sqlalchemy import Table, MetaData
 from sqlalchemy.sql.expression import text
 
+from ambry.orm.database import POSTGRES_PARTITION_SCHEMA_NAME
 from ambry.util import get_logger
 
 logger = get_logger(__name__, propagate=False)
@@ -20,8 +21,9 @@ def add_partition(connection, partition):
         ) server {server_name} options (
             filename '{file_name}'
         );
-    """.format(table_name=_table_name(partition), columns=',\n'.join(columns),
-               server_name=FOREIGN_SERVER_NAME, file_name=partition.datafile.syspath)
+    """.format(table_name=_table_name(partition),
+               columns=',\n'.join(columns), server_name=FOREIGN_SERVER_NAME,
+               file_name=partition.datafile.syspath)
     logging.debug('Create foreign table for {} partition. Query:\n{}.'.format(partition.vid, query))
     connection.execute(query)
 
@@ -34,12 +36,14 @@ def _as_orm(connection, partition):
         print session.query(PartitionRow).all()
 
     Returns:
+        FIXME:
     """
 
     # FIXME: That solution is not documented by multicorn. Try documented solution again.
 
-    table_name = _table_name(partition)
-    metadata = MetaData(bind=connection.engine)
+    schema, table_name = _table_name(partition).split('.')
+
+    metadata = MetaData(bind=connection.engine, schema=schema)
     PartitionRow = Table(table_name, metadata, *partition.table.columns)
     return PartitionRow
 
@@ -71,4 +75,4 @@ def _table_name(partition):
     """ Returns foreign table name for the given partition. """
     # p_{vid}_ft stands for partition_vid_foreign_table
     # FIXME: it seems prefix + partition.table.name is better choice for foreign table name.
-    return 'p_{vid}_ft'.format(vid=partition.vid)
+    return '{schema}.p_{vid}_ft'.format(schema=POSTGRES_PARTITION_SCHEMA_NAME, vid=partition.vid)

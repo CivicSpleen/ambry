@@ -14,7 +14,7 @@ from six.moves.urllib.parse import urlparse
 
 from ambry.identity import DatasetNumber
 from ambry.orm import Database, Dataset
-from ambry.orm.database import POSTGRES_SCHEMA_NAME
+from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
 from ambry.run import get_runconfig
 
 
@@ -229,6 +229,7 @@ class PostgreSQLTestBase(TestBase):
         # create db schemas needed by ambry.
         engine = create_engine(test_db_dsn, poolclass=NullPool)
         engine.execute('CREATE SCHEMA IF NOT EXISTS {};'.format(POSTGRES_SCHEMA_NAME))
+        engine.execute('CREATE SCHEMA IF NOT EXISTS {};'.format(POSTGRES_PARTITION_SCHEMA_NAME))
 
         # verify all modules needed by tests are installed.
         with engine.connect() as conn:

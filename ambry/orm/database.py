@@ -23,6 +23,7 @@ ROOT_CONFIG_NAME_V = 'd000001'
 SCHEMA_VERSION = 106
 
 POSTGRES_SCHEMA_NAME = 'ambrylib'
+POSTGRES_PARTITION_SCHEMA_NAME = 'partitions'
 
 # Database connection information
 Dbci = namedtuple('Dbc', 'dsn_template sql')
@@ -725,7 +726,8 @@ def _update_version(connection, version):
         connection.execute('PRAGMA user_version = {}'.format(version))
     elif connection.engine.name == 'postgresql':
 
-        connection.execute(DDL('CREATE SCHEMA IF NOT EXISTS {}'.format(POSTGRES_SCHEMA_NAME)))
+        connection.execute(DDL('CREATE SCHEMA IF NOT EXISTS {};'.format(POSTGRES_SCHEMA_NAME)))
+        connection.execute(DDL('CREATE SCHEMA IF NOT EXISTS {};'.format(POSTGRES_PARTITION_SCHEMA_NAME)))
 
         connection.execute('CREATE TABLE IF NOT EXISTS {}.user_version(version INTEGER NOT NULL);'
                            .format(POSTGRES_SCHEMA_NAME))
@@ -733,13 +735,15 @@ def _update_version(connection, version):
         # upsert.
         if connection.execute('SELECT * FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone():
             # update
-            connection.execute('UPDATE {}.user_version SET version = {};'.format(POSTGRES_SCHEMA_NAME, version))
+            connection.execute('UPDATE {}.user_version SET version = {};'
+                               .format(POSTGRES_SCHEMA_NAME, version))
         else:
             # insert
             connection.execute('INSERT INTO {}.user_version (version) VALUES ({})'
-                               .format(POSTGRES_SCHEMA_NAME,version))
+                               .format(POSTGRES_SCHEMA_NAME, version))
     else:
-        raise DatabaseMissingError('Do not know how to migrate {} engine.'.format(connection.engine.driver))
+        raise DatabaseMissingError('Do not know how to migrate {} engine.'
+                                   .format(connection.engine.driver))
 
 
 def _is_missed(connection, version):
