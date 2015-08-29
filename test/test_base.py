@@ -209,16 +209,19 @@ class PostgreSQLTestBase(TestBase):
                     elif delete_it.lower() == 'no':
                         break
 
-            # check for template with pg_tgrm extension.
-            cls.test_template_exists = cls.postgres_db_exists('template0_trgm', connection)
+            #
+            # check for test template with required extensions.
+
+            TEMPLATE_NAME = 'template0_ambry_test'
+            cls.test_template_exists = cls.postgres_db_exists(TEMPLATE_NAME, connection)
 
             if not cls.test_template_exists:
                 raise unittest.SkipTest(
-                    'Tests require custom postgres template db named template0_ambry_test. '
-                    'See README.rst for details.')
+                    'Tests require custom postgres template db named {}. '
+                    'See DEVEL-README.md for details.'.format(TEMPLATE_NAME))
 
-            query = 'CREATE DATABASE {} OWNER {} TEMPLATE template0_trgm encoding \'UTF8\';'\
-                .format(test_db_name, postgres_user)
+            query = 'CREATE DATABASE {} OWNER {} TEMPLATE {} encoding \'UTF8\';'\
+                .format(test_db_name, postgres_user, TEMPLATE_NAME)
             connection.execute(query)
             connection.execute('commit')
             connection.close()
@@ -232,11 +235,11 @@ class PostgreSQLTestBase(TestBase):
 
             if not cls.postgres_extension_installed('pg_trgm', conn):
                 raise unittest.SkipTest(
-                    'Can not find template with pg_trgm support. See README.rst for details.')
+                    'Can not find template with pg_trgm support. See DEVEL-README.md for details.')
 
             if not cls.postgres_extension_installed('multicorn', conn):
                 raise unittest.SkipTest(
-                    'Can not find template with multicorn support. See README.rst for details.')
+                    'Can not find template with multicorn support. See DEVEL-README.md for details.')
 
         cls.postgres_test_db_data = {
             'test_db_name': test_db_name,

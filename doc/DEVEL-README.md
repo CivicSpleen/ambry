@@ -12,35 +12,6 @@ or
 $ python setup.py sdist bdist_wininst upload
 ```
 
-### To run tests:
-```bash
-$ git clone https://github.com/<githubid>/ambry.git
-$ cd ambry
-$ pip install -r requirements/dev.txt
-$ python setup.py test
-```
-
-### To run tests with coverage:
-
-    1. Run with coverage
-```bash
-$ coverage run setup.py test
-```
-    2. Generage html:
-```bash
-$ coverage html
-```
-    3. Open htmlcov/index.html in the browser.
-
-### To setup PostgreSQL for tests.
-Tests use two databases - sqlite and postgresql. SQLite does not require any setup, but PostgreSQL does. You should add postgresql-test section with dsn to the database section of the ambry config. See example:
-```yaml
-database:
-    ...
-    postgresql-test: postgresql+psycopg2://ambry:secret@127.0.0.1/
-```
-Note: Do not include database name to the dsn because each test creates new database empty on each run.
-
 ### To change model's fields and appropriate database table (AKA migration):
     1. Change appropriate models.
     2. Make new empty migration
@@ -84,28 +55,86 @@ python setup.py fetch --all build --enable-all-extensions install test
 ```
 See http://apidoc.apsw.googlecode.com/hg/build.html#recommended for more details.
 
-#### PostgreSQL (Foreign Data Wrapper) - Debian/Ubuntu
-1. Install pgxn
-```bash
-$ sudo apt-get install pgxnclient
-```
-2. Install postgresql-server-dev package
+#### PostgreSQL (Foreign Data Wrapper), Debian/Ubuntu, virtualenv
+1. Install postgresql-server-dev package
 ```bash
 $ sudo apt-get install postgresql-server-dev-(your version here)
 ```
-3. Install multicorn from source code.
+2. Install multicorn from source code *to global environment*.
 ```bash
 $ sudo pgxn install multicorn
 $ wget https://github.com/Kozea/Multicorn/archive/v1.2.3.zip
 $ unzip v1.2.3.zip
 $ cd Multicorn-1.2.3
-$ make
-$ make install
+$ make && make install
 ```
-If you use virtualenv put a multicorn.pth file in your virtualenv's site-packages folder, with the absolute path to the directory containing your multicorn package. Example of *.pth content:
-    /usr/local/lib/python2.7/dist-packages/multicorn-1.2.3_dev-py2.7-linux-i686.egg
-You need to do so because make install installs multicorn to the global environment (dist-packages directory). FIXME: Find a better way how to setup it without magic.
-FIXME (kazbek): describe ambryfdw setup for virtualenv.
+3. Install ambryfdw *to global environment*.
+```bash
+pip install ambryfdw
+```
+4. Create \*.pth files for both libraries in the site-packages of your virtual environment.
+Add multicorn.pth containing path to the multicorn package. Example (use your own path instead):
+```
+/usr/local/lib/python2.7/dist-packages/multicorn-1.2.3_dev-py2.7-linux-i686.egg
+```
+Add ambryfdw.pth containing path to the ambryfdw package. Example (use your own path instead):
+```
+/usr/local/lib/python2.7/dist-packages/ambryfdw
+```
+
+### To run tests:
+    1. Install ambry
+```bash
+$ git clone https://github.com/<githubid>/ambry.git
+$ cd ambry
+$ pip install -r requirements/dev.txt
+```
+
+    2. Provide PostgreSQL credentials
+Tests use two databases - sqlite and postgresql. SQLite does not require any setup, but PostgreSQL does. You should add postgresql-test section with dsn to the database section of the ambry config. Example:
+```yaml
+database:
+    ...
+    postgresql-test: postgresql+psycopg2://ambry:secret@127.0.0.1/
+```
+Note: Do not include database name to the dsn because each test creates new empty database on each run.
+
+    3. Install multicorn and ambryfdw extensions
+Ambry uses custom postgres template because of ambry tests require pg_trgm and multicorn extensions. I do not know how to install extensions on the fly so you need to create the template and install both extensions before running tests. If postgres does not have such template all postgres tests will be skipped.
+```bash
+# Switch to postgres account
+$ sudo su - postgres
+
+# create template
+$ psql postgres -c 'CREATE DATABASE template0_ambry_test TEMPLATE template0;'
+
+# install extensions
+$ psql template0_ambry_test -c 'CREATE EXTENSION pg_trgm;'
+$ psql template0_ambry_test -c 'CREATE EXTENSION multicorn;'
+
+# Create copy permission needed by test framework to create database.
+$ psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_ambry_test';"
+
+# Exit postgres account
+$ exit
+```
+
+    4. Run tests. Note: Do not make previous steps more than once.
+```bash
+$ python setup.py test
+```
+
+### To run tests with coverage:
+
+    1. Run with coverage
+```bash
+$ coverage run setup.py test
+```
+    2. Generage html:
+```bash
+$ coverage html
+```
+    3. Open htmlcov/index.html in the browser.
 
 ### To write python2/python3 compatible code:
 Ambry uses one code base for both - python2 and python3. This requires some extra work.
