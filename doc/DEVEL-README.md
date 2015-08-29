@@ -145,7 +145,7 @@ Ambry uses one code base for both - python2 and python3. This requires some extr
 2. Run 2to3 before push for all files you changed. FIXME: Not ready yet.
 
 Usefull hints:
-1. Use print() instead of print. For complicated cases (print("", file=sys.stderr) for example) use six.print_.
+1. Use print() instead of print. For complicated cases (print("", file=sys.stderr) for example) use six.print\_.
 2. Use six.iteritems, six.iterkeys, six.itervalues instead of {}.iteritems, {}.iterkeys, {}.itervalues if you need iterator.
 3. If you need lists from {}.keys, {}.values wrap both with list - list({}.keys()), list({}.values())
 4. Use urlparse from six:
