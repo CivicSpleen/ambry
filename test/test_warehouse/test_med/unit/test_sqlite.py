@@ -28,6 +28,34 @@ class Test(BaseMEDTest):
         self.assertEqual(result[0], (0, '0'))
         self.assertEqual(result[-1], (99, '99'))
 
+    def test_many_queries_on_one_partition(self):
+        partition_vid = 'vid1'
+        partition = self._get_fake_partition(partition_vid)
+        connection = apsw.Connection(':memory:')
+        add_partition(connection, partition)
+
+        # select all from virtual table.
+        cursor = connection.cursor()
+        query = 'SELECT col1, col2 FROM {};'.format(_table_name(partition))
+        result = cursor.execute(query).fetchall()
+        self.assertEqual(len(result), 100)
+        self.assertEqual(result[0], (0, '0'))
+        self.assertEqual(result[-1], (99, '99'))
+
+        # select first three records
+        query = 'SELECT col1, col2 FROM {} LIMIT 3;'.format(_table_name(partition))
+        result = cursor.execute(query).fetchall()
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], (0, '0'))
+        self.assertEqual(result[1], (1, '1'))
+        self.assertEqual(result[2], (2, '2'))
+
+        # select with filtering
+        query = 'SELECT col1 FROM {} WHERE col1=\'1\';'.format(_table_name(partition))
+        result = cursor.execute(query).fetchall()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], (1,))
+
     def test_creates_virtual_table_for_each_partition(self):
         partitions = []
         connection = apsw.Connection(':memory:')

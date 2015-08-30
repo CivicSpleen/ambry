@@ -34,22 +34,6 @@ class Table:
     def __init__(self, columns, filename):
         self.columns = columns
         self.filename = filename
-        self.data = self._read_data(self.filename)
-
-    def _read_data(self, filename):
-        data = []
-        with open(filename) as stream:
-            unpacker = msgpack.Unpacker(stream, object_hook=PartitionMsgpackDataFileReader.decode_obj)
-            header = None
-
-            for row in unpacker:
-                assert isinstance(row, (tuple, list)), row
-
-                if not header:
-                    header = row
-                    continue
-                data.append(row)
-        return data
 
     def BestIndex(self, *args):
         return None
@@ -67,24 +51,36 @@ class Cursor:
     """ Represents a cursor """
     def __init__(self, table):
         self.table = table
+        self._current_row = None
+        self._next_row = None
+        self._f = open(table.filename)
+        self._unpacker = msgpack.Unpacker(
+            self._f, object_hook=PartitionMsgpackDataFileReader.decode_obj)
+        self._header = next(self._unpacker)
+        self._current_row = next(self._unpacker)
 
     def Filter(self, *args):
-        self.pos = 0
+        pass
 
     def Eof(self):
-        return self.pos >= len(self.table.data)
+        return self._current_row is None
 
     def Rowid(self):
-        return self.table.data[self.pos][0]
+        return self._current_row[0]
 
     def Column(self, col):
-        return self.table.data[self.pos][1 + col]
+        return self._current_row[1 + col]
 
     def Next(self):
-        self.pos += 1
+        try:
+            self._current_row = next(self._unpacker)
+            assert isinstance(self._current_row, (tuple, list)), self._current_row
+        except StopIteration:
+            self._current_row = None
 
     def Close(self):
-        pass
+        self._f.close()
+        self._unpacker = None
 
 
 def add_partition(connection, partition):
