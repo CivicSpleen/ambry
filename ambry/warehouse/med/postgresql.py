@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
+from sqlalchemy.dialects.postgresql import dialect as pg_dialect
 from sqlalchemy import Table, MetaData
 from sqlalchemy.sql.expression import text
 
@@ -13,8 +14,9 @@ logger = get_logger(__name__, propagate=False)
 def add_partition(connection, partition):
     FOREIGN_SERVER_NAME = 'partition_server'
     _create_if_not_exists(connection, FOREIGN_SERVER_NAME)
-
-    columns = ['{} {}'.format(c.name, c.type.compile()) for c in partition.table.columns]
+    columns = []
+    columns = [
+        '{} {}'.format(c.name, c.type.compile(dialect=pg_dialect())) for c in partition.table.columns]
     query = """
         CREATE FOREIGN TABLE {table_name} (
             {columns}
