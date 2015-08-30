@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime, date
+
 import msgpack
+import gzip
 
 from sqlalchemy import Table as SATable, MetaData
 
 from ambry.etl.partition import PartitionMsgpackDataFileReader
 
-# TODO: Do not load all records to memory: http://www.drdobbs.com/database/query-anything-with-sqlite/202802959?pgno=3
+# Documents used to implement module and function:
+# Module: http://apidoc.apsw.googlecode.com/hg/vtable.html
+# Functions: http://www.drdobbs.com/database/query-anything-with-sqlite/202802959?pgno=3
 
 
 def get_module_class(partition):
@@ -54,8 +59,9 @@ class Cursor:
         self._current_row = None
         self._next_row = None
         self._f = open(table.filename)
+        self._msg_file = gzip.GzipFile(fileobj=self._f)
         self._unpacker = msgpack.Unpacker(
-            self._f, object_hook=PartitionMsgpackDataFileReader.decode_obj)
+            self._msg_file, object_hook=PartitionMsgpackDataFileReader.decode_obj)
         self._header = next(self._unpacker)
         self._current_row = next(self._unpacker)
 
@@ -69,7 +75,11 @@ class Cursor:
         return self._current_row[0]
 
     def Column(self, col):
-        return self._current_row[1 + col]
+        value = self._current_row[1 + col]
+        if isinstance(value, (date, datetime)):
+            # Convert to ISO format.
+            return value.isoformat()
+        return value
 
     def Next(self):
         try:

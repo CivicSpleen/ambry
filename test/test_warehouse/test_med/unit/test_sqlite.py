@@ -100,3 +100,16 @@ class Test(BaseMEDTest):
                 self.assertEqual(all_rows[0].col2, '0')
         finally:
             os.remove(DB_FILE)
+
+    def test_date_and_datetime(self):
+        partition_vid = 'vid1'
+        partition = self._get_fake_datetime_partition(partition_vid)
+        connection = apsw.Connection(':memory:')
+        add_partition(connection, partition)
+
+        # select from virtual table.
+        cursor = connection.cursor()
+        query = 'SELECT col1, col2 FROM {};'.format(_table_name(partition))
+        result = cursor.execute(query).fetchall()
+        self.assertEqual(len(result), 100)
+        self.assertEqual(result[0], (u'2015-08-30', u'2015-08-30T11:41:32.977993'))
