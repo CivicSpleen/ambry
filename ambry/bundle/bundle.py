@@ -893,6 +893,8 @@ class Bundle(object):
 
         self.state = phase + '_done'
 
+        self.commit()
+
         return True
 
     def run_phase(self, phase, stage='main', sources=None):
@@ -1154,9 +1156,10 @@ Pipeline Headers
                 key = (col, error['value'])
                 if key not in seen:
                     seen.add(key)
-                    self.error('Cast Error on column {}; {}'.format(cp.headers[col], error))
 
-                    column = cp.source.dest_table.column(cp.headers[col])
+                    self.error('Cast Error on column {}; {}'.format(col, error))
+
+                    column = cp.source.dest_table.column(col)
                     column.add_code(error['value'], error['value'], source='cast_error')
 
     def build_post_write_bundle_file(self):

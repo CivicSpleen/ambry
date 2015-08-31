@@ -724,8 +724,7 @@ class Term(object):
         """ Creates or updates db config of the term. Requires bound to db tree. """
         dataset = self._top._config.dataset
         session = object_session(self._top._config)
-        logger.debug(
-            'Updating term config. dataset: {}, type: {}, key: {}, value: {}'.format(
+        logger.debug('Updating term config. dataset: {}, type: {}, key: {}, value: {}'.format(
                 dataset, self._top._type, self._key, self.get()))
 
         if not self._parent._config:
@@ -746,11 +745,9 @@ class Term(object):
         self._top._add_valid(self._config)
 
         if created:
-            logger.debug(
-                'New config created and bound to the term. config: {}'.format(self._config))
+            logger.debug('New config created and bound to the term. config: {}'.format(self._config))
         else:
-            logger.debug(
-                'Existing config bound to the term. config: {}'.format(self._config))
+            logger.debug('Existing config bound to the term. config: {}'.format(self._config))
 
     def null_entry(self):
         raise NotImplementedError("Not implemented by {}".format(type(self)))
@@ -857,7 +854,7 @@ class ScalarTerm(Term):
     """A Term that can only be a string or number."""
 
     def set(self, v):
-        logger.debug('set term: {} = {}'.format(self._fqkey, v))
+        #logger.debug(u'set term: {} = {}'.format(self._fqkey, v))
         if self._constraint and v not in self._constraint:
             raise ValueError('{} is not valid value. Use one from {}.'.format(v, self._constraint))
         self._parent._term_values[self._key] = v

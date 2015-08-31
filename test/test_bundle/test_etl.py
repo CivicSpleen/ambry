@@ -973,4 +973,10 @@ class Test(TestBase):
         b.sync_in()
         b.build()
 
+        p = list(b.partitions)[0]
 
+        for i, row in enumerate(p.stream()):
+            if i > 5:
+                break
+
+            print i, row

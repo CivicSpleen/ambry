@@ -461,6 +461,8 @@ class Test(TestBase):
         self.assertTrue(b.prepare())
         self.assertEquals('prepare_done', b.state)
 
+        b.run()
+
     def test_db_copy(self):
         from ambry.orm.database import Database
 

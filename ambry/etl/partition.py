@@ -400,8 +400,10 @@ class PartitionMsgpackDataFile(PartitionDataFile):
             return {'__date__': True, 'as_str': obj.isoformat()}
         elif isinstance(obj, datetime.time):
             return {'__time__': True, 'as_str': obj.strftime("%H:%M:%S")}
-        elif isinstance(obj, time.time):
-            return {'__time__': True, 'as_str': obj.strftime("%H:%M:%S")}
+        elif hasattr(obj, 'render'):
+            return obj.render()
+        elif hasattr(obj, '__str__'):
+            return str(obj)
         else:
             raise Exception("Unknown type on encode: {}, {}".format(type(obj), obj))
 

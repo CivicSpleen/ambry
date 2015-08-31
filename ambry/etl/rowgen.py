@@ -19,20 +19,22 @@ class SourceError(Exception):
     pass
 
 
-def source_pipe(bundle, source):
+
+
+def source_pipe(bundle, source, allow_refetch = True):
     """Create a source pipe from a source ORM record"""
 
     if source.generator:  # Get the source from the generator, not from a file.
-
+        #FIXME: The generator should probably be imported as class, rather than evaled.
         import sys
         # Ambry.build comes from ambry.bundle.files.PythonSourceFile#import_bundle
         gen = eval(source.generator, globals(), sys.modules['ambry.build'].__dict__)
         return gen(bundle, source)
+
+    elif source.get_urltype() == 'gs':
+        return GoogleSource(bundle, source)
+
     else:
-
-        if source.get_urltype() == 'gs':
-            return GoogleSource(bundle, source)
-
         gft = source.get_filetype()
 
         if gft == 'csv':
@@ -47,8 +49,13 @@ def source_pipe(bundle, source):
             return ExcelSource(bundle, source)
         elif gft == 'partition':
             return PartitionSource(bundle, source)
+        elif allow_refetch:
+            sp = SourcePipe(bundle, source)
+            fstor = sp.fetch()
+            source.file = fstor.path
+            return source_pipe(bundle, source, False)
         else:
-            raise ValueError("Unknown filetype for source {}: {} ".format(source.name, gft))
+            raise SourceError("Failed to determine file type for source '{}' ".format())
 
 
 class DelayedOpen(object):
@@ -73,6 +80,10 @@ class DelayedOpen(object):
     def source_pipe(self):
         return self._source.row_gen()
 
+    @property
+    def path(self):
+        return self._path
+
     def __str__(self):
 
         from fs.errors import NoSysPathError
@@ -80,7 +91,7 @@ class DelayedOpen(object):
         try:
             return self.syspath()
         except NoSysPathError:
-            return str(self._fs)+';'+str(self._path)
+            return "Delayed Open: "+str(self._fs)+';'+str(self._path)
 
 def fetch(source, cache_fs, account_accessor):
     """Download the source and return a callable object that will open the file. """
@@ -148,7 +159,7 @@ class SourcePipe(Pipe):
         self._account_accessor = bundle.library.config.account
 
         # The fstor was a bit like a functor that delayed opening the filesystme object,
-        # but not it looks like a remant that can be factored out.
+        # but now it looks like a remant that can be factored out.
         self._fstor = None
 
     def __iter__(self):
@@ -257,8 +268,25 @@ class PartitionSource(SourcePipe):
 class ExcelSource(SourcePipe):
     """Generate rows from an excel file"""
     def _get_row_gen(self):
+        from fs.errors import  NoSysPathError
         fstor = self.fetch()
-        return excel_iter(fstor.syspath(), self._source.segment)
+        try:
+            return excel_iter(fstor.syspath(), self._source.segment)
+        except NoSysPathError:
+            # There is no sys path when the file is in a ZipFile, or other non-traditional filesystem.
+            from fs.opener import fsopendir
+            from ambry.util.flo import copy_file_or_flo
+            from os.path import dirname, join
+
+            cache = self.bundle.library.download_cache
+            path = join(self.bundle.identity.cache_key, self._source.name)
+            cache.makedir(dirname(path), recursive = True, allow_recreate=True) #FIXME: Should check that file exists
+
+            with fstor.open(mode='rb') as f_in, cache.open(path, 'wb') as f_out:
+                copy_file_or_flo(f_in, f_out)
+
+            return excel_iter(cache.getsyspath(path), self._source.segment)
+
 
 
 class GoogleSource(SourcePipe):

@@ -34,6 +34,7 @@ from .filesystem import LibraryFilesystem
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
+global_library = None
 
 def new_library(config=None):
 
@@ -59,6 +60,10 @@ def new_library(config=None):
                 filesystem=lfs,
                 warehouse=warehouse,
                 search = search_backend)
+
+    global global_library
+
+    global_library = l
 
     return l
 

@@ -754,9 +754,12 @@ def bundle_dump(args, l, rc):
         for t in b.dataset.source_tables:
             for c in t.columns:
                 if not records:
-                    records.append(c.row.keys())
+                    records.append(['vid'] + c.row.keys())
 
-                records.append(c.row.values())
+                records.append([c.vid] + c.row.values())
+
+        # Transpose, remove empty columns, transpose back
+        records = zip(*[row for row in zip(*records) if bool(filter(bool, row[1:]))])
 
         if records:
             headers, records = records[0], records[1:]

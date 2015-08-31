@@ -11,13 +11,18 @@ from .. import ValueType, IntValue
 
 from ..usps import states
 
-class County(object):
+class County(IntValue):
     """Up-to 3 digit integers, or three digit strings. """
 
-    __pythontype__ = str
+    _county_map = None
 
-    def __init__(self, state, v):
-        pass
+    def __init__(self, v):
+        from ambry.library import global_library
+        # v is set in __new__
+
+
+        self.state = None
+        self.library = global_library
 
 
     def intuit_name(self, name):
@@ -31,13 +36,17 @@ class County(object):
         else:
             return 0
 
-
+    @property
     def county_map(self):
         """
         Map the FIPS codes of state and county to the county name
         :return:
         """
         if not County._county_map:
+
+            # FIXME. These hard-coded values should not be here, but I'm not sure where to put them. There
+            # should probably be a central config area for partition names, or require that they be specified in the
+            # dependencies.
             counties = self.library.partition('census.gov-acs-geofile-2009-geofile50-20095-50')
             states = self.library.partition('census.gov-acs-geofile-2009-geofile40-20095-40')
 
@@ -50,38 +59,61 @@ class County(object):
 
             for row in counties.stream(as_dict=True):
                 name = row['name'].replace(', ' + state_names[row['state']], '')
-                name, last = name[:name.rindex(' ')], name[name.rindex(' '):]
-                County._county_map[(row['state'], row['county'])] = (name.strip(), last.strip())
+                first, last = name[:name.rindex(' ')], name[name.rindex(' '):]
 
+                if first.strip().endswith('Census'): # Last bit should be "Census Area"
+                    first, lastm1 = first[:first.rindex(' ')], first[first.rindex(' '):]
+                    last = lastm1+' '+last
+
+                County._county_map[(row['state'], row['county'])] = (name.strip(), first.strip(), last.strip())
 
         return County._county_map
 
+    def set_state(self, state):
+        """Call this before geoid(), etc, to set the state id """
+        self.state = state
+        return self
+
+    def set_library(self, library):
+        """Call this before geoid(), etc, to set the state id """
+
+        self.library = library
+        return self
+
+    @property
     def fips(self):
         return self._parsed
 
+    @property
     def fips_i(self):
         """Integer version of the fips"""
-        return int(self._parsed)
+        return int(self)
 
-    def geoid(self, state):
+    @property
+    def acs(self):
         """A county geoid"""
         from geoid.acs import County
-        return str(County(int(state), int(self._parsed)))
+        return County(int(self.state), int(self))
 
-    def tiger(self, state):
+    @property
+    def tiger(self):
         """A county geoid, in tiger format"""
         from geoid.tiger import County
-        return str(County(int(state), int(self._parsed)))
+        return County(int(self.state), int(self))
 
-    def gvid(self, state):
+    @property
+    def gvid(self):
         """A state geoid, in CivicKnowledge format"""
         from geoid.civick import County
-        return str(County(int(state), int(self._parsed)))
+        return County(int(self.state), int(self))
 
+    @property
     def name(self):
         """Return the name of the county"""
-        raise NotImplementedError()
 
+        return self.county_map[(self.state, int(self))]
+
+    @property
     def census_name(self):
         """Return the name of the county, including the state"""
         raise NotImplementedError()
@@ -158,15 +190,11 @@ class State(IntValue):
         from geoid.tiger import State
         return State(self)
 
-        return str(int(self._parsed))
-
     @property
     def gvid(self):
         """A state geoid, in CivicKnowledge format"""
         from geoid.civick import State
         return State(self)
-
-        return str( int(self._parsed))
 
     @property
     def name(self):

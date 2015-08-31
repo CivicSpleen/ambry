@@ -19,9 +19,9 @@ def import_valuetype(name):
 def python_type(name):
     return import_valuetype(name).__pythontype__
 
+
 class ValueType(object):
 
-    library = None # Externally set class property
 
     @classmethod
     def intuit_name(self, name):
@@ -33,7 +33,8 @@ class ValueType(object):
     def parse(cls, v):
         """Parse a value of this type and return a list of parsed values"""
 
-        return cls(v)
+        return v
+
 
 class StrValue(str,ValueType):
 

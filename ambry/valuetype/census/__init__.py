@@ -54,6 +54,26 @@ class Geoid(object):
         except KeyError:
             return object.__getattribute__(item)
 
+    def render(self):
+        return str(self.geoid)
+
+    @property
+    def acs(self):
+        return self.geoid.convert(geoid.acs.AcsGeoid)
+
+    @property
+    def gvid(self):
+        return self.geoid.convert(geoid.civick.Gvid)
+
+    @property
+    def census(self):
+        return self.geoid.convert(geoid.census.CensusGeoid)
+
+    @property
+    def tiger(self):
+        return self.geoid.convert(geoid.tiger.TigerGeoid)
+
+
 class AcsGeoid(Geoid):
     parser = geoid.acs.AcsGeoid.parse
 
@@ -62,3 +82,6 @@ class CensusGeoid(Geoid):
 
 class TigerGeoid(Geoid):
     parser = geoid.tiger.TigerGeoid.parse
+
+class GVid(Geoid):
+    parser = geoid.civick.GVid.parse

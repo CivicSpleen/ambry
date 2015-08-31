@@ -3,6 +3,7 @@ altname,,altname,,,,,,Random data with alternate names,,,,,http://public.source.
 csv_no_csv,simple1,simple,,,,,,CSV file with wrong extension,,,csv,,http://public.source.civicknowledge.com/example.com/sources/simple-example.foo,e4732aa75d0e3f712653e718851f64b8
 multiexcel,rent,rent,,,,0,"3,4",Multiple sheets in an Excel file,,,,,http://public.source.civicknowledge.com/example.com/sources/multisheet.xls,e82baa3d19d0df8651e481b3df506a1c
 mz_with_zip,simple1,simple,,,,,,Multi-file Zipfile with zip extension,simple-example.csv,,,,http://public.source.civicknowledge.com/example.com/sources/test_data.zip,e4732aa75d0e3f712653e718851f64b8
+mz_with_zip_xl,rent,simple,,,,,"3,4",Multi-file Zipfile with zip extension,renter_cost_excel07.xlsx,,,,http://public.source.civicknowledge.com/example.com/sources/test_data.zip,e4732aa75d0e3f712653e718851f64b8
 namesu8,,names,,,,,,CSV file with Unicode in UTF,,,,utf8,http://public.source.civicknowledge.com/example.com/sources/unicode-utf8.csv,4b581a5617af9b532d50399bf1e753f3
 rent07,rent,rent,,,,,"3,4","Renter cost, Excel 2007 format",,,,,http://public.source.civicknowledge.com/example.com/sources/renter_cost_excel07.xlsx,5a6bee8a5da0727b865493aa13ca1ef8
 rent97,rent,rent,,,,,"3,4","Renter cost, Excel 97 format",,,,,http://public.source.civicknowledge.com/example.com/sources/renter_cost_excel97.xls,b9078d1e8a4d4829ae6c32084fabd795

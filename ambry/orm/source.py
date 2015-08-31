@@ -27,9 +27,14 @@ class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
 
     def get_filetype(self):
+        """Determine the format of the source file, by reporting the file extension"""
+
+        # The filetype is explicitly specified
         if self.filetype:
             return self.filetype
 
+        # The name of an internal file is specified, use the extension
+        # FIXME. The file can be named as a reg ex, so the extension isn't required.
         if self.file:
             root, ext = splitext(self.file)
             return ext[1:]
@@ -39,6 +44,7 @@ class DataSourceBase(object):
         root, ext = splitext(parsed.path)
 
         if ext == '.zip':
+            # Try some wackiness by assuming that there is an extension on the URL path, after removing .zip
             parsed_path = parsed.path.replace('.zip', '')
             root, ext = splitext(parsed_path)
 

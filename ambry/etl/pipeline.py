@@ -179,11 +179,11 @@ class Pipe(object):
 
         return self
 
-    def process_header(self, row):
+    def process_header(self, headers):
         """Called to process the first row, the header. Must return the header,
         possibly modified. The returned header will be sent upstream"""
-        self.headers = row
-        return row
+
+        return headers
 
     def process_body(self, row):
         """Called to process each row in the body. Must return a row to be sent upstream"""
@@ -200,8 +200,14 @@ class Pipe(object):
 
         yield self.headers
 
+        header_len = len(self.headers)
+
         for row in rg:
+
             row = self.process_body(row)
+
+            assert len(row) == header_len, (self.headers, row)
+
             if row:
                 yield row
 
@@ -886,6 +892,7 @@ class Delete(AddDeleteExpand):
 
         return qualified_class_name(self) + "delete = "+ ', '.join(self.delete)
 
+
 class Edit(AddDeleteExpand):
     def __init__(self,  edit, as_dict=False):
         super(Edit, self).__init__(edit=edit, as_dict=as_dict)
@@ -903,6 +910,57 @@ class PassOnlyDestColumns(Delete):
         self.delete = [ h for h in row if h not in dest_cols]
 
         return super(Delete, self).process_header(row)
+
+
+class AddDerived(Pipe):
+    """Add values for the columns with a 'derivedfrom' entry. This pipe assumes to be be run after
+    the Caster, so the rows are in the same shape as the schema for the destination table
+
+
+    """
+
+    def __init__(self):
+        self.code = None
+        self.processor = None
+        self.row_proxy = None
+
+    def process_header(self, headers):
+        import ambry.valuetype.math
+
+        parts = []
+
+        for i, c in enumerate(self.source.dest_table.columns):
+            if c.derivedfrom:
+                index = headers.index(c.name)
+                assert i == index
+
+                parts.append(c.derivedfrom)
+            else:
+                parts.append('row[{}]'.format(i))
+
+        if not parts:
+            self.process_body = self.process_body_default
+        else:
+            self.code = 'lambda caster,  row: [ {} ] '.format(','.join(parts))
+
+            self.processor = eval(self.code, ambry.valuetype.math.__dict__)
+
+            self.row_proxy = RowProxy(headers)
+
+        return headers
+
+    def process_body(self, row):
+
+        try:
+
+            return self.processor(self, self.row_proxy.set_row(row))
+        except Exception as e:
+            self.error("Exception in AddDerived processor\ncode={}\nexception={}".format(self.code, str(e)))
+            raise
+
+    def process_body_default(self, row):
+        return row
+
 
 class Modify(Pipe):
     """Base class to modify a whole row, as a dict. Does not modify the header. Uses a slower method
@@ -1002,6 +1060,7 @@ class Skip(Pipe):
             self.passed += 1
             return row
 
+
 class LogRate(Pipe):
 
     def __init__(self, output_f, N, message=None):
@@ -1011,6 +1070,7 @@ class LogRate(Pipe):
     def process_body(self, row):
         self.lr()
         return row
+
 
 class PrintRows(Pipe):
     """A Pipe that collects rows that pass through and displays them as a table when the pipeline is printed. """
@@ -1069,6 +1129,7 @@ class PrintRows(Pipe):
         else:
             return qualified_class_name(self) + ' 0 rows'
 
+
 class PrintEvery(Pipe):
     """Print a row every N rows. Always prints the header. """
 
@@ -1085,6 +1146,7 @@ class PrintEvery(Pipe):
             print('Print Row   :', row)
         self.i += 1
         return row
+
 
 class MatchPredicate(Pipe):
     """Store rows that match a predicate. THe predicate is a function that takes the row as its
@@ -1104,6 +1166,7 @@ class MatchPredicate(Pipe):
             self.matches.append(row)
 
         return row
+
 
 class Reduce(Pipe):
     """Like works like reduce() on the body rows, using the function f(accumulator,row) """
@@ -1132,8 +1195,6 @@ class Reduce(Pipe):
         for row in it:
             self.accumulator = self._f(self.accumulator, row)
             yield row
-
-
 
 
 def make_table_map(table, headers):
@@ -1285,6 +1346,7 @@ class WriteToPartition(Pipe, PartitionWriter):
             p.datafile.insert_body(body_mapper(row))
         except Exception as e:
             self.bundle.logger.error("Insert failed: {}\n{}".format(row, e))
+            raise
 
         return row
 

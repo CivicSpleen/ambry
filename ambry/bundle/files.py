@@ -251,7 +251,7 @@ class DictBuildSourceFile(BuildSourceFile):
         fr.path = fn_path
         if fn_path.endswith('.yaml'):
             with self._fs.open(fn_path) as f:
-                fr.update_contents(msgpack.packb(yaml.load(f)))
+                fr.update_contents(msgpack.packb(yaml.safe_load(f)))
             fr.mime_type = 'application/msgpack'
         else:
             raise FileTypeError('Unknown file type for : %s' % fn_path)
@@ -269,9 +269,8 @@ class DictBuildSourceFile(BuildSourceFile):
 
         if fr.contents:
             with self._fs.open(fn_path, 'wb') as f:
-                # FIXME: f is unused?
-                yaml.dump(fr.unpacked_contents, default_flow_style=False)
-                raise NotImplementedError(" Why is F unused?")
+
+                yaml.safe_dump(fr.unpacked_contents, f, default_flow_style=False, encoding='utf-8')
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
 
@@ -357,7 +356,7 @@ class MetadataFile(DictBuildSourceFile):
             o = fr.unpacked_contents
 
         else:
-            o = yaml.safe_load(file_default(self._file_const))
+            o = yaml.safe_load(file_default(self._file_const), encoding='utf-8')
 
             try:
                 act = self._bundle.library.config.account('ambry').to_dict()
