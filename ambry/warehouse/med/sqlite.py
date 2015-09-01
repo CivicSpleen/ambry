@@ -119,7 +119,7 @@ def _as_orm(connection, partition):
         print session.query(PartitionRow).all()
 
     Returns:
-        FIXME:
+        Table:
     """
     # FIXME:
     raise NotImplementedError(
@@ -132,6 +132,4 @@ def _as_orm(connection, partition):
 
 def _table_name(partition):
     """ Returns virtual table name for the given partition. """
-    # p_{vid}_ft stands for partition_vid_foreign_table
-    # FIXME: it seems prefix + partition.table.name is better choice for virtual table name.
     return 'p_{vid}_vt'.format(vid=partition.vid)

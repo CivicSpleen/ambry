@@ -12,6 +12,11 @@ logger = get_logger(__name__, propagate=False)
 
 
 def add_partition(connection, partition):
+    """ Create foreign table for given partition.
+    Args:
+        connection (sqlalchemy.engine.Connection)
+        partition (orm.Partition):
+    """
     FOREIGN_SERVER_NAME = 'partition_server'
     _create_if_not_exists(connection, FOREIGN_SERVER_NAME)
     columns = []
@@ -38,10 +43,8 @@ def _as_orm(connection, partition):
         print session.query(PartitionRow).all()
 
     Returns:
-        FIXME:
+        Table:
     """
-
-    # FIXME: That solution is not documented by multicorn. Try documented solution again.
 
     schema, table_name = _table_name(partition).split('.')
 
@@ -75,6 +78,4 @@ def _create_if_not_exists(connection, server_name):
 
 def _table_name(partition):
     """ Returns foreign table name for the given partition. """
-    # p_{vid}_ft stands for partition_vid_foreign_table
-    # FIXME: it seems prefix + partition.table.name is better choice for foreign table name.
     return '{schema}.p_{vid}_ft'.format(schema=POSTGRES_PARTITION_SCHEMA_NAME, vid=partition.vid)
