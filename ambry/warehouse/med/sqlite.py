@@ -6,6 +6,8 @@ import gzip
 
 from sqlalchemy import Table as SATable, MetaData
 
+from apsw import MisuseError
+
 from ambry.etl.partition import PartitionMsgpackDataFileReader
 
 # Documents used to implement module and function:
@@ -102,13 +104,17 @@ def add_partition(connection, partition):
 
     """
 
-    # register module. FIXME: Do not create module for each partition. Create 1 module for all partitions.
-    module_name = 'mod_{}'.format(partition.vid)
-    connection.createmodule(module_name, get_module_class(partition)())
+    module_name = 'mod_partition'
+    try:
+        connection.createmodule(module_name, get_module_class(partition)())
+    except MisuseError:
+        # TODO: The best solution I've found to check for existance. Try again later,
+        # because MisuseError might mean something else.
+        pass
 
     # create virtual table.
     cursor = connection.cursor()
-    cursor.execute('CREATE VIRTUAL TABLE {} using {}'.format(_table_name(partition), module_name))
+    cursor.execute('CREATE VIRTUAL TABLE {} using {};'.format(_table_name(partition), module_name))
 
 
 def _as_orm(connection, partition):
