@@ -28,7 +28,8 @@ import sys
 import time
 import yaml
 
-from six import string_types, iteritems
+from six import string_types, iteritems, u, iterkeys
+from six.moves import zip as six_izip
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import File
@@ -217,12 +218,10 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fn_path = file_name(self._file_const)
 
-        hl_index = None
-
         # Some types have special representations in spreadsheets, particularly lists and dicts
         def munge_types(v):
             if isinstance(v, (list, tuple)):
-                return u','.join(unicode(e.replace(',','\,')) for e in v)
+                return u(',').join(u(e.replace(',', '\,')) for e in v)
             elif isinstance(v, dict):
                 import json
                 return json.dumps(v)
@@ -436,7 +435,6 @@ class SourcesFile(RowBuildSourceFile):
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
-        from ..orm.source import DataSource
 
         fr = self._dataset.bsfile(self._file_const)
 
@@ -450,9 +448,7 @@ class SourcesFile(RowBuildSourceFile):
         # for that row. The bool and filter return false when none of the values
         # are non-empty. Then zip again to transpose to original form.
 
-        # TODO: next row is so complicated. Try to refactor.
-        # FIXME: Needs smart 2to3 conversion. Auto conversion breaks tests.
-        non_empty_rows = zip(*[row for row in zip(*contents) if bool(filter(bool, row[1:]))])
+        non_empty_rows = _drop_empty(contents)
 
         s = self._dataset._database.session
 
@@ -461,7 +457,7 @@ class SourcesFile(RowBuildSourceFile):
             if i == 0:
                 header = row
             else:
-                d = dict(list(zip(header, row)))
+                d = dict(six_izip(header, row))
 
                 if 'widths' in d:
                     del d['widths']  # Obsolete column in old spreadsheets.
@@ -503,8 +499,7 @@ class SourcesFile(RowBuildSourceFile):
             rows = [list(rows[0].keys())] + [list(r.values()) for r in rows]
 
             # Transpose trick to remove empty columns
-            # FIXME: needs smart 2to3 conversion. Auto conversion breaks tests.
-            rows = zip(*[row for row in zip(*rows) if bool(filter(bool, row[1:]))])
+            rows = list(_drop_empty(rows))
         else:
             # No contents, so use the default file
             import csv
@@ -514,6 +509,7 @@ class SourcesFile(RowBuildSourceFile):
 
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
+
 
 class SchemaFile(RowBuildSourceFile):
 
@@ -620,9 +616,9 @@ class SchemaFile(RowBuildSourceFile):
                 initial_rows.append(row)
 
                 # this should put all of the data fields at the end of the headers
-                for v in row.keys():
-                    if v not in headers:
-                        headers.append(v)
+                for k in iterkeys(row):
+                    if k not in headers:
+                        headers.append(k)
 
         rows = list()
 
@@ -652,8 +648,7 @@ class SchemaFile(RowBuildSourceFile):
         # Transpose trick to remove empty columns
         if rows:
             rows_before_transpose = len(rows)
-            # FIXME: Needs smart 2to3 conversion. Auto-conversion breaks tests.
-            rows = zip(*[r for r in zip(*rows) if bool(filter(bool, r[1:]))])
+            rows = list(_drop_empty(rows))
             assert rows_before_transpose == len(rows)  # The transpose trick removes all of the rows if anything goes wrong
 
         else:
@@ -839,3 +834,17 @@ class BuildSourceFileAccessor(object):
     def sync_dirs(self):
         return [(file_const, self.file(file_const).sync_dir())
                 for file_const, (file_name, clz) in iteritems(file_info_map)]
+
+
+def _drop_empty(rows):
+    """ Returns generator with new rows without empty.
+
+    Args:
+        rows (list of lists)
+
+    Returns:
+        iterator
+
+    """
+    # TODO: looks so complicated. Refactor.
+    return six_izip(*[r for r in six_izip(*rows) if bool(list(filter(bool, r[1:])))])

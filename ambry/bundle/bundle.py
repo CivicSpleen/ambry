@@ -11,6 +11,7 @@ import sys
 from time import time
 import traceback
 from functools import partial
+
 from six import string_types, iteritems, u, b
 
 from geoid.civick import GVid
@@ -22,6 +23,7 @@ import ambry.etl
 from ..util import get_logger, Constant
 
 indent = '    '  # Indent for structured log output
+
 
 class Bundle(object):
 
@@ -929,7 +931,7 @@ class Bundle(object):
         """Write a report of the pipeline out to a file """
 
         self.build_fs.makedir('pipeline', allow_recreate=True)
-        v = """
+        v = u("""
 Pipeline
 ========
 {}
@@ -937,7 +939,7 @@ Pipeline
 Pipeline Headers
 ================
 {}
-""".format(unicode(pl), pl.headers_report())
+""").format(pl, pl.headers_report())
 
         self.build_fs.setcontents(
             os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'), v, encoding='utf8')
