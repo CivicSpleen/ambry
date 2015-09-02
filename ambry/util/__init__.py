@@ -28,7 +28,7 @@ from bs4 import BeautifulSoup
 
 from six.moves import filterfalse, xrange
 from six import iteritems, iterkeys, itervalues, _print, StringIO
-from six.moves import builtins
+from six.moves import builtins, zip as six_izip
 from six.moves.urllib.parse import urlparse, urlsplit, urlunsplit
 from six.moves.urllib.request import urlopen
 
