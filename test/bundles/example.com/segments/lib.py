@@ -18,10 +18,10 @@ class RandomSourcePipe(SourcePipe):
 
         categorical = ['red', 'blue', 'green', 'yellow', 'black']
 
-        states = range(2)
-        counties = range(1, 4)
-        tracts = range(1, 6)
-        bgs = range(1, 6)
+        states = list(range(2))
+        counties = list(range(1, 4))
+        tracts = list(range(1, 6))
+        bgs = list(range(1, 6))
 
         rc = random.choice
 
@@ -42,6 +42,6 @@ class RandomSourcePipe(SourcePipe):
             row['bg_gvid'] = str(civick.Blockgroup(rc(states), rc(counties), rc(tracts), rc(bgs)))
 
             if i == 0:
-                yield row.keys()
+                yield list(row.keys())
 
-            yield row.values()
+            yield list(row.values())

@@ -1,10 +1,13 @@
 """"
 These are random tests used in development. They aren't meant to be comprehensive or to exercise any specific bugs. """
 
-from test.test_base import TestBase
 import unittest
 
-from ambry.bundle import Bundle
+from six import u
+
+from test.test_base import TestBase
+from six.moves.urllib.parse import urlparse
+
 
 class Test(TestBase):
 
@@ -24,7 +27,7 @@ class Test(TestBase):
         p = list(b.partitions)[0]
         p_vid = p.vid
 
-        self.assertEquals(497054, int(sum(row[3] for row in p.stream(skip_header=True))))
+        self.assertEqual(497054, int(sum(row[3] for row in p.stream(skip_header=True))))
 
         self.assertEqual('build', l.partition(p_vid).location)
 
@@ -37,7 +40,7 @@ class Test(TestBase):
             else:
                 raise
 
-        print remote_name, path
+        print(remote_name, path)
 
     @unittest.skip("Development Test")
     def test_search(self):
@@ -63,17 +66,16 @@ class Test(TestBase):
 
         search.index_library_datasets()
 
-        self.assertEquals([u'd000simple003', u'p000simple002003'], list(search.list_documents()))
+        self.assertEqual([u('d000simple003'), u('p000simple002003')], list(search.list_documents()))
 
-        print search.search_datasets('d000simple003')[0].vid
+        print(search.search_datasets('d000simple003')[0].vid)
 
-        print search.search_datasets('Example')[0].vid
+        print(search.search_datasets('Example')[0].vid)
 
-        print search.search_datasets('2010')
+        print(search.search_datasets('2010'))
 
     @unittest.skip("Development Test")
     def test_sequence(self):
-        from urlparse import urlparse
         from ambry.orm import Database
 
         conf = self.get_rc()
@@ -90,5 +92,5 @@ class Test(TestBase):
 
         for i in range(10):
 
-            print b.dataset.next_number('foobar')
+            print(b.dataset.next_number('foobar'))
 

@@ -9,6 +9,6 @@ class Bundle(Bundle):
     """ """
 
     def test_coverage(self):
-        
+
         for p in self.partitions:
             print()  # FIXME: print what?
