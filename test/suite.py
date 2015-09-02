@@ -4,7 +4,7 @@ Created on Oct 15, 2012
 @author: eric
 """
 import unittest
-import test_identity
+from . import test_identity
 
 suite = unittest.TestSuite()
 suite.addTests(test_identity.suite())
@@ -13,10 +13,10 @@ test_loader = unittest.defaultTestLoader
 
 modules_to_discover = [
     'test_bundle',
-    'test_library',
-    'test_orm',
-    'test_metadata',
     'test_etl',
+    'test_library',
+    'test_metadata',
+    'test_orm',
     'test_warehouse',
 ]
 
