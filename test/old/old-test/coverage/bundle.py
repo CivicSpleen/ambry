@@ -17,7 +17,7 @@ class Bundle(CsvBundle):
         super(Bundle, self).build()
 
         gvids = "0O0F0b 0O0F0B 0O0F0D".split()  # Counties in Oregon
-        years = range(1995, 1999)
+        years = list(range(1995, 1999))
 
         p = self.partitions.find_or_new(table="counties")
         p.clean()

@@ -30,7 +30,7 @@ class Bundle(BuildBundle):
                 ins.row_id = (seg - 1) * self.records_per_segment
 
                 for i in range(self.records_per_segment):
-                    row = dict(nd.items())
+                    row = dict(list(nd.items()))
 
                     row['uuid'] = str(uuid.uuid4())
                     row['int'] = random.randint(0, 100)

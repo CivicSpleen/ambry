@@ -28,7 +28,7 @@ class Bundle(BuildBundle):
         self.log("Installed manifest to {}".format(w.database.dsn))
 
         for row in w.database.connection.execute("SELECT * FROM example_combined"):
-            print row
+            print(row)
 
         return True
         

@@ -88,7 +88,7 @@ class Bundle(BuildBundle):
             with self.session:
                 header = [c.name for c in table.columns]
 
-            for stusab, state in self.states.items():
+            for stusab, state in list(self.states.items()):
 
                 if self.run_args.test and stusab != 'CA':
                     continue
@@ -108,7 +108,7 @@ class Bundle(BuildBundle):
                                     lr("{} {} {} {}".format(
                                         table_name, stusab, geo,
                                         p.identity.grain))
-                                    d = dict(zip(header, line))
+                                    d = dict(list(zip(header, line)))
 
                                     errors = ins.insert(d)
 
@@ -122,7 +122,7 @@ class Bundle(BuildBundle):
         # the Jam Codes
         code_cols = {}
         for link, errors, geo, table in raw_codes:
-            ld = dict(zip(header[:6], link))
+            ld = dict(list(zip(header[:6], link)))
             del ld['fileid']
             del ld['filetype']  # Should aways be 2012e5
             ld['geo'] = geo
@@ -131,7 +131,7 @@ class Bundle(BuildBundle):
             if table not in code_cols:
                 code_cols[table] = []
 
-            for k, v in errors.items():
+            for k, v in list(errors.items()):
                 ld['col'] = k
                 ld['value'] = v
 
