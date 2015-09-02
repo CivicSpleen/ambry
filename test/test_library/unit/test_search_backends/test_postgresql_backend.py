@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+
 
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
@@ -114,7 +114,7 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
         self.backend.dataset_index.index_one(ds1)
         self.backend.dataset_index.index_one(ds2)
         ret = self.backend.dataset_index.all()
-        self.assertEquals(len(ret), 2)
+        self.assertEqual(len(ret), 2)
 
     # _make_query_from_terms tests
     def test_extends_query_with_limit(self):
@@ -130,12 +130,12 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
         # was it really added?
         ret = self.backend.dataset_index.all()
-        self.assertEquals(len(ret), 1)
+        self.assertEqual(len(ret), 1)
 
         # delete and test
         self.backend.dataset_index._delete(vid=ds1.vid)
         ret = self.backend.dataset_index.all()
-        self.assertEquals(len(ret), 0)
+        self.assertEqual(len(ret), 0)
 
 
 class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
@@ -211,7 +211,7 @@ class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
         self.backend.identifier_index.index_one(identifier1)
         self.backend.identifier_index.index_one(identifier2)
         ret = self.backend.identifier_index.all()
-        self.assertEquals(len(ret), 2)
+        self.assertEqual(len(ret), 2)
 
     # _delete tests
     def test_deletes_given_identifier_from_index(self):
@@ -223,12 +223,12 @@ class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
         # was it really added?
         ret = self.backend.identifier_index.all()
-        self.assertEquals(len(ret), 1)
+        self.assertEqual(len(ret), 1)
 
         # delete and test
         self.backend.identifier_index._delete(identifier='id2')
         ret = self.backend.identifier_index.all()
-        self.assertEquals(len(ret), 0)
+        self.assertEqual(len(ret), 0)
 
 
 class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
@@ -284,9 +284,9 @@ class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
         # was it really added?
         ret = self.backend.partition_index.all()
-        self.assertEquals(len(ret), 1)
+        self.assertEqual(len(ret), 1)
 
         # delete and test
         self.backend.partition_index._delete(vid=partition.vid)
         ret = self.backend.partition_index.all()
-        self.assertEquals(len(ret), 0)
+        self.assertEqual(len(ret), 0)

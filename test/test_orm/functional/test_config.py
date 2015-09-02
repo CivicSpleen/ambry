@@ -15,7 +15,7 @@ class Test(TestBase):
         db = self.new_database()
         ds = self.new_db_dataset(db, n=0)
 
-        print ds.config.metadata.identity.id
+        print(ds.config.metadata.identity.id)
         return
 
         ds.config.metadata.identity.id = 'd02'
@@ -70,7 +70,7 @@ class Test(TestBase):
 
         dsn = rc.database('pg-func-test', return_dsn=True)
 
-        print dsn
+        print(dsn)
 
         db = Database(dsn)
 
@@ -82,13 +82,13 @@ class Test(TestBase):
 
         db.commit()
 
-        ds.config.library.build.url = u'http:/foo/bar/baz/øé'
+        ds.config.library.build.url = 'http:/foo/bar/baz/øé'
 
         ds.config.sync['lib']['foobar'] = time.time()
 
         ds.commit()
 
-        print ds.config.library.build.url
+        print(ds.config.library.build.url)
 
 
 

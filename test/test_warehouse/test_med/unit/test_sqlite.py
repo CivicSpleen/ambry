@@ -4,6 +4,8 @@ import unittest
 
 import apsw
 
+from six import u
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import create_session
 
@@ -112,4 +114,4 @@ class Test(BaseMEDTest):
         query = 'SELECT col1, col2 FROM {};'.format(_table_name(partition))
         result = cursor.execute(query).fetchall()
         self.assertEqual(len(result), 100)
-        self.assertEqual(result[0], (u'2015-08-30', u'2015-08-30T11:41:32.977993'))
+        self.assertEqual(result[0], (u('2015-08-30'), u('2015-08-30T11:41:32.977993')))

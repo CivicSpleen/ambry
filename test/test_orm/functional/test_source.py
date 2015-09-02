@@ -41,6 +41,6 @@ class Test(TestBase):
             source = ds.new_source("source"+str(i))
             ds.commit()
             t  = source.source_table
-            self.assertEquals("source"+str(i), t.name)
+            self.assertEqual("source"+str(i), t.name)
 
 

@@ -23,6 +23,6 @@ class Test(TestBase):
         self.assertEqual(bs1.id, bs3.id)
         self.assertNotEqual(bs1.id, bs2.id)
 
-        print bs1.id
-        print bs2.id
-        print bs3.id
+        print(bs1.id)
+        print(bs2.id)
+        print(bs3.id)
