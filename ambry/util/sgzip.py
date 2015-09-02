@@ -21,7 +21,7 @@ import time
 import zlib
 
 from six.moves import builtins
-from six import string_types, xrange, StringIO
+from six import string_types, xrange as six_xrange, StringIO, integer_types
 
 if sys.version_info > (3,):
     # allow to use long() for 2 and 3 versions of the python.
@@ -217,7 +217,7 @@ class GzipFile(io.BufferedIOBase):
         mtime = self.mtime
         if mtime is None:
             mtime = time.time()
-        write32u(self.fileobj, long(mtime))
+        write32u(self.fileobj, integer_types[-1](mtime))  # long for python2, int for python3
         self.fileobj.write('\002')
         self.fileobj.write('\377')
 
@@ -517,7 +517,7 @@ class GzipFile(io.BufferedIOBase):
             if offset < self.offset:
                 raise IOError('Negative seek in write mode')
             count = offset - self.offset
-            for i in xrange(count // 1024):
+            for i in six_xrange(count // 1024):
                 self.write(1024 * '\0')
             self.write((count % 1024) * '\0')
         elif self.mode == READ:
@@ -525,7 +525,7 @@ class GzipFile(io.BufferedIOBase):
                 # for negative seek, rewind and do positive seek
                 self.rewind()
             count = offset - self.offset
-            for i in xrange(count // 1024):
+            for i in six_xrange(count // 1024):
                 self.read(1024)
             self.read(count % 1024)
 

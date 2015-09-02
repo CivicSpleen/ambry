@@ -1,5 +1,7 @@
 """Utilities for dealing with time"""
 
+from six import string_types, integer_types
+
 
 def expand_to_years(dates):
     """
@@ -15,7 +17,8 @@ def expand_to_years(dates):
     if not dates:
         return []
 
-    if not isinstance(dates, (basestring, int)):  # Can't EAFP since strings are iterable
+    types = string_types + integer_types
+    if not isinstance(dates, types):  # Can't EAFP since strings are iterable
         import itertools
         return sorted(set(itertools.chain(*[expand_to_years(x) for x in dates])))
 

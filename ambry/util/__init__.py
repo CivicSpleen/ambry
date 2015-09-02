@@ -5,7 +5,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from __future__ import unicode_literals
+
 from collections import OrderedDict, defaultdict, Mapping, deque, MutableMapping, Callable
 from functools import partial, reduce, wraps
 import json
@@ -26,8 +26,8 @@ from yaml.representer import RepresenterError
 
 from bs4 import BeautifulSoup
 
-from six.moves import filterfalse, xrange
-from six import iteritems, iterkeys, itervalues, _print, StringIO
+from six.moves import filterfalse, xrange as six_xrange
+from six import iteritems, iterkeys, itervalues, _print, StringIO, text_type
 from six.moves import builtins, zip as six_izip
 from six.moves.urllib.parse import urlparse, urlsplit, urlunsplit
 from six.moves.urllib.request import urlopen
@@ -412,10 +412,6 @@ def include_representer(dumper, data):
     return dumper.represent_scalar('!include', data.relpath)
 
 
-def include_representer(dumper, data):
-    return dumper.represent_scalar('!include', data.relpath)
-
-
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 class AttrDict(OrderedDict):
     def __init__(self, *argz, **kwz):
@@ -725,7 +721,7 @@ def toposort(data):
 def chunks(l, n):
     """ Yield successive n-sized chunks from l.
     """
-    for i in xrange(0, len(l), n):
+    for i in six_xrange(0, len(l), n):
         yield l[i:i + n]
 
 
@@ -768,7 +764,7 @@ def md5_for_file(f, block_size=2 ** 20):
             if not data:
                 break
 
-            if isinstance(data, unicode):
+            if isinstance(data, text_type):
                 # HACK! This part seems wrong, but it seems to work
                 data = data.encode('utf8')
 
@@ -809,7 +805,7 @@ def make_acro(past, prefix, s):
 
         # Really should cache these ...
         v = ['a', 'e', 'i', 'o', 'u', 'y']
-        c = [chr(x) for x in range(ord('a'), ord('z') + 1) if chr(x) not in v]
+        c = [chr(x) for x in six_xrange(ord('a'), ord('z') + 1) if chr(x) not in v]
 
         s = re.sub(r'\W+', '', s.lower())
 
@@ -854,7 +850,7 @@ def make_acro(past, prefix, s):
 
         return None
 
-    for t in range(11):
+    for t in six_xrange(11):
 
         try:
             a = _make_acro(s, t)
@@ -1145,7 +1141,7 @@ class Progressor(object):
 
 
 def enum(*sequential, **named):
-    enums = dict(list(zip(sequential, list(range(len(sequential))))), **named)
+    enums = dict(list(zip(sequential, list(six_xrange(len(sequential))))), **named)
     return type('Enum', (), enums)
 
 
