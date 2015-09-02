@@ -142,6 +142,7 @@ class Column(object):
         self.type_counts[datetime.date] = 0
         self.type_counts[datetime.time] = 0
         self.type_counts[None] = 0
+        self.type_counts[unicode] = 0
         self.strings = deque(maxlen=1000)
         self.position = None
         self.header = None
@@ -156,14 +157,19 @@ class Column(object):
     def test(self, v):
         from dateutil import parser
 
-        self.length = max(self.length, len(str(v)))
         self.count += 1
 
         if v is None:
             self.type_counts[None] += 1
             return None
 
-        v = str(v)
+        try:
+            v = str(v)
+        except UnicodeEncodeError:
+            self.type_counts[unicode] += 1
+            return unicode
+
+        self.length = max(self.length, len(v))
 
         try:
             v = v.strip()
@@ -209,7 +215,6 @@ class Column(object):
 
                 return type_
 
-
     def _resolved_type(self):
         """Return the type for the columns, and a flag to indicate that the
         column has codes."""
@@ -241,8 +246,12 @@ class Column(object):
         elif self.type_counts[int] > 0:
             num_type = int
 
+        # FIXME; need a better method of str/unicode that's compatible with Python3
         elif self.type_counts[str] > 0:
             num_type = str
+
+        elif self.type_counts[unicode] > 0:
+            num_type = unicode
 
         else:
             num_type = unknown
@@ -296,18 +305,20 @@ class TypeIntuiter(Pipe):
         if n < self.skip_rows:
             return
 
-        try:
-            for i, value in enumerate(row):
+        for i, value in enumerate(row):
+            try:
                 if i not in self._columns:
                     self._columns[i] = Column()
                     self._columns[i].position = i
 
                 self._columns[i].test(value)
 
-        except Exception:
-            # This usually doesn't matter, since there are usually plenty of other rows to intuit from
-            # print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
-            pass
+            except Exception as e:
+                # This usually doesn't matter, since there are usually plenty of other rows to intuit from
+                # print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
+                print i, value, e
+                pass
+                raise
 
     def __iter__(self):
         for i, row in enumerate(self.source_pipe):
@@ -365,7 +376,7 @@ class TypeIntuiter(Pipe):
         except AttributeError:
             pass
 
-        type_precidence = ['unknown', 'int', 'float', 'date', 'time', 'datetime', 'str']
+        type_precidence = ['unknown', 'int', 'float', 'date', 'time', 'datetime', 'str', 'unicode']
 
         # TODO This will fail for dates and times.
 
@@ -376,13 +387,15 @@ class TypeIntuiter(Pipe):
 
     def results_table(self):
 
-        fields = 'position header length resolved_type has_codes count ints floats strs nones datetimes dates times '.split()
+        fields = 'position header length resolved_type has_codes count ints floats strs unicode nones datetimes dates times '.split()
 
         header = list(fields)
+        # Shorten a few of the header names
         header[0] = '#'
         header[2] = 'size'
         header[4] = 'codes?'
-        header[10] = 'd/t'
+        header[9] = 'uni'
+        header[11] = 'd/t'
 
         rows = list()
 
@@ -407,6 +420,7 @@ class TypeIntuiter(Pipe):
                 ints=v.type_counts.get(int, None),
                 floats=v.type_counts.get(float, None),
                 strs=v.type_counts.get(str, None),
+                unicode=v.type_counts.get(unicode, None),
                 nones=v.type_counts.get(None, None),
                 datetimes=v.type_counts.get(datetime.datetime, None),
                 dates=v.type_counts.get(datetime.date, None),
@@ -688,3 +702,104 @@ class RowIntuiter(Pipe):
                 # all rows generated.
                 break
         self.finish()
+
+
+class ClusterHeaders(object):
+    """Using Source table headers, cluster the source tables into destination tables"""
+
+    def __init__(self, bundle = None):
+        self._bundle = bundle
+        self._headers = {}
+
+    def match_headers(self, a, b):
+        from difflib import SequenceMatcher, ndiff
+        from collections import Counter
+
+        c =  Counter(e[0] for e in ndiff(a,b) if e[0] != '?')
+
+        same = c.get(' ',0)
+        remove = c.get('-',0)
+        add = c.get('+',0)
+
+        return float(remove+add) / float(same)
+
+    def match_headers_a(self, a, b):
+        from difflib import SequenceMatcher
+
+        for i, ca in enumerate(a):
+            for j,cb in enumerate(b):
+                r = SequenceMatcher(None, ca, cb).ratio()
+
+                if r > .9:
+                    print ca, cb
+                    break
+
+    def add_header(self, name, headers):
+        self._headers[name] = headers
+
+    def pairs(self):
+        return  set([ (name1, name2) for name1 in list(self._headers) for name2 in list(self._headers) if name2 > name1])
+
+    @classmethod
+    def long_substr(cls,data):
+        data = list(data)
+        substr = ''
+        if len(data) > 1 and len(data[0]) > 0:
+            for i in range(len(data[0])):
+                for j in range(len(data[0]) - i + 1):
+                    if j > len(substr) and cls.is_substr(data[0][i:i + j], data):
+                        substr = data[0][i:i + j]
+        return substr
+
+    @classmethod
+    def is_substr(cls,find, data):
+        if len(data) < 1 and len(find) < 1:
+            return False
+        for i in range(len(data)):
+            if find not in data[i]:
+                return False
+        return True
+
+    def cluster(self):
+
+        pairs = self.pairs()
+
+        results = []
+        for a, b in pairs:
+            results.append((round(self.match_headers(self._headers[a],self._headers[b]), 3), a, b))
+
+        results = sorted(results, key = lambda r: r[0])
+
+        clusters = []
+
+        for r in results:
+            if r[0] < .3:
+                a = r[1]
+                b = r[2]
+                allocated = False
+                for c in clusters:
+                    if a in c or b in c:
+                        c.add(a)
+                        c.add(b)
+                        allocated = True
+                        break
+                if not allocated:
+                    ns = set([a,b])
+                    clusters.append(ns)
+
+        d = { self.long_substr(c).strip('_'):sorted(c) for c in clusters }
+
+        return d
+
+
+
+
+
+
+
+
+
+
+
+
+

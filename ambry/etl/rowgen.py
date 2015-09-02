@@ -55,7 +55,7 @@ def source_pipe(bundle, source, allow_refetch = True):
             source.file = fstor.path
             return source_pipe(bundle, source, False)
         else:
-            raise SourceError("Failed to determine file type for source '{}' ".format())
+            raise SourceError("Failed to determine file type for source '{}' ".format(source.name))
 
 
 class DelayedOpen(object):
@@ -91,7 +91,7 @@ class DelayedOpen(object):
         try:
             return self.syspath()
         except NoSysPathError:
-            return "Delayed Open: "+str(self._fs)+';'+str(self._path)
+            return "Delayed Open: source = {}; {}; {} ".format(self._source.name, str(self._fs),str(self._path))
 
 def fetch(source, cache_fs, account_accessor):
     """Download the source and return a callable object that will open the file. """
@@ -193,7 +193,7 @@ class SourcePipe(Pipe):
         from fs.errors import NoSysPathError
 
         if self._fstor:
-            return qualified_class_name(self)+"\n"+self.indent+str(self._fstor)
+            return "{}; {}\n{}{}".format(qualified_class_name(self), self.source.name,self.indent,str(self._fstor))
 
         else:
 

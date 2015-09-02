@@ -348,6 +348,9 @@ def bundle_parser(cmd):
 
 
 
+    command_p = sub_cmd.add_parser('cluster', help='Cluster sources by similar headers')
+    command_p.set_defaults(subcommand='cluster')
+
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -1124,4 +1127,19 @@ def bundle_extract(args, l, rc):
                 w.writerow(row)
 
     b.logger.info('Extracted to: {}'.format(bfs.getsyspath('/')))
+
+def bundle_cluster(args, l, rc):
+
+    from ambry.etl import ClusterHeaders
+    import yaml
+
+    b = using_bundle(args, l)
+
+    ch = ClusterHeaders()
+
+    for t in b.dataset.source_tables:
+        ch.add_header(t.name, sorted([c.source_header for c in t.columns ]))
+
+
+    print yaml.safe_dump({'source_sets': ch.cluster()}, indent=4, default_flow_style=False)
 

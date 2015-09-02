@@ -377,17 +377,22 @@ class Head(Pipe):
     """ Pass-through only the first N rows
     """
 
-    def __init__(self, count=20):
+    def __init__(self, N=20):
 
-        self.count = count
+        self.N = N
+        self.i = 0
 
     def process_body(self, row):
 
-        if self.count == 0:
+        if self.i >= self.N:
             raise StopIteration
 
-        self.count -= 1
+        self.i += 1
         return row
+
+    def __str__(self):
+        return "{}; N={}; i={}".format(super(Head, self).__str__(), self.N, self.i )
+
 
 class Sample(Pipe):
     """ Take a sample of rows, skipping rows exponentially to end at the est_length input row, with

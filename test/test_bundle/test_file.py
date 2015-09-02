@@ -141,7 +141,7 @@ class Test(unittest.TestCase):
         #    print x
 
     def test_datafile(self):
-        from ambry.etl.partition import PartitionCsvDataFile, PartitionMsgpackDataFile
+        from ambry.etl.partition import PartitionMsgpackDataFile
         from fs.opener import fsopendir
         import time
         import datetime
@@ -149,105 +149,41 @@ class Test(unittest.TestCase):
 
         fs = fsopendir('mem://')
 
-        N = 100000
+        N = 10
 
         # Basic read/ write tests.
 
-        header = 'abcdef'.split()
         row = [ None, 1, 2.0, 'Foobar', datetime.date(10,10,10), datetime.date(10,10,10) ]
-
-        with Timer() as t:
-
-            df = PartitionCsvDataFile(fs, 'foobar')
-
-            df.insert_header(['a', 'b'])
-
-            for i in range(N):
-                df.insert_body([i,i])
-
-            df.close()
-            print "CSV Write    ", float(N)/t.elapsed, df.size
-
-        with Timer() as t:
-            count = 0
-
-            for row in df.reader():
-                try:
-                    count += int(row[0])
-                except:
-                    pass
-
-            print "CSV Read     ", float(N)/t.elapsed
+        header = list('abcdefghi')[:len(row)]
 
         with Timer() as t:
             df = PartitionMsgpackDataFile(fs, 'foobar')
+            w = df.writer()
 
-            df.insert_header(['a', 'b'])
+            w.set_row_header(header)
+
+            w.file_header['source']['url'] = 'blah blah'
+
+            w.write_file_header()
 
             for i in range(N):
-                df.insert_body([i, i])
+                w.insert_row(row)
 
-            df.close()
-            print "MSGPack write" , float(N)/t.elapsed, df.size
+            w.close()
+            print "MSGPack write " , float(N)/t.elapsed, df.size
 
         with Timer() as t:
             count = 0
 
-            for row in df.reader():
+            r = df.reader()
+
+            for row in r:
                 try:
                     count += int(row[0])
                 except:
                     pass
 
-            print "MSGPack read ", float(N)/t.elapsed
+            print "MSGPack read  ", float(N)/t.elapsed
 
-        with Timer() as t:
-            df = PartitionMsgpackDataFile(fs, 'foobar', compress = False)
-
-            df.insert_header(['a', 'b'])
-
-            for i in range(N):
-                df.insert_body([i, i])
-
-            df.close()
-            print "MSGPack write", float(N) / t.elapsed, df.size
-
-        with Timer() as t:
-            count = 0
-
-            for row in df.reader():
-                try:
-                    count += int(row[0])
-                except:
-                    pass
-
-            print "MSGPack read ", float(N) / t.elapsed
-
-        # Test rate of coping from one set of segments
-
-        def gen_df(N, name):
-            df = PartitionMsgpackDataFile(fs, name)
-
-            df.insert_header(header)
-
-            for i in range(N):
-                df.insert_body(row)
-
-            df.close()
-
-            return df
-
-
-
-        if False:
-            from itertools import chain
-            df = PartitionMsgpackDataFile(fs, 'output')
-            df.insert_header(header)
-            with Timer() as t:
-                for row in chain(gen_df(N, 'foo1').reader(), gen_df(N,'foo2').reader()):
-                    df.insert_body(row)
-
-                print "Chained MSGPack write/read", float(2*N) / t.elapsed
-
-
+            print r.file_header
 

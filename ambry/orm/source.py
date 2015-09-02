@@ -31,13 +31,13 @@ class DataSourceBase(object):
 
         # The filetype is explicitly specified
         if self.filetype:
-            return self.filetype
+            return self.filetype.lower()
 
         # The name of an internal file is specified, use the extension
         # FIXME. The file can be named as a reg ex, so the extension isn't required.
         if self.file:
             root, ext = splitext(self.file)
-            return ext[1:]
+            return ext[1:].lower()
 
         parsed = urlparse(self.url)
 
@@ -48,10 +48,10 @@ class DataSourceBase(object):
             parsed_path = parsed.path.replace('.zip', '')
             root, ext = splitext(parsed_path)
 
-            return ext[1:]
+            return ext[1:].lower()
 
         elif ext:
-            return ext[1:]
+            return ext[1:].lower()
 
         return None
 

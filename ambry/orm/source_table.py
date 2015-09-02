@@ -27,6 +27,7 @@ class SourceColumn(Base):
     DATATYPE.INT = int.__name__
     DATATYPE.FLOAT = float.__name__
     DATATYPE.STRING = str.__name__
+    DATATYPE.UNICODE = unicode.__name__
     DATATYPE.DATE = datetime.date.__name__
     DATATYPE.TIME = datetime.time.__name__
     DATATYPE.DATETIME = datetime.datetime.__name__
@@ -36,6 +37,7 @@ class SourceColumn(Base):
         DATATYPE.INT: int,
         DATATYPE.FLOAT: float,
         DATATYPE.STRING: str,
+        DATATYPE.UNICODE: unicode,
         DATATYPE.DATE: datetime.date,
         DATATYPE.TIME: datetime.time,
         DATATYPE.DATETIME: datetime.datetime,
@@ -46,6 +48,7 @@ class SourceColumn(Base):
         DATATYPE.INT: Column.DATATYPE_INTEGER,
         DATATYPE.FLOAT: Column.DATATYPE_FLOAT,
         DATATYPE.STRING: Column.DATATYPE_STR,
+        DATATYPE.UNICODE: Column.DATATYPE_STR,
         DATATYPE.DATE: Column.DATATYPE_DATE,
         DATATYPE.TIME: Column.DATATYPE_TIME,
         DATATYPE.DATETIME: Column.DATATYPE_DATETIME,
