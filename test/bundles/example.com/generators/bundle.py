@@ -25,9 +25,9 @@ class RandomSourcePipe(SourcePipe):
             row['number2'] = i*2
 
             if i == 0:
-                yield row.keys()
+                yield list(row.keys())
 
-            yield row.values()
+            yield list(row.values())
 
 
 class Bundle(Bundle):
