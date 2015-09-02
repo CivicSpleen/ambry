@@ -4,13 +4,11 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
-from __future__ import unicode_literals
 from collections import Mapping, OrderedDict, MutableMapping
 import copy
 import logging
 
-from six import StringIO
-from six import iteritems, iterkeys, itervalues
+from six import iteritems, iterkeys, itervalues, StringIO, text_type, binary_type, string_types
 from six.moves.html_parser import HTMLParser
 
 from sqlalchemy.orm import object_session
@@ -54,7 +52,7 @@ class AttrDict(OrderedDict):
     @staticmethod
     def flatten_dict(data, path=tuple()):
         dst = list()
-        for k, v in data.items():
+        for k, v in iteritems(data):
             k = path + (k,)
             if isinstance(v, Mapping):
                 for v in v.flatten(k):
@@ -798,7 +796,7 @@ class MLStripper(HTMLParser):
         return ''.join(self.fed)
 
 
-class _ScalarTermS(str):
+class _ScalarTermS(binary_type):
     """A scalar term for extension for  strings, with support for Jinja substitutions"""
 
     def __new__(cls, string, jinja_sub, term):
@@ -826,7 +824,7 @@ class _ScalarTermS(str):
         return s.get_data()
 
 
-class _ScalarTermU(unicode):  # TODO: Need 2to3 conversion.
+class _ScalarTermU(text_type):
     """A scalar term for extension for unicode, with support for Jinja substitutions"""
     def __new__(cls, string, jinja_sub, term):
         ob = super(_ScalarTermU, cls).__new__(cls, string)
@@ -870,7 +868,7 @@ class ScalarTerm(Term):
 
         def jinja_sub(st):
 
-            if isinstance(st, basestring):  # TODO: need 2to3 conversion.
+            if isinstance(st, string_types):
                 from jinja2 import Template
 
                 try:
@@ -885,9 +883,9 @@ class ScalarTerm(Term):
 
             return st
 
-        if isinstance(st, str):  # TODO: Need 2to3 conversion.
+        if isinstance(st, binary_type):
             return _ScalarTermS(st, jinja_sub, self)
-        elif isinstance(st, unicode):  # TODO: Need 2to3 conversion.
+        elif isinstance(st, text_type):
             return _ScalarTermU(st, jinja_sub, self)
         elif st is None:
             return _ScalarTermS('', jinja_sub, self)
