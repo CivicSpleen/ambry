@@ -1,5 +1,5 @@
 """Intuit data types for rows of values."""
-from __future__ import unicode_literals
+
 __author__ = 'eric'
 
 from collections import deque
@@ -630,7 +630,7 @@ class RowIntuiter(Pipe):
         rows_iter = iter(self._source_pipe)
         for i in range(self.FIRST_ROWS + self.DATA_SAMPLE_SIZE + self.LAST_ROWS):
             try:
-                first_rows.append(rows_iter.next())
+                first_rows.append(next(rows_iter))
             except StopIteration:
                 pass
 
@@ -657,7 +657,7 @@ class RowIntuiter(Pipe):
             # collect rows to chunk.
             for i in range(self.CHUNK_DATA_SIZE + self.CHUNK_FOOTER_SIZE - len(chunk)):
                 try:
-                    chunk.append(rows_iter.next())
+                    chunk.append(next(rows_iter))
                 except StopIteration:
                     break
 

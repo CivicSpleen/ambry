@@ -10,7 +10,7 @@ import time
 
 from tabulate import tabulate
 
-from six import iteritems, itervalues, string_types
+from six import iteritems, itervalues, string_types, u, b
 
 from ambry.identity import PartialPartitionName
 from ambry.util import qualified_class_name
@@ -382,7 +382,7 @@ class AddDestHeader(Pipe):
         if not self._added_headers:
             self._added_headers = [c.name for c in self.source.dest_table.columns][1:]
 
-        print '!!!!', self.source.dest_table.name, self._added_headers
+        print('!!!!', self.source.dest_table.name, self._added_headers)
 
         yield self._added_headers
 
@@ -472,6 +472,7 @@ class MangleHeader(Pipe):
 
         while True:
             yield next(itr)
+
 
 class MergeHeader(Pipe):
     """Strips out the header comments and combines multiple header lines to emit a
@@ -582,10 +583,12 @@ class MergeHeader(Pipe):
 
                 if self.i < self.data_start_line:
                     if self.i in self.header_lines:
-                        self.headers.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+                        self.headers.append(
+                            [b(u('{}').format(x).encode('ascii', 'ignore')) for x in row])
 
                     if self.i in self.header_comment_lines:
-                        self.header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+                        self.header_comments.append(
+                            [b(u('{}').format(x).encode('ascii', 'ignore')) for x in row])
 
                     if self.i == max_header_line:
 
@@ -723,17 +726,17 @@ class AddDeleteExpand(Pipe):
             r1 = self.edit_row(row)
         except:
             # Todo, put this into the exception
-            print("EDIT ROW CODE", self.edit_row_code)
+            print('EDIT ROW CODE', self.edit_row_code)
             raise
 
         try:
             r2 = self.expand_row(row)
         except:
             # FIXME: put this into the exception
-            print("EXPAND ROW CODE: ", self.expand_row_code)
+            print('EXPAND ROW CODE: ', self.expand_row_code)
             raise
 
-        return r1+r2
+        return r1 + r2
 
     def __str__(self):
         from ..util import qualified_class_name
@@ -1304,7 +1307,7 @@ class Pipeline(OrderedDict):
 
         def pipe_location(pipe):
 
-            if not isinstance(pipe, basestring):
+            if not isinstance(pipe, string_types):
                 return None
 
             elif pipe[0] in '+-$!':
@@ -1514,9 +1517,9 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
 
         for pipe in chain:
-            out.append((pipe.segment.name if hasattr(pipe, 'segment') else '?') + ': '+unicode(pipe))
+            out.append((pipe.segment.name if hasattr(pipe, 'segment') else u('?: {}').format(pipe)))
 
-        out.append('final: '+str(self.final))
+        out.append('final: ' + str(self.final))
 
         return 'Pipeline {}\n'.format(self.name if self.name else '') + '\n'.join(out)
 

@@ -10,7 +10,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from collections import Counter
 
 from livestats import livestats
-from six import iteritems, iterkeys
+from six import iteritems, iterkeys, u
 
 from ambry.util import Constant
 
@@ -20,9 +20,9 @@ from .pipeline import PipelineError
 def text_hist(nums, ascii=False):
 
     if ascii:
-        parts = u' _.,,-=T#'
+        parts = u(' _.,,-=T#')
     else:
-        parts = u' ▁▂▃▄▅▆▇▉'
+        parts = u(' ▁▂▃▄▅▆▇▉')
 
     nums = list(nums)
     fraction = max(nums) / float(len(parts) - 1)
@@ -87,7 +87,7 @@ class StatSet(object):
         self.n += 1
 
         try:
-            unival = unicode(v)
+            unival = u('{}').format(v)
         except UnicodeError:
             unival = v.decode('ascii', 'ignore')
 

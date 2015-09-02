@@ -139,9 +139,8 @@ class PartitionCsvDataFileReader(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         """Generate rows from the file"""
-        # TODO: 2to3 brokes that by replacing next with __next__. Need extra check.
 
         row = next(self.reader)
 
@@ -154,6 +153,9 @@ class PartitionCsvDataFileReader(object):
 
     def close(self):
         self._f.close()
+
+# port iterator to python2
+PartitionCsvDataFileReader.next = PartitionCsvDataFileReader.__next__
 
 
 class PartitionCsvDataFile(PartitionDataFile):

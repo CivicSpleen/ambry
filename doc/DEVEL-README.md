@@ -201,7 +201,38 @@ If you do so, 2to3 will not replace __nonzero__.
 ```python
 u('some-str')
 ```
+instead of ```python
+u'some-str'
+```
+11. Use six.u() if you need to call __unicode__. Use six.b() if you need to call __str__:
+```python
+u('{}').format(instance)
+```
 instead of
 ```python
-u'some-str'
+unicode(instance)
+```
+and
+```python
+b('{}').format(instance)
+```
+instead of
+```python
+str(instance)
+```
+12. Use six.text_type and six.binary_type instead of str and unicode types.
+```python
+types = [int, six.binary_type]
+```
+instead of
+```python
+types = [int, str]
+```
+and
+```python
+types = [int, six.text_type]
+```
+instead of
+```python
+types = [int, unicode]
 ```

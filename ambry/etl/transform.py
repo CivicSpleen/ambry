@@ -10,7 +10,7 @@ import datetime
 import sys
 import textwrap
 
-from six import string_types, iteritems
+from six import string_types, iteritems, u, b, text_type, binary_type
 
 from .pipeline import Pipe, MissingHeaderError
 
@@ -229,11 +229,11 @@ def parse_float(caster, name, v):
 
 
 def parse_str(caster, name, v):
-    return str(v)
+    return b('{}').format(v)
 
 
 def parse_unicode(caster, name, v):
-    return unicode(v)
+    return u('{}').format(v)
 
 
 def parse_type(type_, caster,  name, v):
@@ -337,12 +337,14 @@ class Transform(object):
 
         o = []
 
+        full_types = []
+        full_types.extend(string_types)
+        full_types.extend([datetime.date, datetime.time, datetime.datetime, int, float])
         for i, (name, type_) in enumerate(self.types):
-
-            if type_ == str:
-                type_ = unicode
-
-            if type_ in [datetime.date, datetime.time, datetime.datetime, int, float, str, unicode]:
+            # convert all string types to unicode types.
+            if type_ == binary_type:
+                type_ = text_type
+            if type_ in full_types:
                 o.append((i, name, 'parse_{}'.format(type_.__name__)))
             else:
                 o.append((i, name, 'partial(parse_type,{})'.format(type_.__name__)))
@@ -359,18 +361,17 @@ class Transform(object):
 
     def compile(self):
 
+        # Note: do not remove that imports because we need them while evaluating.
         import dateutil.parser as dp
         import datetime
         from functools import partial
         from ambry.etl.transform import parse_date, parse_time, parse_datetime
         import sys
-
         # Get the code in string form.
         self.dict_transform_code, self.row_transform_code = self.make_transform()
 
-        localvars = dict(locals().items())
-
-        localvars.update(sys.modules[__name__].__dict__.items())
+        localvars = dict(iteritems(locals()))
+        localvars.update(iteritems(sys.modules[__name__].__dict__))
 
         for k, v in iteritems(self.custom_types):
             localvars[k] = v
@@ -381,6 +382,7 @@ class Transform(object):
 
     def cast_error(self, type_, name, v, e):
         self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
+
 
 class DictTransform(Transform):
 
@@ -486,10 +488,9 @@ class CasterPipe(Transform, Pipe, ):
         except Exception as e:
             m = str(e)
 
-            print self.pipeline
+            print(self.pipeline)
 
             raise type(e)("Failed to process row '{}'\n{}".format(row, e))
-
 
         if self.error_handler:
             row, self.error_accumulator = self.error_handler(row, self.error_accumulator)
