@@ -7,6 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 
+import sys
 import datetime
 
 import dateutil
@@ -26,6 +27,10 @@ from . import Base, MutationDict, MutationList,  JSONEncodedObj, BigIntegerType,
 
 from ambry.orm.code import Code
 from ambry.identity import ColumnNumber, ObjectNumber
+
+
+if sys.version_info > (3,):
+    buffer = memoryview
 
 
 class Column(Base):
@@ -99,7 +104,7 @@ class Column(Base):
     types = {
         # Sqlalchemy, Python, Sql,
 
-        DATATYPE_STR: (sqlalchemy.types.String, str, 'VARCHAR'),
+        DATATYPE_STR: (sqlalchemy.types.String, six.binary_type, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
         DATATYPE_INTEGER64: (BigIntegerType, six.integer_types[-1], 'INTEGER64'),  # it is long for py2 and int for py3
         DATATYPE_FLOAT: (sqlalchemy.types.Float, float, 'REAL'),
@@ -107,11 +112,11 @@ class Column(Base):
         DATATYPE_TIME: (sqlalchemy.types.Time, datetime.time, 'TIME'),
         DATATYPE_TIMESTAMP: (sqlalchemy.types.DateTime, datetime.datetime, 'TIMESTAMP'),
         DATATYPE_DATETIME: (sqlalchemy.types.DateTime, datetime.datetime, 'DATETIME'),
-        DATATYPE_POINT: (GeometryType, str, 'POINT'),
-        DATATYPE_LINESTRING: (GeometryType, str, 'LINESTRING'),
-        DATATYPE_POLYGON: (GeometryType, str, 'POLYGON'),
-        DATATYPE_MULTIPOLYGON: (GeometryType, str, 'MULTIPOLYGON'),
-        DATATYPE_GEOMETRY: (GeometryType, str, 'GEOMETRY'),
+        DATATYPE_POINT: (GeometryType, six.binary_type, 'POINT'),
+        DATATYPE_LINESTRING: (GeometryType, six.binary_type, 'LINESTRING'),
+        DATATYPE_POLYGON: (GeometryType, six.binary_type, 'POLYGON'),
+        DATATYPE_MULTIPOLYGON: (GeometryType, six.binary_type, 'MULTIPOLYGON'),
+        DATATYPE_GEOMETRY: (GeometryType, six.binary_type, 'GEOMETRY'),
         DATATYPE_BLOB: (sqlalchemy.types.LargeBinary, buffer, 'BLOB')
     }
 
