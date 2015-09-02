@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 from os.path import splitext
 
+from six import iteritems
 from six.moves.urllib.parse import urlparse
 
 from sqlalchemy import Column as SAColumn
@@ -80,7 +81,8 @@ class DataSourceBase(object):
     def row(self):
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
-        SKIP_KEYS = ('sequence_id', 'vid', '_source_table', '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
+        SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
+                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
 
         d = OrderedDict(
             [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS])
@@ -88,7 +90,7 @@ class DataSourceBase(object):
 
     def update(self, **kwargs):
 
-        for k, v in list(kwargs.items()):
+        for k, v in iteritems(kwargs):
             if hasattr(self, k):
                 setattr(self, k, v)
 
@@ -141,19 +143,8 @@ class DataSourceBase(object):
 
     @property
     def is_downloadable(self):
-        """Return true if the URL is probably downloadable from the url, and is not a reference or a template"""
-
-        return not self.urltype in ('ref', 'template')
-
-
-class TransientDataSource(DataSourceBase):
-    """A Transient version of Data Source, which can be created temporaritly, without being stored in the
-    database"""
-
-    def __init__(self,  **kwargs):
-
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+        """Return true if the URL is probably downloadable, and is not a reference or a template"""
+        return self.urltype not in ('ref', 'template')
 
 
 class DataSource(DataSourceBase, Base, DictableMixin):
@@ -218,7 +209,5 @@ class TransientDataSource(DataSourceBase):
             if isinstance(o, InstrumentedAttribute):
                 setattr(self, name, None)
 
-        for k, v in kwargs.items():
+        for k, v in iteritems(kwargs):
             setattr(self, k, v)
-
-

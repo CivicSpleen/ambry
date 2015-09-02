@@ -11,14 +11,14 @@ import datetime
 
 import dateutil
 
+import six
+
 import sqlalchemy
 
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, Boolean, UniqueConstraint
 from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
-
-from sqlalchemy.sql import text
 
 from ..util import memoize
 
@@ -71,8 +71,8 @@ class Column(Base):
 
     data = SAColumn('c_data', MutationDict.as_mutable(JSONEncodedObj))
 
-    codes = relationship(Code, backref='column', order_by="asc(Code.key)",
-                         cascade="save-update, delete, delete-orphan")
+    codes = relationship(Code, backref='column', order_by='asc(Code.key)',
+                         cascade='save-update, delete, delete-orphan')
 
     __table_args__ = (
         UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_c_sequence_id'),
@@ -82,7 +82,7 @@ class Column(Base):
     # FIXME. These types should be harmonized with   SourceColumn.DATATYPE
     DATATYPE_STR = 'str'
     DATATYPE_INTEGER = 'int'
-    DATATYPE_INTEGER64 = 'long'
+    DATATYPE_INTEGER64 = 'long' if six.PY2 else 'int'
     DATATYPE_FLOAT = 'float'
     DATATYPE_DATE = 'date'
     DATATYPE_TIME = 'time'
@@ -101,7 +101,7 @@ class Column(Base):
 
         DATATYPE_STR: (sqlalchemy.types.String, str, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
-        DATATYPE_INTEGER64: (BigIntegerType, long, 'INTEGER64'),
+        DATATYPE_INTEGER64: (BigIntegerType, six.integer_types[-1], 'INTEGER64'),  # it is long for py2 and int for py3
         DATATYPE_FLOAT: (sqlalchemy.types.Float, float, 'REAL'),
         DATATYPE_DATE: (sqlalchemy.types.Date, datetime.date, 'DATE'),
         DATATYPE_TIME: (sqlalchemy.types.Time, datetime.time, 'TIME'),
@@ -138,7 +138,7 @@ class Column(Base):
         return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64, Column.DATATYPE_FLOAT)
 
     def type_is_text(self):
-        return self.datatype in ( Column.DATATYPE_STR)
+        return self.datatype in (Column.DATATYPE_STR,)
 
     def type_is_geo(self):
         return self.datatype in (
@@ -188,7 +188,7 @@ class Column(Base):
     def schema_type(self):
 
         if not self.datatype:
-            from exc import ConfigurationError
+            from .exc import ConfigurationError
             raise ConfigurationError("Column '{}' has no datatype".format(self.name))
 
         # let it fail with KeyError if datatype is unknown.
@@ -222,16 +222,16 @@ class Column(Base):
     def convert_python_type(cls, py_type_in, name=None):
 
         type_map = {
-            unicode: str
+            six.text_type: six.binary_type
         }
 
-        for col_type, (sla_type, py_type, sql_type) in cls.types.items():
+        for col_type, (sla_type, py_type, sql_type) in six.iteritems(cls.types):
 
             if py_type == type_map.get(py_type_in, py_type_in):
                 if col_type == 'blob' and name and name.endswith('geometry'):
                     return cls.DATATYPE_GEOMETRY
 
-                elif sla_type != GeometryType: # Total HACK. FIXME
+                elif sla_type != GeometryType:  # Total HACK. FIXME
                     return col_type
 
         return None
@@ -258,7 +258,7 @@ class Column(Base):
 
         if self.data:
             # Copy data fields into top level dict, but don't overwrite existind values.
-            for k, v in self.data.items():
+            for k, v in six.iteritems(self.data):
                 if k not in d and k not in ('table', 'stats', '_codes', 'data'):
                     d[k] = v
 
@@ -271,17 +271,15 @@ class Column(Base):
         :return:
 
         """
-        return {k: v for k, v in self.dict.items() if v and k != '_codes'}
+        return {k: v for k, v in six.iteritems(self.dict) if v and k != '_codes'}
 
     @property
     def insertable_dict(self):
         """Like dict, but properties have the table prefix, so it can be
         inserted into a row."""
-
-        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ('table', 'stats', '_codes')}
-
-        x = {('c_' + k).strip('_'): v for k, v in d.items()}
-
+        SKIP_KEYS = ('table', 'stats', '_codes')
+        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS}
+        x = {('c_' + k).strip('_'): v for k, v in six.iteritems(d)}
         return x
 
     @staticmethod
@@ -295,7 +293,7 @@ class Column(Base):
         """
         import re
         try:
-            return re.sub('_+','_',re.sub('[^\w_]','_',name).lower()).rstrip('_')
+            return re.sub('_+', '_', re.sub('[^\w_]', '_', name).lower()).rstrip('_')
         except TypeError:
             raise TypeError(
                 'Trying to mangle name with invalid type of: ' + str(type(name)))
@@ -370,7 +368,7 @@ class Column(Base):
         else:
             data = self.data
 
-        for k, v in data.items():
+        for k, v in six.iteritems(data):
             d[k] = v
 
         return d

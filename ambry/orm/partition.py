@@ -8,6 +8,8 @@ __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
 
+from six import string_types
+
 from geoid.util import isimplify
 from geoid.civick import GVid
 
@@ -206,7 +208,7 @@ class Partition(Base, DictableMixin):
                     tcov |= set(int(x) for x in sd[c.name].uniques)
                 elif sd[c.name].is_date:
                     # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
-                    tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, basestring) else x.year for x in sd[c.name].uniques)
+                    tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, string_types) else x.year for x in sd[c.name].uniques)
             except Exception as e:
                 self._bundle.error("Failed to set coverage for column '{}', partition '{}': {}"
                                    .format(c.name, self.identity.vname, e))
@@ -446,7 +448,7 @@ class Partition(Base, DictableMixin):
         from sqlalchemy import text
 
         if not target.sequence_id:
-            from exc import DatabaseError
+            from .exc import DatabaseError
             raise DatabaseError("Sequence ID must be set before insertion")
 
         if not target.vid:

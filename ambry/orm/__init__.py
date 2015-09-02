@@ -9,9 +9,10 @@ __docformat__ = 'restructuredtext en'
 
 import json
 
+from six import string_types, iteritems
+
 import sqlalchemy
-from sqlalchemy import event
-from sqlalchemy import  BigInteger
+from sqlalchemy import BigInteger
 from sqlalchemy import Text
 from sqlalchemy.types import TypeDecorator, TEXT, UserDefinedType
 from sqlalchemy.ext.declarative import declarative_base
@@ -22,8 +23,8 @@ from sqlalchemy import func
 Base = declarative_base()
 
 from sqlalchemy.dialects import registry
-registry.register("spatialite","ambry.orm.dialects.spatialite", "SpatialiteDialect")
-registry.register("postgis", "ambry.orm.dialects.postgis", "PostgisDialect")
+registry.register('spatialite', 'ambry.orm.dialects.spatialite', 'SpatialiteDialect')
+registry.register('postgis', 'ambry.orm.dialects.postgis', 'PostgisDialect')
 
 # http://stackoverflow.com/a/23175518/1144479
 # SQLAlchemy does not map BigInt to Int by default on the sqlite dialect.
@@ -206,15 +207,16 @@ class MutationDict(Mutable, dict):
         dict.__delitem__(self, key)
         self.changed()
 
+
 class MutationList(MutationObj, list):
 
     @classmethod
     def coerce(cls, key, value):
         """Convert plain list to MutationList."""
 
-        if isinstance(value, basestring):
+        if isinstance(value, string_types):
             value = value.strip()
-            if value[0] == '[': # It's json encoded, probably
+            if value[0] == '[':  # It's json encoded, probably
                 try:
                     value = json.loads(value)
                 except ValueError:
@@ -310,22 +312,17 @@ class LoadPropertiesMixin(object):
         if self.data:
             self.data.update(kwargs)
 
+
 # Sould have things derived from this, once there are test cases for it.
 
 class DictableMixin(object):
 
     def set_attributes(self, **kwargs):
-        for k, v in kwargs.items():
+        for k, v in iteritems(kwargs):
             setattr(self, k, v)
 
     @property
     def record_dict(self):
-        from sqlalchemy.orm.attributes import InstrumentedAttribute
-        import inspect
-
-        #return dict(inspect.getmembers(self.__class__,lambda x: isinstance(x,InstrumentedAttribute)))
-
-        # Alternative?
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     @property

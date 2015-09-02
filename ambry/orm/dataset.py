@@ -139,7 +139,7 @@ class Dataset(Base):
 
     def table(self, ref):
         from .exc import NotFoundError
-        from table import Table
+        from .table import Table
 
         table_name = Table.mangle_name(str(ref))
 
@@ -203,14 +203,14 @@ class Dataset(Base):
 
         # Create the basic partition record, with a sequence ID.
 
-        if isinstance(table, basestring):
+        if isinstance(table, string_types):
             table = self.table(table)
 
         if 'sequence_id' in kwargs:
             sequence_id = kwargs['sequence_id']
             del kwargs['sequence_id']
         else:
-            sequence_id = self.next_sequence_id( Partition)
+            sequence_id = self.next_sequence_id(Partition)
 
         p = Partition(
             sequence_id=sequence_id,

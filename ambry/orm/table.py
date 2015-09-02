@@ -99,7 +99,7 @@ class Table(Base, DictableMixin):
     def column(self, ref):
         # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
         # so iterating over the collection only involves one SELECT.
-        from column import Column
+        from .column import Column
 
         column_name = Column.mangle_name(str(ref))
 
