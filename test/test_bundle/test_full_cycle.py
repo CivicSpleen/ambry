@@ -47,14 +47,14 @@ class Test(TestBase):
 
             b.sync()
 
-            print "Loaded bundle: {}".format(b.identity.fqname)
+            print("Loaded bundle: {}".format(b.identity.fqname))
 
         for bi in l.bundles:
 
             if 'casters' in bi.identity.vid or 'process' in bi.identity.vid:
                 continue # This one has caster errors in it.
 
-            print 'Running bundle', str(bi.identity.fqname)
+            print('Running bundle', str(bi.identity.fqname))
             b = l.bundle(bi.identity.vid)
             b.sync_in()
             b = b.cast_to_subclass()

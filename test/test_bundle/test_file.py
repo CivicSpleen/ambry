@@ -21,7 +21,7 @@ class Test(unittest.TestCase):
     def dump_database(self, db, table):
 
         for row in db.connection.execute("SELECT * FROM {}".format(table)):
-            print row
+            print(row)
 
     def compare_files(self, fs1, fs2, file_const):
         from ambry.util import md5_for_file
@@ -72,7 +72,7 @@ class Test(unittest.TestCase):
         bsfa = BuildSourceFileAccessor(ds, source_fs)
 
         for i in range(5):
-            print i, bsfa.sync()
+            print(i, bsfa.sync())
 
         db.commit()
 
@@ -100,17 +100,17 @@ class Test(unittest.TestCase):
 
         bsfa = BuildSourceFileAccessor(ds, source_fs)
         # Report 4 files to sync from file to record
-        self.assertEquals(4, dict(bsfa.sync_dirs()).values().count('ftr'))
+        self.assertEqual(4, list(dict(bsfa.sync_dirs()).values()).count('ftr'))
         # Report did 4 syncs
-        self.assertEquals(4, dict(bsfa.sync()).values().count('ftr'))
+        self.assertEqual(4, list(dict(bsfa.sync()).values()).count('ftr'))
         # Report non left to do.
-        self.assertEquals(0, dict(bsfa.sync()).values().count('ftr'))
+        self.assertEqual(0, list(dict(bsfa.sync()).values()).count('ftr'))
 
         bsf = ds.bsfile(File.BSFILE.META)
         bsf.modified = time.time()
 
         # Now there is one in the other direction
-        self.assertEquals(1, dict(bsfa.sync()).values().count('rtf'))
+        self.assertEqual(1, list(dict(bsfa.sync()).values()).count('rtf'))
 
     @unittest.skip("Broken and don't know why, but doesn't appear to be important")
     def test_sources_file(self):
@@ -166,7 +166,7 @@ class Test(unittest.TestCase):
                 df.insert_body([i,i])
 
             df.close()
-            print "CSV Write    ", float(N)/t.elapsed, df.size
+            print("CSV Write    ", float(N)/t.elapsed, df.size)
 
         with Timer() as t:
             count = 0
@@ -177,7 +177,7 @@ class Test(unittest.TestCase):
                 except:
                     pass
 
-            print "CSV Read     ", float(N)/t.elapsed
+            print("CSV Read     ", float(N)/t.elapsed)
 
         with Timer() as t:
             df = PartitionMsgpackDataFile(fs, 'foobar')
@@ -188,7 +188,7 @@ class Test(unittest.TestCase):
                 df.insert_body([i, i])
 
             df.close()
-            print "MSGPack write" , float(N)/t.elapsed, df.size
+            print("MSGPack write" , float(N)/t.elapsed, df.size)
 
         with Timer() as t:
             count = 0
@@ -199,7 +199,7 @@ class Test(unittest.TestCase):
                 except:
                     pass
 
-            print "MSGPack read ", float(N)/t.elapsed
+            print("MSGPack read ", float(N)/t.elapsed)
 
         with Timer() as t:
             df = PartitionMsgpackDataFile(fs, 'foobar', compress = False)
@@ -210,7 +210,7 @@ class Test(unittest.TestCase):
                 df.insert_body([i, i])
 
             df.close()
-            print "MSGPack write", float(N) / t.elapsed, df.size
+            print("MSGPack write", float(N) / t.elapsed, df.size)
 
         with Timer() as t:
             count = 0
@@ -221,7 +221,7 @@ class Test(unittest.TestCase):
                 except:
                     pass
 
-            print "MSGPack read ", float(N) / t.elapsed
+            print("MSGPack read ", float(N) / t.elapsed)
 
         # Test rate of coping from one set of segments
 
@@ -247,7 +247,7 @@ class Test(unittest.TestCase):
                 for row in chain(gen_df(N, 'foo1').reader(), gen_df(N,'foo2').reader()):
                     df.insert_body(row)
 
-                print "Chained MSGPack write/read", float(2*N) / t.elapsed
+                print("Chained MSGPack write/read", float(2*N) / t.elapsed)
 
 
 

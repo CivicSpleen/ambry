@@ -279,9 +279,9 @@ class RowIntuiterTest(unittest.TestCase):
         self.assertEqual(len(ret), data_rows_amount)
 
         # contains data rows
-        self.assertEquals(['data0-1', 'data0-2'], ret[0])
-        self.assertEquals(['data1-1', 'data1-2'], ret[1])
-        self.assertEquals(['data2-1', 'data2-2'], ret[2])
+        self.assertEqual(['data0-1', 'data0-2'], ret[0])
+        self.assertEqual(['data1-1', 'data1-2'], ret[1])
+        self.assertEqual(['data2-1', 'data2-2'], ret[2])
 
         # does not contain comment and header
         self.assertNotIn(['Comment', None], ret)
@@ -328,10 +328,10 @@ class RowIntuiterTest(unittest.TestCase):
         self.assertEqual(len(ret), data_rows_amount)
 
         # contains data rows
-        self.assertEquals(['data0-1', 'data0-2'], ret[0])
-        self.assertEquals(['data1-1', 'data1-2'], ret[1])
-        self.assertEquals(['data2-1', 'data2-2'], ret[2])
-        self.assertEquals(
+        self.assertEqual(['data0-1', 'data0-2'], ret[0])
+        self.assertEqual(['data1-1', 'data1-2'], ret[1])
+        self.assertEqual(['data2-1', 'data2-2'], ret[2])
+        self.assertEqual(
             ['data{}-1'.format(data_rows_amount - 1), 'data{}-2'.format(data_rows_amount - 1)],
             ret[data_rows_amount - 1])
 
@@ -387,10 +387,10 @@ class RowIntuiterTest(unittest.TestCase):
         self.assertEqual(len(ret), data_rows_amount)
 
         # contains data rows
-        self.assertEquals(['data0-1', 'data0-2'], ret[0])
-        self.assertEquals(['data1-1', 'data1-2'], ret[1])
-        self.assertEquals(['data2-1', 'data2-2'], ret[2])
-        self.assertEquals(
+        self.assertEqual(['data0-1', 'data0-2'], ret[0])
+        self.assertEqual(['data1-1', 'data1-2'], ret[1])
+        self.assertEqual(['data2-1', 'data2-2'], ret[2])
+        self.assertEqual(
             ['data{}-1'.format(data_rows_amount - 1), 'data{}-2'.format(data_rows_amount - 1)],
             ret[data_rows_amount - 1])
 

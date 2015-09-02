@@ -5,10 +5,10 @@ Created on Oct 15, 2012
 """
 import unittest
 
-import test_bundle
-import test_file
-import test_etl
-import test_simple_bundle
+from . import test_bundle
+from . import test_file
+from . import test_etl
+from . import test_simple_bundle
 
 suite = unittest.TestSuite()
 suite.addTests(test_bundle.suite())

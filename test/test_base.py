@@ -11,6 +11,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.sql.expression import text
 
 from six.moves.urllib.parse import urlparse
+from six.moves import input as six_input
 
 from ambry.identity import DatasetNumber
 from ambry.orm import Database, Dataset
@@ -61,7 +62,7 @@ class TestBase(unittest.TestCase):
         from ambry.bundle.files import file_info_map
         from fs.errors import ResourceNotFoundError
 
-        for const_name, (path, clz) in file_info_map.items():
+        for const_name, (path, clz) in list(file_info_map.items()):
             try:
                 dest.setcontents(path, source.getcontents(path))
             except ResourceNotFoundError:
@@ -73,7 +74,7 @@ class TestBase(unittest.TestCase):
             db = self.db
 
         for row in db.connection.execute('SELECT * FROM {}'.format(table)):
-            print row
+            print(row)
 
     def new_database(self):
         # FIXME: this connection will not be closed properly in a postgres case.
@@ -196,7 +197,7 @@ class PostgreSQLTestBase(TestBase):
             if cls.postgres_db_exists(test_db_name, engine):
                 assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
                 while True:
-                    delete_it = raw_input(
+                    delete_it = six_input(
                         '\nTest database with {} name already exists. Can I delete it (Yes|No): '.format(test_db_name))
                     if delete_it.lower() == 'yes':
                         try:
