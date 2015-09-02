@@ -84,9 +84,6 @@ class DatabaseTest(TestBase):
 
     # ._create_path tests
     def test_makes_database_directory(self):
-        # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(os.makedirs, ['name', 'mode'])
-        assert_spec(os.path.exists, ['path'])
 
         # prepare state
         fake_makedirs = fudge.Fake('makedirs').expects_call()
@@ -104,8 +101,6 @@ class DatabaseTest(TestBase):
         fudge.verify()
 
     def test_ignores_exception_if_makedirs_failed(self):
-        # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(os.makedirs, ['name', 'mode'])
 
         fake_makedirs = fudge.Fake('makedirs')\
             .expects_call()\
@@ -125,9 +120,6 @@ class DatabaseTest(TestBase):
         fudge.verify()
 
     def test_raises_exception_if_dir_does_not_exists_after_creation_attempt(self):
-        # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(os.makedirs, ['name', 'mode'])
-        assert_spec(os.path.exists, ['path'])
 
         # prepare state
         fake_makedirs = fudge.Fake('makedirs')\
