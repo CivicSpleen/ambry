@@ -1093,23 +1093,25 @@ Pipeline Headers
             parent = self.partitions.get_or_new_partition(name, type=Partition.TYPE.UNION)
             stats = Stats(parent.table)
 
-            pdf = parent.datafile
+            pdf = parent.datafile.writer
             for seg in sorted(segments, key=lambda x: b(x.name)):
 
                 self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
 
-                reader = self.wrap_partition(seg).datafile.reader()
+                reader = self.wrap_partition(seg).datafile.reader
                 header = None
                 start_time = time()
-                for i, row in enumerate(reader):
+                for i, rp in enumerate(reader):
+
 
                     if header is None:
-                        header = row
-                        pdf.insert_header(row)
-                        stats.process_header(row)
+                        header = rp.headers
+                        pdf.set_row_header(header)
+                        stats.process_header(header)
                     else:
-                        row[0] = i
-                        pdf.insert_body(row)
+                        rp[0] = i
+                        row = rp.row
+                        pdf.insert_row(row)
                         stats.process_body(row)
 
                 reader.close()
@@ -1117,6 +1119,9 @@ Pipeline Headers
 
             pdf.close()
             self.commit()
+
+
+
             parent.finalize(stats)
             self.commit()
 

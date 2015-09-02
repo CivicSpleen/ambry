@@ -98,6 +98,7 @@ class Partition(Base, DictableMixin):
 
     _bundle  = None # Set when returned from a bundle.
     _datafile = None
+    _datafile_writer = None
 
     @property
     def identity(self):
@@ -387,7 +388,7 @@ class Partition(Base, DictableMixin):
 
         if self.location == 'build':
             try:
-                reader = self.datafile.reader()
+                reader = self.datafile.reader
             except ResourceNotFoundError:
                 raise NotFoundError("Partition {} not found in location '{}'. System Path: {} "
                                     .format(self.identity.fqname, self.location, self.datafile.syspath))
@@ -395,8 +396,9 @@ class Partition(Base, DictableMixin):
         elif self.location == 'remote':
             b = self._bundle.library.bundle(self.identity.as_dataset().vid)
             remote = self._bundle.library.remote(b)
+            from ambry.etl.partition import PMDFReader
 
-            reader = self.datafile.reader(remote.open(self.datafile.munged_path, 'rb'))
+            reader = PMDFReader(remote.open(self.datafile.munged_path, 'rb'))
 
         elif self.location == 'warehouse':
             raise NotImplementedError()

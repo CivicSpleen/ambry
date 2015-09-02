@@ -1,5 +1,5 @@
-"sequence_id","name","dest_table_name","time","space","generator"
-1,"source1","demo",2000,"nv","RandomSourcePipe"
-2,"source2","demo",2001,"ca","RandomSourcePipe"
-3,"source3","demo",2002,"la","RandomSourcePipe"
-4,"source4","demo",2003,"ut","RandomSourcePipe"
+name,dest_table_name,time,space,generator
+source1,demo,2000,nv,RandomSourcePipe
+source2,demo,2001,ca,RandomSourcePipe
+source3,demo,2002,la,RandomSourcePipe
+source4,demo,2003,ut,RandomSourcePipe

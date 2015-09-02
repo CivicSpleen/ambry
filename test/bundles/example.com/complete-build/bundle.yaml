@@ -45,6 +45,10 @@ names:
     vid: d0000build003
     vname: example.com-complete-build-0.1.3
 pipelines:
+    build:
+        replace:
+            SelectPartition: SelectPartition('PartialPartitionName(table=source.dest_table_name,
+                time = row[9])')
     schema:
         first:
         - Head(1000)

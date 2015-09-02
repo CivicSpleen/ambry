@@ -177,6 +177,8 @@ class CasterPipe(Pipe):
 
     def get_caster_f(self, name):
 
+        caster_f = None
+
         try:
             caster_f = getattr(self.bundle, name)
         except AttributeError:
@@ -188,6 +190,7 @@ class CasterPipe(Pipe):
             pass
 
         if not caster_f:
+
             raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(name))
 
         return caster_f

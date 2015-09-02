@@ -28,8 +28,24 @@ def new_partition_data_file(fs, path, stats=None):
     if not ext:
         ext = '.msg'
 
-    return PartitionMsgpackDataFile(fs, path, stats=stats)
+    return PartitionMsgpackDataFile(fs, path)
 
+class PMDFError(Exception):
+    pass
+
+class GzipFile(gzip.GzipFile):
+
+    def __init__(self, filename=None, mode=None, compresslevel=9, fileobj=None, mtime=None, end_of_data=None):
+        super(GzipFile, self).__init__(filename, mode, compresslevel, fileobj, mtime)
+        self._end_of_data = end_of_data
+
+    def _read(self, size=1024):
+        """Alters the _read method to stop reading new gzip members when we've reached the end of the row data. """
+
+        if self._new_member and self._end_of_data and self.fileobj.tell() >= self._end_of_data:
+            raise EOFError, "Reached EOF"
+        else:
+            return super(GzipFile, self)._read(size)
 
 
 class PartitionMsgpackDataFile(object):
@@ -38,10 +54,12 @@ class PartitionMsgpackDataFile(object):
 
     EXTENSION = '.msg'
     VERSION = 1
-    MAGIC = 'AMBRMDF'
-    HDF = struct.Struct('>7sHi')
+    MAGIC = 'AMBRMPDF'
 
-    HEADER_TEMPLATE = {
+    # 8s: Magic Number, H: Version,  I: Number of rows, Q: End of row / Start of meta
+    FILE_HEADER_FORMAT = struct.Struct('>8sHIQ')
+
+    META_TEMPLATE = {
 
         'schema': {},
         'geo':{
@@ -89,13 +107,12 @@ class PartitionMsgpackDataFile(object):
         assert bool(self._fs)
 
         self._path = path
-        self._nrows = 0
-        self._header = None
 
         self._writer = None
-
         self._reader = None
-        self.header = None # Header on read, to conform to Pipe interface
+
+        self._compress = True
+
 
     @property
     def path(self):
@@ -105,11 +122,8 @@ class PartitionMsgpackDataFile(object):
     def syspath(self):
         return self._fs.getsyspath(self.munged_path, allow_none=True)
 
-
-    def close(self):
-        if self._writer:
-            self._writer.close()
-            self._writer = None
+    def open (self, *args, **kwargs):
+        return self._fs.open(self.munged_path, *args, **kwargs)
 
     def delete(self):
         from fs.errors import ResourceNotFoundError
@@ -166,26 +180,54 @@ class PartitionMsgpackDataFile(object):
 
         return obj
 
+    @property
     def reader(self):
-        return PMDFReader(self._fs.open(self.munged_path, mode='rb'))
+        if not self._reader:
+            self._reader = PMDFReader(self._fs.open(self.munged_path, mode='rb'), compress = self._compress)
 
+        return self._reader
+
+    @property
     def writer(self):
-        return PMDFWriter(self._fs.open(self.munged_path, mode='wb'))
+        if not self._writer:
+            self._writer = PMDFWriter(self._fs.open(self.munged_path, mode='wb'), compress = self._compress)
+
+        return self._writer
 
 
 class PMDFWriter(object):
 
-    def __init__(self, fh):
+    MAGIC = PartitionMsgpackDataFile.MAGIC
+    VERSION = PartitionMsgpackDataFile.VERSION
+    FILE_HEADER_FORMAT = PartitionMsgpackDataFile.FILE_HEADER_FORMAT
+    FILE_HEADER_FORMAT_SIZE = PartitionMsgpackDataFile.FILE_HEADER_FORMAT.size
+    META_TEMPLATE = PartitionMsgpackDataFile.META_TEMPLATE
+    SCHEMA_TEMPLATE = PartitionMsgpackDataFile.SCHEMA_TEMPLATE
+
+    def __init__(self, fh, compress = True):
 
         from copy import deepcopy
 
         self._fh = fh
-        self._zfh = None
-        self._data_start = None
+        self._compress = compress
 
-        self._n = 0
+        self._zfh = None # Compressor for writing rows
+        self._data_start = self.FILE_HEADER_FORMAT_SIZE
+        self._data_end = self._data_start
 
-        self.file_header = deepcopy(PartitionMsgpackDataFile.HEADER_TEMPLATE)
+        self._i = 0
+
+        self.meta = deepcopy(self.META_TEMPLATE)
+
+        self._row_writer = None
+
+    @property
+    def headers(self):
+        return [c['name'] for c in self.meta['schema']]
+
+    @headers.setter
+    def headers(self, headers):
+        self.set_row_header(headers)
 
     def set_row_header(self, headers):
         from copy import deepcopy
@@ -193,107 +235,191 @@ class PMDFWriter(object):
         schema = []
 
         for i, h in enumerate(headers):
-            d = deepcopy(PartitionMsgpackDataFile.SCHEMA_TEMPLATE)
+            d = deepcopy(self.SCHEMA_TEMPLATE)
             d['pos'] = i
             d['name'] = h
             schema.append(d)
 
-        self.file_header['schema'] = schema
+        self.meta['schema'] = schema
 
     def write_file_header(self):
-
         """Write the magic number, version and the file_header dictionary.  """
-        assert self._n == 0
+
+        hdf = self.FILE_HEADER_FORMAT.pack(self.MAGIC,self.VERSION,self._i,self._data_end)
+
+        assert len(hdf) == self.FILE_HEADER_FORMAT_SIZE
 
         self._fh.seek(0)
 
-        fhb = msgpack.packb(self.file_header, encoding='utf-8').encode('zlib')
-
-        self._data_start = PartitionMsgpackDataFile.HDF.size + len(fhb)
-
-        hdf = PartitionMsgpackDataFile.HDF.pack(
-                    PartitionMsgpackDataFile.MAGIC,
-                    PartitionMsgpackDataFile.VERSION,
-                    self._data_start)
-
-        assert len(hdf) == PartitionMsgpackDataFile.HDF.size
-
         self._fh.write(hdf)
-        self._fh.write(fhb)
 
-        assert self._fh.tell() == self._data_start
+        assert self._fh.tell() == self.FILE_HEADER_FORMAT_SIZE, (self._fh.tell(), self.FILE_HEADER_FORMAT_SIZE)
+
+    def write_meta(self):
+
+        self._fh.seek(self._data_end) # Should probably already be there.
+
+        fhb = msgpack.packb(self.meta, encoding='utf-8').encode('zlib')
+        self._fh.write(fhb)
 
     def insert_row(self, row):
 
-        if self._n == 0:
-            self._fh.seek(self._data_start)
-            self._zfh = gzip.GzipFile(fileobj=self._fh)
+        if self._i == 0:
 
-        self._n += 1
+            if not self.headers:
+                raise PMDFError("Must set row headers before inserting rows")
 
-        # Assume the first item is the id, and fill it if it is empty
-        if row[0] is None:
-            row[0] = self._n
+            self.write_file_header()
 
-        self._zfh.write(msgpack.packb(row, default=PartitionMsgpackDataFile.encode_obj, encoding='utf-8'))
+            # Creating the GzipFile object will also write the Gzip header, about 21 bytes of data.
+
+            if self._compress:
+                self._zfh = GzipFile(fileobj=self._fh)  # Compressor for writing rows
+            else:
+                self._zfh = self._fh
+
+            self._row_writer = lambda row: self._zfh.write(
+                                msgpack.packb(row, default=PartitionMsgpackDataFile.encode_obj, encoding='utf-8'))
+
+            # Row header is also the first row
+            self._row_writer(self.headers)
+
+        self._i += 1
+
+        self._row_writer(row)
 
     def close(self):
 
         if self._fh:
-            self._zfh.close()
+            # First close the Gzip file, so it can flush, etc.
+
+            self._row_writer(None)
+
+            if self._compress:
+                self._zfh.close()
+            self._data_end = self._fh.tell()
             self._zfh = None
+
+            self.write_file_header()
+            self._fh.seek(0,2) # Go back to the end of the file
+            assert self._data_end == self._fh.tell()
+
+            self.write_meta()
+
+            self._fh.close()
             self._fh = None
-
-
 
 class PMDFReader(object):
 
-    def __init__(self, fh):
+    MAGIC = PartitionMsgpackDataFile.MAGIC
+    VERSION = PartitionMsgpackDataFile.VERSION
+    FILE_HEADER_FORMAT = PartitionMsgpackDataFile.FILE_HEADER_FORMAT
+    FILE_HEADER_FORMAT_SIZE = PartitionMsgpackDataFile.FILE_HEADER_FORMAT.size
+    META_TEMPLATE = PartitionMsgpackDataFile.META_TEMPLATE
+    SCHEMA_TEMPLATE = PartitionMsgpackDataFile.SCHEMA_TEMPLATE
+
+    def __init__(self, fh, compress = True):
         """Reads the file_header and prepares for iterating over rows"""
 
-        self.magic, self.version, self.start_of_data = \
-            PartitionMsgpackDataFile.HDF.unpack(fh.read(PartitionMsgpackDataFile.HDF.size))
+        self._fh = fh
+        self._compress = compress
 
-        self.file_header = msgpack.unpackb(fh.read(self.start_of_data-fh.tell()).decode('zlib'), encoding='utf-8')
+        self.magic, self.version, self.rows, self.end_of_data = \
+            self.FILE_HEADER_FORMAT.unpack(self._fh.read(self.FILE_HEADER_FORMAT_SIZE))
 
-        assert fh.tell() == self.start_of_data
+        self.start_of_data = int(self._fh.tell())
 
-        self._fh = gzip.GzipFile(fileobj=fh)
+        assert self.start_of_data == self.FILE_HEADER_FORMAT_SIZE
 
+        if self._compress:
+            self._zfh = GzipFile(fileobj=self._fh, end_of_data=self.end_of_data)
+        else:
+            self._zfh =self._fh
+
+        self.unpacker = msgpack.Unpacker(self._zfh, object_hook=PartitionMsgpackDataFile.decode_obj, encoding='utf-8')
+
+        self._meta = None
+
+        self._i = 0
 
     @property
-    def row_header(self):
-        return [ c['name'] for c in self.file_header['schema']]
+    def info(self):
+
+        return dict(
+            version = self.version,
+            rows = self.rows,
+            start_of_data = self.start_of_data,
+            end_of_data = self.end_of_data
+        )
+
+    @property
+    def meta(self):
+
+        if self._meta is None:
+            pos = self._fh.tell()
+
+            self._fh.seek(self.end_of_data)
+
+            # Using the _fh b/c I suspect that the GzipFile attached to self._zfh has state that would
+            # get screwed up if you read from a new position
+
+            data = self._fh.read()
+
+            if data:
+
+                self._meta = msgpack.unpackb(data.decode('zlib'), encoding='utf-8')
+
+            else:
+                self._meta = {}
+
+            self._fh.seek(pos)
+
+        return self._meta
 
     @property
     def dict_rows(self):
         """Generate rows from the file"""
 
-        for i, row in enumerate(self.rows):
-            if i == 0:
-                continue
+        self._fh.seek(self.start_of_data)
 
-            yield dict(list(zip(self._header, row)))
+        self.headers = self.unpacker.next()
+
+        try:
+            for row in self.unpacker:
+                yield dict(list(zip(self.headers, row)))
+
+        finally:
+            self.close()
 
     def __iter__(self):
         """Iterator for reading rows"""
         from ..etl import RowProxy
 
+        self._fh.seek(self.start_of_data)
+
+        self.headers = self.unpacker.next()
+
         try:
 
-            unpacker = msgpack.Unpacker(self._fh, object_hook=PartitionMsgpackDataFile.decode_obj, encoding='utf-8')
+            rp = RowProxy(self.headers)
 
-            rp = RowProxy(self.row_header)
-
-            for row in unpacker:
+            for i, row in enumerate(self.unpacker):
+                if row == None:
+                    return
                 yield rp.set_row(row)
 
-        finally:
-            if self._fh:
-                self._fh.close()
-                self._fh = None
+        except IOError:
+
+            if self._fh.tell() -  self.end_of_data == 2:
+                # We're at the end of the data, but gzip has tried to read the neader for the next gzip member,
+                # which is 2 bytes, so we need to move back
+                self._fh.seek(self.end_of_data)
+                return
+            else:
+                raise
 
     def close(self):
         if self._fh:
             self._fh.close()
+            self._fh = None
 

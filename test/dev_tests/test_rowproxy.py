@@ -22,8 +22,8 @@ class Test(unittest.TestCase):
 
         rp.set_row(row)
 
-        self.assertEqual(row, rp.get_row())
-        self.assertEqual(headers,  rp.get_keys())
+        self.assertEqual(row, rp.row)
+        self.assertEqual(headers,  rp.headers)
         self.assertEqual( dict(zip(headers, row)),  rp.dict)
 
         rp.a = 10
@@ -110,6 +110,20 @@ class Test(unittest.TestCase):
                 row_sum += sum(l(row))
 
         print 'lambda ',num_rows / t.elapsed
+
+        self.assertEquals(expected_sum, row_sum)
+
+        row_sum = 0
+
+        # Compare to constructed lambda access, but add directly, wihtout the sum() call
+        with Timer() as t:
+
+            l = lambda row: row[1] + row[2] + row[3] + row[26] + row[38]
+
+            for row in rows:
+                row_sum += l(row)
+
+        print 'lambda2', num_rows / t.elapsed
 
         self.assertEquals(expected_sum, row_sum)
 

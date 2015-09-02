@@ -385,9 +385,9 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
 
-        row =  p.stream(skip_header=True).next()
+        row =  p.stream().next()
 
-        for c, v in zip(p.table.columns, row):
+        for c, v in zip(p.table.columns, row.row):
             self.assertEquals(type(v), c.python_type)
 
     def test_complete_build(self):
@@ -400,28 +400,6 @@ class Test(TestBase):
         b = b.cast_to_subclass()
         self.assertEquals('new', b.state)
         self.assertTrue(b.meta())
-
-        def edit_pipeline(pl):
-            from ambry.etl.pipeline import PrintRows, LogRate, AddDeleteExpand, WriteToPartition, SelectPartition
-
-            def prt(m):
-                print m
-
-            # Converting to the cesus geoid b/c they are just numbers, and when used in a partition name,
-            # the names are lowercased, causing the case sensitive GVIDs to alias.
-            pl.augment = AddDeleteExpand(
-                edit = {'triangle' : lambda e,r,v : 1}
-            )
-
-            pl.last =  [PrintRows( print_at='end'), LogRate(prt, 3000,'')]
-
-            def select_part(source, row):
-                from ambry.identity import PartialPartitionName
-                return PartialPartitionName(table=source.dest_table_name, time = row[8])
-
-            pl.replace(SelectPartition, SelectPartition(select_part))
-
-        b.set_edit_pipeline(edit_pipeline)
 
         self.assertTrue(b.build())
 
@@ -440,11 +418,11 @@ class Test(TestBase):
         self.assertEqual(4, len(b.dataset.partitions))
         self.assertEqual(2, len(b.dataset.tables))
 
-        from ambry.etl.partition import PartitionMsgpackDataFileReader
+        print 'Build, testing reads'
 
         p = list(b.partitions)[0]
 
-        self.assertEquals(6001, sum( 1 for row in p.datafile.reader() ))
+        self.assertEquals(6001, sum( 1 for row in p.datafile.reader ))
 
         self.assertEquals(48, len(b.dataset.stats))
 
@@ -461,6 +439,7 @@ class Test(TestBase):
         self.assertTrue(b.prepare())
         self.assertEquals('prepare_done', b.state)
 
+        b = b.cast_to_subclass()
         b.run()
 
     def test_db_copy(self):
@@ -568,3 +547,10 @@ class Test(TestBase):
                     id_sum += row[0]
 
                 self.assertEqual(18003000, id_sum)
+
+    def test_datafile_download(self):
+
+        b = self.setup_bundle('complete-load')
+        l = b._library
+
+        b.sync()

@@ -222,7 +222,6 @@ class Dataset(Base):
 
         self.partitions.append(p)
 
-        #object_session(self).commit()
 
         return p
 

@@ -145,45 +145,51 @@ class Test(unittest.TestCase):
         from fs.opener import fsopendir
         import time
         import datetime
+        from random import randint
         from contexttimer import Timer
+        from uuid import uuid4
 
         fs = fsopendir('mem://')
 
-        N = 10
+        fs = fsopendir('/tmp/pmpf')
+
+        N = 10000
 
         # Basic read/ write tests.
 
-        row = [ None, 1, 2.0, 'Foobar', datetime.date(10,10,10), datetime.date(10,10,10) ]
-        header = list('abcdefghi')[:len(row)]
+        row = lambda: [ None, 1, 2.0, str(uuid4()),
+                datetime.date(randint(2000,2015),randint(1,12),10),
+                datetime.date(randint(2000,2015),randint(1,12),10) ]
+        headers = list('abcdefghi')[:len(row())]
 
         with Timer() as t:
             df = PartitionMsgpackDataFile(fs, 'foobar')
-            w = df.writer()
+            w = df.writer
 
-            w.set_row_header(header)
+            w.headers = headers
 
-            w.file_header['source']['url'] = 'blah blah'
-
-            w.write_file_header()
+            w.meta['source']['url'] = 'blah blah'
 
             for i in range(N):
-                w.insert_row(row)
+                w.insert_row(row())
 
             w.close()
-            print "MSGPack write " , float(N)/t.elapsed, df.size
+
+        print "MSGPack write " , float(N)/t.elapsed, df.size
+
+        print df.reader.info
 
         with Timer() as t:
             count = 0
+            i = 0
 
-            r = df.reader()
+            r = df.reader
 
-            for row in r:
-                try:
-                    count += int(row[0])
-                except:
-                    pass
+            for i, row in enumerate(r):
+                count += 1
 
-            print "MSGPack read  ", float(N)/t.elapsed
+        print "MSGPack read  ", float(N)/t.elapsed, i, count
 
-            print r.file_header
+        print r.meta
+
 

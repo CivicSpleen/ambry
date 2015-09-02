@@ -91,14 +91,16 @@ class RowProxy(object):
         self.__pos_map = { e:i for i, e in enumerate(keys)}
         self.__initialized = True
 
-    def get_row(self):
+    @property
+    def row(self):
         return object.__getattribute__(self, '_RowProxy__row')
 
     def set_row(self,v):
         object.__setattr__(self, '_RowProxy__row', v)
         return self
 
-    def get_keys(self):
+    @property
+    def headers(self):
         return self.__getattribute__('_RowProxy__keys')
 
     def __setitem__(self, key, value):
@@ -129,10 +131,10 @@ class RowProxy(object):
         raise NotImplementedError()
 
     def __iter__(self):
-        return iter(self.keys)
+        return iter(self.__keys)
 
     def __len__(self):
-        return len(self.keys)
+        return len(self.__keys)
 
     @property
     def dict(self):
@@ -1228,6 +1230,10 @@ class SelectPartition(Pipe):
 
         # Under the theory that removing an if is faster.
         if select_f:
+
+            if not callable(self):
+                select_f = eval('lambda source, row: {}'.format(select_f))
+
             self.select_f = select_f
             self.process_body = self.process_body_select
         else:
@@ -1345,10 +1351,10 @@ class WriteToPartition(Pipe, PartitionWriter):
             self._datafiles[df_key] = (p, header_mapper, body_mapper)
 
             # It is a new datafile, so it needs a header.
-            p.datafile.insert_header(header_mapper(self.headers))
+            p.datafile.writer.set_row_header(header_mapper(self.headers))
 
         try:
-            p.datafile.insert_body(body_mapper(row))
+            p.datafile.writer.insert_row(body_mapper(row))
         except Exception as e:
             self.bundle.logger.error("Insert failed: {}\n{}".format(row, e))
             raise
@@ -1360,7 +1366,7 @@ class WriteToPartition(Pipe, PartitionWriter):
         self._end_time = time.time()
 
         for key, (p, header_mapper, body_mapper) in iteritems(self._datafiles):
-            p.datafile.close()
+            p.datafile.writer.close()
 
     @property
     def rate(self):
