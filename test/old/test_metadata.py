@@ -128,15 +128,15 @@ views: {}
         t.dictgroup.dterm1.dterm.sterm = 'sterm'
         t.dictgroup.dterm1.dterm.lterm = [1, 2, 3]
 
-        self.assertEquals(t.dictgroup.dterm1.sterm, 'sterm')
-        self.assertEquals(list(t.dictgroup.dterm1.lterm), [1,2,3])
-        self.assertEquals(t.dictgroup.dterm1.dterm.sterm , 'sterm')
-        self.assertEquals(list(t.dictgroup.dterm1.dterm.lterm) , [1, 2, 3])
+        self.assertEqual(t.dictgroup.dterm1.sterm, 'sterm')
+        self.assertEqual(list(t.dictgroup.dterm1.lterm), [1,2,3])
+        self.assertEqual(t.dictgroup.dterm1.dterm.sterm , 'sterm')
+        self.assertEqual(list(t.dictgroup.dterm1.dterm.lterm) , [1, 2, 3])
 
-        self.assertEquals(t.dictgroup.dterm1.dict,
+        self.assertEqual(t.dictgroup.dterm1.dict,
                           {'lterm': [1, 2, 3], 'sterm': 'sterm', 'dterm': {'sterm': 'sterm', 'lterm': [1, 2, 3]}})
 
-        self.assertEquals(t.dictgroup.dterm1.dterm.dict,{'sterm': 'sterm', 'lterm': [1, 2, 3]})
+        self.assertEqual(t.dictgroup.dterm1.dterm.dict,{'sterm': 'sterm', 'lterm': [1, 2, 3]})
 
 
 
@@ -176,13 +176,13 @@ views: {}
         with self.assertRaises(AttributeError):
             tt.group.term3 = 'Term3'
 
-        self.assertEquals('Term', tt.group.term)
-        self.assertEquals('Term2', tt.group.term2)
-        self.assertEquals('Term', tt.group['term'])
-        self.assertEquals(['term', 'term2', 'dterm'], tt.group.keys())
-        self.assertEquals(
+        self.assertEqual('Term', tt.group.term)
+        self.assertEqual('Term2', tt.group.term2)
+        self.assertEqual('Term', tt.group['term'])
+        self.assertEqual(['term', 'term2', 'dterm'], list(tt.group.keys()))
+        self.assertEqual(
             ['Term', 'Term2', AttrDict([('dterm1', ''), ('unset_term', ''), ('dterm2', '')])],
-            tt.group.values())
+            list(tt.group.values()))
 
         #
         # Dict Term
@@ -190,13 +190,13 @@ views: {}
         tt.group.dterm.dterm1 = 'dterm1'
         tt.group.dterm.dterm2 = 'dterm2'
 
-        self.assertEquals('dterm1', tt.group.dterm.dterm1)
-        self.assertEquals(['dterm1', 'unset_term', 'dterm2'], tt.group.dterm.keys())
-        self.assertEquals(['dterm1', '', 'dterm2'], tt.group.dterm.values())
+        self.assertEqual('dterm1', tt.group.dterm.dterm1)
+        self.assertEqual(['dterm1', 'unset_term', 'dterm2'], list(tt.group.dterm.keys()))
+        self.assertEqual(['dterm1', '', 'dterm2'], list(tt.group.dterm.values()))
 
         tt.group = dict(term='x',term2='y')
-        self.assertEquals('x',tt.group.term)
-        self.assertEquals('y',tt.group.term2)
+        self.assertEqual('x',tt.group.term)
+        self.assertEqual('y',tt.group.term2)
 
         #
         # TypedDictGroup

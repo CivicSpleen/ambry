@@ -7,7 +7,7 @@ Created on Jun 30, 2012
 import unittest
 import os
 
-from bundles.testbundle.bundle import Bundle
+from .bundles.testbundle.bundle import Bundle
 from ambry.run import get_runconfig
 from ambry.warehouse.manifest import Manifest
 from test_base import TestBase
@@ -128,7 +128,7 @@ class Test(TestBase):
         self.waho = self._default_warehouse()
         mf = Manifest(self.mf, get_logger('TL'))
         self.waho.install_manifest(mf)
-        tb = self.waho.tables.next()
+        tb = next(self.waho.tables)
 
         # test installed table
         self.waho.extract_table(tb.vid, 'csv')
@@ -355,10 +355,10 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
         self.waho.name = name
         self.waho.url = url
 
-        self.assertEquals(title, self.waho.title)
-        self.assertEquals(summary, self.waho.summary)
-        self.assertEquals(name, self.waho.name)
-        self.assertEquals(url, self.waho.url)
+        self.assertEqual(title, self.waho.title)
+        self.assertEqual(summary, self.waho.summary)
+        self.assertEqual(name, self.waho.name)
+        self.assertEqual(url, self.waho.url)
 
     def test_return_type(self):
         from ambry.identity import Identity

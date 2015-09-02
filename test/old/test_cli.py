@@ -12,12 +12,11 @@ import sys
 import shlex
 import subprocess
 import unittest
-from StringIO import StringIO
+from six import StringIO
 
 from test.old import configs, bundles
 from ambry.run import RunConfig
 from test_base import TestBase
-
 
 
 # from ambry.util import memoize
@@ -138,8 +137,8 @@ class Test(TestCLIMixin, TestLoggingMixin, TestBase):
         try:
             s = subprocess.check_output(args)
         except subprocess.CalledProcessError as e:
-            print "ERROR: ", e
-            print e.output
+            print("ERROR: ", e)
+            print(e.output)
             raise
 
         return s
@@ -191,7 +190,7 @@ class Test(TestCLIMixin, TestLoggingMixin, TestBase):
 
         out = c("list -Fvid")
 
-        print out
+        print(out)
 
 
 def suite():

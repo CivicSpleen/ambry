@@ -92,14 +92,14 @@ class Test(TestBase):
         db.set_config_value('test', 'one', 1)
         db.set_config_value('test', 'two', 2)
 
-        self.assertEquals(1, db.get_config_value('test', 'one').value)
-        self.assertEquals(2, db.get_config_value('test', 'two').value)
+        self.assertEqual(1, db.get_config_value('test', 'one').value)
+        self.assertEqual(2, db.get_config_value('test', 'two').value)
 
         self.assertIn(('test', 'one'), db.config_values)
         self.assertIn(('test', 'two'), db.config_values)
-        self.assertEquals(2, db.config_values[('test', 'two')])
+        self.assertEqual(2, db.config_values[('test', 'two')])
 
-        self.assertEquals(0, len(db.list()))
+        self.assertEqual(0, len(db.list()))
 
         db.drop()
 
@@ -142,15 +142,15 @@ class Test(TestBase):
 
         r = Resolver(db.session)
 
-        for ref, vid in tests.items():
+        for ref, vid in list(tests.items()):
             ip, results = r.resolve_ref_all(ref)
 
             self.assertEqual(1, len(results))
 
-            first = results.values().pop(0)
-            vid2 = first.vid if not first.partitions else first.partitions.values()[0].vid
+            first = list(results.values()).pop(0)
+            vid2 = first.vid if not first.partitions else list(first.partitions.values())[0].vid
 
-            self.assertEquals(vid, vid2)
+            self.assertEqual(vid, vid2)
 
     def test_simple_install(self):
 
@@ -162,22 +162,22 @@ class Test(TestBase):
 
         bdsq = self.bundle.database.session.query
 
-        self.assertEquals(4, len(bdsq(Partition).all()))
+        self.assertEqual(4, len(bdsq(Partition).all()))
 
         r = l.put_bundle(self.bundle, install_partitions = True)
 
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
-        self.assertEquals(self.bundle.identity.sname, r.identity.sname)
+        self.assertEqual(self.bundle.identity.sname, r.identity.sname)
 
-        self.assertEquals(4, len(ldsq(Partition).all()))
-        self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(20, len(ldsq(Code).all()))
-        self.assertEquals(23, len(ldsq(ColumnStat).all()))
-        self.assertEquals(44, len(ldsq(Config).all()))
+        self.assertEqual(4, len(ldsq(Partition).all()))
+        self.assertEqual(9, len(ldsq(Table).all()))
+        self.assertEqual(45, len(ldsq(Column).all()))
+        self.assertEqual(20, len(ldsq(Code).all()))
+        self.assertEqual(23, len(ldsq(ColumnStat).all()))
+        self.assertEqual(44, len(ldsq(Config).all()))
 
-        self.assertEquals(5, len(ldsq(File).all()))
+        self.assertEqual(5, len(ldsq(File).all()))
 
         for p in self.bundle.partitions.all:
             l.get(p.identity.vid)
@@ -193,19 +193,19 @@ class Test(TestBase):
             # Get the partition with a name
             r = l.get(partition.identity.sname)
             self.assertTrue(r is not False)
-            self.assertEquals(partition.identity.sname, r.partition.identity.sname)
-            self.assertEquals(self.bundle.identity.sname, r.identity.sname)
+            self.assertEqual(partition.identity.sname, r.partition.identity.sname)
+            self.assertEqual(self.bundle.identity.sname, r.identity.sname)
 
             # Get the partition with an id
             r = l.get(partition.identity.id_)
 
             self.assertTrue(bool(r))
-            self.assertEquals(partition.identity.sname, r.partition.identity.sname)
-            self.assertEquals(self.bundle.identity.sname, r.identity.sname)
+            self.assertEqual(partition.identity.sname, r.partition.identity.sname)
+            self.assertEqual(self.bundle.identity.sname, r.identity.sname)
 
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
-        self.assertEquals(self.bundle.identity.sname, r.identity.sname)
+        self.assertEqual(self.bundle.identity.sname, r.identity.sname)
 
         # An extra change so the following tests work
         l.put_bundle(self.bundle)
@@ -224,41 +224,41 @@ class Test(TestBase):
 
 
         ldsq = l.database.session.query
-        self.assertEquals(4, len(ldsq(Partition).all()))
-        self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(20, len(ldsq(Code).all()))
-        self.assertEquals(23, len(ldsq(ColumnStat).all()))
+        self.assertEqual(4, len(ldsq(Partition).all()))
+        self.assertEqual(9, len(ldsq(Table).all()))
+        self.assertEqual(45, len(ldsq(Column).all()))
+        self.assertEqual(20, len(ldsq(Code).all()))
+        self.assertEqual(23, len(ldsq(ColumnStat).all()))
 
         l.put_bundle(self.bundle)
 
         l.put_bundle(self.bundle)
 
-        self.assertEquals(4, len(ldsq(Partition).all()))
-        self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(20, len(ldsq(Code).all()))
-        self.assertEquals(23, len(ldsq(ColumnStat).all()))
+        self.assertEqual(4, len(ldsq(Partition).all()))
+        self.assertEqual(9, len(ldsq(Table).all()))
+        self.assertEqual(45, len(ldsq(Column).all()))
+        self.assertEqual(20, len(ldsq(Code).all()))
+        self.assertEqual(23, len(ldsq(ColumnStat).all()))
 
         r = l.get(self.bundle.identity)
 
         self.assertIsNotNone(r)
         self.assertTrue(r is not False)
-        self.assertEquals(r.identity.id_, r.identity.id_)
+        self.assertEqual(r.identity.id_, r.identity.id_)
 
         num_tables = 9
-        self.assertEquals(num_tables, len(l.database.session.query(Table).all()))
+        self.assertEqual(num_tables, len(l.database.session.query(Table).all()))
 
         b = l.get(self.bundle.identity.vid)
-        self.assertEquals(num_tables, len(b.schema.tables))
+        self.assertEqual(num_tables, len(b.schema.tables))
 
         l.remove(b)
 
-        self.assertEquals(0, len(ldsq(Partition).all()))
-        self.assertEquals(0, len(ldsq(Table).all()))
-        self.assertEquals(0, len(ldsq(Column).all()))
-        self.assertEquals(0, len(ldsq(Code).all()))
-        self.assertEquals(0, len(ldsq(ColumnStat).all()))
+        self.assertEqual(0, len(ldsq(Partition).all()))
+        self.assertEqual(0, len(ldsq(Table).all()))
+        self.assertEqual(0, len(ldsq(Column).all()))
+        self.assertEqual(0, len(ldsq(Code).all()))
+        self.assertEqual(0, len(ldsq(ColumnStat).all()))
 
         # Re-install the bundle, then check that the partitions are still properly installed
 
@@ -269,11 +269,11 @@ class Test(TestBase):
 
             r = l.get(partition.identity.vid)
             self.assertIsNotNone(r)
-            self.assertEquals(r.partition.identity.id_, partition.identity.id_)
+            self.assertEqual(r.partition.identity.id_, partition.identity.id_)
 
             r = l.get(partition.identity.id_)
             self.assertIsNotNone(r)
-            self.assertEquals(r.partition.identity.id_, partition.identity.id_)
+            self.assertEqual(r.partition.identity.id_, partition.identity.id_)
             
 
 
@@ -290,14 +290,14 @@ class Test(TestBase):
 
         self.assertIsNotNone(r)
         self.assertTrue(r is not False)
-        self.assertEquals(r.identity.id_, r.identity.id_)
+        self.assertEqual(r.identity.id_, r.identity.id_)
 
-        self.assertEquals(5, len(l.files.query.state('new').all))
+        self.assertEqual(5, len(l.files.query.state('new').all))
 
-        for remote_name, remote in l.remotes.items():
+        for remote_name, remote in list(l.remotes.items()):
             remote.clean()
 
-        a = l.remotes.values()
+        a = list(l.remotes.values())
         b = l.files.query.state('new').all
 
         def cb(what, metadata, start):
@@ -349,7 +349,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         fn = l.remote_stack.get(self.bundle.identity.cache_key)
 
         self.assertTrue(bool(fn))
-        self.assertEquals('/tmp/library-test/remote-cache-2/source/dataset-subset-variation-0.0.1.db', fn)
+        self.assertEqual('/tmp/library-test/remote-cache-2/source/dataset-subset-variation-0.0.1.db', fn)
 
         c = l.cache
 
@@ -412,27 +412,27 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         self.assertTrue(bool(b))
 
-        self.assertEquals(self.bundle.identity.vname, b.identity.vname)
+        self.assertEqual(self.bundle.identity.vname, b.identity.vname)
 
         for p in b.partitions:
             bp = l.get(p.identity.vid)
 
-            self.assertEquals(self.bundle.identity.vname, bp.identity.vname)
-            self.assertEquals(p.identity.vname, bp.partition.vname)
+            self.assertEqual(self.bundle.identity.vname, bp.identity.vname)
+            self.assertEqual(p.identity.vname, bp.partition.vname)
 
             l.files.query.ref(bp.partition.identity.vid).one
 
         dataset = l.resolve(p.identity.vid)
 
-        self.assertEquals('piEGPXmDC8005001', dataset.partition.vid)
+        self.assertEqual('piEGPXmDC8005001', dataset.partition.vid)
 
-        l.remotes.values()[0].store_list()
+        list(l.remotes.values())[0].store_list()
 
     def test_http_cache(self):
 
         l = self.get_library('http-remoted')
 
-        r = l.remotes.values()[0]
+        r = list(l.remotes.values())[0]
 
         self.assertFalse(r.has('foobar'))
         self.assertTrue(r.has(self.bundle.identity.cache_key))
@@ -445,13 +445,13 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         self.assertTrue(bool(b))
 
-        self.assertEquals(self.bundle.identity.vname, b.identity.vname)
+        self.assertEqual(self.bundle.identity.vname, b.identity.vname)
 
         for p in b.partitions:
             bp = l.get(p.identity.vid)
 
-            self.assertEquals(self.bundle.identity.vname, bp.identity.vname)
-            self.assertEquals(p.identity.vname, bp.partition.vname)
+            self.assertEqual(self.bundle.identity.vname, bp.identity.vname)
+            self.assertEqual(p.identity.vname, bp.partition.vname)
 
     def test_versions(self):
         from ambry.run import get_runconfig
@@ -512,11 +512,11 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         db = l.database
 
-        for d in db.list(with_partitions=True).values():
+        for d in list(db.list(with_partitions=True).values()):
             datasets[d.vid] = d.dict
             datasets[d.vid]['partitions'] = {}
 
-            for p_vid, p in d.partitions.items():
+            for p_vid, p in list(d.partitions.items()):
                 datasets[d.vid]['partitions'][p_vid] = p.dict
 
         with open(self.bundle.filesystem.path('meta', 'version_datasets.json'), 'w') as f:
@@ -553,29 +553,29 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         name = 'source-dataset-subset-variation'
 
         ip, results = r.resolve_ref_one(vname)
-        self.assertEquals(vname, results.vname)
+        self.assertEqual(vname, results.vname)
 
         ip, results = r.resolve_ref_one(name)
-        self.assertEquals(vname, results.vname)
+        self.assertEqual(vname, results.vname)
 
         # Cache keys
 
         ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1.db')
-        self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001', str(result))
+        self.assertEqual('source-dataset-subset-variation-0.0.1~diEGPXmDC8001', str(result))
 
         ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1/tthree.db')
-        self.assertEquals('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001', str(result.partition))
+        self.assertEqual('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001', str(result.partition))
 
         # Now in the library, which has a slightly different interface.
         ident = l.resolve(vname)
-        self.assertEquals(vname, ident.vname)
+        self.assertEqual(vname, ident.vname)
 
         ident = l.resolve('source-dataset-subset-variation-0.0.1~diEGPXmDC8001')
-        self.assertEquals('diEGPXmDC8001', ident.vid)
+        self.assertEqual('diEGPXmDC8001', ident.vid)
 
         ident = l.resolve('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001')
-        self.assertEquals('diEGPXmDC8001', ident.vid)
-        self.assertEquals('piEGPXmDC8001001', ident.partition.vid)
+        self.assertEqual('diEGPXmDC8001', ident.vid)
+        self.assertEqual('piEGPXmDC8001001', ident.partition.vid)
 
         #
         # Test semantic version matching
@@ -595,24 +595,24 @@ source/dataset-subset-variation-0.0.1/tthree.db:
                 from ambry.identity import Identity
 
                 ip = Identity.classify(ref)
-                return ip, {k: Identity.from_dict(ds) for k, ds in datasets.items()}
+                return ip, {k: Identity.from_dict(ds) for k, ds in list(datasets.items())}
 
         r = TestResolver(db.session)
 
         ip, result = r.resolve_ref_one('source-dataset-subset-variation-==1.10.1')
-        self.assertEquals('source-dataset-subset-variation-1.10.1~diEGPXmDC8001', str(result))
+        self.assertEqual('source-dataset-subset-variation-1.10.1~diEGPXmDC8001', str(result))
 
         ip, result = r.resolve_ref_one('source-dataset-subset-variation->=1.10.1,<3.0.0')
-        self.assertEquals('source-dataset-subset-variation-2.20.2~diEGPXmDC8002', str(result))
+        self.assertEqual('source-dataset-subset-variation-2.20.2~diEGPXmDC8002', str(result))
 
         ip, result = r.resolve_ref_one('source-dataset-subset-variation->=1.10.1,<2.0.0')
-        self.assertEquals('source-dataset-subset-variation-1.10.1~diEGPXmDC8001', str(result))
+        self.assertEqual('source-dataset-subset-variation-1.10.1~diEGPXmDC8001', str(result))
 
         ip, result = r.resolve_ref_one('source-dataset-subset-variation->2.0.0')
-        self.assertEquals('source-dataset-subset-variation-3.30.3~diEGPXmDC8003', str(result))
+        self.assertEqual('source-dataset-subset-variation-3.30.3~diEGPXmDC8003', str(result))
 
         ip, result = r.resolve_ref_one('source-dataset-subset-variation-<=3.0.0')
-        self.assertEquals('source-dataset-subset-variation-2.20.2~diEGPXmDC8002', str(result))
+        self.assertEqual('source-dataset-subset-variation-2.20.2~diEGPXmDC8002', str(result))
 
     def test_compression_cache(self):
         """Test a two-level cache where the upstream compresses files """
@@ -663,11 +663,11 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
-            self.assertEquals(partition.identity.id_, r.partition.identity.id_)
+            self.assertEqual(partition.identity.id_, r.partition.identity.id_)
 
             r = l.get(partition.identity.id_)
             self.assertIsNotNone(r)
-            self.assertEquals(partition.identity.id_, r.partition.identity.id_)
+            self.assertEqual(partition.identity.id_, r.partition.identity.id_)
 
         #
         # Create all possible combinations of partition names
@@ -743,16 +743,16 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             f = l.files.new_file(path='path'+e[0], ref="{}-{}".format(*e),
                                  source_url = 'foo', group=e[1], type_=e[1])
 
-        self.assertEquals(30, len(l.files.query.all))
+        self.assertEqual(30, len(l.files.query.all))
 
         # Will throw an exception on duplicate error
         f1 = l.files.new_file(path='ref-a', type = 'type-a', source = 'source-a', state = 'a')
-        self.assertEquals('a', l.files.query.path('ref-a').one.state)
+        self.assertEqual('a', l.files.query.path('ref-a').one.state)
 
         # Test that it overwrites inistead of duplicates
         f2 = l.files.new_file(path='ref-a', type='type-a', source='source-a', state = 'b')
-        self.assertEquals('b', l.files.query.path('ref-a').one.state)
-        self.assertEquals(31, len(l.files.query.all))
+        self.assertEqual('b', l.files.query.path('ref-a').one.state)
+        self.assertEqual(31, len(l.files.query.all))
 
     def test_codes(self):
 
@@ -775,7 +775,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         c = t.column('code')
 
         self.assertEqual(10, len(c.forward_code_map))
-        self.assertIn('5',c.forward_code_map.keys())
+        self.assertIn('5',list(c.forward_code_map.keys()))
 
         l.remove(b)
 
@@ -800,10 +800,10 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         for r in l.search.search_datasets("title:zip"):
             ds = l.dataset(r)
-            print r, ds.vname, ds.data.get('title')
+            print(r, ds.vname, ds.data.get('title'))
 
         for r in l.search.search_partitions("doc:0E06"):
-            print r
+            print(r)
 
     # This test requires that specific bundles are installed. It needs to be re-written with the
     # text bundles, which means that a test bundle need to be created that can exercise a variety
@@ -822,11 +822,11 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         e = lambda x: l.search.make_query_from_terms(stp.parse(x))
 
-        print e('births ')
-        print e('births source cdph')
-        print e('births with mother source cdph')
-        print e('births with mother in California by tracts')
-        print e('births with mother with birth in California by tracts')
+        print(e('births '))
+        print(e('births source cdph'))
+        print(e('births with mother source cdph'))
+        print(e('births with mother in California by tracts'))
+        print(e('births with mother with birth in California by tracts'))
 
 def suite():
     suite = unittest.TestSuite()

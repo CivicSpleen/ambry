@@ -29,25 +29,25 @@ class Test(TestCLIMixin, TestBase):
         from ambry.cli import library
 
         args = self.format_args('info')
-        print '== %s' % args
+        print('== %s' % args)
         root.root_command(args, self.rc)
 
         args = self.format_args('library', 'info')
-        print '== %s' % args
+        print('== %s' % args)
         library.library_command(args, self.rc)
 
         args = self.format_args('library', 'drop')
-        print '== %s' % args
+        print('== %s' % args)
         library.library_command(args, self.rc)
 
         args = self.format_args('library', 'sync', '-s')
-        print '== %s' % args
+        print('== %s' % args)
         library.library_command(args, self.rc)
 
         args = self.format_args('list')
-        print '== %s' % args
+        print('== %s' % args)
         root.root_command(args, self.rc)
 
         args = self.format_args('source', 'buildable', '-Fvid')
-        print '== %s' % args
+        print('== %s' % args)
         source.source_command(args, self.rc)

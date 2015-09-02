@@ -16,9 +16,9 @@ class Test(TestBase):
         rg = DelimitedRowGenerator(fn('rowgen_basic.csv'))
 
         for row in rg:
-            print row
+            print(row)
 
-        print rg.header
+        print(rg.header)
 
     def test_headers(self):
         from test import support
@@ -30,22 +30,22 @@ class Test(TestBase):
         class RG(DelimitedRowGenerator):
             def is_data_line(self, i, row):
                 try:
-                    return len(filter(bool, row)) > 5 and int(row[0])
+                    return len(list(filter(bool, row))) > 5 and int(row[0])
                 except ValueError:
                     return False
 
             def is_header_comment_line(self, i, row):
-                return len(filter(bool, row)) < 2
+                return len(list(filter(bool, row))) < 2
 
             def is_header_line(self, i, row):
-                return len(filter(bool, row)) > 2
+                return len(list(filter(bool, row))) > 2
 
         rg = RG(fn('rowgen_multiheader.csv'))
 
-        print rg.intuit_row_spec()
+        print(rg.intuit_row_spec())
 
-        print rg.get_header()
+        print(rg.get_header())
 
         for row in rg:
-            print row
+            print(row)
 

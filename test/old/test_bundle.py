@@ -28,8 +28,8 @@ class Test(TestBase):
         b.clean()
 
         self.assertTrue(b.identity.id_ is not None)
-        self.assertEquals('source-dataset-subset-variation', b.identity.sname)
-        self.assertEquals('source-dataset-subset-variation-0.0.1', b.identity.vname)
+        self.assertEqual('source-dataset-subset-variation', b.identity.sname)
+        self.assertEqual('source-dataset-subset-variation-0.0.1', b.identity.vname)
 
         b.database.create()
 
@@ -143,15 +143,15 @@ class Test(TestBase):
 
             c1 = t.column('col1')
 
-            self.assertEquals(1, BasicTransform(c1)({'col1': ' 1 '}))
+            self.assertEqual(1, BasicTransform(c1)({'col1': ' 1 '}))
 
             with self.assertRaises(ValueError):
-                print "PROCESSOR '{}'".format(CensusTransform(c1)({'col1': ' B '}))
+                print("PROCESSOR '{}'".format(CensusTransform(c1)({'col1': ' B '})))
 
-            self.assertEquals(1, CensusTransform(c1)({'col1': ' 1 '}))
-            self.assertEquals(-1, CensusTransform(c1)({'col1': ' 999 '}))
-            self.assertEquals(-3, CensusTransform(c1)({'col1': ' # '}))
-            self.assertEquals(-2, CensusTransform(c1)({'col1': ' ! '}))
+            self.assertEqual(1, CensusTransform(c1)({'col1': ' 1 '}))
+            self.assertEqual(-1, CensusTransform(c1)({'col1': ' 999 '}))
+            self.assertEqual(-3, CensusTransform(c1)({'col1': ' # '}))
+            self.assertEqual(-2, CensusTransform(c1)({'col1': ' ! '}))
 
     def test_validator(self):
 
@@ -234,7 +234,7 @@ class Test(TestBase):
             m = hashlib.md5()
             m.update(hashed_str)
 
-            self.assertEquals(int(m.hexdigest()[:14], 16), table.row_hash(row))
+            self.assertEqual(int(m.hexdigest()[:14], 16), table.row_hash(row))
 
     def test_partition(self):
         from ambry.orm.exc import ConflictError
@@ -253,13 +253,13 @@ class Test(TestBase):
         p = self.bundle.partitions.find_or_new(table='tone',time=10, space=10)
         p.database.create() # Find will go to the library if the database doesn't exist.
         self.assertEqual(1, len(self.bundle.partitions.all))
-        self.assertEquals('pid1', p.data['pid'])
+        self.assertEqual('pid1', p.data['pid'])
 
         p = self.bundle.partitions.find(PartitionNameQuery(table='tone',time=10, space=10))
-        self.assertEquals('pid1',p.data['pid'] )
+        self.assertEqual('pid1',p.data['pid'] )
 
         p = self.bundle.partitions.find(table='tone',time=10, space=10)
-        self.assertEquals('pid1', p.data['pid'])
+        self.assertEqual('pid1', p.data['pid'])
 
         pnq3 = PartitionNameQuery(space=10)
 
@@ -271,7 +271,7 @@ class Test(TestBase):
         bundle = Bundle()
         p = bundle.partitions.find(pnq3)
 
-        self.assertEquals('bar', p.data['foo'])
+        self.assertEqual('bar', p.data['foo'])
 
         # p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30-hdf'))
         # self.assertTrue(p is not None)
@@ -321,10 +321,10 @@ class Test(TestBase):
 
         l = rc.library('library1')
 
-        self.assertEquals('database1', l['database']['_name'])
-        self.assertEquals('filesystem1', l['filesystem']['_name'])
-        self.assertEquals('filesystem2', l['filesystem']['upstream']['_name'])
-        self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
+        self.assertEqual('database1', l['database']['_name'])
+        self.assertEqual('filesystem1', l['filesystem']['_name'])
+        self.assertEqual('filesystem2', l['filesystem']['upstream']['_name'])
+        self.assertEqual('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
 
     def test_build_bundle(self):
         import shutil
