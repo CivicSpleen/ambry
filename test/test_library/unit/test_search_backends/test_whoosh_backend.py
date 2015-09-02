@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-
 import os
+
+from six import u
 
 from test.test_base import TestBase
 
@@ -101,7 +102,7 @@ class DatasetWhooshIndexTest(TestBase):
         self.assertEqual(all_docs[0]['vid'], dataset.vid)
 
         # update
-        doc['doc'] = 'updated'
+        doc['doc'] = u('updated')
         self.backend.dataset_index._index_document(doc, force=True)
         all_docs = list(self.backend.dataset_index.index.searcher().documents(doc='updated'))
         self.assertEqual(len(all_docs), 1)
@@ -294,7 +295,7 @@ class PartitionWhooshIndexTest(TestBase):
         self.assertIn(partition1.vid, all_vids)
 
         # update
-        doc['doc'] = 'updated'
+        doc['doc'] = u('updated')
         self.backend.partition_index._index_document(doc, force=True)
         all_docs = list(self.backend.partition_index.index.searcher().documents(doc='updated'))
         self.assertEqual(len(all_docs), 1)
