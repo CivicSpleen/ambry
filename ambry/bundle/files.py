@@ -33,7 +33,7 @@ from six.moves import zip as six_izip
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import File
-from ambry.util import Constant, get_logger
+from ambry.util import Constant, get_logger, drop_empty
 
 logger = get_logger(__name__)
 
@@ -448,7 +448,7 @@ class SourcesFile(RowBuildSourceFile):
         # for that row. The bool and filter return false when none of the values
         # are non-empty. Then zip again to transpose to original form.
 
-        non_empty_rows = _drop_empty(contents)
+        non_empty_rows = drop_empty(contents)
 
         s = self._dataset._database.session
 
@@ -499,7 +499,7 @@ class SourcesFile(RowBuildSourceFile):
             rows = [list(rows[0].keys())] + [list(r.values()) for r in rows]
 
             # Transpose trick to remove empty columns
-            rows = list(_drop_empty(rows))
+            rows = list(drop_empty(rows))
         else:
             # No contents, so use the default file
             import csv
@@ -648,7 +648,7 @@ class SchemaFile(RowBuildSourceFile):
         # Transpose trick to remove empty columns
         if rows:
             rows_before_transpose = len(rows)
-            rows = list(_drop_empty(rows))
+            rows = list(drop_empty(rows))
             assert rows_before_transpose == len(rows)  # The transpose trick removes all of the rows if anything goes wrong
 
         else:
@@ -834,17 +834,3 @@ class BuildSourceFileAccessor(object):
     def sync_dirs(self):
         return [(file_const, self.file(file_const).sync_dir())
                 for file_const, (file_name, clz) in iteritems(file_info_map)]
-
-
-def _drop_empty(rows):
-    """ Returns generator with new rows without empty.
-
-    Args:
-        rows (list of lists)
-
-    Returns:
-        iterator
-
-    """
-    # TODO: looks so complicated. Refactor.
-    return six_izip(*[r for r in six_izip(*rows) if bool(list(filter(bool, r[1:])))])

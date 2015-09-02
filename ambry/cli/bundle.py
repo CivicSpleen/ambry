@@ -14,12 +14,17 @@ from fs.opener import fsopendir
 
 from tabulate import tabulate
 
+from six import iteritems, iterkeys, callable as six_callable
+from six.moves import queue as six_queue
+
 from ambry.identity import NotObjectNumberError
 from ambry.bundle import Bundle
 from ambry.orm.exc import NotFoundError
+from ambry.util import drop_empty
 
 from ..cli import prt, fatal, warn, err
 from ..orm import File
+
 
 def bundle_command(args, rc):
 
@@ -342,8 +347,6 @@ def bundle_parser(cmd):
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
 
-
-
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
 
@@ -358,7 +361,7 @@ def bundle_info(args, l, rc):
     b.set_last_access(Bundle.STATES.INFO)
 
     if args.source_dir:
-        print b.source_fs.getsyspath('/')
+        print(b.source_fs.getsyspath('/'))
         return
 
     def inf(column, k, v):
@@ -386,7 +389,7 @@ def bundle_info(args, l, rc):
     info = [list()]
     inf(0, 'Title', b.metadata.about.title)
     inf(0, 'Summary', b.metadata.about.summary)
-    print tabulate(join(*info), tablefmt='plain')
+    print(tabulate(join(*info), tablefmt='plain'))
 
     info = [list(), list()]
 
@@ -401,14 +404,14 @@ def bundle_info(args, l, rc):
     except KeyError:
         pass
 
-    print tabulate(join(*info), tablefmt='plain')
+    print(tabulate(join(*info), tablefmt='plain'))
 
     info = [list()]
 
     inf(0, 'Build  FS', str(b.build_fs))
     inf(0, 'Source FS', str(b.source_fs))
 
-    print tabulate(join(info[0]), tablefmt='plain')
+    print(tabulate(join(info[0]), tablefmt='plain'))
 
     # DIsplay info about a partition, if one was provided
     if args.term:
@@ -425,8 +428,8 @@ def bundle_info(args, l, rc):
             inf(0, 'Location', p.location)
             inf(1, 'State', p.state)
 
-            print '\nPartition'
-            print tabulate(join(*info), tablefmt='plain')
+            print('\nPartition')
+            print(tabulate(join(*info), tablefmt='plain'))
 
         except (NotFoundError, AttributeError):
             pass
@@ -439,7 +442,7 @@ def bundle_info(args, l, rc):
 
         for p in b.partitions:
             rows = ['Column LOM Count Uniques Values'.split()]
-            keys = [k for k, v in p.stats_dict.items()]
+            keys = [k for k, v in iteritems(p.stats_dict)]
             d = p.stats_dict
             for c in p.table.columns:
                 if c.name in keys:
@@ -449,11 +452,11 @@ def bundle_info(args, l, rc):
                     rows.append([
                         str(k), str(v.lom), str(v.count), str(v.nuniques),
                         text_hist(int(x) for x in v.hist) if v.lom == 'i' else (
-                            '\n'.join(wrap(', '.join(sorted(str(x) for x in v.uvalues.keys()[:10])), 50)))
+                            '\n'.join(wrap(', '.join(sorted(str(x) for x in iterkeys(v.uvalues)[:10])), 50)))
                     ])
 
             #print tabulate(row, tablefmt='plain')
-            print SingleTable(rows, title='Stats for ' + str(p.identity.name)).table
+            print(SingleTable(rows, title='Stats for ' + str(p.identity.name)).table)
 
     elif args.partitions:
 
@@ -462,8 +465,8 @@ def bundle_info(args, l, rc):
             rows.append([p.vid, p.vname, p.table.name,
                          ', '.join(str(e) for e in p.time_coverage[:5]), ', '.join(p.space_coverage[:5]),
                          ', '.join(p.grain_coverage[:5])])
-        print '\nPartitions'
-        print tabulate(rows, headers = "Vid Name Table Time Space Grain".split())
+        print('\nPartitions')
+        print(tabulate(rows, headers = "Vid Name Table Time Space Grain".split()))
 
 
 def check_built(b):
@@ -629,17 +632,17 @@ def bundle_run(args, l, rc):
 
         return
 
-    if not callable(f):
+    if not six_callable(f):
         raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
 
-    b.logger.info("Running: {}({})".format(str(args.method), ','.join(args.args)))
+    b.logger.info('Running: {}({})'.format(str(args.method), ','.join(args.args)))
 
     r = f(*args.args)
 
     if args.sync:
         b.sync_out()
 
-    print "RETURN: ", r
+    print("RETURN: ", r)
 
 
 def bundle_checkin(args, l, rc):
@@ -729,12 +732,11 @@ def bundle_dump(args, l, rc):
         records = []
         for i, row in enumerate(b.dataset.sources):
             if not records:
-                records.append(row.dict.keys())
+                records.append(list(row.dict.keys()))
 
-            records.append(row.dict.values())
+            records.append(list(row.dict.values()))
 
-        # Transpose, remove empty columns, transpose back
-        records = zip(*[row for row in zip(*records) if bool(filter(bool, row[1:]))])
+        records = drop_empty(records)
 
         if records:
             headers, records = records[0], records[1:]
@@ -749,9 +751,9 @@ def bundle_dump(args, l, rc):
         for t in b.dataset.source_tables:
             for c in t.columns:
                 if not records:
-                    records.append(c.row.keys())
+                    records.append(list(c.row.keys()))
 
-                records.append(c.row.values())
+                records.append(list(c.row.values()))
 
         if records:
             headers, records = records[0], records[1:]
@@ -763,111 +765,29 @@ def bundle_dump(args, l, rc):
         headers = []
         for t in b.dataset.tables:
             for i, c in enumerate(t.columns):
-                row = OrderedDict((k, v) for k, v in c.row.items() if k in
+                row = OrderedDict((k, v) for k, v in iteritems(c.row) if k in
                                   ['table', 'column', 'id', 'datatype', 'caster', 'description'])
 
                 if i == 0:
-                    records.append(row.keys())  # once for each table
+                    records.append(list(row.keys()))  # once for each table
 
-                records.append(row.values())
+                records.append(list(row.values()))
 
-
-        records = zip(*[r for r in zip(*records) if bool(filter(bool, records[1:]))])
-
+        records = drop_empty(records)
         if records:
             headers, records = records[0], records[1:]
         else:
             headers = []
 
-    print tabulate(records, headers=headers)
+    print(tabulate(records, headers=headers))
 
 
 def bundle_config_scrape(args, b, st, rc):
-
     raise NotImplementedError
-
-    from bs4 import BeautifulSoup
-    import urllib2
-    import urlparse
-    import os
-
-    page_url = b.metadata.external_documentation.download.url
-
-    if not page_url:
-        page_url = b.metadata.external_documentation.dataset.url
-
-    if not page_url:
-        fatal(
-            "Didn't get URL in either the external_documentation.download nor external_documentation.dataset config ")
-
-    parts = list(urlparse.urlsplit(page_url))
-
-    parts[2] = ''
-    root_url = urlparse.urlunsplit(parts)
-
-    html_page = urllib2.urlopen(page_url)
-    soup = BeautifulSoup(html_page)
-
-    d = dict(external_documentation={}, sources={})
-
-    for link in soup.findAll('a'):
-
-        if not link:
-            continue
-
-        if link.string:
-            text = str(link.string.encode('ascii', 'ignore'))
-        else:
-            text = 'None'
-
-        url = link.get('href')
-
-        if not url:
-            continue
-
-        if 'javascript' in url:
-            continue
-
-        if url.startswith('http'):
-            pass
-        elif url.startswith('/'):
-            url = os.path.join(root_url, url)
-        else:
-            url = os.path.join(page_url, url)
-
-        base = os.path.basename(url)
-
-        if '#' in base:
-            continue
-
-        try:
-            fn, ext = base.split('.', 1)
-        except ValueError:
-            fn = base
-            ext = 'html'
-
-        # xlsm is a bug that adss 'm' to the end of the url. No idea.
-        if ext.lower() in ('zip', 'csv', 'xls', 'xlsx', 'xlsm', 'txt'):
-            d['sources'][fn] = dict(
-                url=url,
-                description=text
-            )
-        elif ext.lower() in ('pdf', 'html'):
-            d['external_documentation'][fn] = dict(
-                url=url,
-                description=text,
-                title=text
-            )
-        else:
-
-            pass
-
-    print yaml.dump(d, default_flow_style=False)
 
 
 def bundle_repopulate(args, b, st, rc):
     raise NotImplementedError()
-    # return b.repopulate()
 
 
 def bundle_new(args, l, rc):
@@ -905,7 +825,7 @@ def bundle_new(args, l, rc):
     except ConflictError:
         fatal("Can't create dataset; one with a conflicting name already exists")
 
-    print b.identity.fqname
+    print(b.identity.fqname)
 
 
 def bundle_import(args, l, rc):
@@ -972,7 +892,6 @@ def bundle_edit(args, l, rc):
     from ..util import getch
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
-    from Queue import Queue
     import threading
 
     b = using_bundle(args, l)
@@ -983,7 +902,7 @@ def bundle_edit(args, l, rc):
 
     b.sync()
 
-    prt('Commands: q=quit, {}'.format(', '.join(k + '=' + v for k, v in file_const_map.items())))
+    prt('Commands: q=quit, {}'.format(', '.join(k + '=' + v for k, v in list(file_const_map.items()))))
 
     def edit(const):
 
@@ -1006,7 +925,7 @@ def bundle_edit(args, l, rc):
     if args.file_const:
         edit(args.file_const)
 
-    queue = Queue()
+    queue = six_queue.Queue()
 
     class EditEventHandler(FileSystemEventHandler):
         def on_modified(self, event):
@@ -1042,7 +961,7 @@ def bundle_edit(args, l, rc):
 
             # On OS X Terminal, the printing moves the cursor down a lone, but not to the start, so these
             # ANSI sequences fix the cursor positiing. No idea why ...
-            print "\033[0G\033[1F"
+            print("\033[0G\033[1F")
 
             if command == 'quit':
                 observer.stop()

@@ -1427,3 +1427,20 @@ def trace(fn):
         print('Return {}'.format(ret))
         return ret
     return wrapped
+
+
+def drop_empty(rows):
+    """ Returns generator with new rows without empty.
+
+    Args:
+        rows (list of lists):
+
+    Example:
+        FIXME: add example.
+
+    Returns:
+        iterator
+
+    """
+    # TODO: looks so complicated. Refactor.
+    return six_izip(*[r for r in six_izip(*rows) if bool(list(filter(bool, r[1:])))])

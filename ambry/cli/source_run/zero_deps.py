@@ -10,4 +10,4 @@ def run(args, bundle_dir, bundle):
     deps = bundle.metadata.dependencies
 
     if len(deps) == 0:
-        print bundle.identity.fqname
+        print(bundle.identity.fqname)

@@ -9,4 +9,4 @@ def run(args, bundle_dir, bundle):
 
     deps = bundle.config.build.get('dependencies', {})
 
-    print len(deps), bundle_dir
+    print(len(deps), bundle_dir)

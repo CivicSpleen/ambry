@@ -1,37 +1,46 @@
 
+from six import iterkeys
+
 from ..cli import prt, fatal, warn, err
 
 
 def config_parser(cmd):
-    config_p = cmd.add_parser('config',help='Install or display the configuration')
+    config_p = cmd.add_parser('config', help='Install or display the configuration')
     config_p.set_defaults(command='config')
 
-    asp = config_p.add_subparsers(title='Config commands',help='Configuration commands')
+    asp = config_p.add_subparsers(title='Config commands', help='Configuration commands')
 
     sp = asp.add_parser('install', help='Install a configuration file')
     sp.set_defaults(subcommand='install')
-    sp.add_argument('-t','--template',default='devel',help="Suffix of the configuration template. One of: 'devel', 'library', 'builder'. Default: 'devel' ")
+    sp.add_argument(
+        '-t', '--template', default='devel',
+        help="Suffix of the configuration template. One of: 'devel', 'library', 'builder'. Default: 'devel' ")
     sp.add_argument('-r', '--root', default=None, help="Set the root dir")
-
-    sp.add_argument('-R','--remote', default=None, help="Url of remote library")
-    sp.add_argument('-p','--print',dest='prt',default=False,action='store_true',help='Print, rather than save, the config file')
+    sp.add_argument('-R', '--remote', default=None, help="Url of remote library")
+    sp.add_argument(
+        '-p', '--print', dest='prt', default=False, action='store_true',
+        help='Print, rather than save, the config file')
 
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-e','--edit',default=False,action='store_true',help="Edit existing file")
-    group.add_argument('-f','--force',default=False,action='store_true',help="Force using the default config; don't re-use the existing config")
+    group.add_argument('-e', '--edit', default=False, action='store_true', help='Edit existing file')
+    group.add_argument(
+        '-f', '--force', default=False, action='store_true',
+        help="Force using the default config; don't re-use the existing config")
 
-    sp.add_argument('args',nargs='*',help='key=value entries')  # Get everything else.
-
-    sp = asp.add_parser('value',help='Return a configuration value, or all values if no key is specified')
+    sp.add_argument('args', nargs='*', help='key=value entries')  # Get everything else.
+    sp = asp.add_parser('value', help='Return a configuration value, or all values if no key is specified')
     sp.set_defaults(subcommand='value')
-    sp.add_argument('-y','--yaml',default=False,action='store_true',help="If no key is specified, return the while configuration as yaml")
+    sp.add_argument(
+        '-y', '--yaml', default=False, action='store_true',
+        help='If no key is specified, return the while configuration as yaml')
     sp.add_argument('key', nargs='*', help='Value key')  # Get everything else.
 
     sp = asp.add_parser('password', help='Set a password for a service')
     sp.set_defaults(subcommand='password')
     group.add_argument('-d', '--delete', default=False, action='store_true', help="Delete the password")
-    sp.add_argument('service', metavar = 'service', nargs=1, help='Service name, usually a hostname')  # Get everything else.
-    sp.add_argument('username', metavar = 'username', nargs=1, help = 'username')
+    sp.add_argument('service', metavar='service', nargs=1, help='Service name, usually a hostname')  # Get everything else.
+    sp.add_argument('username', metavar='username', nargs=1, help='username')
+
 
 def config_command(args, rc):
     from ..library import new_library
@@ -99,7 +108,7 @@ def config_install(args, l, rc):
         e = d
         for k in key_parts:
             k = k.strip()
-            print k, str(key_parts[-1])
+            print(k, str(key_parts[-1]))
             if str(k) == str(key_parts[-1]):
                 e[k] = value
             else:
@@ -146,7 +155,7 @@ def config_install(args, l, rc):
     from ..run import get_runconfig
     rc = get_runconfig(install_file)
 
-    for name in rc.group('filesystem').keys():
+    for name in iterkeys(rc.group('filesystem')):
         fs = rc.filesystem(name)
 
         try:
@@ -175,16 +184,16 @@ def config_value(args, rc):
             dot_path = '.'.join(path)
             if key:
                 if key == dot_path:
-                    print sub_value(value, subs)
+                    print(sub_value(value, subs))
                     return
             else:
-                print dot_path, '=', sub_value(value, subs)
+                print(dot_path, '=', sub_value(value, subs))
 
     subs = dict(root=rc.filesystem_path('root'))
 
     if not args.key:
         if args.yaml:
-            print rc.dump()
+            print(rc.dump())
         else:
             dump_key(None, subs)
     else:

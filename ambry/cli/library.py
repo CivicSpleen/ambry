@@ -4,8 +4,8 @@ This file is licensed under the terms of the Revised BSD License,
 included in this distribution as LICENSE.txt
 
 """
+from six import iteritems
 
-import os
 from ..cli import prt, err, fatal, warn, _print_info  # @UnresolvedImport
 from ambry.util import Progressor
 
@@ -23,22 +23,23 @@ def library_parser(cmd):
 
     sp = asp.add_parser('push', help='Push new library files')
     sp.set_defaults(subcommand='push')
-    sp.add_argument('-w', '--watch', default=False, action="store_true", help='Check periodically for new files.')
-    sp.add_argument('-f', '--force', default=False, action="store_true", help='Push all files')
-    sp.add_argument('-n', '--dry-run', default=False, action="store_true",
+    sp.add_argument('-w', '--watch', default=False, action='store_true',
+                    help='Check periodically for new files.')
+    sp.add_argument('-f', '--force', default=False, action='store_true', help='Push all files')
+    sp.add_argument('-n', '--dry-run', default=False, action='store_true',
                     help="Dry run, don't actually send the files.")
 
     sp = asp.add_parser('files', help='Print out files in the library')
     sp.set_defaults(subcommand='files')
-    sp.add_argument('-a', '--all', default='all', action="store_const", const='all', dest='file_state',
+    sp.add_argument('-a', '--all', default='all', action='store_const', const='all', dest='file_state',
                     help='Print all files')
-    sp.add_argument('-n', '--new', default=False, action="store_const", const='new', dest='file_state',
+    sp.add_argument('-n', '--new', default=False, action='store_const', const='new', dest='file_state',
                     help='Print new files')
-    sp.add_argument('-p', '--pushed', default=False, action="store_const", const='pushed', dest='file_state',
+    sp.add_argument('-p', '--pushed', default=False, action='store_const', const='pushed', dest='file_state',
                     help='Print pushed files')
-    sp.add_argument('-u', '--pulled', default=False, action="store_const", const='pulled', dest='file_state',
+    sp.add_argument('-u', '--pulled', default=False, action='store_const', const='pulled', dest='file_state',
                     help='Print pulled files')
-    sp.add_argument('-s', '--synced', default=False, action="store_const", const='synced', dest='file_state',
+    sp.add_argument('-s', '--synced', default=False, action='store_const', const='synced', dest='file_state',
                     help='Print synced source packages')
 
     sp = asp.add_parser('new', help='Create a new library')
@@ -50,42 +51,48 @@ def library_parser(cmd):
     sp = asp.add_parser('clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
 
-
     sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
     sp.set_defaults(subcommand='sync')
-    sp.add_argument('-C', '--clean', default=False, action="store_true",
+    sp.add_argument('-C', '--clean', default=False, action='store_true',
                     help='Clean before syncing. Will clean only the locations that are also synced')
 
-    sp.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
-    sp.add_argument('-l', '--library', default=False, action="store_true", help='Sync the library')
-    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync the remote')
-    sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync the source')
-    sp.add_argument('-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
-    sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
-    sp.add_argument('-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
+    sp.add_argument('-a', '--all', default=False, action='store_true', help='Sync everything')
+    sp.add_argument('-l', '--library', default=False, action='store_true', help='Sync the library')
+    sp.add_argument('-r', '--remote', default=False, action='store_true', help='Sync the remote')
+    sp.add_argument('-s', '--source', default=False, action='store_true', help='Sync the source')
+    sp.add_argument('-j', '--json', default=False, action='store_true',
+                    help='Cache JSON versions of library objects')
+    sp.add_argument('-w', '--warehouses', default=False, action='store_true',
+                    help='Re-synchronize warehouses')
+    sp.add_argument('-F', '--bundle-list',
+                    help='File of bundle VIDs. Sync only VIDs listed in this file')
 
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. '
                                     'Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')
     sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
-    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
+    sp.add_argument('-p', '--partitions', default=False, action='store_true',
+                    help='Also get all of the partitions. ')
+    sp.add_argument('-f', '--force', default=False, action='store_true',
+                    help='Force retrieving from the remote')
 
     sp = asp.add_parser('open', help='Open a bundle or partition file with sqlite3')
     sp.set_defaults(subcommand='open')
     sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
+    sp.add_argument('-f', '--force', default=False, action='store_true',
+                    help='Force retrieving from the remote')
 
     sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
     sp.set_defaults(subcommand='remove')
-    sp.add_argument('-a', '--all', default=False, action="store_true", help='Remove all records')
-    sp.add_argument('-b', '--bundle', default=False, action="store_true",
+    sp.add_argument('-a', '--all', default=False, action='store_true', help='Remove all records')
+    sp.add_argument('-b', '--bundle', default=False, action='store_true',
                     help='Remove the dataset and partition records')
-    sp.add_argument('-l', '--library', default=False, action="store_true",
+    sp.add_argument('-l', '--library', default=False, action='store_true',
                     help='Remove the library file record and library files')
-    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Remove the remote record')
-    sp.add_argument('-s', '--source', default=False, action="store_true", help='Remove the source record')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to remove')
+    sp.add_argument('-r', '--remote', default=False, action='store_true', help='Remove the remote record')
+    sp.add_argument('-s', '--source', default=False, action='store_true', help='Remove the source record')
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
+                    help='Name or ID of the bundle or partition to remove')
 
     whsp = asp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
@@ -93,7 +100,8 @@ def library_parser(cmd):
 
     sp = asp.add_parser('number', help='Return a new number from the number server')
     sp.set_defaults(subcommand='number')
-    sp.add_argument('-k', '--key', default='self', help="Set the number server key, or 'self' for self assignment ")
+    sp.add_argument('-k', '--key', default='self',
+                    help="Set the number server key, or 'self' for self assignment ")
 
 
 def library_command(args, rc):
@@ -285,8 +293,8 @@ def library_push(args, l, config):
 
     # Update the list file. This file is required for use with HTTP access, since you can't get
     # a list otherwise.
-    for remote_name, remote in l.remotes.items():
-        prt("  {}".format(remote.repo_id))
+    for remote_name, remote in iteritems(l.remotes):
+        prt('  {}'.format(remote.repo_id))
 
         if not args.dry_run:
             remote.store_list()
@@ -334,12 +342,12 @@ def library_sync(args, l, config):
 
 
     for r in l.remotes:
-        print r
+        print(r)
 
 
 def library_number(args, l, config):
 
-    print l.number(assignment_class=args.key)
+    print(l.number(assignment_class=args.key))
 
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")
