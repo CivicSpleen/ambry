@@ -27,7 +27,7 @@ from yaml.representer import RepresenterError
 from bs4 import BeautifulSoup
 
 from six.moves import filterfalse, xrange as six_xrange
-from six import iteritems, iterkeys, itervalues, _print, StringIO, text_type
+from six import iteritems, iterkeys, itervalues, print_, StringIO, text_type
 from six.moves import builtins, zip as six_izip
 from six.moves.urllib.parse import urlparse, urlsplit, urlunsplit
 from six.moves.urllib.request import urlopen
@@ -1099,7 +1099,7 @@ class Progressor(object):
     last = None
     freq = 5
 
-    def __init__(self, message='Download', printf=_print):
+    def __init__(self, message='Download', printf=print_):
         self.start = time.clock()
         self.message = message
         self.rates = deque(maxlen=10)
