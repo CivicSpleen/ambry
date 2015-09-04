@@ -60,7 +60,7 @@ class Cursor:
         self.table = table
         self._current_row = None
         self._next_row = None
-        self._f = open(table.filename)
+        self._f = open(table.filename, 'rb')
         self._msg_file = gzip.GzipFile(fileobj=self._f)
         self._unpacker = msgpack.Unpacker(
             self._msg_file, object_hook=PartitionMsgpackDataFileReader.decode_obj)

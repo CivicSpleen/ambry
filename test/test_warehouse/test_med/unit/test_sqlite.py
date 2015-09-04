@@ -4,7 +4,7 @@ import unittest
 
 import apsw
 
-from six import u
+from six import u, b
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import create_session
@@ -16,7 +16,7 @@ from test.test_warehouse.test_med.unit import BaseMEDTest
 
 class Test(BaseMEDTest):
 
-    def test_creates_virtual_table(self):
+    def test_1creates_virtual_table(self):
         partition_vid = 'vid1'
         partition = self._get_fake_partition(partition_vid)
         connection = apsw.Connection(':memory:')
@@ -27,8 +27,8 @@ class Test(BaseMEDTest):
         query = 'SELECT col1, col2 FROM {};'.format(_table_name(partition))
         result = cursor.execute(query).fetchall()
         self.assertEqual(len(result), 100)
-        self.assertEqual(result[0], (0, '0'))
-        self.assertEqual(result[-1], (99, '99'))
+        self.assertEqual(result[0], (0, b('0')))
+        self.assertEqual(result[-1], (99, b('99')))
 
     def test_many_queries_on_one_partition(self):
         partition_vid = 'vid1'
@@ -41,16 +41,16 @@ class Test(BaseMEDTest):
         query = 'SELECT col1, col2 FROM {};'.format(_table_name(partition))
         result = cursor.execute(query).fetchall()
         self.assertEqual(len(result), 100)
-        self.assertEqual(result[0], (0, '0'))
-        self.assertEqual(result[-1], (99, '99'))
+        self.assertEqual(result[0], (0, b('0')))
+        self.assertEqual(result[-1], (99, b('99')))
 
         # select first three records
         query = 'SELECT col1, col2 FROM {} LIMIT 3;'.format(_table_name(partition))
         result = cursor.execute(query).fetchall()
         self.assertEqual(len(result), 3)
-        self.assertEqual(result[0], (0, '0'))
-        self.assertEqual(result[1], (1, '1'))
-        self.assertEqual(result[2], (2, '2'))
+        self.assertEqual(result[0], (0, b('0')))
+        self.assertEqual(result[1], (1, b('1')))
+        self.assertEqual(result[2], (2, b('2')))
 
         # select with filtering
         query = 'SELECT col1 FROM {} WHERE col1=\'1\';'.format(_table_name(partition))
@@ -73,8 +73,8 @@ class Test(BaseMEDTest):
             query = 'SELECT col1, col2 FROM {};'.format(_table_name(partition))
             result = cursor.execute(query).fetchall()
             self.assertEqual(len(result), 100)
-            self.assertEqual(result[0], (0, '0'))
-            self.assertEqual(result[-1], (99, '99'))
+            self.assertEqual(result[0], (0, b('0')))
+            self.assertEqual(result[-1], (99, b('99')))
 
     @unittest.skip('sqlite module created by apsw is not visible by pysqlite.')
     def test_partition_row_orm(self):

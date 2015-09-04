@@ -10,6 +10,8 @@ import gzip
 
 import msgpack
 
+from six import b, u
+
 import unicodecsv as csv
 
 # Note:
@@ -317,21 +319,23 @@ class PartitionMsgpackDataFileReader(object):
 
     @staticmethod
     def decode_obj(obj):
+        if b('as_str') not in obj:
+            raise Exception('Unknown type on decode: {} '.format(obj))
 
-        if b'__datetime__' in obj:
+        as_str = obj[b('as_str')].decode('utf-8')
+        if b('__datetime__') in obj:
             try:
-                obj = datetime.datetime.strptime(obj['as_str'], DATETIME_FORMAT_NO_MS)
+                obj = datetime.datetime.strptime(as_str, DATETIME_FORMAT_NO_MS)
             except ValueError:
                 # The preferred format is without the microseconds, but there are some lingering
                 # bundle that still have it.
-                obj = datetime.datetime.strptime(obj['as_str'], DATETIME_FORMAT_WITH_MS)
-        elif b'__time__' in obj:
-            obj = datetime.time(*list(time.strptime(obj['as_str'], TIME_FORMAT))[3:6])
-        elif b'__date__' in obj:
-            obj = datetime.datetime.strptime(obj['as_str'], DATE_FORMAT).date()
+                obj = datetime.datetime.strptime(as_str, DATETIME_FORMAT_WITH_MS)
+        elif b('__time__') in obj:
+            obj = datetime.time(*list(time.strptime(as_str, TIME_FORMAT))[3:6])
+        elif b('__date__') in obj:
+            obj = datetime.datetime.strptime(as_str, DATE_FORMAT).date()
         else:
             raise Exception('Unknown type on decode: {} '.format(obj))
-
         return obj
 
     def close(self):
