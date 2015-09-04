@@ -119,11 +119,11 @@ class Test(TestBase):
         n = 30000
         s = time.time()
         for i in range(n):
-            row = data[i%100]
+            row = data[i % 100]
             row = row_munger1(row)
             cdf.insert(row)
 
-        print("Munger 1", round(float(n)/(time.time() - s),3), 'rows/s')
+        print("Munger 1", round(float(n)/(time.time() - s), 3), 'rows/s')
 
         s = time.time()
         for i in range(n):
@@ -232,7 +232,7 @@ class Test(TestBase):
         ctb.append('float', float)
         ctb.append('str', str)
 
-        row, errors = ctb([1,2.0,'3'])
+        row, errors = ctb([1, 2.0, '3'])
 
         self.assertIsInstance(row[0], int)
         self.assertEqual(row[0], 1)
@@ -256,7 +256,7 @@ class Test(TestBase):
         ctb.append('time', datetime.time)
         ctb.append('datetime', datetime.datetime)
 
-        row, errors = ctb(['1990-01-01','10:52','1990-01-01T12:30'])
+        row, errors = ctb(['1990-01-01', '10:52', '1990-01-01T12:30'])
 
         self.assertTrue(isinstance(row[0], datetime.date))
         self.assertTrue(isinstance(row[1], datetime.time))
@@ -303,9 +303,7 @@ class Test(TestBase):
         ctb.append('ni1', NaturalInt)
         ctb.append('ni2', NaturalInt)
 
-        row, errors =  ctb(['.',  'a',  '3',  0,  3])
-
-
+        row, errors = ctb(['.',  'a',  '3',  0,  3])
 
     def test_simple_download(self):
 
@@ -315,19 +313,19 @@ class Test(TestBase):
         b.sync_in()
         b.prepare()
 
-        for i,row in enumerate(b.source_pipe('simple_fixed')):
+        for i, row in enumerate(b.source_pipe('simple_fixed')):
             print(row)
             if i > 3:
                 break
 
-        for i,row in enumerate(b.source_pipe('simple')):
+        for i, row in enumerate(b.source_pipe('simple')):
             print(row)
             if i > 3:
                 break
 
     def test_etl_pipeline_run(self):
         from ambry.etl.pipeline import MergeHeader, MangleHeader, MapHeader, Pipeline
-        from ambry.etl.pipeline import PrintRows, augment_pipeline
+        from ambry.etl.pipeline import PrintRows
         from ambry.etl.intuit import TypeIntuiter
 
         b = self.setup_bundle('complete-load')
@@ -416,7 +414,6 @@ class Test(TestBase):
 
     def test_complete_load_build(self):
         """Build the complete-load bundle"""
-        from ambry.etl import augment_pipeline, PrintRows
 
         b = self.setup_bundle('complete-load')
 
@@ -426,7 +423,7 @@ class Test(TestBase):
 
         b.meta()
 
-        #print b.source_fs.getcontents('schema.csv')
+        # print b.source_fs.getcontents('schema.csv')
 
         b.prepare()
         self.assertEqual('prepare_done', b.state)
@@ -439,7 +436,6 @@ class Test(TestBase):
 
         pl.run()
 
-
     def test_complete_load_meta(self):
         """"""
 
@@ -450,23 +446,24 @@ class Test(TestBase):
         b.sync_out()
 
         self.assertIn('position', b.source_fs.getcontents('source_schema.csv'))
-        self.assertIn('renter_cost_gt_30',b.source_fs.getcontents('source_schema.csv'))
+        self.assertIn('renter_cost_gt_30', b.source_fs.getcontents('source_schema.csv'))
 
-        #self.assertEquals(6, len(b.dataset.source_tables))
+        # self.assertEquals(6, len(b.dataset.source_tables))
 
         print(list(b.source_fs.listdir()))
-        #print b.source_fs.getcontents('source_schema.csv')
+        # print b.source_fs.getcontents('source_schema.csv')
 
         s = b.source('rent07')
 
-        #print s.column_map
+        # print s.column_map
 
     def alt_bundle_dirs(self, root):
 
-        import glob, os
+        import glob
+        import os
 
-        build_url = os.path.join(root,'build')
-        source_url = os.path.join(root,'source')
+        build_url = os.path.join(root, 'build')
+        source_url = os.path.join(root, 'source')
 
         for base in (source_url, os.path.join(build_url, 'pipeline'), build_url):
             for f in glob.glob(os.path.join(base, '*')):
@@ -479,14 +476,13 @@ class Test(TestBase):
 
     def test_complete_load_meta_rent07(self):
         """"""
-        from ambry.etl.pipeline import augment_pipeline, PrintRows
 
         if False:
             build_url, source_url = self.alt_bundle_dirs('/tmp/test/rent07')
         else:
             build_url = source_url = None
 
-        b = self.setup_bundle('complete-load', build_url = build_url, source_url = source_url)
+        b = self.setup_bundle('complete-load', build_url=build_url, source_url=source_url)
         b.sync_in()
 
         b.meta('rent07')
@@ -496,7 +492,7 @@ class Test(TestBase):
         # Check the source schema file.
         b.sync_out()
         self.assertIn('renter_cost_gt_30', b.source_fs.getcontents('source_schema.csv'))
-        self.assertIn('rent,1,gvid,gvid,str,,,,,,',b.source_fs.getcontents('source_schema.csv'))
+        self.assertIn('rent,1,gvid,gvid,str,,,,,,', b.source_fs.getcontents('source_schema.csv'))
         self.assertIn('rpeople,1,size,size,float,,,,,,', b.source_fs.getcontents('source_schema.csv'))
 
         # Check a few random bits from the pipeline debugging output.
@@ -512,8 +508,10 @@ class Test(TestBase):
         # The schema file should have a schema in it.
 
         schema_lines = b.source_fs.getcontents('schema.csv').splitlines()
-        self.assertEqual(7, len(schema_lines) )
-        self.assertIn('rent,4,owner_cost_gt_30_pct,,,c00000load01004,REAL,owner_cost_gt_30_pct,', schema_lines)
+        self.assertEqual(7, len(schema_lines))
+        self.assertIn(
+            'rent,4,owner_cost_gt_30_pct,,,c00000load01004,REAL,owner_cost_gt_30_pct,',
+            schema_lines)
 
         import ambry
 
@@ -532,9 +530,10 @@ class Test(TestBase):
 
         from ambry.etl.intuit import TypeIntuiter
         from ambry.orm.column import Column
-        import datetime, time
+        import datetime
+        import time
 
-        b = self.setup_bundle('process', source_url='temp://') # So modtimes work properly
+        b = self.setup_bundle('process', source_url='temp://')  # So modtimes work properly
 
         b.sync_in()
 
@@ -542,33 +541,36 @@ class Test(TestBase):
         b.prepare()
         self.assertEqual('prepare_done', b.state)
 
-        pl = b.pipeline('source','types1').run()
+        pl = b.pipeline('source', 'types1').run()
 
         self.assertTrue(bool(pl.source))
 
         ti = pl[TypeIntuiter]
 
-        ti_cols =  list(ti.columns)
+        ti_cols = list(ti.columns)
 
-        self.assertEqual('int float string time date'.split(), [ e.header for e in ti_cols] )
-        self.assertEqual([int,float,str,datetime.time, datetime.date], [ e.resolved_type for e in ti_cols])
+        self.assertEqual('int float string time date'.split(), [e.header for e in ti_cols])
+        self.assertEqual([int, float, str, datetime.time, datetime.date], [e.resolved_type for e in ti_cols])
 
         t = b.dataset.new_table(pl.source.source.name)
 
         for c in pl[TypeIntuiter].columns:
-            t.add_column(c.header, datatype = Column.convert_python_type(c.resolved_type))
+            t.add_column(c.header, datatype=Column.convert_python_type(c.resolved_type))
 
         b.commit()
 
-        self.assertEqual('id int float string time date'.split(), [c.name for c in b.dataset.tables[0].columns ])
-        self.assertEqual(['int', 'int', 'float', 'str', 'time', 'date'],
-                         [str(c.datatype) for c in b.dataset.tables[0].columns])
+        self.assertEqual(
+            'id int float string time date'.split(),
+            [c.name for c in b.dataset.tables[0].columns])
+        self.assertEqual(
+            ['int', 'int', 'float', 'str', 'time', 'date'],
+            [str(c.datatype) for c in b.dataset.tables[0].columns])
 
         from ambry.orm.file import File
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
-        time.sleep(2) # Give modtimes a chance to change
-        self.assertEqual(1, sum( e[1] == 'rtf' for e in b.sync() ))
+        time.sleep(2)  # Give modtimes a chance to change
+        self.assertEqual(1, sum(e[1] == 'rtf' for e in b.sync()))
 
     def test_pipe_config(self):
 
@@ -581,12 +583,12 @@ class Test(TestBase):
 
         # Re-write the metadata to include a pipeline
         with b.source_fs.open('bundle.yaml') as f:
-            config =  yaml.load(f)
+            config = yaml.load(f)
 
         config['pipelines']['build'] = dict(
             augment=["Add({'a': lambda e,r,v: 1 }) "],
             last=["PrintRows(print_at='end')"],
-            store=['SelectPartition','WriteToPartition']
+            store=['SelectPartition', 'WriteToPartition']
         )
 
         config['pipelines']['source'] = [
@@ -603,7 +605,7 @@ class Test(TestBase):
         with b.source_fs.open('bundle.yaml', 'wb') as f:
             yaml.dump(config, f)
 
-        b.sync_in() # force b/c not enough time for modtime to change
+        b.sync_in()  # force b/c not enough time for modtime to change
 
         b.run_phase('source')
 
@@ -648,7 +650,7 @@ class Test(TestBase):
         )
 
         config['pipelines']['source'] = dict(
-            intuit =["-Add({'a': lambda e,r,v: 1 })"]
+            intuit=["-Add({'a': lambda e,r,v: 1 })"]
         )
 
         config['pipelines']['schema'] = dict(
@@ -693,9 +695,9 @@ class Test(TestBase):
         b.sync_in()
         b.prepare()
 
-        pl = b.pipeline('source','dimensions')
+        pl = b.pipeline('source', 'dimensions')
         pl.last.append(AddDeleteExpand(
-                            delete = ['time','county','state'],
+                            delete=['time','county','state'],
                             add={ "a": lambda e,r,v: r[4], "b": lambda e,r,v: r[1]},
                             edit = {'stusab': lambda e,r,v: v.lower(), 'name' : lambda e,r,v: v.upper() },
                             expand = { ('x','y') : lambda e, r, v: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
@@ -707,7 +709,6 @@ class Test(TestBase):
 
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
-
 
         row = [7, 'al', '63216', '15500US0163216115', 'ST. CLAIR COUNTY (PART), RAGLAND TOWN, ALABAMA', '9456',
                '2000-03-15', '2015-06-05 09:38:32.000436', '2004-02-06T03:59:18', '15500US0163216115', '1', 0, 0]
@@ -721,7 +722,6 @@ class Test(TestBase):
 
         print(pl)
 
-
     def test_sample_head(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head
 
@@ -729,22 +729,22 @@ class Test(TestBase):
 
             def __iter__(self):
 
-                yield ['int','int']
+                yield ['int', 'int']
 
                 for i in range(10000):
-                    yield([i,i])
+                    yield([i, i])
 
         # Sample
         pl = Pipeline(
             source=Source(),
-            first = Sample(est_length=10000),
-            last = PrintRows(count=50)
+            first=Sample(est_length=10000),
+            last=PrintRows(count=50)
         )
 
         pl.run()
 
         # head
-        self.assertIn([2, 7, 7],pl[PrintRows].rows)
+        self.assertIn([2, 7, 7], pl[PrintRows].rows)
         self.assertIn([16, 2018, 2018], pl[PrintRows].rows)
         self.assertIn([20, 9999, 9999], pl[PrintRows].rows)
 
@@ -887,8 +887,8 @@ class Test(TestBase):
 
         print([str(p.identity.name) for p in b.partitions])
 
-        self.assertItemsEqual(['example.com-generators-demo', 'example.com-generators-demo-build2'],
-                              [str(p.identity.name) for p in b.partitions])
+        self.assertEqual(sorted(['example.com-generators-demo', 'example.com-generators-demo-build2']),
+                         sorted([str(p.identity.name) for p in b.partitions]))
 
         for p in b.partitions:
             count = sum_ = 0
@@ -943,9 +943,3 @@ class Test(TestBase):
         self.assertEqual(6, mx)
 
         self.assertEqual(0, len(b.dataset.codes))
-
-
-
-
-
-

@@ -40,7 +40,7 @@ class SearchTest(TestBase):
         try:
             Search(self.library)
         except Exception as exc:
-            self.assertIn('Missing backend', exc.message)
+            self.assertIn('Missing backend', str(exc))
 
     def test_uses_default_backend_if_library_database_search_is_not_implemented(self):
         with fudge.patched_context(self.library.database, 'driver', 'mysql'):

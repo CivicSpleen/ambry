@@ -37,7 +37,7 @@ class Test(TestBase):
             'subset', 'variation', 'dataset', 'btime', 'source',
             'version', 'bspace', 'type', 'id', 'revision']
 
-        self.assertItemsEqual(identity_keys, [v for v in ds.config.metadata.identity])
+        self.assertEqual(sorted(identity_keys), sorted([v for v in ds.config.metadata.identity]))
 
         with self.assertRaises(AttributeError):
             ds.config.metadata = 'foo'
