@@ -869,7 +869,7 @@ class Bundle(object):
 
             self.debug('Final methods')
             for m in pl.final:
-                self.debug(indent + b(m))
+                self.debug(indent + m)
                 getattr(self, m)(pl)
 
             if pl.stopped:

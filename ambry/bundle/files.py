@@ -126,10 +126,9 @@ class BuildSourceFile(object):
 
         if self.exists() and bool(self.size()) and not self.record.size:
             # The fs exists, but the record is empty
-
             return self.SYNC_DIR.FILE_TO_RECORD
 
-        if self.fs_modtime > self.record.modified and self.record.source_hash != self.fs_hash:
+        if (self.fs_modtime or 0) > self.record.modified and self.record.source_hash != self.fs_hash:
             # Filesystem is newer
 
             return self.SYNC_DIR.FILE_TO_RECORD
@@ -194,7 +193,7 @@ class RowBuildSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
         rows = []
-        with self._fs.open(fn_path, 'rb') as f:
+        with self._fs.open(fn_path) as f:
             for row in csv.reader(f):
                 row = [e if e.strip() != '' else None for e in row]
                 if any(bool(e) for e in row):

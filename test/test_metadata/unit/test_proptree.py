@@ -30,7 +30,7 @@ class ScalarTermTest(unittest.TestCase):
         try:
             tree.group1.term1 = 'value3'
         except ValueError as exc:
-            self.assertIn('is not valid value', exc.message)
+            self.assertIn('is not valid value', str(exc))
 
 
 class ListTermTest(unittest.TestCase):

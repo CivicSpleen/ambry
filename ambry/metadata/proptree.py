@@ -6,9 +6,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 from collections import Mapping, OrderedDict, MutableMapping
 import copy
-import logging
 
-from six import iteritems, iterkeys, itervalues, StringIO, text_type, binary_type, string_types
+from six import iteritems, iterkeys, itervalues, StringIO, text_type, binary_type, string_types, b
 from six.moves.html_parser import HTMLParser
 
 from sqlalchemy.orm import object_session
@@ -18,7 +17,7 @@ from ambry.orm.exc import MetadataError
 
 from ambry.util import get_logger
 
-logger = get_logger(__name__, level=logging.INFO)
+logger = get_logger(__name__)
 
 
 class AttrDict(OrderedDict):
@@ -804,7 +803,7 @@ class _ScalarTermS(binary_type):
         return ob
 
     def __init__(self, string, jinja_sub, term):
-        super(_ScalarTermS, self).__init__(string)
+        super(_ScalarTermS, self).__init__()
         self.jinja_sub = jinja_sub
         self._term = term
 
@@ -831,7 +830,7 @@ class _ScalarTermU(text_type):
         return ob
 
     def __init__(self, string, jinja_sub, term):
-        super(_ScalarTermU, self).__init__(string)
+        super(_ScalarTermU, self).__init__()
         self.jinja_sub = jinja_sub
         self._term = term
 
@@ -888,7 +887,7 @@ class ScalarTerm(Term):
         elif isinstance(st, text_type):
             return _ScalarTermU(st, jinja_sub, self)
         elif st is None:
-            return _ScalarTermS('', jinja_sub, self)
+            return _ScalarTermS(b(''), jinja_sub, self)
         else:
             return st
 
@@ -1141,11 +1140,22 @@ def _set_value(configs_map, prop_tree, config_instance):
     #
     # FIXME: Make all the terms to store config the same way.
     term = getattr(group, config_instance.key)
-    if hasattr(term, '_term'):
-        # ScalarTermS and ScalarTermU case
-        term._term._config = config_instance
-    elif hasattr(term, '_config'):
-        term._config = config_instance
+    try:
+        if hasattr(term, '_term'):
+            # ScalarTermS and ScalarTermU case
+            term._term._config = config_instance
+            return
+    except KeyError:
+        # python3 case. TODO: Find the way to make it simple.
+        pass
+
+    try:
+        if hasattr(term, '_config'):
+            term._config = config_instance
+            return
+    except KeyError:
+        # python3 case. TODO: Find the way to make it simple.
+        pass
     else:
         pass  # the setting should have been handled by setattr(group, key, config.value)
 

@@ -74,7 +74,9 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
         # testing.
         ret = self.backend.dataset_index.search('title')
         self.assertEqual(len(ret), 2)
-        self.assertListEqual([dataset1.vid, dataset2.vid], [x.vid for x in ret])
+        self.assertEqual(
+            sorted([dataset1.vid, dataset2.vid]),
+            sorted([x.vid for x in ret]))
 
     def test_returns_limited_datasets(self):
         for n in range(4):
