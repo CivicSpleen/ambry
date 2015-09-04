@@ -337,13 +337,10 @@ class Transform(object):
 
         o = []
 
-        full_types = []
-        full_types.extend(string_types)
-        full_types.extend([datetime.date, datetime.time, datetime.datetime, int, float])
+        full_types = [
+            text_type, binary_type,
+            datetime.date, datetime.time, datetime.datetime, int, float]
         for i, (name, type_) in enumerate(self.types):
-            # convert all string types to unicode types.
-            if type_ == binary_type:
-                type_ = text_type
             if type_ in full_types:
                 o.append((i, name, 'parse_{}'.format(type_.__name__)))
             else:

@@ -2,6 +2,7 @@ import unittest
 
 from test.test_base import TestBase
 from six.moves import reduce as six_reduce
+from six import binary_type, text_type, b, u
 
 
 def cast_str(v):
@@ -141,16 +142,19 @@ class Test(TestBase):
 
         ctb.append('int', int)
         ctb.append('float', float)
-        ctb.append('str', str)
+        ctb.append('str', binary_type)
+        ctb.append(u('unicode'), text_type)
 
-        row, errors = ctb({'int': 1, 'float': 2, 'str': '3'})
+        row, errors = ctb({'int': 1, 'float': 2, 'str': '3', 'unicode': u('4')})
 
         self.assertIsInstance(row['int'], int)
         self.assertEqual(row['int'], 1)
         self.assertTrue(isinstance(row['float'], float))
         self.assertEqual(row['float'], 2.0)
-        self.assertTrue(isinstance(row['str'], str))
-        self.assertEqual(row['str'], '3')
+        self.assertTrue(isinstance(row['str'], binary_type))
+        self.assertEqual(row['str'], b('3'))
+        self.assertTrue(isinstance(row['unicode'], text_type))
+        self.assertEqual(row['unicode'], u('4'))
 
         # Should be idempotent
         row, errors = ctb(row)
@@ -158,8 +162,10 @@ class Test(TestBase):
         self.assertEqual(row['int'], 1)
         self.assertTrue(isinstance(row['float'], float))
         self.assertEqual(row['float'], 2.0)
-        self.assertTrue(isinstance(row['str'], str))
-        self.assertEqual(row['str'], '3')
+        self.assertTrue(isinstance(row['str'], binary_type))
+        self.assertEqual(row['str'], b('3'))
+        self.assertTrue(isinstance(row['unicode'], text_type))
+        self.assertEqual(row['unicode'], u('4'))
 
         ctb = DictTransform()
 
@@ -696,11 +702,12 @@ class Test(TestBase):
         b.prepare()
 
         pl = b.pipeline('source', 'dimensions')
-        pl.last.append(AddDeleteExpand(
-                            delete=['time','county','state'],
-                            add={ "a": lambda e,r,v: r[4], "b": lambda e,r,v: r[1]},
-                            edit = {'stusab': lambda e,r,v: v.lower(), 'name' : lambda e,r,v: v.upper() },
-                            expand = { ('x','y') : lambda e, r, v: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
+        pl.last.append(
+            AddDeleteExpand(
+                delete=['time', 'county', 'state'],
+                add={'a': lambda e, r, v: r[4], 'b': lambda e, r, v: r[1]},
+                edit={'stusab': lambda e, r, v: v.lower(), 'name': lambda e, r, v: v.upper()},
+                expand={('x', 'y'): lambda e, r, v: [parse(r[1]).hour, parse(r[1]).minute]}))
         pl.last.append(PrintRows)
         pl.last.prepend(PrintRows)
         # header: ['date', 'time', 'stusab', 'state', 'county', 'county_name']
@@ -710,8 +717,9 @@ class Test(TestBase):
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
 
-        row = [7, 'al', '63216', '15500US0163216115', 'ST. CLAIR COUNTY (PART), RAGLAND TOWN, ALABAMA', '9456',
-               '2000-03-15', '2015-06-05 09:38:32.000436', '2004-02-06T03:59:18', '15500US0163216115', '1', 0, 0]
+        row = [7, 'al', '63216', '15500US0163216115', 'ST. CLAIR COUNTY (PART), RAGLAND TOWN, ALABAMA',
+               '9456', '2000-03-15', '2015-06-05 09:38:32.000436', '2004-02-06T03:59:18',
+               '15500US0163216115', '1', 0, 0]
         self.assertNotIn(row, pl.last[0].rows)
         self.assertIn(row, pl.last[-1].rows)
 
