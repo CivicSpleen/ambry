@@ -119,7 +119,7 @@ class DatabaseTest(TestBase):
                 db._create_path()
         fudge.verify()
 
-    def test_raises_exception_if_dir_does_not_exists_after_creation_attempt(self):
+    def test_raises_exception_if_dir_does_not_exist_after_creation_attempt(self):
 
         # prepare state
         fake_makedirs = fudge.Fake('makedirs')\
@@ -138,7 +138,7 @@ class DatabaseTest(TestBase):
                     db = Database('sqlite:///test_database1.db')
                     db._create_path()
                 except Exception as exc:
-                    self.assertIn('Couldn\'t create directory', exc.message)
+                    self.assertIn('Couldn\'t create directory', str(exc))
         fudge.verify()
 
     # .exists tests

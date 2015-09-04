@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
+import unittest
 
 from sqlalchemy.exc import IntegrityError
 
+import six
+
 from ambry.orm.config import Config
+
 from test.test_base import TestBase
-import unittest
 
 
 class Test(TestBase):
@@ -58,7 +61,7 @@ class Test(TestBase):
             db.session.commit()
             raise AssertionError('Dupe unexpectedly saved. It seems unique constraint is broken.')
         except IntegrityError as exc:
-            self.assertIn('UNIQUE constraint failed', exc.message)
+            self.assertIn('UNIQUE constraint failed', str(exc))
 
     @unittest.skip("Credentials need to be fixed")
     def test_config_postgres_unicode(self):

@@ -8,11 +8,11 @@ __docformat__ = 'restructuredtext en'
 
 from time import time
 
-from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer, Boolean,\
+from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer,\
     event, UniqueConstraint, text
 from sqlalchemy.orm import object_session, relationship
 
-from six import iterkeys
+from six import iterkeys, b
 
 from . import Base, JSONAlchemy
 from ..identity import ObjectNumber, DatasetNumber
@@ -61,8 +61,10 @@ class Config(Base):
 
             # FIXME This is a bit of a mess, much longer than it should be. Unfortunately, there seem to be few other options
             # since the trick used in partitions doesn't work for mass updates to many configs.
-            target.id = "{}{}{}".format(target.d_vid, target.type,
-                                        hashlib.md5(str(target.group)+str(target.key)+str(target.parent_id)).hexdigest()[:8] )
+            diggest = hashlib\
+                .md5(b(target.group or '') + b(target.key or '') + b(target.parent_id or ''))\
+                .hexdigest()[:8]
+            target.id = '{}{}{}'.format(target.d_vid, target.type, diggest)
 
         Config.before_update(mapper, conn, target)
 
