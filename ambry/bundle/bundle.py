@@ -46,45 +46,6 @@ class Bundle(object):
 
     # Default body content for pipelines
     default_pipelines = {
-        # Classifies rows in multi-header sources
-        'rowintuit': {
-            'intuit': [
-                ambry.etl.RowIntuiter
-            ]
-        },
-        # Creates the source schemas
-        'source': {
-            'body': [
-                ambry.etl.MergeHeader,
-                ambry.etl.MangleHeader,
-            ],
-            'intuit': [
-                ambry.etl.TypeIntuiter,
-            ],
-            'final': [
-                'final_log_pipeline',
-                'final_make_source_tables'
-            ]
-
-        },
-        'schema': {
-            'body': [
-                ambry.etl.MergeHeader,
-                ambry.etl.MangleHeader
-            ],
-            'cast': [
-                ambry.etl.MapToSourceTable
-            ],
-            'intuit': [
-                ambry.etl.TypeIntuiter,
-            ],
-            'final': [
-                'final_log_pipeline',
-                'final_make_dest_tables'
-            ]
-
-        },
-
 
         'build': {
             'first': [],
