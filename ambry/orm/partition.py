@@ -376,7 +376,7 @@ class Partition(Base, DictableMixin):
     def location(self, v):
         self._location = v
 
-    def stream(self, skip_header=False, as_dict=False):
+    def stream(self, as_dict=False):
         """Yield rows of a partition, as an intyerator. Data is taken from one of these locations:
         - The warehouse, for installed data
         - The build directory, for built data
@@ -398,7 +398,7 @@ class Partition(Base, DictableMixin):
             remote = self._bundle.library.remote(b)
             from ambry.etl.partition import PMDFReader
 
-            reader = PMDFReader(remote.open(self.datafile.munged_path, 'rb'))
+            reader = PMDFReader(None, remote.open(self.datafile.munged_path, 'rb'))
 
         elif self.location == 'warehouse':
             raise NotImplementedError()
@@ -432,8 +432,6 @@ class Partition(Base, DictableMixin):
 
         itr = iter(generator())
 
-        if skip_header:
-            next(itr)
 
         return itr
 

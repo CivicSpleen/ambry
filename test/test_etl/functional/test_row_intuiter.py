@@ -6,13 +6,12 @@ import xlrd
 
 from ambry.etl.intuit import RowIntuiter
 
-TEST_FILES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'functional', 'files')
 
 
 class Test(unittest.TestCase):
 
     def _get_source(self, file_name):
-        """ Creates source pipe from xls wigh given file name and returns it."""
+        """ Creates source pipe from xls with given file name and returns it."""
 
         class XlsSource(object):
             def __iter__(self):

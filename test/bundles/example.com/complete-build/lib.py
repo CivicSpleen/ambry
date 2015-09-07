@@ -2,11 +2,15 @@ from ambry.etl import SourcePipe
 
 class RandomSourcePipe(SourcePipe):
 
-    def __init__(self, bundle, source):
+    def __init__(self, bundle, source=None):
         super(RandomSourcePipe, self).__init__(bundle, source)
 
-        self.year = int(source.time)
-        self.space = source.space
+        if source:
+            self.year = int(source.time)
+            self.space = source.space
+        else:
+            self.year = 2010
+            self.space = 'CA'
 
     def __iter__(self):
 

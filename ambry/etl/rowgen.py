@@ -9,7 +9,9 @@ import logging
 from ambry.etl import Pipe
 from ambry.util import get_logger
 
+# noinspection PyUnresolvedReferences
 from six.moves.urllib.parse import urlparse
+# noinspection PyUnresolvedReferences
 from six.moves.urllib.request import urlopen
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
@@ -22,7 +24,13 @@ class SourceError(Exception):
 
 
 def source_pipe(bundle, source, allow_refetch = True):
-    """Create a source pipe from a source ORM record"""
+    """
+    Create a source pipe from a source ORM record
+    :param bundle:
+    :param source:
+    :param allow_refetch: If True, the function can call itself to return a source pipe for a file insize a Zip Archive
+    :return:
+    """
 
     if source.generator:  # Get the source from the generator, not from a file.
         #FIXME: The generator should probably be imported as class, rather than evaled.

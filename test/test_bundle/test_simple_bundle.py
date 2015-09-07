@@ -388,7 +388,8 @@ class Test(TestBase):
         row =  p.stream().next()
 
         for c, v in zip(p.table.columns, row.row):
-            self.assertEquals(type(v), c.python_type)
+            if type(v) != unicode: # It gets reported as string
+                self.assertEquals(type(v), c.python_type)
 
     def test_complete_build(self):
         """Build the simple bundle"""
@@ -398,6 +399,15 @@ class Test(TestBase):
         b = self.setup_bundle('complete-build')
         b.sync_in()
         b = b.cast_to_subclass()
+        m = b.import_lib()
+
+        import sys
+
+        RandomSourcePipe =  m.__dict__['RandomSourcePipe']
+
+        # 6000 rows and one header
+        self.assertEqual(6001, len(list(RandomSourcePipe(b))))
+
         self.assertEquals('new', b.state)
         self.assertTrue(b.meta())
 
@@ -422,7 +432,9 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
 
-        self.assertEquals(6001, sum( 1 for row in p.datafile.reader ))
+        print p.datafile.reader.info
+
+        self.assertEquals(6000, sum( 1 for row in p.datafile.reader ))
 
         self.assertEquals(48, len(b.dataset.stats))
 
@@ -493,7 +505,7 @@ class Test(TestBase):
         p = list(b.partitions)[0]
         p_vid = p.vid
 
-        self.assertEquals(497054, int(sum(row[3] for row in p.stream(skip_header=True))))
+        self.assertEquals(497054, int(sum(row[3] for row in p.stream())))
 
         self.assertEqual('build', l.partition(p_vid).location)
 
@@ -522,11 +534,9 @@ class Test(TestBase):
 
         self.assertEqual('remote',l.partition(p_vid).location)
 
-        self.assertEqual(10000, len(list(p.stream(skip_header=True))))
+        self.assertEqual(10000, len(list(p.stream())))
 
-        self.assertEqual(10001, len(list(p.stream(skip_header=False))))
-
-        self.assertEquals(497054, int(sum(row[3] for row in p.stream(skip_header=True))))
+        self.assertEquals(497054, int(sum(row[3] for row in p.stream())))
 
     def test_msgpack_build(self):
         """Build the simple bundle"""

@@ -1,6 +1,5 @@
 """Intuit data types for rows of values."""
 from __future__ import unicode_literals
-__author__ = 'eric'
 
 from collections import deque
 import datetime

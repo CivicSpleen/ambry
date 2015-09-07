@@ -177,7 +177,7 @@ class Bundle(object):
     def import_lib(self):
         """Import the lib.py file from the bundle"""
         from ambry.orm import File
-        self.build_source_files.file(File.BSFILE.LIB).import_lib()
+        return self.build_source_files.file(File.BSFILE.LIB).import_lib()
 
     def load_requirements(self):
         """If there are python library requirements set, append the python dir
@@ -1103,16 +1103,15 @@ Pipeline Headers
                 start_time = time()
                 for i, rp in enumerate(reader):
 
-
                     if header is None:
                         header = rp.headers
                         pdf.set_row_header(header)
                         stats.process_header(header)
-                    else:
-                        rp[0] = i
-                        row = rp.row
-                        pdf.insert_row(row)
-                        stats.process_body(row)
+
+                    rp[0] = i + 1
+                    row = rp.row
+                    pdf.insert_row(row)
+                    stats.process_body(row)
 
                 reader.close()
                 self.debug(indent + "Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time()-start_time)))

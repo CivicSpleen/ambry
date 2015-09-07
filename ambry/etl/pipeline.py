@@ -839,6 +839,7 @@ class AddDeleteExpand(Pipe):
         # Build the single function to edit the header or row all at once
         self.edit_header_code = "lambda r: [{}]".format(','.join(header_parts + header_extra))
         self.edit_header = eval(self.edit_header_code)
+        # FIXME: Should probably use itemgetter() instead of eval
         self.edit_row_code = "lambda r,self=self: [{}]".format(','.join(row_parts ))
         self.edit_row = eval(self.edit_row_code)
 
@@ -948,6 +949,7 @@ class AddDerived(Pipe):
         if not parts:
             self.process_body = self.process_body_default
         else:
+            # FIXME: Should probably use itemgetter() instead of eval
             self.code = 'lambda caster,  row: [ {} ] '.format(','.join(parts))
 
             self.processor = eval(self.code, ambry.valuetype.math.__dict__)
@@ -1003,6 +1005,7 @@ class RemoveBlankColumns(Pipe):
                 header_parts.append('r[{}]'.format(i))
 
         if header_parts:
+            # FIXME: Should probably use itemgetter() instead of eval
             self.editor = eval("lambda r: [{}]".format(','.join(header_parts)))
             return self.editor(row)
         else:

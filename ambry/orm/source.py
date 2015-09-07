@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 from os.path import splitext
 
+# noinspection PyUnresolvedReferences
 from six.moves.urllib.parse import urlparse
 
 from sqlalchemy import Column as SAColumn

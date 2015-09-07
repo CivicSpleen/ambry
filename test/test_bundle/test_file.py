@@ -140,56 +140,6 @@ class Test(unittest.TestCase):
         #for x in  ad.flatten():
         #    print x
 
-    def test_datafile(self):
-        from ambry.etl.partition import PartitionMsgpackDataFile
-        from fs.opener import fsopendir
-        import time
-        import datetime
-        from random import randint
-        from contexttimer import Timer
-        from uuid import uuid4
 
-        fs = fsopendir('mem://')
-
-        fs = fsopendir('/tmp/pmpf')
-
-        N = 10000
-
-        # Basic read/ write tests.
-
-        row = lambda: [ None, 1, 2.0, str(uuid4()),
-                datetime.date(randint(2000,2015),randint(1,12),10),
-                datetime.date(randint(2000,2015),randint(1,12),10) ]
-        headers = list('abcdefghi')[:len(row())]
-
-        with Timer() as t:
-            df = PartitionMsgpackDataFile(fs, 'foobar')
-            w = df.writer
-
-            w.headers = headers
-
-            w.meta['source']['url'] = 'blah blah'
-
-            for i in range(N):
-                w.insert_row(row())
-
-            w.close()
-
-        print "MSGPack write " , float(N)/t.elapsed, df.size
-
-        print df.reader.info
-
-        with Timer() as t:
-            count = 0
-            i = 0
-
-            r = df.reader
-
-            for i, row in enumerate(r):
-                count += 1
-
-        print "MSGPack read  ", float(N)/t.elapsed, i, count
-
-        print r.meta
 
 
