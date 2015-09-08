@@ -128,7 +128,7 @@ class BuildSourceFile(object):
             # The fs exists, but the record is empty
             return self.SYNC_DIR.FILE_TO_RECORD
 
-        if (self.fs_modtime or 0) > self.record.modified and self.record.source_hash != self.fs_hash:
+        if (self.fs_modtime or 0) > (self.record.modified or 0) and self.record.source_hash != self.fs_hash:
             # Filesystem is newer
 
             return self.SYNC_DIR.FILE_TO_RECORD
@@ -138,7 +138,7 @@ class BuildSourceFile(object):
 
             return self.SYNC_DIR.RECORD_TO_FILE
 
-        if self.record.modified > self.fs_modtime:
+        if (self.record.modified or 0) > (self.fs_modtime or 0):
             # Record is newer
 
             return self.SYNC_DIR.RECORD_TO_FILE

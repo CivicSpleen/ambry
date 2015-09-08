@@ -10,7 +10,7 @@ import datetime
 import sys
 import textwrap
 
-from six import string_types, iteritems, u, b, text_type, binary_type
+from six import string_types, iteritems, text_type, binary_type, PY3
 
 from .pipeline import Pipe, MissingHeaderError
 
@@ -228,15 +228,19 @@ def parse_float(caster, name, v):
         return None
 
 
-def parse_str(caster, name, v):
-    return b('{}').format(v)
+def parse_binary(caster, name, v):
+    if isinstance(v, text_type):
+        return v.encode('utf-8')
+    if PY3:
+        return binary_type(v, 'utf-8')
+    return binary_type(v)
 
 
-def parse_unicode(caster, name, v):
-    return u('{}').format(v)
+def parse_text(caster, name, v):
+    return text_type(v)
 
 
-def parse_type(type_, caster,  name, v):
+def parse_type(type_, caster, name, v):
 
     try:
         if is_nothing(v):
@@ -333,6 +337,16 @@ class Transform(object):
 
         self.compile()
 
+    def _get_type(self, type_):
+        """ Returns portable type. """
+        if type_ == binary_type:
+            parser = 'binary'
+        elif type_ == text_type:
+            parser = 'text'
+        else:
+            parser = type_.__name__
+        return parser
+
     def make_transform(self):
 
         o = []
@@ -342,9 +356,10 @@ class Transform(object):
             datetime.date, datetime.time, datetime.datetime, int, float]
         for i, (name, type_) in enumerate(self.types):
             if type_ in full_types:
-                o.append((i, name, 'parse_{}'.format(type_.__name__)))
+                o.append((i, name, 'parse_{}'.format(self._get_type(type_))))
             else:
-                o.append((i, name, 'partial(parse_type,{})'.format(type_.__name__)))
+                parse_type = self._get_type(type_)
+                o.append((i, name, 'partial(parse_type,{})'.format(parse_type)))
 
         dict_transform = "lambda caster, row:{{{}}}".format(
                         ','.join("'{name}':{func}(caster, '{name}', row.get('{name}'))".format(i=i, name=name, func=v)
@@ -354,7 +369,7 @@ class Transform(object):
                         ','.join("{func}(caster, {i}, row[{i}])".format(i=i, name=name, func=v)
                         for i, name, v in o))
 
-        return dict_transform,  row_transform
+        return dict_transform, row_transform
 
     def compile(self):
 
@@ -500,5 +515,5 @@ class CasterPipe(Transform, Pipe, ):
         from ambry.util import qualified_class_name
 
         return (qualified_class_name(self) + "\n" +
-                self.indent + "Row: "+self.row_transform_code + "\n" +
-                self.indent + "Dict: "+ self.dict_transform_code + "\n" )
+                self.indent + "Row: " + self.row_transform_code + "\n" +
+                self.indent + "Dict: " + self.dict_transform_code + "\n")
