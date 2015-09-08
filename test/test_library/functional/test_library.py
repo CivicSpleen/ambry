@@ -24,17 +24,9 @@ class Test(TestBase):
 
         print(l.number())
 
-        b = l.new_bundle(source='source',dataset='dataset')
+        b = l.new_bundle(source='source', dataset='dataset')
 
         for b in l.bundles:
             print(b.identity.vname)
 
         print(l.edit_history())
-
-
-    def test_remote(self):
-
-        l = new_library(self.get_rc())
-
-        for k, v in  list(l.remotes.items()):
-            print(k, v, l.remote(k))
