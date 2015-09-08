@@ -487,8 +487,6 @@ class Test(TestBase):
             from shutil import rmtree
             rmtree(td)
 
-    # FIXME This test passes when run individually, but fails when run with the other
-    # tests in the class, at least when run in PyCharm.
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
 
@@ -546,10 +544,10 @@ class Test(TestBase):
         b.run()
 
         for p in b.partitions:
-            print('---', p.identity.name)
+            # print('---', p.identity.name)
 
             for c in p.children:
-                print('   ', c.identity.name)
+                # print('   ', c.identity.name)
                 id_sum = 0
                 for row in b.wrap_partition(c).stream(skip_header=True):
 

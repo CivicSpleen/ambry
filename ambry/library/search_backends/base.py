@@ -371,15 +371,21 @@ class BaseDatasetIndex(BaseIndex):
             except (KeyError, ValueError):
                 return g
 
-        try:
-            about_time = list(dataset.config.metadata.about.time)
-        except TypeError:
-            about_time = [dataset.config.metadata.about.time]
+        def as_list(value):
+            """ Converts value to the list. """
+            if not value:
+                return []
+            if isinstance(value, string_types):
+                lst = [value]
+            else:
+                try:
+                    lst = list(value)
+                except TypeError:
+                    lst = [value]
+            return lst
 
-        try:
-            about_grain = list(dataset.config.metadata.about.grain)
-        except TypeError:
-            about_grain = [dataset.config.metadata.about.grain]
+        about_time = as_list(dataset.config.metadata.about.time)
+        about_grain = as_list(dataset.config.metadata.about.grain)
 
         keywords = (
             list(dataset.config.metadata.about.groups) +
