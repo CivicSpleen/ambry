@@ -27,7 +27,6 @@ class Test(TestBase):
         from itertools import cycle
 
         b = self.setup_bundle('simple')
-        l = b._library
         b.sync_in()
         b.prepare()
 
@@ -380,7 +379,6 @@ class Test(TestBase):
 
         b = self.setup_bundle('simple')
         b.run()
-        l = b.library
 
         p = list(b.partitions)[0]
 
@@ -428,11 +426,11 @@ class Test(TestBase):
 
         self.assertEqual([u('0O0001'), u('0O0002'), u('0O0003'), u('0O0101'), u('0O0102'), u('0O0103')],
                          b.dataset.partitions[0].space_coverage)
-        self.assertEqual(u('2qZZZZZZZZZ'), b.dataset.partitions[0].grain_coverage[0])
+        self.assertEqual(u('2qZZZZZZZZZZ'), b.dataset.partitions[0].grain_coverage[0])
 
         self.assertEqual([u('0O0001'), u('0O0002'), u('0O0003'), u('0O0101'), u('0O0102'), u('0O0103')],
                          b.dataset.partitions[2].space_coverage)
-        self.assertEqual([u('2qZZZZZZZZZ')], b.dataset.partitions[2].grain_coverage)
+        self.assertEqual([u('2qZZZZZZZZZZ')], b.dataset.partitions[2].grain_coverage)
 
         self.assertEqual(4, len(b.dataset.partitions))
         self.assertEqual(2, len(b.dataset.tables))
@@ -460,7 +458,6 @@ class Test(TestBase):
         from ambry.orm.database import Database
 
         b = self.setup_bundle('simple')
-        l = b._library
 
         b.run()
 
