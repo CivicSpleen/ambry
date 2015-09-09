@@ -398,7 +398,7 @@ class MapHeader(Pipe):
 
         rg = iter(self._source_pipe)
 
-        self.headers =  [ self._header_map.get(c,c) for c in next(rg) ]
+        self.headers = [self._header_map.get(c, c) for c in next(rg)]
 
         yield self.headers
 
@@ -584,14 +584,13 @@ class MergeHeader(Pipe):
                 if self.i < self.data_start_line:
                     if self.i in self.header_lines:
                         self.headers.append(
-                            [b(u('{}').format(x).encode('ascii', 'ignore')) for x in row])
+                            [_to_ascii(x) for x in row])
 
                     if self.i in self.header_comment_lines:
                         self.header_comments.append(
-                            [b(u('{}').format(x).encode('ascii', 'ignore')) for x in row])
+                            [_to_ascii(x) for x in row])
 
                     if self.i == max_header_line:
-
                         yield self.coalesce_headers()
 
                 elif not self.data_end_line or self.i <= self.data_end_line:
@@ -1568,3 +1567,22 @@ def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
 
             if tail_pipe:
                 v.append(tail_pipe)
+
+
+def _to_ascii(s):
+    """ Converts given string to ascii ignoring non ascii.
+    Args:
+        s (text or binary):
+
+    Returns:
+        str:
+    """
+    # TODO: Always use unicode within ambry.
+    from six import text_type, binary_type
+    if isinstance(s, text_type):
+        ascii_ = s.encode('ascii', 'ignore')
+    elif isinstance(s, binary_type):
+        ascii_ = s.decode('utf-8').encode('ascii', 'ignore')
+    else:
+        raise Exception('Unknown text type - {}'.format(type(s)))
+    return ascii_
