@@ -4,8 +4,6 @@ Created on Jul 6, 2013
 @author: eric
 """
 
-import unittest
-
 from semantic_version import Version, Spec
 
 from ambry.identity import DatasetNumber, TableNumber, ObjectNumber, ColumnNumber, PartitionNumber,\
@@ -457,8 +455,3 @@ class Test(TestBase):
         self.assertEqual('G01C001Z005', str(GeneralNumber1('G',dn, 123)))
 
         self.assertEqual('G01C001Z005', ObjectNumber.parse(str(GeneralNumber1('G',dn, 123)), 'other1'))
-
-def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite

@@ -122,12 +122,12 @@ $ psql postgres -c "GRANT USAGE ON FOREIGN DATA WRAPPER multicorn TO ambry;"
 $ exit
 ```
 
-    4. Run tests. Note: Do not make previous steps more than once.
+    4. Run all tests. Note: Do not make previous steps more than once.
 ```bash
 $ python setup.py test
 ```
 
-### To run tests with coverage:
+### To all run tests with coverage:
 
     1. Run with coverage
 ```bash
@@ -138,6 +138,21 @@ $ coverage run setup.py test
 $ coverage html
 ```
     3. Open htmlcov/index.html in the browser.
+
+### To run certain test (use pytest):
+```bash
+py.test test/test_metadata/regression/test_ambry_93.py::Test::test_deletes_removed_keys_from_db
+```
+or all tests of test_metadata module
+```bash
+py.test test/test_metadata
+```
+
+### To stop testing of first fail:
+```bash
+py.test test/test_metadata -x
+```
+
 
 ### To write python2/python3 compatible code:
 Ambry uses one code base for both - python2 and python3. This requires some extra work.
