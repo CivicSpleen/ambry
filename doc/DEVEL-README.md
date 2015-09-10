@@ -205,7 +205,7 @@ import __builtins__
 ```
 9. Use __bool__ instead of __nonzero__. For python2 compatibility use next hack:
 ```python
-class Foo(objct):
+class Foo(object):
     def __bool__(self):
         return bool(...)
 
