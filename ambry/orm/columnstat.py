@@ -47,6 +47,8 @@ class ColumnStat(Base):
     uvalues = SAColumn('f_uvalues', MutationDict.as_mutable(JSONEncodedObj))
     hist = SAColumn('f_hist', MutationList.as_mutable(JSONEncodedObj))
 
+    text_hist = SAColumn('cs_text_hist', String)
+
     __table_args__ = (
         UniqueConstraint('cs_p_vid', 'cs_c_vid', name='u_cols_stats'),
     )

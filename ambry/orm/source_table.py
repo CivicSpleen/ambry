@@ -12,11 +12,10 @@ from sqlalchemy.orm import relationship
 
 from ..util import Constant
 from ..orm.column import Column
-from ambry.etl.intuit import unknown
+from ambry_sources.intuit import unknown
 
 
 from . import Base, MutationDict, JSONEncodedObj
-
 
 
 class SourceColumn(Base):
@@ -44,7 +43,7 @@ class SourceColumn(Base):
         DATATYPE.DATETIME: unknown
     }
 
-    column_type_map = { # FIXME The COlumn types should be harmonized with these types
+    column_type_map = { # FIXME The Column types should be harmonized with these types
         DATATYPE.INT: Column.DATATYPE_INTEGER,
         DATATYPE.FLOAT: Column.DATATYPE_FLOAT,
         DATATYPE.STRING: Column.DATATYPE_STR,
@@ -82,6 +81,10 @@ class SourceColumn(Base):
     __table_args__ = (
         UniqueConstraint('sc_st_vid','sc_source_header', name='_uc_sourcecolumns'),
     )
+
+    @property
+    def name(self):
+        return self.source_header
 
     @property
     def python_datatype(self):
@@ -135,6 +138,7 @@ class SourceColumn(Base):
                 setattr(self, k, v)
 
 
+
 class SourceTable(Base):
     __tablename__ = 'sourcetables'
 
@@ -150,12 +154,21 @@ class SourceTable(Base):
         UniqueConstraint('st_d_vid','st_name', name='_uc_sourcetables'),
     )
 
-    def column(self, source_header):
+    def column(self, source_header_or_pos):
+        """
+        Return a column by name or position
 
+        :param source_header_or_pos: If a string, a source header name. If an integer, column position
+        :return:
+        """
         for c in self.columns:
-            if c.source_header == source_header:
+            if c.source_header == source_header_or_pos:
                 assert c.st_vid == self.vid
                 return c
+            elif c.position == source_header_or_pos:
+                assert c.st_vid == self.vid
+                return c
+
         else:
             return None
 
@@ -163,7 +176,7 @@ class SourceTable(Base):
         """
         Add a column to the source table.
         :param position: Integer position of the column
-        :param source_header: Name fothe column, as it exists in the source file
+        :param source_header: Name of the column, as it exists in the source file
         :param datatype: Python datatype ( str, int, float, None ) for the column
         :param kwargs:  Other source record args.
         :return:
@@ -172,17 +185,39 @@ class SourceTable(Base):
         from ..identity import GeneralNumber2
 
         c = self.column(source_header)
+        c_by_pos = self.column(position)
+
+
+        assert not c or not c_by_pos or c.vid == c_by_pos.vid
 
         if c:
+
+            # Changing the position can result in conflicts
+            assert not c_by_pos or c_by_pos.vid == c.vid
+
             c.update(
                 position=position,
                 datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
                 **kwargs )
 
+        elif c_by_pos:
+
+            # FIXME This feels wrong; there probably should not be any changes to the both
+            # of the table, since then it won't represent the previouls source. Maybe all of the sources
+            # should get their own tables initially, then affterward the duplicates can be removed.
+
+            assert not c or c_by_pos.vid == c.vid
+
+            c_by_pos.update(
+                source_header = source_header,
+                datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
+                **kwargs)
+
         else:
 
-            # Hacking an id number, since I don't want to create a new Identity ObjectNUmber type
+            assert not c and not c_by_pos
 
+            # Hacking an id number, since I don't want to create a new Identity ObjectNUmber type
             c = SourceColumn(
             vid = str(GeneralNumber2('C', self.d_vid, self.sequence_id, int(position))),
             position=position,

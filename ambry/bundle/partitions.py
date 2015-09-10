@@ -17,6 +17,7 @@ from ..identity import PartitionIdentity, PartitionNameQuery, NameQuery  # , Par
 # from util.typecheck import accepts, returns
 from ..util import Constant
 
+
 class Partitions(object):
 
     """Container and manager for the set of partitions.

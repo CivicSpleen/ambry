@@ -150,18 +150,19 @@ class Partition(Base, DictableMixin):
 
         self.fqname = Identity._compose_fqname(self.vname, self.vid)
 
-    def set_stats(self, stats):
+    def set_stats(self, stats= None):
 
-        sd = dict(stats)
+        if stats is None:
+            stats = self.datafile.stats
 
         self.stats[:] = [] # Delete existing stats
 
         for c in self.table.columns:
 
-            if c.name not in sd:
+            if c.name not in stats:
                 continue
 
-            d = sd[c.name].dict
+            d = stats[c.name]
 
             del d['name']
             del d['flags']
@@ -184,10 +185,10 @@ class Partition(Base, DictableMixin):
 
             return GVid.parse(places[0].vid)
 
-    def set_coverage(self, stats):
+    def set_coverage(self):
         """"Extract time space and grain coverage from the stats and store them in the partition"""
         from ambry.util.datestimes import expand_to_years
-        sd = dict(stats)
+        sd = self.stats
 
         scov = set()
         tcov = set()
@@ -325,16 +326,16 @@ class Partition(Base, DictableMixin):
             if hasattr(self, k):
                 setattr(self, k, v)
 
-    def finalize(self, stats=None):
+    def finalize(self, stats = None):
 
         self.state = self.STATES.BUILT
 
         # Write the stats for this partition back into the partition
 
-        if stats:
-            self.set_stats(stats.stats())
-            self.set_coverage(stats.stats())
-            self.table.update_from_stats(stats.stats())
+        self.datafile.run_stats()
+        self.set_stats()
+        self.set_coverage()
+
 
         self._location = 'build'
 
@@ -347,15 +348,15 @@ class Partition(Base, DictableMixin):
     def clean(self):
         """Remove all built files and return the partition to a newly-created state"""
 
-        self.datafile.delete()
+        self.datafile.remove()
 
     @property
     def datafile(self):
-
+        from ambry_sources import MPRowsFile
         if self._datafile is None:
-            from ambry.etl.partition import new_partition_data_file
+
             assert bool(self.cache_key)
-            self._datafile = new_partition_data_file(self._bundle.build_fs, self.cache_key)
+            self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
 
         return self._datafile
 

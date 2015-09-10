@@ -27,49 +27,8 @@ from . import Base,  DictableMixin
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
 
-    def get_filetype(self):
-        """Determine the format of the source file, by reporting the file extension"""
-
-        # The filetype is explicitly specified
-        if self.filetype:
-            return self.filetype.lower()
-
-        # The name of an internal file is specified, use the extension
-        # FIXME. The file can be named as a reg ex, so the extension isn't required.
-        if self.file:
-            root, ext = splitext(self.file)
-            return ext[1:].lower()
-
-        parsed = urlparse(self.url)
-
-        root, ext = splitext(parsed.path)
-
-        if ext == '.zip':
-            # Try some wackiness by assuming that there is an extension on the URL path, after removing .zip
-            parsed_path = parsed.path.replace('.zip', '')
-            root, ext = splitext(parsed_path)
-
-            return ext[1:].lower()
-
-        elif ext:
-            return ext[1:].lower()
-
-        return None
-
-    def get_urltype(self):
-        from os.path import splitext
-
-        if self.urltype:
-            return self.urltype
-
-        if self.url and self.url.startswith('gs://'):
-            return 'gs'  # Google spreadsheet
-
-        if self.url:
-            root, ext = splitext(self.url)
-            return ext[1:]
-
-        return None
+    _bundle = None  # Set externally
+    _datafile = None
 
     @property
     def dict(self):
@@ -129,6 +88,25 @@ class DataSourceBase(object):
         return self._dest_table
 
     @property
+    def datafile(self):
+        from ambry_sources import MPRowsFile
+
+        if self._datafile is None:
+
+            name = self._bundle.identity.name.as_partition(table=self.name, format='source')
+
+            self._datafile = MPRowsFile(self._bundle.build_fs, name.cache_key)
+
+        return self._datafile
+
+    @property
+    def spec(self):
+        """Return a SourceSpec to describe this source"""
+        from ambry_sources.sources import SourceSpec
+
+        return SourceSpec(**self.dict)
+
+    @property
     def column_map(self):
         """For each column, map from the source header ( column name ) to the destination header """
         return self.source_table.column_map
@@ -152,16 +130,40 @@ class DataSourceBase(object):
 
         return not self.urltype in ('ref', 'template')
 
+    def update_table(self):
+        """Update the source table from the datafile"""
+        from ambry_sources.intuit import TypeIntuiter
 
-class TransientDataSource(DataSourceBase):
-    """A Transient version of Data Source, which can be created temporaritly, without being stored in the
-    database"""
+        with self.datafile.reader as r:
 
-    def __init__(self,  **kwargs):
+            st = self.source_table
+            for col in r.meta['schema']:
 
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+                # col
 
+                c = st.column(col['name'])
+
+                if c:
+                    c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
+
+                    #self._bundle.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
+                else:
+
+                    c = st.add_column(col['pos'], source_header=col['name'], dest_header=col['name'],
+                                      datatype=col['resolved_type'])
+
+                    #self._bundle.log('Created column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
+
+    def update_spec(self):
+        """Update the source specification with information from the row intuiter, but only if the spec values
+        are not already set. """
+
+        with self.datafile.reader as r:
+
+            self.header_lines = r.info['header_rows']
+            self.comment_lines =  r.info['comment_rows']
+            self.start_line = r.info['data_start_row']
+            self.end_line = r.info['data_end_row']
 
 class DataSource(DataSourceBase, Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""
@@ -211,8 +213,9 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     )
 
 
+
 class TransientDataSource(DataSourceBase):
-    """A Transient version of Data Source, which can be created temporaritly, without being stored in the
+    """A Transient version of Data Source, which can be created temporarily, without being stored in the
     database"""
 
     def __init__(self,  **kwargs):

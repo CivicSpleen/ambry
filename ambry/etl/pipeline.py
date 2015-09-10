@@ -15,6 +15,7 @@ from six import iteritems, itervalues, string_types
 from ambry.identity import PartialPartitionName
 from ambry.util import qualified_class_name
 
+from ambry_sources import RowProxy
 
 class PipelineError(Exception):
     def __init__(self,  pipe, *args, **kwargs):
@@ -69,84 +70,6 @@ Pipeline:
 class StopPipe(Exception):
     pass
 
-
-class RowProxy(object):
-    '''
-    A dict-like accessor for rows which holds a constant header for the keys. Allows for faster access than
-    constructing a dict, and also provides attribute access
-
-    >>> header = list('abcde')
-    >>> rp = RowProxy(header)
-    >>> for i in range(10):
-    >>>     row = [ j for j in range(len(header)]
-    >>>     rp.set_row(row)
-    >>>     print rp['c']
-
-    '''
-
-    def __init__(self, keys):
-
-        self.__keys = keys
-        self.__row = [None] * len(keys)
-        self.__pos_map = { e:i for i, e in enumerate(keys)}
-        self.__initialized = True
-
-    @property
-    def row(self):
-        return object.__getattribute__(self, '_RowProxy__row')
-
-    def set_row(self,v):
-        object.__setattr__(self, '_RowProxy__row', v)
-        return self
-
-    @property
-    def headers(self):
-        return self.__getattribute__('_RowProxy__keys')
-
-    def __setitem__(self, key, value):
-        if isinstance(key, int):
-            self.__row[key] = value
-        else:
-            self.__row[self.__pos_map[key]] = value
-
-    def __getitem__(self, key):
-        if isinstance(key, int):
-            return self.__row[key]
-        else:
-            return self.__row[self.__pos_map[key]]
-
-    def __setattr__(self, key, value):
-
-        if not self.__dict__.has_key('_RowProxy__initialized'):
-            return object.__setattr__(self, key, value)
-
-        else:
-            self.__row[self.__pos_map[key]] = value
-
-    def __getattr__(self, key):
-
-        return self.__row[self.__pos_map[key]]
-
-    def __delitem__(self, key):
-        raise NotImplementedError()
-
-    def __iter__(self):
-        return iter(self.__keys)
-
-    def __len__(self):
-        return len(self.__keys)
-
-    @property
-    def dict(self):
-        return dict(zip(self.__keys, self.__row))
-
-    # The final two methods aren't required, but nice for demo purposes:
-    def __str__(self):
-        '''returns simple dict representation of the mapping'''
-        return str(self.dict)
-
-    def __repr__(self):
-        return self.dict.__repr__()
 
 class Pipe(object):
     """A step in the pipeline"""
@@ -230,6 +153,38 @@ class Pipe(object):
 
     def __str__(self):
         return self.print_header()
+
+
+class SourcePipe(Pipe):
+    """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
+
+    def __init__(self, bundle, source):
+        self.bundle = bundle
+        self._source = source
+        self._datafile = source.datafile
+
+    def __iter__(self):
+
+        self.start()
+
+        yield self._source.headers
+
+        for row in self._datafile.reader.rows:
+            yield row
+
+        self.finish()
+
+    def start(self):
+        pass
+
+    def finish(self):
+        pass
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return "{}; {} {}".format(qualified_class_name(self), type(self.source), self._datafile.path)
+
 
 
 class Sink(Pipe):
@@ -509,8 +464,6 @@ class AddDestHeader(Pipe):
 
         if not self._added_headers:
             self._added_headers = [c.name for c in self.source.dest_table.columns][1:]
-
-        print '!!!!', self.source.dest_table.name, self._added_headers
 
         yield self._added_headers
 
@@ -1354,7 +1307,7 @@ class WriteToPartition(Pipe, PartitionWriter):
             self._datafiles[df_key] = (p, header_mapper, body_mapper)
 
             # It is a new datafile, so it needs a header.
-            p.datafile.writer.set_row_header(header_mapper(self.headers))
+            p.datafile.writer.set_schema(header_mapper(self.headers))
 
         try:
             p.datafile.writer.insert_row(body_mapper(row))
@@ -1592,7 +1545,10 @@ class Pipeline(OrderedDict):
     @property
     def file_name(self):
 
-        return self.source.source.name
+        try:
+            return self.source.source.name
+        except Exception as e:
+            raise
 
     def __setitem__(self, k, v):
 

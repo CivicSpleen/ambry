@@ -50,8 +50,6 @@ class Bundle(object):
         'build': {
             'first': [],
             'body': [
-                ambry.etl.MergeHeader,
-                ambry.etl.MangleHeader,
                 ambry.etl.MapToSourceTable
             ],
             'augment' : [],
@@ -74,6 +72,7 @@ class Bundle(object):
 
     def __init__(self, dataset, library, source_url=None, build_url=None):
         import logging
+        import signal
 
         self._dataset = dataset
         self._library = library
@@ -95,6 +94,8 @@ class Bundle(object):
         self._build_fs = None
 
         self._identity = None
+
+        self._orig_alarm_handler = signal.SIG_DFL # For start_progress_loggin
 
         self.init()
 
@@ -288,22 +289,28 @@ class Bundle(object):
 
     def source_pipe(self, source):
         """Create a source pipe for a source, giving it access to download files to the local cache"""
-        from ambry.etl.rowgen import source_pipe
-
+        from ambry.etl import SourcePipe
         if isinstance(source, string_types):
             source = self.source(source)
 
         source.dataset = self.dataset
 
-        sp = source_pipe(self, source)
-        sp.bundle = self
+        sp = SourcePipe(self, source)
 
         return sp
 
     @property
     def sources(self):
         """Iterate over downloadable sources"""
-        return list(s for s in self.dataset.sources if s.is_downloadable)
+        def set_bundle(s):
+            s._bundle = self
+            return s
+
+        return list(set_bundle(s) for s in self.dataset.sources if s.is_downloadable)
+
+    @property
+    def source_tables(self):
+        return self.dataset.source_tables
 
     @property
     def refs(self):
@@ -436,6 +443,89 @@ class Bundle(object):
         else:
             raise FatalError(message)
 
+    def progress_logging(self, f, interval=2):
+        """Context manager to start and stop context logging.
+
+        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args)
+        :param interval: Frequency to call the function, in seconds.
+        :return:
+
+        """
+
+        bundle = self
+
+        class _ProgressLogger(object):
+
+            def __enter__(self):
+                bundle.start_progress_logging(f, interval)
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+
+                bundle.stop_progress_logging()
+
+                if exc_val:
+                    return False
+                else:
+                    return True
+
+        return _ProgressLogger()
+
+
+    def start_progress_logging(self, f, interval=2):
+        """
+        Call the function ``f`` every ``interval`` seconds to produce a logging message to be passed
+        to self.log().
+
+        NOTE: This may cause problems with IO operations:
+
+            When a signal arrives during an I/O operation, it is possible that the I/O operation raises an exception
+            after the signal handler returns. This is dependent on the underlying Unix system's
+            semantics regarding interrupted system calls.
+
+        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args)
+        :param interval: Frequence to call the function, in seconds.
+        :return:
+        """
+
+        import signal
+
+        def handler(signum, frame):
+
+            r = f()
+
+            if isinstance(r, (tuple,list)):
+                try:
+                    self.log(r[0].format(*r[1]))
+                except IndexError:
+                    self.log(str(r)+" (Bad log format)") # Well, at least log something
+            else:
+                self.log(str(r) + ' '+str(type(r)))
+
+            # Or, use signal.itimer()? Maybe, but this way, the handler will stop if there is
+            # an exception, rather than getting regular exceptions.
+            signal.alarm(1)
+
+        old_handler = signal.signal(signal.SIGALRM, handler)
+
+        if not self._orig_alarm_handler: # Only want the handlers from other outside sources
+            self._orig_alarm_handler = old_handler
+
+        signal.alarm(interval)
+
+    def stop_progress_logging(self):
+        """
+        Stop progress logging by removing the Alarm signal handler and canceling the alarm.
+        :return:
+        """
+
+        import signal
+
+        if self._orig_alarm_handler:
+            signal.signal(signal.SIGALRM, self._orig_alarm_handler)
+            self._orig_alarm_handler = None
+
+            signal.alarm(0) # Cancel any currently active alarm.
+
     #
     # Source Synced
     #
@@ -515,7 +605,7 @@ class Bundle(object):
 
         self.sync_in()
 
-        if not self.meta():
+        if not self.ingest():
             self.error('Run: failed to meta')
             return False
 
@@ -660,6 +750,82 @@ class Bundle(object):
     #
     # General Phase Runs
     #
+
+    def ingest(self, sources = None, force = False, clean = False):
+        """
+        Load sources files into MPR files, attached to the source record
+        :param force: Delete files before loading.
+        :param clean: Same as force; exists for consistency
+        :return:
+        """
+        from ambry_sources import get_source, MPRowsFile
+        from ambry_sources.sources import SourceSpec, FixedSource, ColumnSpec
+
+        # They are the same in this function, but are different elsewhere, so we have both for
+        # consistence.
+        force = force or clean
+
+        if not sources:
+            sources = self.sources
+        elif not isinstance(sources, (list,tuple)):
+            sources = [sources]
+
+        for i, source in enumerate(sources):
+
+            if isinstance(source, basestring):
+                source_name = source
+                source = self.source(source)
+                source._bundle = self
+
+                if not source:
+                    raise BundleError("Failed to get source for '{}'".format(source_name))
+
+            if not force and source.datafile.exists:
+                self.log("Source {} already ingested, skipping".format(source.name))
+                continue
+            else:
+                self.log('Ingesting: {} '.format(source.spec.name))
+
+            if force and source.datafile.exists:
+                source.datafile.remove()
+
+            s = get_source(source.spec, self.library.download_cache, clean = force)
+
+            if isinstance(s, FixedSource):
+                s.spec.columns = list(source.source_table.columns)
+
+            with self.progress_logging(lambda : ("Ingesting {}: {} {} of {}, rate: {}",
+                                                 (source.spec.name,) + source.datafile.report_progress()), 3):
+                source.datafile.load_rows(s, s.spec)
+
+            source.update_table()
+
+            source.update_spec() # Update header_lines, start_line, etc.
+
+            self.commit()
+
+    def schema(self):
+        """Generate destination schemas"""
+        from itertools import groupby
+        from operator import attrgetter
+
+        # Group the sources by the destination table name
+        keyfunc = attrgetter('dest_table_name')
+        for table_name, sources in groupby(sorted(self.sources, key=keyfunc), keyfunc):
+
+            t = self.new_table( table_name )
+
+            # Get all of the header names, for each source, associating the header position in the table
+            # with the header, then sort on the postition. This will produce a stream of header names
+            # that may have duplicates, but with is generally in the order the headers appear in the
+            # sources. The duplicates are properly handled when we add the columns in add_column()
+            headers = sorted(set([ (i, col.name, col.datatype, col.description) for source in sources
+                             for i, col in enumerate(source.source_table.columns) ]))
+
+            for pos, name, datatype, desc in headers:
+                  t.add_column(name=name, datatype=datatype, description=desc)
+
+        self.commit()
 
     def pipeline(self, phase, source=None):
         """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
@@ -919,54 +1085,12 @@ Pipeline Headers
     #
 
     def meta(self, sources=None):
-        self.run_phase('source', sources=sources)
         self.run_phase('schema', sources=sources)
         return True
 
     def meta_schema(self, sources=None):
         return self.run_phase('schema', sources=sources)
 
-    def meta_source(self, sources=None):
-        return self.run_phase('source', sources=sources)
-
-    def final_make_source_tables(self, pl):
-        from ambry.etl.intuit import TypeIntuiter
-
-        ti = pl[TypeIntuiter]
-
-        source = pl.source.source
-        st = source.source_table
-
-        # if not source.st_id:
-        for tic in ti.columns:
-            c = st.column(tic.header)
-            if c:
-                c.datatype = TypeIntuiter.promote_type(c.datatype, tic.resolved_type)
-                self.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
-            else:
-
-                c = st.add_column(tic.position, source_header=tic.header, dest_header=tic.header,
-                                  datatype=tic.resolved_type_name)
-                self.log('Created source table column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
-
-    def final_make_dest_tables(self, pl):
-        from ambry.etl.intuit import TypeIntuiter
-        from ambry.orm.source_table import SourceColumn
-        source = pl.source.source
-        dest = pl.source.source.dest_table
-        st = source.source_table
-
-        col_type_map = SourceColumn.column_type_map
-
-        ti = pl[TypeIntuiter]
-
-        for tic in ti.columns:
-            sc = st.column(tic.header)
-
-            dest.add_column(name=tic.header,
-                            datatype=col_type_map[tic.resolved_type_name],
-                            summary=sc.summary if sc else None,
-                            description=sc.description if sc else None)
 
     #
     # Build
@@ -1033,7 +1157,6 @@ Pipeline Headers
 
         from collections import defaultdict
         from ..orm.partition import Partition
-        from ..etl.stats import Stats
 
         # Group the segments by their parent partition name, which is the
         # same name, without the segment.
@@ -1052,41 +1175,38 @@ Pipeline Headers
             self.debug('Coalescing segments for partition {} '.format(name))
 
             parent = self.partitions.get_or_new_partition(name, type=Partition.TYPE.UNION)
-            stats = Stats(parent.table)
 
-            pdf = parent.datafile.writer
-            for seg in sorted(segments, key=lambda x: b(x.name)):
+            w = parent.datafile.writer
+            headers = None
+            i = 1
 
-                self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
+            with parent.datafile.writer as w, \
+                 self.progress_logging(lambda : ("Coalescing {}: {} {} of {}, rate: {}",
+                                                     (name,) + parent.datafile.report_progress()), 3):
 
-                reader = self.wrap_partition(seg).datafile.reader
-                header = None
-                start_time = time()
-                for i, rp in enumerate(reader):
+                for seg in sorted(segments, key=lambda x: b(x.name)):
 
-                    if header is None:
-                        header = rp.headers
-                        pdf.set_row_header(header)
-                        stats.process_header(header)
+                    self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
 
-                    rp[0] = i + 1
-                    row = rp.row
-                    pdf.insert_row(row)
-                    stats.process_body(row)
+                    with self.wrap_partition(seg).datafile.reader as reader:
+                        if not headers:
+                            headers = reader.headers
+                            w.insert_headers(headers)
 
-                reader.close()
-                self.debug(indent + "Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time()-start_time)))
+                        for i, row in enumerate(reader.rows):
+                            row[0] = i
+                            w.insert_row(row)
+                            i += 1
 
-            pdf.close()
+                self.debug(indent + "Coalesced {} rows ".format(i))
+
             self.commit()
 
-
-
-            parent.finalize(stats)
+            parent.finalize()
             self.commit()
 
             for s in segments:
-                self.wrap_partition(s).datafile.delete()
+                self.wrap_partition(s).datafile.remove()
                 self.session.delete(s)
 
     def final_finalize_segments(self, pl):

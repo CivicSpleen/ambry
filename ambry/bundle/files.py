@@ -222,7 +222,7 @@ class RowBuildSourceFile(BuildSourceFile):
         # Some types have special representations in spreadsheets, particularly lists and dicts
         def munge_types(v):
             if isinstance(v, (list, tuple)):
-                return u','.join(unicode(e.replace(',','\,')) for e in v)
+                return u','.join(unicode(e).replace(',','\,') for e in v)
             elif isinstance(v, dict):
                 import json
                 return json.dumps(v)

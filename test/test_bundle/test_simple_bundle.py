@@ -49,14 +49,6 @@ class Test(TestBase):
 
         print pl
 
-    def test_simple_build(self):
-        """Just check that it doesn't throw an exception"""
-        from ambry.orm.database import Database
-
-        b = self.setup_bundle('simple')
-        l = b._library
-
-        b.run()
 
     def test_simple_process(self):
         """Build the simple bundle"""
@@ -376,83 +368,7 @@ class Test(TestBase):
 
         return b
 
-    def test_simple_build_types(self):
-        """Build the simple bundle and check that the data types are correct"""
 
-        b = self.setup_bundle('simple')
-        b.run()
-        l = b.library
-
-        p = list(b.partitions)[0]
-
-        row =  p.stream().next()
-
-        for c, v in zip(p.table.columns, row.row):
-            if type(v) != unicode: # It gets reported as string
-                self.assertEquals(type(v), c.python_type)
-
-    def test_complete_build(self):
-        """Build the simple bundle"""
-
-        from geoid import civick, census
-
-        b = self.setup_bundle('complete-build')
-        b.sync_in()
-        b = b.cast_to_subclass()
-        m = b.import_lib()
-
-        import sys
-
-        RandomSourcePipe =  m.__dict__['RandomSourcePipe']
-
-        # 6000 rows and one header
-        self.assertEqual(6001, len(list(RandomSourcePipe(b))))
-
-        self.assertEquals('new', b.state)
-        self.assertTrue(b.meta())
-
-        self.assertTrue(b.build())
-
-        for p in b.partitions:
-            print p.name
-            self.assertIn(int(p.identity.time), p.time_coverage)
-
-        self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
-                          b.dataset.partitions[0].space_coverage)
-        self.assertEquals(u'2qZZZZZZZZZ', b.dataset.partitions[0].grain_coverage[0])
-
-        self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
-                          b.dataset.partitions[2].space_coverage)
-        self.assertEquals([u'2qZZZZZZZZZ'], b.dataset.partitions[2].grain_coverage)
-
-        self.assertEqual(4, len(b.dataset.partitions))
-        self.assertEqual(2, len(b.dataset.tables))
-
-        print 'Build, testing reads'
-
-        p = list(b.partitions)[0]
-
-        print p.datafile.reader.info
-
-        self.assertEquals(6000, sum( 1 for row in p.datafile.reader ))
-
-        self.assertEquals(48, len(b.dataset.stats))
-
-        self.assertEquals('build_done', b.state)
-
-    def test_complete_load(self):
-        """Build the simple bundle"""
-
-        b = self.setup_bundle('complete-load')
-        b.sync()
-
-        b.meta()
-        self.assertEquals('schema_done', b.state)
-        self.assertTrue(b.prepare())
-        self.assertEquals('prepare_done', b.state)
-
-        b = b.cast_to_subclass()
-        b.run()
 
     def test_db_copy(self):
         from ambry.orm.database import Database
@@ -558,9 +474,4 @@ class Test(TestBase):
 
                 self.assertEqual(18003000, id_sum)
 
-    def test_datafile_download(self):
 
-        b = self.setup_bundle('complete-load')
-        l = b._library
-
-        b.sync()

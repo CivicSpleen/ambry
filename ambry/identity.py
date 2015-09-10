@@ -416,6 +416,8 @@ class PartitionName(PartialPartitionName, Name):
         l = []
         if self.grain:
             l.append(str(self.grain))
+        if self.format:
+            l.append(str(self.format))
         if self.segment:
             l.append(str(self.segment))
 

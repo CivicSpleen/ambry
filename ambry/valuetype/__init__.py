@@ -17,7 +17,7 @@ def import_valuetype(name):
     return cls
 
 def python_type(name):
-    return import_valuetype(name).__pythontype__
+    return import_valuetype(name).__pythontype
 
 
 class ValueType(object):
@@ -38,21 +38,21 @@ class ValueType(object):
 
 class StrValue(str,ValueType):
 
-    __pythontype__ = str
+    __pythontype = str
 
     def __new__(cls, v):
         o = super(StrValue, cls).__new__(cls, cls.parse(v))
         return o
 
 class IntValue(int,ValueType):
-    __pythontype__ = int
+    __pythontype = int
 
     def __new__(cls, v):
         o = super(IntValue, cls).__new__(cls, cls.parse(v))
         return o
 
 class FloatValue(float,ValueType):
-    __pythontype__ = float
+    __pythontype = float
 
     def __new__(cls, v):
         o = super(FloatValue, cls).__new__(cls, cls.parse(v))

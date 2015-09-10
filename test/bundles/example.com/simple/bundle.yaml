@@ -49,17 +49,7 @@ names:
     vid: d000simple003
     vname: example.com-simple-0.1.3
 pipelines:
-    build:
-        body:
-        - MergeHeader
-        - TypeIntuiter
-        - MangleHeader
-        - MapToSourceTable(error_on_fail = False)
-        cast:
-        - CasterPipe
-        store:
-        - SelectPartition
-        - WriteToPartition
+
     build2:
         body:
         - 'Add({ ''year'' : lambda e,r: e.source.time, ''release'' : lambda e,r: str(e.source.grain)
