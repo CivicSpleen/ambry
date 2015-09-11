@@ -18,7 +18,6 @@ from . import Base, JSONAlchemy
 from ..identity import ObjectNumber, DatasetNumber
 
 
-
 class Config(Base):
 
     __tablename__ = 'config'
@@ -33,12 +32,13 @@ class Config(Base):
     key = SAColumn('co_key', String(200),  doc='Key of the config')
     value = SAColumn('co_value', JSONAlchemy(Text()),  doc='Value of the config key.')
     modified = SAColumn('co_modified', Integer(),
-        doc='Modification date: time in seconds since the epoch as a integer.')
+                        doc='Modification date: time in seconds since the epoch as a integer.')
 
     # FIXME. Foreign key constraints may it hard to dump all of the configs to a new bundle database in
     # ambry.orm.database.Database#copy_dataset, so I've removed the foreign key constraint.
 
-    parent_id = SAColumn(String(32), ForeignKey('config.co_id'), nullable=True, doc='Id of the parent config.')
+    parent_id = SAColumn(String(32), ForeignKey('config.co_id'), nullable=True,
+                         doc='Id of the parent config.')
 
     parent = relationship('Config',  remote_side=[id])
     children = relationship('Config')
@@ -55,12 +55,12 @@ class Config(Base):
 
         if not target.id:
             import hashlib
-            import time
 
             assert bool(target.d_vid)
 
-            # FIXME This is a bit of a mess, much longer than it should be. Unfortunately, there seem to be few other options
-            # since the trick used in partitions doesn't work for mass updates to many configs.
+            # FIXME This is a bit of a mess, much longer than it should be. Unfortunately,
+            # there seem to be few other options since the trick used in partitions doesn't
+            # work for mass updates to many configs.
             diggest = hashlib\
                 .md5(b(target.group or '') + b(target.key or '') + b(target.parent_id or ''))\
                 .hexdigest()[:8]
@@ -77,6 +77,7 @@ class Config(Base):
 event.listen(Config, 'before_insert', Config.before_insert)
 event.listen(Config, 'before_update', Config.before_update)
 
+
 class ConfigTypeGroupAccessor(object):
 
     def __init__(self, dataset, type_name, group_name,  *args, **kwargs):
@@ -91,10 +92,12 @@ class ConfigTypeGroupAccessor(object):
 
         # find all matched configs and populate configs cache.
 
-        configs =  (self._session.query(Config)
+        configs = self._session\
+            .query(Config)\
             .filter_by(d_vid=self._dataset.vid,
                        type=self._type_name,
-                       group=self._group_name)).all()
+                       group=self._group_name)\
+            .all()
 
         self._configs = {}
 
