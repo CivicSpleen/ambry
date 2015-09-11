@@ -14,10 +14,10 @@ from test.test_base import TestBase
 from test.test_orm.factories import ConfigFactory, DatasetFactory
 
 
-class Test(TestBase):
+class TestConfig(TestBase):
 
     def setUp(self):
-        super(Test, self).setUp()
+        super(TestConfig, self).setUp()
         db = self.new_database()
         ConfigFactory._meta.sqlalchemy_session = db.session
         DatasetFactory._meta.sqlalchemy_session = db.session
@@ -28,6 +28,7 @@ class Test(TestBase):
         config1 = ConfigFactory(d_vid=ds.vid)
         fields = [
             'id',
+            'sequence_id',
             'dataset',
             'd_vid',
             'type',
@@ -48,7 +49,6 @@ class Test(TestBase):
     def test_returns_config_as_string(self):
         ds = DatasetFactory()
         config1 = ConfigFactory(d_vid=ds.vid)
-
         repr_str = config1.__repr__()
         self.assertIsInstance(repr_str, binary_type)
         self.assertIn(config1.d_vid, repr_str)
@@ -58,9 +58,10 @@ class Test(TestBase):
 
     # before_insert tests
     @fudge.patch(
+        'ambry.orm.config.next_sequence_id',
         'ambry.orm.config.Config.before_update')
-    def test_populates_id_field(self, fake_before_update):
-        # FIXME: Use next_sequence to generate id.
+    def test_populates_id_field(self, fake_next, fake_before_update):
+        fake_next.expects_call().returns(1)
         fake_before_update.expects_call()
         ds = DatasetFactory()
         config1 = ConfigFactory.build(d_vid=ds.vid)
@@ -71,6 +72,7 @@ class Test(TestBase):
         Config.before_insert(mapper, conn, config1)
 
         self.assertIsNotNone(config1.id)
+        self.assertEqual('Fds0010001001', config1.id)
 
     # before_update tests
     @fudge.patch(

@@ -12,8 +12,10 @@ from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer,\
     event, UniqueConstraint
 from sqlalchemy.orm import object_session, relationship
 
-from six import iterkeys, b
+from six import iterkeys
 
+from ambry.orm import next_sequence_id
+from ambry.identity import GeneralNumber1
 from . import Base, JSONAlchemy
 
 
@@ -24,6 +26,7 @@ class Config(Base):
         UniqueConstraint('co_d_vid', 'co_type', 'co_group', 'co_key', name='_type_group_key_uc'),)
 
     id = SAColumn('co_id', String(32), primary_key=True)
+    sequence_id = SAColumn('co_sequence_id', Integer, nullable=False, index=True)
 
     d_vid = SAColumn('co_d_vid', String(16), ForeignKey('datasets.d_vid'), index=True, doc='Dataset vid')
     type = SAColumn('co_type', String(200), doc='Type of the config: metadata, process, sync, etc...')
@@ -33,8 +36,9 @@ class Config(Base):
     modified = SAColumn('co_modified', Integer(),
                         doc='Modification date: time in seconds since the epoch as a integer.')
 
-    # FIXME. Foreign key constraints may it hard to dump all of the configs to a new bundle database in
+    # Foreign key constraints may it hard to dump all of the configs to a new bundle database in
     # ambry.orm.database.Database#copy_dataset, so I've removed the foreign key constraint.
+    # TODO: Write test for that note.
 
     parent_id = SAColumn(String(32), ForeignKey('config.co_id'), nullable=True,
                          doc='Id of the parent config.')
@@ -51,19 +55,10 @@ class Config(Base):
 
     @staticmethod
     def before_insert(mapper, conn, target):
-
         if not target.id:
-            import hashlib
-
             assert bool(target.d_vid)
-
-            # FIXME This is a bit of a mess, much longer than it should be. Unfortunately,
-            # there seem to be few other options since the trick used in partitions doesn't
-            # work for mass updates to many configs.
-            diggest = hashlib\
-                .md5(b(target.group or '') + b(target.key or '') + b(target.parent_id or ''))\
-                .hexdigest()[:8]
-            target.id = '{}{}{}'.format(target.d_vid, target.type, diggest)
+            target.sequence_id = next_sequence_id(object_session(target), {}, target.d_vid, Config)
+            target.id = str(GeneralNumber1('F', target.d_vid, target.sequence_id))
 
         Config.before_update(mapper, conn, target)
 
