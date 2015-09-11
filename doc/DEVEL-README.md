@@ -50,6 +50,7 @@ you can install private version of the sqlite for the python-apsw.
         http://rogerbinns.github.io/apsw/download.html
     2. Unzip it, cd to unzipped directory.
     3. Install
+    4. If you use virtualenv copy apsw.so to the site-packages directory of the virtual env.
 ```bash
 python setup.py fetch --all build --enable-all-extensions install test
 ```
