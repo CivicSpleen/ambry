@@ -10,6 +10,22 @@ from test.test_base import TestBase
 
 class Test(TestBase):
 
+    def test_id_generation(self):
+
+        # set some configs
+        db = self.new_database()
+        ds = self.new_db_dataset(db, n=0)
+
+        ds.config.metadata.identity.id = 'd02'
+        ds.config.metadata.identity.version = '0.0.1'
+        db.commit()
+
+        # check ids
+        query = db.session.query(Config)
+        for config in query.filter_by(d_vid=ds.vid).all():
+            self.assertTrue(config.id.startswith('F'))
+            self.assertIn(ds.id[1:], config.id)
+
     def test_dataset_config_operations(self):
         """Basic operations on datasets"""
 
