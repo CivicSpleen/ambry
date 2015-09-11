@@ -9,13 +9,12 @@ __docformat__ = 'restructuredtext en'
 from time import time
 
 from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer,\
-    event, UniqueConstraint, text
+    event, UniqueConstraint
 from sqlalchemy.orm import object_session, relationship
 
 from six import iterkeys, b
 
 from . import Base, JSONAlchemy
-from ..identity import ObjectNumber, DatasetNumber
 
 
 class Config(Base):

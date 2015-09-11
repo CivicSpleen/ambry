@@ -3,8 +3,6 @@ import unittest
 
 from sqlalchemy.exc import IntegrityError
 
-import six
-
 from ambry.orm.config import Config
 
 from test.test_base import TestBase
@@ -12,14 +10,11 @@ from test.test_base import TestBase
 
 class Test(TestBase):
 
-    def test_basic(self):
+    def test_dataset_config_operations(self):
         """Basic operations on datasets"""
 
         db = self.new_database()
         ds = self.new_db_dataset(db, n=0)
-
-        print(ds.config.metadata.identity.id)
-        return
 
         ds.config.metadata.identity.id = 'd02'
         ds.config.metadata.identity.version = '0.0.1'
@@ -92,9 +87,3 @@ class Test(TestBase):
         ds.commit()
 
         print(ds.config.library.build.url)
-
-
-
-
-
-

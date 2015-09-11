@@ -24,7 +24,7 @@ def _drop_entity(vid):
 class DatasetFactory(SQLAlchemyModelFactory):
     class Meta:
         model = Dataset
-        sqlalchemy_session = None  # Set that just before ConfigFactory using.
+        sqlalchemy_session = None  # Set that just before DatasetFactory using.
 
     vid = factory.LazyAttribute(
         lambda dataset: '{self.id}{self.revision:03d}'.format(self=dataset))
