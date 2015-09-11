@@ -332,6 +332,13 @@ class Partition(Base, DictableMixin):
 
         # Write the stats for this partition back into the partition
 
+        with self.datafile.writer as w:
+            w.set_schema(
+                [ dict(pos = c.sequence_id, name = c.name, description = c.description, type = c.datatype)
+                  for c in self.table.columns]
+            )
+
+
         self.datafile.run_stats()
         self.set_stats()
         self.set_coverage()
@@ -378,7 +385,7 @@ class Partition(Base, DictableMixin):
         self._location = v
 
     def stream(self, as_dict=False):
-        """Yield rows of a partition, as an intyerator. Data is taken from one of these locations:
+        """Yield rows of a partition, as an iterator. Data is taken from one of these locations:
         - The warehouse, for installed data
         - The build directory, for built data
         - The remote, for checked in data.
@@ -404,37 +411,8 @@ class Partition(Base, DictableMixin):
         elif self.location == 'warehouse':
             raise NotImplementedError()
 
-        def generator():
 
-            itr = iter(reader)
-
-            header = next(itr)
-
-            # Check that header is sensible.
-            for i, (a, b) in enumerate(zip(header, (c.name for c in self.table.columns))):
-                if a != b:
-                    exc_msg = 'For {} at position {}, partition header {} is different ' \
-                              'from column name {}. {}\n{}' \
-                        .format(self.identity.name, i, a, b, list(header),
-                                [c.name for c in self.table.columns])
-                    raise Exception(exc_msg)
-
-            if not as_dict:
-                yield header
-
-            if as_dict:
-                for row in itr:
-                    yield dict(list(zip(header, row)))
-            else:
-                for row in itr:
-                    yield row
-
-            reader.close()
-
-        itr = iter(generator())
-
-
-        return itr
+        return iter(reader)
 
 
 

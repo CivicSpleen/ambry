@@ -2,7 +2,7 @@
 # Like the bambry program, but runs multiple jobs in parallel, with the number
 # of simultaneous runs being equal to the number of cores.
 
-# Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
+# Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 # Works on both Linux and OS X. http://stackoverflow.com/a/20283990

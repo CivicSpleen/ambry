@@ -1,9 +1,7 @@
-from ambry.etl import SourcePipe
 
-class RandomSourcePipe(SourcePipe):
+class RandomSourcePipe(object):
 
     def __init__(self, bundle, source=None):
-        super(RandomSourcePipe, self).__init__(bundle, source)
 
         if source:
             self.year = int(source.time)

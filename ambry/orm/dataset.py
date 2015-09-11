@@ -88,7 +88,7 @@ class Dataset(Base):
             self.revision = 1
 
         if self.cache_key is None:
-            self.cache_key = self.identity.cache_key
+            self.cache_key = self.identity.name.cache_key
 
         if not self.name:
             self.name = str(self.identity.name)

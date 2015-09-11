@@ -19,24 +19,31 @@ from ambry_sources import RowProxy
 
 class PipelineError(Exception):
     def __init__(self,  pipe, *args, **kwargs):
+
         super(PipelineError, self).__init__(*args, **kwargs)
         self.pipe = pipe
+        self.exc_name = qualified_class_name(self)
+        self.extra = ''
+        self.extra_section = ''
 
-        def __str__(self):
-            return """
+
+    def __str__(self):
+        return """
 ======================================
-Pipeline Exception: PipelineError
+Pipeline Exception: {exc_name}
 Message:         {message}
 Pipeline:        {pipeline_name}
 Pipe:            {pipe_class}
 Source:          {source_name}
 Segment Headers: {headers}
+{extra}
 -------------------------------------
+{extra_section}
 Pipeline:
 {pipeline}
 """.format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline=str(self.pipe.pipeline),
-           pipe_class=qualified_class_name(self.pipe), source_name=self.source.name,
-           headers=self.pipe.headers)
+           pipe_class=qualified_class_name(self.pipe), source_name=self.pipe.source.name,
+           headers=self.pipe.headers, exc_name = self.exc_name, extra = self.extra, extra_section=self.extra_section)
 
 
 class MissingHeaderError(PipelineError):
@@ -47,24 +54,31 @@ class MissingHeaderError(PipelineError):
         self.table = table
 
     def __str__(self):
-        return """
-======================================
-Pipeline Exception: MissingHeaderError
-Message:         {message}
-Pipeline:        {pipeline_name}
-Pipe:            {pipe_class}
-Source:          {source_name}
-Segment Headers: {headers}
+        self.extra = \
+"""
 Missing Header:  {header}
--------------------------------------
+""".format(header=self.header)
+
+        self.extra_section = \
+"""
 {table_columns}
 -------------------------------------
-Pipeline:
-{pipeline}
-""".format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline=str(self.pipe.pipeline),
-           pipe_class=qualified_class_name(self.pipe), source_name=self.pipe.source.name,
-           headers= self.pipe.headers, header=self.header, table_name=self.table.name,
-           table_columns=str(self.table))
+""".format(table_columns=str(self.table))
+
+        return super(MissingHeaderError, self).__str__()
+
+class BadSourceTable(PipelineError):
+    def __init__(self, pipe, source_table, *args, **kwargs):
+        super(BadSourceTable, self).__init__(pipe, *args, **kwargs)
+
+        self.source_table = source_table
+
+    def __str__(self):
+        self.extra = \
+"""
+Bad/Missing Table:  {source_table}
+""".format(source_table=self.source_table)
+        return super(BadSourceTable, self).__str__()
 
 
 class StopPipe(Exception):
@@ -155,13 +169,16 @@ class Pipe(object):
         return self.print_header()
 
 
-class SourcePipe(Pipe):
+class DatafileSourcePipe(Pipe):
     """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
 
     def __init__(self, bundle, source):
         self.bundle = bundle
         self._source = source
+
         self._datafile = source.datafile
+        # file_name is for the pipeline logger, to generate a file
+        self.file_name = self.path = self._datafile.path
 
     def __iter__(self):
 
@@ -183,7 +200,43 @@ class SourcePipe(Pipe):
     def __str__(self):
         from ..util import qualified_class_name
 
-        return "{}; {} {}".format(qualified_class_name(self), type(self.source), self._datafile.path)
+        return "{}; {} {}".format(qualified_class_name(self), type(self.source), self.path)
+
+class GeneratorSourcePipe(Pipe):
+    """Base class for a source pipe that implements it own iterator """
+
+    def __init__(self, bundle, source, gen):
+        from ..util import qualified_class_name
+
+        self.bundle = bundle
+        self._source = source
+        self._gen = gen
+
+        # file_name is for the pipeline logger, to generate a file
+        if self._source:
+            self.file_name = self._source.name
+        else:
+            self.file_name = qualified_class_name(self)
+
+    def __iter__(self):
+
+        self.start()
+
+        for row in self._gen:
+            yield row
+
+        self.finish()
+
+    def start(self):
+        pass
+
+    def finish(self):
+        pass
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return "Generator {}".format(qualified_class_name(self))
 
 
 
@@ -496,6 +549,9 @@ class MapToSourceTable(Pipe):
     def process_header(self, row):
 
         m = {c.source_header: c.dest_header for c in self.source.source_table.columns}
+
+        if not m:
+            raise BadSourceTable(self, self.source.source_table_name, "Malformed or entirely missing source table")
 
         if self.error_on_fail:
             try:
@@ -1546,7 +1602,7 @@ class Pipeline(OrderedDict):
     def file_name(self):
 
         try:
-            return self.source.source.name
+            return self.source[0].file_name
         except Exception as e:
             raise
 

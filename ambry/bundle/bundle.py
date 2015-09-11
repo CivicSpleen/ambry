@@ -40,6 +40,7 @@ class Bundle(object):
     STATES.INSTALLING = 'install'
     STATES.INSTALLED = 'install_done'
     STATES.META = 'meta'
+    STATES.INGEST = 'ingest'
 
     # Other things that can be part of the 'last action'
     STATES.INFO = 'info'
@@ -289,15 +290,14 @@ class Bundle(object):
 
     def source_pipe(self, source):
         """Create a source pipe for a source, giving it access to download files to the local cache"""
-        from ambry.etl import SourcePipe
+        from ambry.etl import DatafileSourcePipe, GeneratorSourcePipe
         if isinstance(source, string_types):
             source = self.source(source)
 
         source.dataset = self.dataset
+        source._bundle = self
 
-        sp = SourcePipe(self, source)
-
-        return sp
+        return DatafileSourcePipe(self, source)
 
     @property
     def sources(self):
@@ -758,8 +758,8 @@ class Bundle(object):
         :param clean: Same as force; exists for consistency
         :return:
         """
-        from ambry_sources import get_source, MPRowsFile
-        from ambry_sources.sources import SourceSpec, FixedSource, ColumnSpec
+        from ambry_sources import get_source
+        from ambry_sources.sources import FixedSource, GeneratorSource
 
         # They are the same in this function, but are different elsewhere, so we have both for
         # consistence.
@@ -783,26 +783,40 @@ class Bundle(object):
             if not force and source.datafile.exists:
                 self.log("Source {} already ingested, skipping".format(source.name))
                 continue
-            else:
-                self.log('Ingesting: {} '.format(source.spec.name))
-
-            if force and source.datafile.exists:
+            elif force:
                 source.datafile.remove()
 
-            s = get_source(source.spec, self.library.download_cache, clean = force)
+            self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
 
-            if isinstance(s, FixedSource):
-                s.spec.columns = list(source.source_table.columns)
+            if source.url:
+                s = get_source(source.spec, self.library.download_cache, clean = force)
+
+                if isinstance(s, FixedSource):
+                    s.spec.columns = list(source.source_table.columns)
+
+            elif source.generator:
+                import sys
+
+                if hasattr(self, source.generator):
+                    gen_cls = getattr(self, source.generator)
+                elif source.generator in  sys.modules['ambry.build'].__dict__:
+                    gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
+                else:
+                    gen_cls = self.import_lib().__dict__[source.generator]
+
+                s = GeneratorSource(source.spec, gen_cls(self, source), use_row_spec = False)
 
             with self.progress_logging(lambda : ("Ingesting {}: {} {} of {}, rate: {}",
                                                  (source.spec.name,) + source.datafile.report_progress()), 3):
                 source.datafile.load_rows(s, s.spec)
 
-            source.update_table()
+            source.update_table() # Generate the source tables.
 
             source.update_spec() # Update header_lines, start_line, etc.
 
-            self.commit()
+        self.commit()
+
+        return True
 
     def schema(self):
         """Generate destination schemas"""
@@ -826,6 +840,7 @@ class Bundle(object):
                   t.add_column(name=name, datatype=datatype, description=desc)
 
         self.commit()
+        return True
 
     def pipeline(self, phase, source=None):
         """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
@@ -929,10 +944,10 @@ class Bundle(object):
 
     def phase_main(self, phase,  stage='main', sources=None):
         """
-        Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
-        objects back to file records and synchronize.
 
-        :param force:
+        :param phase:
+        :param stage:
+        :param sources:
         :return:
         """
 
@@ -997,6 +1012,9 @@ class Bundle(object):
 
             pl = self.pipeline(phase, source)
 
+            # Doing this before hand to get at least some information about the pipline,
+            # in case there is an error during the run. It will get overwritten with more information
+            # after asecussful run
             self.final_log_pipeline(pl)
 
             pl.run()
@@ -1024,7 +1042,7 @@ class Bundle(object):
 
         return True
 
-    def run_phase(self, phase, stage='main', sources=None):
+    def run_phase(self, phase, stage='main', sources=None, force = False):
 
         assert isinstance(stage, string_types) or stage is None
 
@@ -1044,7 +1062,7 @@ class Bundle(object):
         try:
 
             step_name = 'Pre-{}'.format(phase)
-            if not phase_pre():
+            if not phase_pre(force = force):
                 self.log("---- Skipping {} ---- ".format(phase))
                 return False
 
@@ -1077,8 +1095,11 @@ Pipeline Headers
 {}
 """.format(unicode(pl), pl.headers_report())
 
-        self.build_fs.setcontents(
-            os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'), v, encoding='utf8')
+        path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
+
+        self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
+
+        self.build_fs.setcontents(path, v, encoding='utf8')
 
     #
     # Meta
@@ -1107,11 +1128,28 @@ Pipeline Headers
 
     def pre_build(self, phase='build', force=False):
         assert isinstance(force, bool)
-        return self.pre_phase(phase, force=force)
+        r =  self.pre_phase(phase, force=force)
 
-    def build(self,  stage='main', sources=None):
+        if not r:
+            return False
+
+        if force:
+
+            for p in self.dataset.partitions:
+                if p.type == p.TYPE.SEGMENT:
+                    self.log("Removing old segment partition: {}".format(p.identity.name))
+                else:
+                    self.log("Removing build partition: {}".format(p.identity.name))
+                self.wrap_partition(p).datafile.remove()
+                self.session.delete(p)
+            self.commit()
+
+        return True
+
+
+    def build(self,  stage='main', sources=None, force = False):
         assert isinstance(stage, string_types) or stage is None
-        return self.run_phase('build', sources=sources, stage=stage)
+        return self.run_phase('build', sources=sources, stage=stage, force = force)
 
     def post_build(self, phase='build'):
         """After the build, update the configuration with the time required for
@@ -1159,7 +1197,7 @@ Pipeline Headers
         from ..orm.partition import Partition
 
         # Group the segments by their parent partition name, which is the
-        # same name, without the segment.
+        # same name, but without the segment.
         partitions = defaultdict(set)
         for p in self.dataset.partitions:
             if p.type == p.TYPE.SEGMENT:
@@ -1176,13 +1214,16 @@ Pipeline Headers
 
             parent = self.partitions.get_or_new_partition(name, type=Partition.TYPE.UNION)
 
-            w = parent.datafile.writer
             headers = None
             i = 1
 
+            if parent.datafile.exists:
+                self.log("Removing exising datafile {}".format(parent.datafile.path))
+                parent.datafile.remove()
+
             with parent.datafile.writer as w, \
-                 self.progress_logging(lambda : ("Coalescing {}: {} {} of {}, rate: {}",
-                                                     (name,) + parent.datafile.report_progress()), 3):
+                 self.progress_logging(lambda : ("Coalescing: {} {} of {}, rate: {}",
+                                                     parent.datafile.report_progress()), 3):
 
                 for seg in sorted(segments, key=lambda x: b(x.name)):
 

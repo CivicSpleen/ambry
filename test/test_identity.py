@@ -458,6 +458,21 @@ class Test(TestBase):
 
         self.assertEquals('G01C001Z005', ObjectNumber.parse(str(GeneralNumber1('G',dn, 123)), 'other1'))
 
+    def test_format_partition_names(self):
+        from ambry.identity import PartialPartitionName
+
+        ds_name = Name(source='source', dataset='dataset')
+
+        p = PartialPartitionName(time=10, space="CA", table='table')
+
+        self.assertEquals('source/dataset-0.0.0/table/10-ca',p.promote(ds_name).cache_key)
+
+        p = PartialPartitionName(time=10, space="CA", table='table', format='format')
+
+        print p.promote(ds_name).cache_key
+        #self.assertEquals('', p.promote(ds_name).cache_key)
+
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

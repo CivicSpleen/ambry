@@ -90,6 +90,7 @@ class DataSourceBase(object):
     @property
     def datafile(self):
         from ambry_sources import MPRowsFile
+        from os.path import join
 
         if self._datafile is None:
 
@@ -138,8 +139,6 @@ class DataSourceBase(object):
 
             st = self.source_table
             for col in r.meta['schema']:
-
-                # col
 
                 c = st.column(col['name'])
 

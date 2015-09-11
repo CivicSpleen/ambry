@@ -201,21 +201,16 @@ def bundle_parser(cmd):
                            help='Force cleaning a built or finalized bundle')
     command_p.set_defaults(subcommand='clean')
 
-    #
-    # Download Command
-    #
-    command_p = sub_cmd.add_parser('download', help='Download all of the soruce files and referenced bundles')
-    command_p.set_defaults(subcommand='download')
 
     #
-    # Meta Command
+    # Ingest Command
     #
-    command_p = sub_cmd.add_parser('meta', help='Build or install metadata')
-    command_p.set_defaults(subcommand='meta')
+    command_p = sub_cmd.add_parser('ingest', help='Build or install download and convert data to internal file format')
+    command_p.set_defaults(subcommand='ingest')
 
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
-    command_p.add_argument('-p', '--print_pipe', default=False, action='store_true',
-                           help='Print out the pipeline as it runs')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Re-ingest already ingested files')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
                            help='Syncrhonize before and after')
 
@@ -529,7 +524,7 @@ def bundle_sync(args, l, rc):
     b.set_last_access(Bundle.STATES.SYNCED)
 
 
-def bundle_meta(args, l, rc):
+def bundle_ingest(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
 
@@ -542,8 +537,8 @@ def bundle_meta(args, l, rc):
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l).cast_to_subclass()
-    b.meta()
-    b.set_last_access(Bundle.STATES.META)
+    b.ingest(force = args.force)
+    b.set_last_access(Bundle.STATES.INGEST)
 
     if args.sync:
         b.sync_out()
@@ -555,6 +550,8 @@ def bundle_build(args, l, rc):
 
     if not args.force:
         check_built(b)
+    else:
+        b.state = Bundle.STATES.PREPARED
 
     if args.clean:
         if not b.clean():
@@ -570,7 +567,10 @@ def bundle_build(args, l, rc):
 
     b = b.cast_to_subclass()
 
-    b.build(sources=args.sources)
+    # Only force build. To force an ingest, must explicitly run ingest.
+    b.ingest(sources=args.sources)
+
+    b.build(sources=args.sources, force = args.force)
 
     if args.sync:
         b.sync_out()

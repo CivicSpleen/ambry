@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from ambry.bundle import Bundle
-from ambry.etl import SourcePipe
+from ambry.etl import DatafileSourcePipe
 
 
-class ExampleSourcePipe(SourcePipe):
+class ExampleSourcePipe(DatafileSourcePipe):
 
     def __iter__(self):
 

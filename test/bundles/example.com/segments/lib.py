@@ -1,6 +1,5 @@
-from ambry.etl import SourcePipe
 
-class RandomSourcePipe(SourcePipe):
+class RandomSourcePipe(object):
 
     def __init__(self, bundle, source):
         super(RandomSourcePipe, self).__init__(bundle, source)

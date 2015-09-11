@@ -37,6 +37,8 @@ class Name(object):
 
     NAME_PART_SEP = '-'
 
+    DEFAULT_FORMAT = 'db'
+
     # Name, Default Value, Is Optional
     _name_parts = [('source', None, False),
                    ('dataset', None, False),
@@ -185,7 +187,7 @@ class Name(object):
         d = self._dict(with_name=False)
 
         return self.NAME_PART_SEP.join([str(d[k]) for (k, _, _) in self.name_parts if k and d.get(
-            k, False) and k != 'version' and not (k == 'format' and d[k] == 'db')])
+            k, False) and k != 'version' and not (k == 'format' and d[k] == Name.DEFAULT_FORMAT)])
 
     @property
     def vname(self):
@@ -218,6 +220,7 @@ class Name(object):
         final_parts = [str(d[k]) for (k, _, _) in self.name_parts
                        if k and d.get(k, False) and k in (names - excludes)]
 
+
         return sep.join(final_parts)
 
     @property
@@ -232,12 +235,7 @@ class Name(object):
         # bundle path when called from subclasses
         names = [k for k, _, _ in Name._name_parts]
 
-        return os.path.join(
-            self.source,
-            self._path_join(
-                names=names,
-                excludes='source',
-                sep=self.NAME_PART_SEP))
+        return os.path.join(self.source,self._path_join(names=names,excludes='source',sep=self.NAME_PART_SEP))
 
     @property
     def source_path(self):
@@ -256,13 +254,7 @@ class Name(object):
             parts.append(self.bspace)
 
         parts.append(
-            self._path_join(
-                names=names,
-                excludes=[
-                    'source',
-                    'version',
-                    'bspace'],
-                sep=self.NAME_PART_SEP))
+            self._path_join(names=names,excludes=[ 'source', 'version','bspace'],sep=self.NAME_PART_SEP))
 
         return os.path.join(*parts)
 
@@ -401,6 +393,9 @@ class PartitionName(PartialPartitionName, Name):
 
         parts = []
 
+        if self.format and self.format != Name.DEFAULT_FORMAT:
+            parts.append(str(self.format))
+
         if self.table:
             parts.append(self.table)
 
@@ -416,8 +411,7 @@ class PartitionName(PartialPartitionName, Name):
         l = []
         if self.grain:
             l.append(str(self.grain))
-        if self.format:
-            l.append(str(self.format))
+
         if self.segment:
             l.append(str(self.segment))
 
@@ -433,25 +427,28 @@ class PartitionName(PartialPartitionName, Name):
 
         d = self._dict(with_name=False)
 
-        return self.NAME_PART_SEP.join([str(d[k]) for (k, _, _) in self.name_parts if k and d.get(
-            k, False) and k != 'version' and (k != 'format' or str(d[k]) != 'db')])
+        return self.NAME_PART_SEP.join(
+                    [str(d[k]) for (k, _, _) in self.name_parts
+                    if k and d.get(k, False) and k != 'version' and (k != 'format' or str(d[k]) != Name.DEFAULT_FORMAT)]
+        )
+
 
     @property
     def path(self):
-        """The path of the partition source.
+        """The path of the bundle source.
 
         Includes the revision.
 
         """
 
-        try:
-            parts = ([super(PartitionName, self).path] + self._local_parts())
-            return os.path.join(*parts)
-        except TypeError as e:
-            raise TypeError(
-                "Path failed for partition {}: {}".format(
-                    self.name,
-                    e.message))
+        # Need to do this to ensure the function produces the
+        # bundle path when called from subclasses
+        names = [k for k, _, _ in Name._name_parts]
+
+        return os.path.join(self.source,
+                            self._path_join(names=names, excludes=['source', 'format'], sep=self.NAME_PART_SEP),
+                            *self._local_parts()
+                            )
 
     @property
     def source_path(self):
@@ -501,14 +498,9 @@ class PartitionName(PartialPartitionName, Name):
 
         d = self._dict(with_name=False)
 
-        d = {
-            k: d.get(k) for k,
-            _,
-            _ in PartialPartitionName._name_parts if d.get(
-                k,
-                False)}
+        d = {k: d.get(k) for k, _,_ in PartialPartitionName._name_parts if d.get(k,False)}
 
-        if 'format' in d and d['format'] == 'db':
+        if 'format' in d and d['format'] == Name.DEFAULT_FORMAT:
             del d['format']
 
         d['name'] = self.name
@@ -1528,8 +1520,7 @@ class Identity(object):
         if hasattr(self._name, name):
             return getattr(self._name, name)
         else:
-            raise AttributeError(
-                'Identity does not have attribute {} '.format(name))
+            raise AttributeError( 'Identity does not have attribute {} '.format(name))
 
     @property
     def cache_key(self):
@@ -1567,12 +1558,7 @@ class Identity(object):
         """A dictionary with only the items required to specify the identy,
         excluding the generated names, name, vname and fqname."""
 
-        SKIP_KEYS = [
-            'name',
-            'vname',
-            'fqname',
-            'vid',
-            'cache_key']
+        SKIP_KEYS = ['name','vname','fqname','vid','cache_key']
         return {k: v for k, v in iteritems(self.dict) if k not in SKIP_KEYS}
 
     @staticmethod
