@@ -72,7 +72,7 @@ class TestConfig(TestBase):
         Config.before_insert(mapper, conn, config1)
 
         self.assertIsNotNone(config1.id)
-        self.assertEqual('Fds0010001001', config1.id)
+        self.assertTrue(config1.id.startswith('Fds'))
 
     # before_update tests
     @fudge.patch(
