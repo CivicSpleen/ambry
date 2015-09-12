@@ -7,7 +7,6 @@ from ambry.bundle import Bundle
 class RandomSourcePipe(object):
 
     def __init__(self, bundle, source):
-        super(RandomSourcePipe, self).__init__(bundle, source)
 
         self.year = int(source.time)
         self.space = source.space
@@ -36,7 +35,7 @@ class Bundle(Bundle):
     def check_subclass(self):
         return True
 
-    def build(self, stage='main', sources=None):
+    def build(self, stage='main', sources=None, force = False):
 
         self.pre_build()
 

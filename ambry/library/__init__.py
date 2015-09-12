@@ -375,17 +375,17 @@ class Library(object):
 
         os.remove(db_path)
 
-        def prt(a, b):
-            print(a, b)
-
         for p in b.partitions:
-
-            print '!!!!', p.datafile.syspath
 
             with p.datafile.open(mode='rb') as fin:
                 self.logger.info('Checking in {}'.format(p.identity.vname))
-                remote.makedir(os.path.dirname(p.datafile.munged_path), recursive=True, allow_recreate=True)
-                remote.setcontents(p.datafile.munged_path, fin)
+
+                def progress(bytes):
+                    self.logger.info('Checking in {}; {} bytes'.format(p.identity.vname, bytes))
+
+                remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
+                event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
+                event.wait()
 
         b.dataset.commit()
 

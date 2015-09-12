@@ -150,10 +150,7 @@ class Partition(Base, DictableMixin):
 
         self.fqname = Identity._compose_fqname(self.vname, self.vid)
 
-    def set_stats(self, stats= None):
-
-        if stats is None:
-            stats = self.datafile.stats
+    def set_stats(self, stats):
 
         self.stats[:] = [] # Delete existing stats
 
@@ -162,7 +159,7 @@ class Partition(Base, DictableMixin):
             if c.name not in stats:
                 continue
 
-            d = stats[c.name]
+            d = stats[c.name].dict
 
             del d['name']
             del d['flags']
@@ -185,10 +182,9 @@ class Partition(Base, DictableMixin):
 
             return GVid.parse(places[0].vid)
 
-    def set_coverage(self):
+    def set_coverage(self, stats):
         """"Extract time space and grain coverage from the stats and store them in the partition"""
         from ambry.util.datestimes import expand_to_years
-        sd = self.stats
 
         scov = set()
         tcov = set()
@@ -196,19 +192,21 @@ class Partition(Base, DictableMixin):
 
         for c in self.table.columns:
 
-            if c.name not in sd:
+
+
+            if c.name not in stats:
                 continue
 
             try:
-                if sd[c.name].is_gvid:
-                    scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[c.name].uniques))
-                    grains |= set(GVid.parse(gvid).summarize() for gvid in sd[c.name].uniques)
-                elif sd[c.name].is_year:
+                if stats[c.name].is_gvid:
+                    scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in stats[c.name].uniques))
+                    grains |= set(GVid.parse(gvid).summarize() for gvid in stats[c.name].uniques)
+                elif stats[c.name].is_year:
 
-                    tcov |= set(int(x) for x in sd[c.name].uniques)
-                elif sd[c.name].is_date:
+                    tcov |= set(int(x) for x in stats[c.name].uniques)
+                elif stats[c.name].is_date:
                     # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
-                    tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, basestring) else x.year for x in sd[c.name].uniques)
+                    tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, basestring) else x.year for x in stats[c.name].uniques)
             except Exception as e:
                 self._bundle.error("Failed to set coverage for column '{}', partition '{}': {}"
                                    .format(c.name, self.identity.vname, e))
@@ -223,7 +221,8 @@ class Partition(Base, DictableMixin):
             scov.add(self.parse_gvid_or_place(self.identity.space))
 
         # For geo_coverage, only includes the higher level summary levels, counties, states, places and urban areas
-        self.space_coverage = sorted([str(x) for x in scov if bool(x) and x.sl in (10, 40, 50, 60, 160, 400)])
+        self.space_coverage = sorted([str(x) for x in scov if bool(x) and x.sl
+                                      in (10, 40, 50, 60, 160, 400)])
 
         #
         # Time Coverage
@@ -338,11 +337,11 @@ class Partition(Base, DictableMixin):
                   for c in self.table.columns]
             )
 
+        stats = self.datafile.run_stats()
 
-        self.datafile.run_stats()
-        self.set_stats()
-        self.set_coverage()
+        self.set_stats(stats)
 
+        self.set_coverage(stats)
 
         self._location = 'build'
 

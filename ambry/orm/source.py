@@ -135,34 +135,36 @@ class DataSourceBase(object):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
 
-        with self.datafile.reader as r:
+        if self.datafile.exists:
+            with self.datafile.reader as r:
 
-            st = self.source_table
-            for col in r.meta['schema']:
+                st = self.source_table
+                for col in r.meta['schema']:
 
-                c = st.column(col['name'])
+                    c = st.column(col['name'])
 
-                if c:
-                    c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
+                    if c:
+                        c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
 
-                    #self._bundle.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
-                else:
+                        #self._bundle.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
+                    else:
 
-                    c = st.add_column(col['pos'], source_header=col['name'], dest_header=col['name'],
-                                      datatype=col['resolved_type'])
+                        c = st.add_column(col['pos'], source_header=col['name'], dest_header=col['name'],
+                                          datatype=col['resolved_type'])
 
-                    #self._bundle.log('Created column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
+                        #self._bundle.log('Created column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
 
     def update_spec(self):
         """Update the source specification with information from the row intuiter, but only if the spec values
         are not already set. """
 
-        with self.datafile.reader as r:
+        if self.datafile.exists:
+            with self.datafile.reader as r:
 
-            self.header_lines = r.info['header_rows']
-            self.comment_lines =  r.info['comment_rows']
-            self.start_line = r.info['data_start_row']
-            self.end_line = r.info['data_end_row']
+                self.header_lines = r.info['header_rows']
+                self.comment_lines =  r.info['comment_rows']
+                self.start_line = r.info['data_start_row']
+                self.end_line = r.info['data_end_row']
 
 class DataSource(DataSourceBase, Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""

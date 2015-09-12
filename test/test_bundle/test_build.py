@@ -70,13 +70,16 @@ class Test(TestBase):
         self.assertEquals('new', b.state)
         b.ingest()
 
-        return
+        self.assertEquals(1, len(b.source_tables))
 
         self.assertTrue(b.schema())
+
+        self.assertEquals(1, len(b.source_tables))
+
         self.assertTrue(b.build())
 
         for p in b.partitions:
-            print p.name
+
             self.assertIn(int(p.identity.time), p.time_coverage)
 
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
@@ -94,8 +97,6 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
 
-        print p.datafile.reader.info
-
         self.assertEquals(6000, sum(1 for row in p.datafile.reader))
 
         self.assertEquals(48, len(b.dataset.stats))
@@ -108,4 +109,12 @@ class Test(TestBase):
         b = self.setup_bundle('complete-load')
         b.sync_in()
         b = b.cast_to_subclass()
-        b.ingest()
+        b.run()
+
+    def test_generators(self):
+        """Build the complete-load"""
+
+        b = self.setup_bundle('generators')
+        b.sync_in()
+        b = b.cast_to_subclass()
+        b.run()

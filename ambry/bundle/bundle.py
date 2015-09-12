@@ -597,7 +597,7 @@ class Bundle(object):
     #
     # Do All; Run the full process
 
-    def run(self):
+    def run(self,sources = None, force = False, clean = False):
 
         if self.is_finalized:
             self.error("Can't run; bundle is finalized")
@@ -605,11 +605,15 @@ class Bundle(object):
 
         self.sync_in()
 
-        if not self.ingest():
-            self.error('Run: failed to meta')
+        if not self.ingest(sources = sources, force = force, clean = clean):
+            self.error('Run: failed to ingest')
             return False
 
-        if not self.build():
+        if not self.schema():
+            self.error('Run: failed to build schema')
+            return False
+
+        if not self.build(sources=sources, force = force):
             self.error('Run: failed to build')
             return False
 
@@ -810,11 +814,13 @@ class Bundle(object):
                                                  (source.spec.name,) + source.datafile.report_progress()), 3):
                 source.datafile.load_rows(s, s.spec)
 
-            source.update_table() # Generate the source tables.
-
-            source.update_spec() # Update header_lines, start_line, etc.
-
         self.commit()
+
+        # Do these updates, even if we skipped ingestion, so that the source tables will be generates if they
+        # had been cleaned from the database, but the ingested files still exists.
+        for i, source in enumerate(sources):
+            source.update_table()  # Generate the source tables.
+            source.update_spec()  # Update header_lines, start_line, etc.
 
         return True
 
