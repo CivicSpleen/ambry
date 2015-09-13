@@ -6,6 +6,7 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
+from functools import wraps
 
 def import_valuetype(name):
     import importlib
@@ -17,7 +18,7 @@ def import_valuetype(name):
     return cls
 
 def python_type(name):
-    return import_valuetype(name).__pythontype
+    return import_valuetype(name)._pythontype
 
 
 class ValueType(object):
@@ -38,21 +39,21 @@ class ValueType(object):
 
 class StrValue(str,ValueType):
 
-    __pythontype = str
+    _pythontype = str
 
     def __new__(cls, v):
         o = super(StrValue, cls).__new__(cls, cls.parse(v))
         return o
 
 class IntValue(int,ValueType):
-    __pythontype = int
+    _pythontype = int
 
     def __new__(cls, v):
         o = super(IntValue, cls).__new__(cls, cls.parse(v))
         return o
 
 class FloatValue(float,ValueType):
-    __pythontype = float
+    _pythontype = float
 
     def __new__(cls, v):
         o = super(FloatValue, cls).__new__(cls, cls.parse(v))
@@ -61,3 +62,9 @@ class FloatValue(float,ValueType):
 
 class RegEx(StrValue):
     pass
+
+from decorator import decorator, dispatch_on
+
+@decorator
+def valuetype(func, *args, **kw):
+    return func(*args, **kw)

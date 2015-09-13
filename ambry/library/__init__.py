@@ -232,7 +232,6 @@ class Library(object):
             except NotFoundError:
                 ds = None
 
-
         if not ds:
             raise NotFoundError('Failed to find dataset for ref: {}'.format(ref))
 

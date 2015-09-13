@@ -42,30 +42,49 @@ class County(IntValue):
         Map the FIPS codes of state and county to the county name
         :return:
         """
-        if not County._county_map:
 
-            # FIXME. These hard-coded values should not be here, but I'm not sure where to put them. There
-            # should probably be a central config area for partition names, or require that they be specified in the
-            # dependencies.
-            counties = self.library.partition('census.gov-acs-geofile-2009-geofile50-20095-50')
-            states = self.library.partition('census.gov-acs-geofile-2009-geofile40-20095-40')
+        from ambry.orm.exc import NotFoundError
 
-            state_names = {}
-            for row in states.stream(as_dict=True):
-                if row['component'] == '00':
-                    state_names[row['state']] = row['name'].strip()
+        if County._county_map is None:
 
-                    County._county_map = {}
+            try:
+                # FIXME. These hard-coded values should not be here, but I'm not sure where to put them. There
+                # should probably be a central config area for partition names, or require that they be specified in the
+                # dependencies.
+                counties = self.library.partition('census.gov-acs-geofile-2009-geofile50-20095-50')
+                states = self.library.partition('census.gov-acs-geofile-2009-geofile40-20095-40')
 
-            for row in counties.stream(as_dict=True):
-                name = row['name'].replace(', ' + state_names[row['state']], '')
-                first, last = name[:name.rindex(' ')], name[name.rindex(' '):]
+                state_names = {}
+                for row in states.stream(as_dict=True):
+                    if row['component'] == '00':
+                        state_names[row['state']] = row['name'].strip()
 
-                if first.strip().endswith('Census'): # Last bit should be "Census Area"
-                    first, lastm1 = first[:first.rindex(' ')], first[first.rindex(' '):]
-                    last = lastm1+' '+last
+                        County._county_map = {}
 
-                County._county_map[(row['state'], row['county'])] = (name.strip(), first.strip(), last.strip())
+                for row in counties.stream(as_dict=True):
+                    name = row['name'].replace(', ' + state_names[row['state']], '')
+                    first, last = name[:name.rindex(' ')], name[name.rindex(' '):]
+
+                    if first.strip().endswith('Census'): # Last bit should be "Census Area"
+                        first, lastm1 = first[:first.rindex(' ')], first[first.rindex(' '):]
+                        last = lastm1+' '+last
+
+                    County._county_map[(row['state'], row['county'])] = (name.strip(), first.strip(), last.strip())
+            except NotFoundError as e:
+                self.library.logger.error("Failed to get partition; County map will return inputs; {}".format(e))
+
+                from collections import MutableMapping
+
+                class keymap(MutableMapping):
+                    def __getitem__(self, key):return ["No County Map; {}".format(key)]*3
+                    def __setitem__(self, key, value): pass
+                    def __delitem__(self, key): pass
+                    def __iter__(self): return iter([])
+                    def __len__(self): return 0
+
+                County._county_map =  keymap()
+
+
 
         return County._county_map
 
@@ -109,7 +128,7 @@ class County(IntValue):
 
     @property
     def name(self):
-        """Return the name of the county"""
+        """Name of the county"""
 
         return self.county_map[(self.state, int(self))]
 

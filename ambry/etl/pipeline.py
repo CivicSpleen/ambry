@@ -178,7 +178,8 @@ class DatafileSourcePipe(Pipe):
 
         self._datafile = source.datafile
         # file_name is for the pipeline logger, to generate a file
-        self.file_name = self.path = self._datafile.path
+        self.file_name = source.name
+        self.path = self._datafile.path
 
     def __iter__(self):
 

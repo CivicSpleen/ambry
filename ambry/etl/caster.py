@@ -165,6 +165,7 @@ class CasterPipe(Pipe):
         self.error_accumulator = None
 
         self.transform_code = ''
+        self.col_code = []
 
     def add_to_env(self, t, name=None):
         if not name:
@@ -173,7 +174,6 @@ class CasterPipe(Pipe):
 
     def cast_error(self, type_, name, v, e):
         self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
-
 
     def get_caster_f(self, name):
 
@@ -213,13 +213,8 @@ class CasterPipe(Pipe):
 
         return localvars
 
-    def compile(self, header, func_names):
 
-        inner_code = ','.join(["{}(row, row[{}])".format(f_name, index) if index else "None"
-                               for (f_name, index) in func_names])
-        self.transform_code = "lambda row: [{}] ".format(inner_code)
 
-        self.row_processor = eval(self.transform_code, self.env())
 
     def process_header(self, header):
 
@@ -234,7 +229,7 @@ class CasterPipe(Pipe):
         env = {}
         row_parts = []
 
-        col_code = {} #  FIXME, This is just for debugging
+        col_code = [None]*len(self.table.columns)
 
         # Create an entry in the row processor function for each output column in the schema.
         for i,c in enumerate(self.table.columns):
@@ -247,7 +242,7 @@ class CasterPipe(Pipe):
                 # There is no source column, so insert a None. Maybe this should be an error.
                 env[f_name] = lambda row, v, caster=self, i=i, header=c.name: None
 
-                col_code[f_name]  = "lambda row, v, caster=self, i=i, header=c.name: None"
+                col_code[i]  = (c.name,"None")
 
             elif c.caster:
                 # Regular casters, from the "caster" column of the schema
@@ -255,7 +250,7 @@ class CasterPipe(Pipe):
                 self.add_to_env(caster_f)
                 env[f_name] = lambda row, v, caster=self, i=i, header=c.name: caster_f(v)
 
-                col_code[f_name] = "lambda row, v, caster=self, i=i, header=c.name: caster_f(v)"
+                col_code[i] = (c.name,c.caster)
 
             elif type_f.__name__ == c.datatype:
                 # Plain python type
@@ -263,8 +258,7 @@ class CasterPipe(Pipe):
                 env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: parse_{}(caster, header, v)"
                                    .format(type_f.__name__), self.env(i=i, header=c.name))
 
-                col_code[f_name] = ("lambda row, v, caster=self, i=i, header=c.name: parse_{}(caster, header, v)"
-                                    .format(type_f.__name__) )
+                col_code[i] = (c.name, "parse_{}(caster, header, v)".format(type_f.__name__) )
 
             else:
                 # Special valuetype, not a normal python type
@@ -273,8 +267,7 @@ class CasterPipe(Pipe):
                 env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: parse_type({},caster, header, v)"
                         .format(vt_name), self.env(i=i, header=c.name))
 
-                col_code[f_name] = ("lambda row, v, caster=self, i=i, header=c.name: parse_type({},caster, header, v)"
-                        .format(c.datatype.replace('.','_')))
+                col_code[i] = (c.name, "parse_type({},caster, header, v)".format(c.datatype.replace('.','_')))
 
             self.add_to_env(env[f_name], f_name)
 
@@ -285,8 +278,14 @@ class CasterPipe(Pipe):
 
             row_parts.append((f_name, header_index))
 
-        self.compile(header, row_parts)
+        self.col_code = col_code
 
+        inner_code = ','.join(["{}(row, row[{}])".format(f_name, index) if index != None else "None"
+                               for (f_name, index) in row_parts])
+
+        self.transform_code = "lambda row: [{}] ".format(inner_code)
+
+        self.row_processor = eval(self.transform_code, self.env())
 
         # Return the table header, rather than the original row header.
         self.new_header =  [ c.name for c in self.table.columns ]
@@ -328,5 +327,7 @@ class CasterPipe(Pipe):
     def __str__(self):
         from ambry.util import qualified_class_name
 
+        col_codes = '\n'.join( '  {:2d} {:15s}: {}'.format(i,col, e) for i, (col,e) in enumerate(self.col_code))
+
         return (qualified_class_name(self) + "\n" +
-                self.indent + "Code: "+ self.transform_code + "\n")
+                self.indent + "Code: "+ self.transform_code + "\n" +col_codes)

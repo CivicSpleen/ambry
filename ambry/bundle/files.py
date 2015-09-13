@@ -618,7 +618,8 @@ class SchemaFile(RowBuildSourceFile):
                 measure=row.get('measure'),
                 caster=row.get('caster'),
                 units=row.get('units', None),
-                universe=row.get('universe'))
+                universe=row.get('universe'),
+                update_existing= True)
 
         return warnings, errors
 

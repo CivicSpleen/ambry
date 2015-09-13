@@ -16,7 +16,7 @@ from sqlalchemy.engine import RowProxy
 class Geoid(object):
     """Two letter state Abbreviation. May be uppercase or lower case. """
 
-    __pythontype = str
+    _pythontype = str
     parser = None
 
     geoid = None

@@ -9,6 +9,17 @@ from ambry.bundle import Bundle
 
 class Test(TestBase):
 
+    def setup_temp_dir(self):
+        import os
+        import shutil
+        build_url = '/tmp/ambry-build-test'
+        if not os.path.exists(build_url):
+            os.makedirs(build_url)
+        shutil.rmtree(build_url)
+        os.makedirs(build_url)
+
+        return build_url
+
     def test_build_all(self):
         from test import bundles
         import os
@@ -22,8 +33,11 @@ class Test(TestBase):
 
         l = new_library(rc)
 
-        source_dir = fsopendir('temp://')
+        # Where we get the source files from
         base_dir = fsopendir(join(dirname(bundles.__file__), 'example.com'))
+
+        # where we copy the source files.
+        source_dir = fsopendir(self.setup_temp_dir())
 
         for f in base_dir.walkfiles():
             source_dir.makedir(os.path.dirname(f), recursive = True, allow_recreate=True)
@@ -43,7 +57,11 @@ class Test(TestBase):
             except NotFoundError:
                 b = l.new_from_bundle_config(config)
 
-            b.set_file_system(source_url=os.path.dirname(source_dir.getsyspath(f)))
+            source_url = os.path.dirname(source_dir.getsyspath(f))
+            build_url = os.path.join(source_url, 'build')
+            os.makedirs(build_url)
+
+            b.set_file_system(source_url=source_url, build_url=build_url)
 
             b.sync()
 

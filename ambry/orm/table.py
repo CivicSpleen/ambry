@@ -110,8 +110,14 @@ class Table(Base, DictableMixin):
         raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
 
 
-    def add_column(self, name, **kwargs):
-        """Add a column to the table, or update an existing one."""
+    def add_column(self, name, update_existing = False, **kwargs):
+        """
+        Add a column to the table, or update an existing one.
+        :param name: Name of the new or existing column.
+        :param update_existing: If True, alter existing column values. Defaults to False
+        :param kwargs: Other arguments for the the Column() constructor
+        :return: a Column object
+        """
         from . import next_sequence_id
         from sqlalchemy.orm import object_session
         from ..identity import ColumnNumber
@@ -119,6 +125,10 @@ class Table(Base, DictableMixin):
         try:
             c = self.column(name)
             extant = True
+
+            if not update_existing:
+                return c
+
         except NotFoundError:
 
             sequence_id = next_sequence_id(object_session(self), self._column_sequence, self.vid, Column)
@@ -136,11 +146,6 @@ class Table(Base, DictableMixin):
         for key, value in list(kwargs.items()):
 
             if key[0] != '_' and key not in ['t_vid', 'name',  'sequence_id', 'data']:
-
-                # Don't overwrite a description with a null value. Of course, that makes it hard
-                # to delete the value.
-                if key == 'description' and bool(c.description) and not bool(value):
-                    continue
 
                 try:
                     setattr(c, key, value)

@@ -830,10 +830,9 @@ class Bundle(object):
         from operator import attrgetter
 
         # Group the sources by the destination table name
-        keyfunc = attrgetter('dest_table_name')
-        for table_name, sources in groupby(sorted(self.sources, key=keyfunc), keyfunc):
+        keyfunc = attrgetter('dest_table')
+        for t, sources in groupby(sorted(self.sources, key=keyfunc), keyfunc):
 
-            t = self.new_table( table_name )
 
             # Get all of the header names, for each source, associating the header position in the table
             # with the header, then sort on the postition. This will produce a stream of header names
@@ -843,7 +842,8 @@ class Bundle(object):
                              for i, col in enumerate(source.source_table.columns) ]))
 
             for pos, name, datatype, desc in headers:
-                  t.add_column(name=name, datatype=datatype, description=desc)
+
+                t.add_column(name=name, datatype=datatype, description=desc)
 
         self.commit()
         return True

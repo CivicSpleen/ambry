@@ -33,8 +33,3 @@ pipelines:
     build:
         cast:
         - +AddDerived
-    source:
-        last:
-        - +PrintRows(print_at='end')
-        source:
-        - +PrintRows(print_at='end')

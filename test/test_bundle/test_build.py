@@ -5,21 +5,26 @@ import unittest
 from boto.exception import S3ResponseError
 
 from test.test_base import TestBase
+import shutil
+import os
 
 
 class Test(TestBase):
 
-    def test_simple_build(self):
-        """Just check that it doesn't throw an exception"""
-        from ambry.orm.database import Database
-        import shutil
-        import os
-
-        build_url = '/tmp/simple'
+    def setup_temp_dir(self):
+        build_url = '/tmp/ambry-build-test'
+        if not os.path.exists(build_url):
+            os.makedirs(build_url)
         shutil.rmtree(build_url)
         os.makedirs(build_url)
 
-        b = self.setup_bundle('simple', build_url = build_url)
+        return build_url
+
+    def test_simple_build(self):
+        """Just check that it doesn't throw an exception"""
+        from ambry.orm.database import Database
+
+        b = self.setup_bundle('simple', build_url=self.setup_temp_dir())
         l = b._library
         b.sync_in()
 
@@ -52,13 +57,12 @@ class Test(TestBase):
             if type(v) != unicode:  # It gets reported as string
                 self.assertEquals(type(v), c.python_type)
 
-
     def test_complete_build(self):
         """Build the simple bundle"""
 
         from geoid import civick, census
 
-        b = self.setup_bundle('complete-build')
+        b = self.setup_bundle('complete-build', build_url=self.setup_temp_dir())
         b.sync_in()
         b = b.cast_to_subclass()
 
@@ -106,7 +110,21 @@ class Test(TestBase):
     def test_complete_load(self):
         """Build the complete-load"""
 
-        b = self.setup_bundle('complete-load')
+        b = self.setup_bundle('complete-load', build_url=self.setup_temp_dir())
+        b.sync_in()
+        b = b.cast_to_subclass()
+        b.run()
+
+    def test_dimensions(self):
+        """Build the complete-load"""
+
+        build_url = '/tmp/ambry-build-test'
+        if not os.path.exists(build_url):
+            os.makedirs(build_url)
+        shutil.rmtree(build_url)
+        os.makedirs(build_url)
+
+        b = self.setup_bundle('dimensions', build_url=self.setup_temp_dir())
         b.sync_in()
         b = b.cast_to_subclass()
         b.run()
@@ -114,7 +132,23 @@ class Test(TestBase):
     def test_generators(self):
         """Build the complete-load"""
 
-        b = self.setup_bundle('generators')
+        build_url = '/tmp/ambry-build-test'
+        if not os.path.exists(build_url):
+            os.makedirs(build_url)
+        shutil.rmtree(build_url)
+        os.makedirs(build_url)
+
+        b = self.setup_bundle('generators', build_url=self.setup_temp_dir())
+        b.sync_in()
+        b = b.cast_to_subclass()
+        b.run()
+
+    def test_complete_ref(self):
+        """Build the complete-load"""
+
+        d =self.setup_temp_dir()
+
+        b = self.setup_bundle('complete-ref', build_url=d, source_url = d)
         b.sync_in()
         b = b.cast_to_subclass()
         b.run()

@@ -333,7 +333,7 @@ class Partition(Base, DictableMixin):
 
         with self.datafile.writer as w:
             w.set_schema(
-                [ dict(pos = c.sequence_id, name = c.name, description = c.description, type = c.datatype)
+                [ dict(pos = c.sequence_id, name = c.name, description = c.description, type = c.python_type.__name__)
                   for c in self.table.columns]
             )
 
