@@ -303,9 +303,7 @@ def library_get(args, l, config):
     b = l.get(
         args.term,
         force=args.force,
-        cb=Progressor(
-            'Download {}'.format(
-                args.term)).progress)
+        cb=Progressor('Download {}'.format(args.term)).progress)
 
     if not b:
         fatal("Download failed: {}", args.term)

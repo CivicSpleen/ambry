@@ -9,11 +9,9 @@ from __future__ import unicode_literals
 from collections import OrderedDict, defaultdict, Mapping, deque, MutableMapping, Callable
 from functools import partial, reduce, wraps
 import json
-from heapq import nsmallest
 import hashlib
-from operator import itemgetter
 import logging
-import math
+
 import os
 import pprint
 import re
@@ -28,7 +26,7 @@ from bs4 import BeautifulSoup
 
 from six.moves import filterfalse, xrange
 from six import iteritems, iterkeys, itervalues, _print, StringIO
-from six.moves import builtins
+
 from six.moves.urllib.parse import urlparse, urlsplit, urlunsplit
 from six.moves.urllib.request import urlopen
 
@@ -71,18 +69,7 @@ def get_logger(name, file_name=None, stream=None, template=None, propagate=False
     return logger
 
 
-def rm_rf(d):
-    """Recursively delete a directory."""
 
-    if not os.path.exists(d):
-        return
-
-    for path in (os.path.join(d, f) for f in os.listdir(d)):
-        if os.path.isdir(path):
-            rm_rf(path)
-        else:
-            os.unlink(path)
-    os.rmdir(d)
 
 # From https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
 
@@ -225,92 +212,6 @@ def lru_cache(maxsize=128, maxtime=60):
 
     return decorating_function
 
-
-def lfu_cache(maxsize=100):
-    '''Least-frequenty-used cache decorator.
-
-    Arguments to the cached function must be hashable.
-    Cache performance statistics stored in f.hits and f.misses.
-    Clear the cache with f.clear().
-    http://en.wikipedia.org/wiki/Least_Frequently_Used
-
-    '''
-
-    def decorating_function(user_function):
-        cache = {}  # mapping of args to results
-        use_count = Counter()  # times each key has been accessed
-        kwd_mark = object()  # separate positional and keyword args
-
-        @wraps(user_function)
-        def wrapper(*args, **kwds):
-            key = args
-            if kwds:
-                key += (kwd_mark,) + tuple(sorted(kwds.items()))
-            use_count[key] += 1
-
-            # get cache entry or compute if not found
-            try:
-                result = cache[key]
-                wrapper.hits += 1
-            except KeyError:
-                result = user_function(*args, **kwds)
-                cache[key] = result
-                wrapper.misses += 1
-
-                # purge least frequently used cache entry
-                if len(cache) > maxsize:
-                    for key, _ in nsmallest(maxsize // 10, iteritems(use_count), key=itemgetter(1)):
-                        del cache[key], use_count[key]
-
-            return result
-
-        def clear():
-            cache.clear()
-            use_count.clear()
-            wrapper.hits = wrapper.misses = 0
-
-        wrapper.hits = wrapper.misses = 0
-        wrapper.clear = clear
-        return wrapper
-
-    return decorating_function
-
-
-def patch_file_open():
-    """A Monkey patch to log opening and closing of files, which is useful for
-    debugging file descriptor exhaustion."""
-
-    openfiles = set()
-    oldfile = builtins.file
-
-    class newfile(oldfile):
-        def __init__(self, *args, **kwargs):
-            self.x = args[0]
-
-            all_fds = count_open_fds()
-
-            print('### {} OPENING {} ( {} total )###'.format(
-                len(openfiles), str(self.x), all_fds))
-            oldfile.__init__(self, *args, **kwargs)
-
-            openfiles.add(self)
-
-        def close(self):
-            print('### {} CLOSING {} ###'.format(len(openfiles), str(self.x)))
-            oldfile.close(self)
-            openfiles.remove(self)
-
-    def newopen(*args, **kwargs):
-        return newfile(*args, **kwargs)
-
-    builtins.file = newfile
-    builtins.open = newopen
-
-
-# patch_file_open()
-
-# From
-# http://stackoverflow.com/questions/528281/how-can-i-include-an-yaml-file-inside-another
 
 
 class YamlIncludeLoader(yaml.Loader):
@@ -722,24 +623,6 @@ def toposort(data):
 # end of http://code.activestate.com/recipes/578272/ }}}
 
 
-def chunks(l, n):
-    """ Yield successive n-sized chunks from l.
-    """
-    for i in xrange(0, len(l), n):
-        yield l[i:i + n]
-
-
-def zip_dir(dir, file_):
-    import zipfile
-    import glob
-
-    with zipfile.ZipFile(file_, 'w') as zf:
-        g = os.path.join(dir, '*')
-        for f in glob.glob(g):
-            zf.write(f)
-    return dir
-
-
 def md5_for_stream(f, block_size=2 ** 20):
 
     md5 = hashlib.md5()
@@ -763,17 +646,7 @@ def md5_for_file(f, block_size=2 ** 20):
         # Guess that f is a FLO.
         f.seek(0)
 
-        while True:
-            data = f.read(block_size)
-            if not data:
-                break
-
-            if isinstance(data, unicode):
-                # HACK! This part seems wrong, but it seems to work
-                data = data.encode('utf8')
-
-            md5.update(data)
-        return md5.hexdigest()
+        return md5_for_stream(f, block_size=block_size)
 
     except AttributeError:
         # Nope, not a FLO. Maybe string?
@@ -783,19 +656,9 @@ def md5_for_file(f, block_size=2 ** 20):
             return md5_for_file(f, block_size)
 
 
-def rd(v, n=100.0):
-    """Round down, to the nearest even 100."""
-    n = float(n)
-    return math.floor(v / n) * int(n)
 
 
-def ru(v, n=100.0):
-    """Round up, to the nearest even 100."""
-    n = float(n)
-    return math.ceil(v / n) * int(n)
-
-
-def make_acro(past, prefix, s):
+def make_acro(past, prefix, s):  # pragma: no cover
     """Create a three letter acronym from the input string s.
 
     Args:
@@ -902,21 +765,7 @@ def temp_file_name():
         return os.path.join(tmp_dir, str(uuid.uuid4()))
 
 
-# http://stackoverflow.com/questions/296499/how-do-i-zip-the-contents-of-a-folder-using-python-version-2-5
-def zipdir(basedir, archivename):
-    from contextlib import closing
-    from zipfile import ZipFile, ZIP_DEFLATED
 
-    assert os.path.isdir(basedir)
-
-    with closing(ZipFile(archivename, "w", ZIP_DEFLATED)) as z:
-        for root, dirs, files in os.walk(basedir):
-
-            # NOTE: ignore empty directories
-            for fn in files:
-                absfn = os.path.join(root, fn)
-                zfn = absfn[len(basedir) + len(os.sep):]  # XXX: relative path
-                z.write(absfn, zfn)
 
 
 def walk_dict(d):
@@ -1014,84 +863,6 @@ def _log_rate(output_f, d, message=None):
     d[2] -= 1
 
 
-def daemonize(f, args, rc, prog_name='ambry'):
-    """Run a process as a daemon."""
-    # import daemon #@UnresolvedImport
-    import lockfile  # @UnresolvedImport
-    # import setproctitle #@UnresolvedImport
-    import sys
-    import grp
-    import pwd
-    import logging
-
-    if args.kill:
-        # Not portable, but works in most of our environments.
-        print('Killing ... ')
-        os.system("pkill -f '{}'".format(prog_name))
-        return
-
-    lib_dir = '/var/lib/' + prog_name
-    run_dir = '/var/run/' + prog_name
-    log_dir = '/var/log/' + prog_name
-    log_file = os.path.join(log_dir, prog_name + '.stdout')
-
-    logger = get_logger(prog_name, log_file)
-    logger.setLevel(logging.DEBUG)
-
-    lock_file_path = os.path.join(run_dir, prog_name + '.pid')
-    pid_file = lockfile.FileLock(lock_file_path)
-
-    if pid_file.is_locked():
-        if args.unlock:
-            pid_file.break_lock()
-        else:
-            logger.error('Lockfile is locked: {}'.format(lock_file_path))
-            sys.stderr.write(
-                'ERROR: Lockfile is locked: {}\n'.format(lock_file_path))
-            sys.exit(1)
-
-    for dir in [run_dir, lib_dir, log_dir]:
-        if not os.path.exists(dir):
-            os.makedirs(dir)
-
-    gid = grp.getgrnam(
-        args.group).gr_gid if args.group is not None else os.getgid()
-    uid = pwd.getpwnam(
-        args.user).pw_uid if args.user is not None else os.getuid()
-
-    class DaemonContext():  # daemon.DaemonContext):
-
-        def __exit__(self, exc_type, exc_value, exc_traceback):
-            logger.info('Exiting')
-
-            super(
-                DaemonContext,
-                self).__exit__(
-                exc_type,
-                exc_value,
-                exc_traceback)
-
-    context = DaemonContext(
-        detach_process=False,
-        working_directory=lib_dir,
-        umask=0o002,
-        pidfile=pid_file,
-        gid=gid,
-        uid=uid,
-        files_preserve=[logger._stream]
-    )
-
-    os.chown(log_file, uid, gid)
-    os.chown(lib_dir, uid, gid)
-    os.chown(run_dir, uid, gid)
-    os.chown(log_dir, uid, gid)
-
-    # setproctitle.setproctitle(prog_name)
-
-    with context:
-        f(prog_name, args, rc, logger)
-
-
 class Progressor(object):
     """Progress reporter suitable for calling in Library.get()
 
@@ -1159,38 +930,6 @@ class Constant:
         if name in self.__dict__:
             raise self.ConstError("Can't rebind const(%s)" % name)
         self.__dict__[name] = value
-
-
-class session_context(object):
-    """Provide a transactional scope around a series of Sqlalchemy
-    operations."""
-
-    def __init__(self, sessionmaker_class):
-        self.sessionmaker_class = sessionmaker_class
-        self.session = None
-
-    def __enter__(self):
-        self.session = self.sessionmaker_class()
-
-        return self.session
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-
-        if exc_type is not None:
-            # Got an exception
-            self.session.rollback()
-            self.session.close()
-            return False
-        else:
-
-            try:
-                self.session.commit()
-                return True
-            except:
-                self.session.rollback()
-                raise
-            finally:
-                self.session.close()
 
 
 def count_open_fds():
@@ -1399,31 +1138,3 @@ def scrape_urls_from_web_page(page_url):
 
     return d
 
-
-def trace(fn):
-    """ Prints parameteters and return values of the each call of the wrapped function.
-
-    Usage:
-        decorate appropriate function or method:
-            @trace
-            def myf():
-                ...
-    """
-    def wrapped(*args, **kwargs):
-        msg = []
-        msg.append('Enter {}('.format(fn.__name__))
-
-        if args:
-            msg.append(', '.join([str(x) for x in args]))
-
-        if kwargs:
-            kwargs_str = ', '.join(['{}={}'.format(k, v) for k, v in list(kwargs.items())])
-            if args:
-                msg.append(', ')
-            msg.append(kwargs_str)
-        msg.append(')')
-        print(''.join(msg))
-        ret = fn(*args, **kwargs)
-        print('Return {}'.format(ret))
-        return ret
-    return wrapped

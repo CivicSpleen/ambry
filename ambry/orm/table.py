@@ -172,68 +172,7 @@ class Table(Base, DictableMixin):
                         description=self.description if not description else description)
 
 
-    def get_fixed_regex(self):
-        """Using the size values for the columns for the table, construct a
-        regular expression to  parsing a fixed width file."""
-        import re
 
-        pos = 0
-        regex = ''
-        header = []
-
-        for col in self.columns:
-
-            size = col.width if col.width else col.size
-
-            if not size:
-                continue
-
-            pos += size
-
-            regex += "(.{{{}}})".format(size)
-            header.append(col.name)
-
-        return header, re.compile(regex), regex
-
-    def get_fixed_unpack(self):
-        """Using the size values for the columns for the table, construct a
-        regular expression to  parsing a fixed width file."""
-        from functools import partial
-        import struct
-        unpack_str = ''
-        header = []
-        length = 0
-
-        for col in self.columns:
-
-            size = col.width
-
-            if not size:
-                continue
-
-            length += size
-
-            unpack_str += "{}s".format(size)
-
-            header.append(col.name)
-
-        return partial(struct.unpack, unpack_str), header, unpack_str, length
-
-    def get_fixed_colspec(self):
-        """Return the column specification suitable for use in  the Panads
-        read_fwf function.
-
-        This will ignore any columns that don't have one or both of the
-        start and width values
-
-        """
-
-        # Warning! Assuming th start values are sorted. Really should check.
-
-        return (
-            [c.name for c in self.columns if c.start and c.width],
-            [(c.start, c.start + c.width) for c in self.columns if c.start and c.width]
-        )
 
     @property
     def null_dict(self):
@@ -262,18 +201,7 @@ class Table(Base, DictableMixin):
 
         return [c.name for c in self.columns]
 
-    @property
-    def caster(self):
-        """Returns a function that takes a row that can be indexed by positions
-        which returns a new row with all of the values cast to schema types."""
-        from ambry.etl.transform import CasterTransformBuilder
 
-        bdr = CasterTransformBuilder()
-
-        for c in self.columns:
-            bdr.append(c.name, c.python_type)
-
-        return bdr
 
     @property
     def dict(self):

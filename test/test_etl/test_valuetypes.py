@@ -2,9 +2,6 @@
 import os
 import unittest
 
-import xlrd
-
-from ambry.etl.intuit import RowIntuiter
 
 class Test(unittest.TestCase):
 

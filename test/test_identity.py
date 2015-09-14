@@ -172,7 +172,7 @@ class Test(TestBase):
                                   **name.dict
                                   )
 
-        self.assertEquals('source.com/dataset-variation-0.0.1/table/time-space/grain-segment', part_name.path)
+        self.assertEquals('source.com/dataset-variation-0.0.1/format/table/time-space/grain-segment', part_name.path)
 
         part_name = PartitionName(time='time',
                                   space='space',
@@ -191,7 +191,7 @@ class Test(TestBase):
                                   **name.dict
                                   )
 
-        self.assertEquals('source.com/dataset-variation-0.0.1/time-space', part_name.path)
+        self.assertEquals('source.com/dataset-variation-0.0.1/format/time-space', part_name.path)
 
         # Cloning
 
@@ -260,8 +260,8 @@ class Test(TestBase):
         self.assertEquals('source.com-foobar-orig-time-space-geo', str(ident.name))
         self.assertEquals('source.com-foobar-orig-time-space-geo-0.0.1', ident.vname)
         self.assertEquals('source.com-foobar-orig-time-space-geo-0.0.1~p002Bi084001', ident.fqname)
-        self.assertEquals('source.com/foobar-orig-0.0.1/time-space', ident.path)
-        self.assertEquals('source.com/foobar-orig-0.0.1/time-space', ident.cache_key)
+        self.assertEquals('source.com/foobar-orig-0.0.1/geo/time-space', ident.path)
+        self.assertEquals('source.com/foobar-orig-0.0.1/geo/time-space', ident.cache_key)
 
         # Updating partition names that were partially specified
 

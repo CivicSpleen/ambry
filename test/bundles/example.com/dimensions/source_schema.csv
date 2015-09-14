@@ -1,0 +1,6 @@
+table,position,source_header,dest_header,datatype,valuetype,start,width,size,summary,description
+counties,0,id,id,int,,,,,,
+counties,1,state,state,int,,,,,,
+counties,2,county,county,int,,,,,,
+counties,3,geoid,geoid,str,,,,,,
+counties,4,name,name,str,,,,,,

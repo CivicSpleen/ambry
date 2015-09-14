@@ -20,7 +20,6 @@ import requests
 import semantic_version as sv
 
 from .util import md5_for_file, Constant
-from .util.typecheck import returns  # , accepts
 
 
 class NotObjectNumberError(ValueError):
@@ -122,7 +121,7 @@ class Name(object):
                         k,
                         self.name_parts))
 
-    @returns(str, debug=2)
+
     def _parse_version(self, version):
 
         if version is not None and isinstance(version, string_types):

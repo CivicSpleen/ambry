@@ -11,15 +11,15 @@ Bundles and Partitions can be loaded into Libraries. A Library synchronizes with
 Contents:
 
 .. toctree::
-    :maxdepth: 2
-
-    install
-    configuration
-    overview
-    tutorial/index
+    :maxdepth: 1
+    
+    install_config/install
+    install_config/configuration
+    building_bundles/index
+    about/index
     cli/index
-    library
-
+    warehouse/index   
+    design/index 
 
 Indices and tables
 ==================

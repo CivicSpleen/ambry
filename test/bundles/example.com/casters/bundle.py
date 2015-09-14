@@ -39,12 +39,10 @@ class ExampleSourcePipe(DatafileSourcePipe):
             yield row.values()
 
 
-# Casters can be in the class or in the module.
-
-
 class Bundle(Bundle):
+
     @staticmethod
-    def double(v):
+    def doubleit(v):
         return v * 2
 
     @staticmethod

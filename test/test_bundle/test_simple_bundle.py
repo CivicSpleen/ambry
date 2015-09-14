@@ -267,6 +267,7 @@ class Test(TestBase):
         b = self.setup_bundle('simple', source_url='temp://')
 
         b.sync_in()  # This will sync the files back to the bundle's source dir
+        b.ingest()
 
         def muck_schema_file(source_header, dest_header ):
             """Alter the source_schema file"""
@@ -331,8 +332,7 @@ class Test(TestBase):
 
         b = b.cast_to_subclass()
 
-        self.assertTrue(b.meta())
-        self.assertEquals('schema_done', b.state)
+        b.run()
 
         def edit_pipeline(pl):
             from ambry.etl.pipeline import PrintRows, LogRate
@@ -344,8 +344,6 @@ class Test(TestBase):
 
         b.set_edit_pipeline(edit_pipeline)
 
-        self.assertTrue(b.build())
-
         # Two dataset partitions, one segment, one union
         self.assertEquals(1,len(b.dataset.partitions))
 
@@ -354,12 +352,12 @@ class Test(TestBase):
 
         self.assertEquals(4,len(b.dataset.source_columns))
 
-        self.assertEquals('build_done', b.state)
+        self.assertEquals('finalize_done', b.state)
 
         # Already built can't build again
         self.assertFalse(b.build())
 
-        b.clean()
+        b.clean(force = True)
         self.assertTrue(b.build())
 
         self.assertTrue(b.finalize())

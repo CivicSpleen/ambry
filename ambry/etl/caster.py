@@ -214,8 +214,6 @@ class CasterPipe(Pipe):
         return localvars
 
 
-
-
     def process_header(self, header):
 
         from ambry.etl import RowProxy
@@ -234,7 +232,7 @@ class CasterPipe(Pipe):
         # Create an entry in the row processor function for each output column in the schema.
         for i,c in enumerate(self.table.columns):
 
-            f_name = "f_"+str(i)
+            f_name = "f_"+str(c.name)
 
             type_f = c.valuetype_class
 
@@ -248,7 +246,9 @@ class CasterPipe(Pipe):
                 # Regular casters, from the "caster" column of the schema
                 caster_f = self.get_caster_f(c.caster)
                 self.add_to_env(caster_f)
-                env[f_name] = lambda row, v, caster=self, i=i, header=c.name: caster_f(v)
+
+                env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: {}(v)".format(c.caster),
+                                   self.env(i=i, header=c.name))
 
                 col_code[i] = (c.name,c.caster)
 

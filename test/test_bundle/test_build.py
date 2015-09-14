@@ -152,3 +152,45 @@ class Test(TestBase):
         b.sync_in()
         b = b.cast_to_subclass()
         b.run()
+
+    def test_casters(self):
+        """Build the complete-load"""
+        from ambry.dbexceptions import PhaseError
+
+        d = self.setup_temp_dir()
+
+        b = self.setup_bundle('casters', build_url=d, source_url=d)
+        b.sync_in()
+        b = b.cast_to_subclass()
+
+        try:
+            b.run()
+        except PhaseError as e:  # Gets cast errors, which are converted to codes
+            self.assertEqual(1, len(b.dataset.codes))
+
+        b.commit()
+        b.table('simple').column('keptcodes').caster = 'remove_codes'
+        b.commit()
+
+        b.dataset.codes[:] = []  # Reset the codes, or the next build will think it had errors.
+
+        try:
+            b.build()
+        except Exception as exc:
+            if exc.message == 'unsupported locale setting':
+                raise EnvironmentError('You need to install en_US locale to run that test.')
+            else:
+                raise
+
+        self.assertEquals(1, len(list(b.partitions)))
+
+        mn = mx = 0
+        for row in list(b.partitions)[0].stream():
+            self.assertEqual(row['index'], row['index2'])
+            int(row['numcom'])  # Check that the comma was removed
+            mn, mx = min(mn, row['codes']), max(mx, row['codes'])
+
+        self.assertEqual(-1, mn)  # The '*' should have been turned into a -1
+        self.assertEqual(6, mx)
+
+        self.assertEqual(0, len(b.dataset.codes))

@@ -1089,17 +1089,17 @@ class Bundle(object):
 
     def final_log_pipeline(self, pl):
         """Write a report of the pipeline out to a file """
-
+        from datetime import datetime
         self.build_fs.makedir('pipeline', allow_recreate=True)
         v = """
-Pipeline
-========
+Pipeline {}
+========================================================
 {}
 
 Pipeline Headers
 ================
 {}
-""".format(unicode(pl), pl.headers_report())
+""".format(str(datetime.now()),unicode(pl), pl.headers_report())
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 

@@ -145,9 +145,8 @@ class Pipe(object):
 
             row = self.process_body(row)
 
-            assert len(row) == header_len, (self.headers, row)
-
             if row:
+                assert len(row) == header_len, (self.headers, row)
                 yield row
 
         self.finish()
@@ -801,7 +800,10 @@ class AddDeleteExpand(Pipe):
 
         self.edit_functions = None  # Turn dict lookup into list lookup
 
+        self._row_proxy = None
+
     def process_header(self, row):
+        from ambry_sources import RowProxy
 
         self.edit_functions = [None] * len(row)
 
@@ -854,19 +856,25 @@ class AddDeleteExpand(Pipe):
         self.edit_row = eval(self.edit_row_code)
 
         # Run it!
-        return self.edit_header(row)
+        headers =  self.edit_header(row)
+
+        self._row_proxy = RowProxy(headers)
+
+        return headers
 
     def process_body(self, row):
 
+        rp = self._row_proxy.set_row(row)
+
         try:
-            r1 = self.edit_row(row)
+            r1 = self.edit_row(rp)
         except:
             # Todo, put this into the exception
             print("EDIT ROW CODE", self.edit_row_code)
             raise
 
         try:
-            r2 = self.expand_row(row)
+            r2 = self.expand_row(rp)
         except:
             # FIXME: put this into the exception
             print("EXPAND ROW CODE: ", self.expand_row_code)
@@ -1116,7 +1124,7 @@ class PrintRows(Pipe):
 
         if self.i < self.count:
 
-            append_row = [self.i] + list(row)
+            append_row = list(row)
 
             self.rows.append(append_row[self.offset:self.columns])
 
@@ -1145,7 +1153,8 @@ class PrintRows(Pipe):
 
             return (qualified_class_name(self) +
                     ' {} rows total\n'.format(self.i) +
-                    tabulate(self.rows, headers=aug_header[self.offset:self.columns], tablefmt='pipe'))
+                    tabulate( [[i] + row for i, row in enumerate(self.rows)],
+                             headers=aug_header[self.offset:self.columns], tablefmt='pipe'))
         else:
             return qualified_class_name(self) + ' 0 rows'
 
