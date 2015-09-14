@@ -130,7 +130,7 @@ def root_command(args, rc):
 def root_makemigration(args, l, rc):
     from ambry.orm.database import create_migration_template
     file_name = create_migration_template(args.migration_name)
-    print 'New empty migration created. Now populate {} with appropriate sql.'.format(file_name)
+    print('New empty migration created. Now populate {} with appropriate sql.'.format(file_name))
 
 def root_list(args, l, rc):
     from tabulate import tabulate
@@ -163,17 +163,17 @@ def root_list(args, l, rc):
 
     if args.tab:
         for row in records:
-            print '\t'.join(str(e) for e in row)
+            print('\t'.join(str(e) for e in row))
     elif args.json:
 
         rows = {}
 
         for row in records:
-            rows[row[0]] = dict(zip(header, row))
+            rows[row[0]] = dict(list(zip(header, row)))
 
-        print json.dumps(rows)
+        print(json.dumps(rows))
     else:
-        print tabulate(records, headers=header)
+        print(tabulate(records, headers=header))
 
 
 def root_info(args, l, rc):
@@ -223,15 +223,15 @@ def root_search(args, l, rc):
         return
 
     terms = ' '.join(args.terms)
-    print terms
+    print(terms)
 
     results = l.search.search(terms)
 
     for r in results:
-        print r.vid, r.bundle.metadata.about.title
+        print(r.vid, r.bundle.metadata.about.title)
         for p in r.partition_records:
             if p:
-                print '    ', p.vid, p.vname
+                print('    ', p.vid, p.vname)
 
 def root_doc(args, l, rc):
 
@@ -250,7 +250,7 @@ def root_doc(args, l, rc):
     file_handler.setLevel(logging.WARNING)
     app.logger.addHandler(file_handler)
 
-    print 'Serving documentation for cache: ', cache_dir
+    print('Serving documentation for cache: ', cache_dir)
 
     if not args.debug:
         # Don't open the browser on debugging, or it will re-open on every

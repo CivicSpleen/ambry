@@ -4,6 +4,9 @@ import unittest
 
 from boto.exception import S3ResponseError
 
+from six.moves import zip as six_izip
+from six import u
+
 from test.test_base import TestBase
 
 
@@ -20,34 +23,32 @@ class Test(TestBase):
 
     def test_phases(self):
         """Test copying a bundle to a remote, then streaming it back"""
-        import os
         from ambry.etl import IterSource, MatchPredicate, Reduce
-        from itertools import izip, cycle
+        from itertools import cycle
 
         b = self.setup_bundle('simple')
-        l = b._library
         b.sync_in()
         b.prepare()
 
         # Text a pipeline run outside of the bundle.
         pl = b.pipeline('test')
-        source = lambda: IterSource(izip(range(100), range(100,200), cycle('abcdefg'), cycle([1.1,2.1,3.2,4.3])))
+        source = lambda: IterSource(six_izip(list(range(100)), list(range(100, 200)), cycle('abcdefg'), cycle([1.1, 2.1, 3.2, 4.3])))
         pl.source = source()
         pl.last = [MatchPredicate(lambda r: r[2] == 'g'),
-                   Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )]
+                   Reduce(lambda a, r: (a[0] + r[0], a[1] + r[1]) if a else (r[0], r[1]))]
         pl.run()
-        self.assertEquals((4950, 14950), pl[Reduce].accumulator)
-        self.assertEquals(14,len(pl[MatchPredicate].matches))
+        self.assertEqual((4950, 14950), pl[Reduce].accumulator)
+        self.assertEqual(14, len(pl[MatchPredicate].matches))
 
         # Same pipeline, but with the match and reduce in the configuration.
         pl = b.pipeline('test2')
         pl.source = source()
         pl.run()
-        print pl
-        self.assertEquals((4950, 14950), pl[Reduce].accumulator)
-        self.assertEquals(14, len(pl[MatchPredicate].matches))
+        print(pl)
+        self.assertEqual((4950, 14950), pl[Reduce].accumulator)
+        self.assertEqual(14, len(pl[MatchPredicate].matches))
 
-        print pl
+        print(pl)
 
 
     def test_simple_process(self):
@@ -60,13 +61,15 @@ class Test(TestBase):
 
         b.sync()  # This will sync the files back to the bundle's source dir
 
-        self.assertEquals(7, len(b.dataset.files))
+        self.assertEqual(7, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
-        print file_names
+        print(file_names)
 
-        self.assertEqual([u'bundle.py', u'lib.py', u'documentation.md', u'source_schema.csv',
-                          u'sources.csv', u'bundle.yaml', u'schema.csv'], file_names)
+        expected_names = [
+            u('bundle.py'), u('lib.py'), u('documentation.md'), u('source_schema.csv'),
+            u('sources.csv'), u('bundle.yaml'), u('schema.csv')]
+        self.assertEqual(file_names, expected_names)
 
         self.assertEqual(12, len(b.dataset.configs))
 
@@ -94,7 +97,7 @@ class Test(TestBase):
             with b.source_fs.open('sources.csv', 'rb') as f:
                 rows = list(csv.reader(f))
 
-            self.assertEquals(2, len(rows))
+            self.assertEqual(2, len(rows))
 
             return rows[1][rows[0].index(val)]
 
@@ -103,7 +106,7 @@ class Test(TestBase):
 
             rows = f.unpacked_contents
 
-            self.assertEquals(2, len(rows))
+            self.assertEqual(2, len(rows))
 
             return rows[1][rows[0].index(val)]
 
@@ -117,7 +120,7 @@ class Test(TestBase):
             try:
                 s = list(b.sources)[0]
                 return getattr(s, val)
-            except IndexError: # Sources list is empty
+            except IndexError:  # Sources list is empty
                 return None
 
         def set_preference(p):
@@ -138,32 +141,32 @@ class Test(TestBase):
         time.sleep(2)
         muck_source_file(v1)
 
-        self.assertEquals(v1, source_file())
-        self.assertNotEquals(v1, file_record())
-        self.assertNotEquals(v1, source_object())
+        self.assertEqual(v1, source_file())
+        self.assertNotEqual(v1, file_record())
+        self.assertNotEqual(v1, source_object())
 
         self.assertIn(('sources', 'ftr'), b.sync())
 
-        self.assertEquals(v1,source_file())
-        self.assertEquals(v1,file_record())
-        self.assertNotEquals(v1,source_object())
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v1, file_record())
+        self.assertNotEqual(v1, source_object())
 
         b.sync_in()
 
-        self.assertEquals(v1,source_file())
-        self.assertEquals(v1,file_record())
-        self.assertEquals(v1,source_object())
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v1, file_record())
+        self.assertEqual(v1, source_object())
 
         muck_source_object(v2)
-        self.assertEquals(v1,source_file())
-        self.assertEquals(v1,file_record())
-        self.assertEquals(v2,source_object())
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v1, file_record())
+        self.assertEqual(v2, source_object())
 
         # Should overwrite the object with the file.
         b.sync_in()
-        self.assertEquals(v1,source_file())
-        self.assertEquals(v1,file_record())
-        self.assertEquals(v1,source_object())
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v1, file_record())
+        self.assertEqual(v1, source_object())
 
         # Run meta, alter the source file, then run meta again
         # The file should retain the change.
@@ -172,11 +175,11 @@ class Test(TestBase):
         muck_source_object(v4)
 
         b.sync()
-        time.sleep(1) # Allow modification time to change
+        time.sleep(1)  # Allow modification time to change
         muck_source_file(v1)
         b.sync()
-        self.assertEquals(v1, source_file())
-        self.assertEquals(v1, file_record())
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v1, file_record())
 
         ##################
         # Alter the preference to the OBJECT, should
@@ -187,40 +190,40 @@ class Test(TestBase):
         muck_source_object(v1)
 
         # Check that a reset works
-        self.assertEquals(v1, source_file())
-        self.assertEquals(v1, file_record())
-        self.assertEquals(v1, source_object())
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v1, file_record())
+        self.assertEqual(v1, source_object())
 
         muck_source_object(v2)
-        self.assertEquals(v1,source_file())
-        self.assertEquals(v1,file_record())
-        self.assertEquals(v2,source_object())
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v1, file_record())
+        self.assertEqual(v2, source_object())
 
         # Prepare should move the object to the file record, not the
         # file record to the object
 
         b.sync_objects()
 
-        self.assertEquals(v1,source_file())
-        self.assertEquals(v2,file_record())
-        self.assertEquals(v2,source_object())
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v2, file_record())
+        self.assertEqual(v2, source_object())
 
         ##################
         # Alter the preference
         set_preference(File.PREFERENCE.OBJECT)
         muck_source_file(v1)
-        muck_source_file(v2,val='space')
+        muck_source_file(v2, val='space')
         sync_source_to_record()
         muck_source_object(v1)
         muck_source_object(v2, val='space')
 
         # Check that a reset works
-        self.assertEquals(v1, source_file())
-        self.assertEquals(v1, file_record())
-        self.assertEquals(v1, source_object())
-        self.assertEquals(v2, source_file(val='space'))
-        self.assertEquals(v2, file_record(val='space'))
-        self.assertEquals(v2, source_object(val='space'))
+        self.assertEqual(v1, source_file())
+        self.assertEqual(v1, file_record())
+        self.assertEqual(v1, source_object())
+        self.assertEqual(v2, source_file(val='space'))
+        self.assertEqual(v2, file_record(val='space'))
+        self.assertEqual(v2, source_object(val='space'))
 
         # Actually test the merging
 
@@ -229,13 +232,13 @@ class Test(TestBase):
         sync_source_to_record()
         muck_source_object(v1, val='space')
 
-        self.assertEquals(v3, source_file())
-        self.assertEquals(v3, file_record())
-        self.assertEquals(v1, source_object())
+        self.assertEqual(v3, source_file())
+        self.assertEqual(v3, file_record())
+        self.assertEqual(v1, source_object())
 
-        self.assertEquals(v2, source_file(val='space'))
-        self.assertEquals(v2, file_record(val='space'))
-        self.assertEquals(v1, source_object(val='space'))
+        self.assertEqual(v2, source_file(val='space'))
+        self.assertEqual(v2, file_record(val='space'))
+        self.assertEqual(v1, source_object(val='space'))
 
         # Ths last change happens during the prepare.
         def prepare_main(self):
@@ -250,13 +253,13 @@ class Test(TestBase):
 
         b.sync_objects()
         b.sync()
-        self.assertEquals(v3, source_file())
-        self.assertEquals(v3, file_record())
-        self.assertEquals(v3, source_object()) # pre_prepare carried v3 to object
+        self.assertEqual(v3, source_file())
+        self.assertEqual(v3, file_record())
+        self.assertEqual(v3, source_object())  # pre_prepare carried v3 to object
 
-        self.assertEquals(v2, source_file(val='space')) # source file won't change until sync
-        #self.assertEquals(v4, file_record(val='space')) # TODO This one still fails ...
-        #self.assertEquals(v4, schema_object(val='space'))
+        self.assertEqual(v2, source_file(val='space'))  # source file won't change until sync
+        # self.assertEqual(v4, file_record(val='space')) # TODO This one still fails ...
+        # self.assertEqual(v4, schema_object(val='space'))
 
     def test_schema_update(self):
         """Check that changes to the source schema persist across re-running meta"""
@@ -269,7 +272,7 @@ class Test(TestBase):
         b.sync_in()  # This will sync the files back to the bundle's source dir
         b.ingest()
 
-        def muck_schema_file(source_header, dest_header ):
+        def muck_schema_file(source_header, dest_header):
             """Alter the source_schema file"""
             import csv
 
@@ -294,8 +297,6 @@ class Test(TestBase):
                     return row[3]
 
         def check_schema_record(source_header):
-            import csv
-
             rows = b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents
 
             for row in rows:
@@ -311,17 +312,17 @@ class Test(TestBase):
         b.meta()
         b.sync_out()
         time.sleep(1)
-        muck_schema_file('uuid','value1')
+        muck_schema_file('uuid', 'value1')
 
-        self.assertEquals('value1',check_schema_file('uuid'))
+        self.assertEqual('value1', check_schema_file('uuid'))
 
         b.sync()
 
-        self.assertEquals('value1',check_schema_record('uuid'))
+        self.assertEqual('value1', check_schema_record('uuid'))
 
         b.meta()
 
-        self.assertEquals('value1', check_schema_file('uuid'))
+        self.assertEqual('value1', check_schema_file('uuid'))
 
     def test_edit_pipeline(self):
         """Build the simple bundle"""
@@ -338,19 +339,19 @@ class Test(TestBase):
             from ambry.etl.pipeline import PrintRows, LogRate
 
             def prt(m):
-                print m
+                print(m)
 
             pl.build_last = [PrintRows(print_at='end'), LogRate(prt, 3000, '')]
 
         b.set_edit_pipeline(edit_pipeline)
 
         # Two dataset partitions, one segment, one union
-        self.assertEquals(1,len(b.dataset.partitions))
+        self.assertEqual(1, len(b.dataset.partitions))
 
         # But, only one partition from the bundle, which is the one union partition
-        self.assertEquals(1, len(list(b.partitions)))
+        self.assertEqual(1, len(list(b.partitions)))
 
-        self.assertEquals(4,len(b.dataset.source_columns))
+        self.assertEqual(4, len(b.dataset.source_columns))
 
         self.assertEquals('finalize_done', b.state)
 
@@ -372,7 +373,6 @@ class Test(TestBase):
         from ambry.orm.database import Database
 
         b = self.setup_bundle('simple')
-        l = b._library
 
         b.run()
 
@@ -389,21 +389,19 @@ class Test(TestBase):
             ds1 = b.dataset
             ds2 = db.dataset(ds1.vid)
 
-            print list(ds1.tables)
+            print(list(ds1.tables))
 
-            self.assertEquals(len(ds1.tables), len(ds2.tables))
-            self.assertEquals(len(ds1.tables[0].columns), len(ds2.tables[0].columns))
-            self.assertEquals(len(ds1.partitions), len(ds2.partitions))
-            self.assertEquals(len(ds1.files), len(ds2.files))
-            self.assertEquals(len(ds1.configs), len(ds2.configs))
-            self.assertEquals(len(ds1.stats), len(ds2.stats))
+            self.assertEqual(len(ds1.tables), len(ds2.tables))
+            self.assertEqual(len(ds1.tables[0].columns), len(ds2.tables[0].columns))
+            self.assertEqual(len(ds1.partitions), len(ds2.partitions))
+            self.assertEqual(len(ds1.files), len(ds2.files))
+            self.assertEqual(len(ds1.configs), len(ds2.configs))
+            self.assertEqual(len(ds1.stats), len(ds2.stats))
 
         finally:
             from shutil import rmtree
             rmtree(td)
 
-    # FIXME This test passes when run individually, but fails when run with the other
-    # tests in the class, at least when run in PyCharm.
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
 
@@ -419,7 +417,7 @@ class Test(TestBase):
         p = list(b.partitions)[0]
         p_vid = p.vid
 
-        self.assertEquals(497054, int(sum(row[3] for row in p.stream())))
+        self.assertEqual(497054, int(sum(row[3] for row in p.stream())))
 
         self.assertEqual('build', l.partition(p_vid).location)
 
@@ -444,27 +442,25 @@ class Test(TestBase):
         b = l.bundle(b.identity.vid)
         p = list(b.partitions)[0]
 
-        #self.assertEqual(1, len(list(l.bundles)))
+        # self.assertEqual(1, len(list(l.bundles)))
 
-        self.assertEqual('remote',l.partition(p_vid).location)
+        self.assertEqual('remote', l.partition(p_vid).location)
 
         self.assertEqual(10000, len(list(p.stream())))
 
-        self.assertEquals(497054, int(sum(row[3] for row in p.stream())))
+        self.assertEqual(497054, int(sum(row[3] for row in p.stream())))
 
     def test_msgpack_build(self):
         """Build the simple bundle"""
-
-        from geoid import civick, census
 
         b = self.setup_bundle('complete-build')
         b.run()
 
         for p in b.partitions:
-            print '---', p.identity.name
+            # print('---', p.identity.name)
 
             for c in p.children:
-                print '   ', c.identity.name
+                # print('   ', c.identity.name)
                 id_sum = 0
                 for row in b.wrap_partition(c).stream(skip_header=True):
 

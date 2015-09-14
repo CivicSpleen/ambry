@@ -66,7 +66,7 @@ class Test(unittest.TestCase):
 
             ds.commit()
 
-        print len(ds.tables), len(ds.tables)/tr.elapsed
+        print(len(ds.tables), len(ds.tables)/tr.elapsed)
 
         self.assertEqual(100, len(ds.tables))
 

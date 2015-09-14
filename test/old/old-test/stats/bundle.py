@@ -52,9 +52,9 @@ class Bundle(BuildBundle):
 
             if as_dict:
 
-                yield dict(row.items())
+                yield dict(list(row.items()))
             else:
-                yield prefix_headers + row.keys(), [None] * len(prefix_headers) + row.values()
+                yield prefix_headers + list(row.keys()), [None] * len(prefix_headers) + list(row.values())
 
     def meta(self):
         from ambry.orm.exc import NotFoundError
@@ -69,7 +69,7 @@ class Bundle(BuildBundle):
             except NotFoundError:
                 self.schema.new_table(table_name, add_id=True)
 
-            header, row = self.gen_rows(as_dict=False).next()
+            header, row = next(self.gen_rows(as_dict=False))
 
             self.schema.update_from_iterator(table_name, header=header, iterator=self.gen_rows(as_dict=False),
                                              max_n=5000, logger=self.init_log_rate(500))

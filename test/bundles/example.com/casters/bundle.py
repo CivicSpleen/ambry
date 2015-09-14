@@ -28,15 +28,15 @@ class ExampleSourcePipe(DatafileSourcePipe):
             row['index2'] = i*2
             row['numcom'] = locale.format("%d", i, grouping=True)
             row['indexd3'] = float(i) / 3.0
-            row['categorical'] = cat_cycle.next()
-            row['codes'] = num_cycle.next()
-            row['keptcodes'] = num_cycle.next()
+            row['categorical'] = next(cat_cycle)
+            row['codes'] = next(num_cycle)
+            row['keptcodes'] = next(num_cycle)
             row['date'] = date(2000, i % 12 + 1, i % 28 + 1)
 
             if i == 0:
-                yield row.keys()
+                yield list(row.keys())
 
-            yield row.values()
+            yield list(row.values())
 
 
 class Bundle(Bundle):

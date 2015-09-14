@@ -24,8 +24,8 @@ class Test(TestBase):
         b.clean()
 
         self.assertTrue(b.identity.id_ is not None)
-        self.assertEquals('source-dataset-subset-variation', b.identity.sname)
-        self.assertEquals('source-dataset-subset-variation-0.0.1', b.identity.vname)
+        self.assertEqual('source-dataset-subset-variation', b.identity.sname)
+        self.assertEqual('source-dataset-subset-variation-0.0.1', b.identity.vname)
 
         b.database.create()
 
@@ -54,11 +54,11 @@ class Test(TestBase):
 
         dbsq = b.database.session.query
 
-        self.assertEquals(2, len(dbsq(Partition).all()))
-        self.assertEquals(9, len(dbsq(Table).all()))
-        self.assertEquals(45, len(dbsq(Column).all()))
-        self.assertEquals(20, len(dbsq(Code).all()))
-        self.assertEquals(9, len(dbsq(ColumnStat).all()))
+        self.assertEqual(2, len(dbsq(Partition).all()))
+        self.assertEqual(9, len(dbsq(Table).all()))
+        self.assertEqual(45, len(dbsq(Column).all()))
+        self.assertEqual(20, len(dbsq(Code).all()))
+        self.assertEqual(9, len(dbsq(ColumnStat).all()))
 
 
 def suite():

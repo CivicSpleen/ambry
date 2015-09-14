@@ -5,13 +5,13 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
-from __future__ import print_function
 
 import argparse
 import logging
 import os.path
 
 from six import itervalues
+from six import print_
 
 from ambry.run import get_runconfig
 import ambry._meta
@@ -31,7 +31,7 @@ AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
 
 def prt(template, *args, **kwargs):
     # global global_logger
-    print(template.format(*args, **kwargs))
+    print_(template.format(*args, **kwargs))
 
 
 def err(template, *args, **kwargs):
@@ -65,6 +65,7 @@ def warn(template, *args, **kwargs):
         global_logger.warning(template.format(*args, **kwargs))
     except:
         global_logger.warning(';'.join(str(e) for e in [template] + list(args) + list(kwargs.items())))
+
 
 def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=None):
     fields = fields or []

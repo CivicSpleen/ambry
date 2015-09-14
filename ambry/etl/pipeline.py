@@ -10,7 +10,7 @@ import time
 
 from tabulate import tabulate
 
-from six import iteritems, itervalues, string_types
+from six import iteritems, itervalues, string_types, u, b
 
 from ambry.identity import PartialPartitionName
 from ambry.util import qualified_class_name
@@ -532,7 +532,7 @@ class MapHeader(Pipe):
 
         rg = iter(self._source_pipe)
 
-        self.headers =  [ self._header_map.get(c,c) for c in next(rg) ]
+        self.headers = [self._header_map.get(c, c) for c in next(rg)]
 
         yield self.headers
 
@@ -609,6 +609,7 @@ class MangleHeader(Pipe):
 
         while True:
             yield next(itr)
+
 
 class MergeHeader(Pipe):
     """Strips out the header comments and combines multiple header lines to emit a
@@ -719,13 +720,14 @@ class MergeHeader(Pipe):
 
                 if self.i < self.data_start_line:
                     if self.i in self.header_lines:
-                        self.headers.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+                        self.headers.append(
+                            [_to_ascii(x) for x in row])
 
                     if self.i in self.header_comment_lines:
-                        self.header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+                        self.header_comments.append(
+                            [_to_ascii(x) for x in row])
 
                     if self.i == max_header_line:
-
                         yield self.coalesce_headers()
 
                 elif not self.data_end_line or self.i <= self.data_end_line:
@@ -870,17 +872,17 @@ class AddDeleteExpand(Pipe):
             r1 = self.edit_row(rp)
         except:
             # Todo, put this into the exception
-            print("EDIT ROW CODE", self.edit_row_code)
+            print('EDIT ROW CODE', self.edit_row_code)
             raise
 
         try:
             r2 = self.expand_row(rp)
         except:
             # FIXME: put this into the exception
-            print("EXPAND ROW CODE: ", self.expand_row_code)
+            print('EXPAND ROW CODE: ', self.expand_row_code)
             raise
 
-        return r1+r2
+        return r1 + r2
 
     def __str__(self):
         from ..util import qualified_class_name
@@ -1535,7 +1537,7 @@ class Pipeline(OrderedDict):
 
         def pipe_location(pipe):
 
-            if not isinstance(pipe, basestring):
+            if not isinstance(pipe, string_types):
                 return None
 
             elif pipe[0] in '+-$!':
@@ -1748,9 +1750,9 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
 
         for pipe in chain:
-            out.append((pipe.segment.name if hasattr(pipe, 'segment') else '?') + ': '+unicode(pipe))
+            out.append((pipe.segment.name if hasattr(pipe, 'segment') else u('?: {}').format(pipe)))
 
-        out.append('final: '+str(self.final))
+        out.append('final: ' + str(self.final))
 
         return 'Pipeline {}\n'.format(self.name if self.name else '') + '\n'.join(out)
 
@@ -1799,3 +1801,22 @@ def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
 
             if tail_pipe:
                 v.append(tail_pipe)
+
+
+def _to_ascii(s):
+    """ Converts given string to ascii ignoring non ascii.
+    Args:
+        s (text or binary):
+
+    Returns:
+        str:
+    """
+    # TODO: Always use unicode within ambry.
+    from six import text_type, binary_type
+    if isinstance(s, text_type):
+        ascii_ = s.encode('ascii', 'ignore')
+    elif isinstance(s, binary_type):
+        ascii_ = s.decode('utf-8').encode('ascii', 'ignore')
+    else:
+        raise Exception('Unknown text type - {}'.format(type(s)))
+    return ascii_

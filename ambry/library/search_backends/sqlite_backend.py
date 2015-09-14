@@ -548,7 +548,7 @@ def _make_rank_func(weights):
         # in machine byte order
         # http://www.sqlite.org/fts3.html#matchinfo
         # and struct defaults to machine byte order
-        matchinfo = struct.unpack('I' * (len(matchinfo) / 4), matchinfo)
+        matchinfo = struct.unpack('I' * int(len(matchinfo) / 4), matchinfo)
         it = iter(matchinfo[2:])
         return sum(x[0] * w / x[1]
                    for x, w in zip(list(zip(it, it, it)), weights)

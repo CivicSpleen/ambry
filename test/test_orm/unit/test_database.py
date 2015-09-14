@@ -13,7 +13,7 @@ from sqlalchemy.pool import NullPool
 from ambry.orm.database import get_stored_version, _validate_version, _migration_required, SCHEMA_VERSION,\
     _update_version, _is_missed, migrate
 from ambry.orm.exc import DatabaseError, DatabaseMissingError
-from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
+from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME, POSTGRES_SCHEMA_NAME
 from ambry.orm.dataset import Dataset
 
 from ambry.run import get_runconfig
@@ -84,9 +84,6 @@ class DatabaseTest(TestBase):
 
     # ._create_path tests
     def test_makes_database_directory(self):
-        # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(os.makedirs, ['name', 'mode'])
-        assert_spec(os.path.exists, ['path'])
 
         # prepare state
         fake_makedirs = fudge.Fake('makedirs').expects_call()
@@ -104,8 +101,6 @@ class DatabaseTest(TestBase):
         fudge.verify()
 
     def test_ignores_exception_if_makedirs_failed(self):
-        # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(os.makedirs, ['name', 'mode'])
 
         fake_makedirs = fudge.Fake('makedirs')\
             .expects_call()\
@@ -124,10 +119,7 @@ class DatabaseTest(TestBase):
                 db._create_path()
         fudge.verify()
 
-    def test_raises_exception_if_dir_does_not_exists_after_creation_attempt(self):
-        # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(os.makedirs, ['name', 'mode'])
-        assert_spec(os.path.exists, ['path'])
+    def test_raises_exception_if_dir_does_not_exist_after_creation_attempt(self):
 
         # prepare state
         fake_makedirs = fudge.Fake('makedirs')\
@@ -146,7 +138,7 @@ class DatabaseTest(TestBase):
                     db = Database('sqlite:///test_database1.db')
                     db._create_path()
                 except Exception as exc:
-                    self.assertIn('Couldn\'t create directory', exc.message)
+                    self.assertIn('Couldn\'t create directory', str(exc))
         fudge.verify()
 
     # .exists tests
@@ -434,11 +426,12 @@ class GetVersionTest(TestBase):
             engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
             with engine.connect() as conn:
                 create_table_query = '''
-                    CREATE TABLE user_version (
-                        version INTEGER NOT NULL); '''
+                    CREATE TABLE {}.user_version (
+                        version INTEGER NOT NULL); '''\
+                    .format(POSTGRES_SCHEMA_NAME)
 
                 conn.execute(create_table_query)
-                conn.execute('INSERT INTO user_version VALUES (22);')
+                conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
                 conn.execute('commit')
                 version = get_stored_version(conn)
                 self.assertEqual(version, 22)
@@ -511,7 +504,9 @@ class UpdateVersionTest(TestBase):
             engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
             with engine.connect() as conn:
                 _update_version(conn, 123)
-                version = conn.execute('SELECT version FROM user_version;').fetchone()[0]
+                version = conn\
+                    .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                    .fetchone()[0]
                 self.assertEqual(version, 123)
         finally:
             PostgreSQLTestBase._drop_postgres_test_db()
@@ -522,15 +517,18 @@ class UpdateVersionTest(TestBase):
             engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
             with engine.connect() as conn:
                 create_table_query = '''
-                    CREATE TABLE user_version (
-                        version INTEGER NOT NULL); '''
+                    CREATE TABLE {}.user_version (
+                        version INTEGER NOT NULL); '''\
+                    .format(POSTGRES_SCHEMA_NAME)
 
                 conn.execute(create_table_query)
-                conn.execute('INSERT INTO user_version VALUES (22);')
+                conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
                 conn.execute('commit')
 
                 _update_version(conn, 123)
-                version = conn.execute('SELECT version FROM user_version;').fetchone()[0]
+                version = conn\
+                    .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                    .fetchone()[0]
                 self.assertEqual(version, 123)
         finally:
             PostgreSQLTestBase._drop_postgres_test_db()

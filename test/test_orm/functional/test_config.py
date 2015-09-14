@@ -1,22 +1,36 @@
 # -*- coding: utf-8 -*-
+import unittest
 
 from sqlalchemy.exc import IntegrityError
 
 from ambry.orm.config import Config
+
 from test.test_base import TestBase
-import unittest
 
 
 class Test(TestBase):
 
-    def test_basic(self):
+    def test_id_generation(self):
+
+        # set some configs
+        db = self.new_database()
+        ds = self.new_db_dataset(db, n=0)
+
+        ds.config.metadata.identity.id = 'd02'
+        ds.config.metadata.identity.version = '0.0.1'
+        db.commit()
+
+        # check ids
+        query = db.session.query(Config)
+        for config in query.filter_by(d_vid=ds.vid).all():
+            self.assertTrue(config.id.startswith('F'))
+            self.assertIn(ds.id[1:], config.id)
+
+    def test_dataset_config_operations(self):
         """Basic operations on datasets"""
 
         db = self.new_database()
         ds = self.new_db_dataset(db, n=0)
-
-        print ds.config.metadata.identity.id
-        return
 
         ds.config.metadata.identity.id = 'd02'
         ds.config.metadata.identity.version = '0.0.1'
@@ -34,7 +48,7 @@ class Test(TestBase):
             'subset', 'variation', 'dataset', 'btime', 'source',
             'version', 'bspace', 'type', 'id', 'revision']
 
-        self.assertItemsEqual(identity_keys, [v for v in ds.config.metadata.identity])
+        self.assertEqual(sorted(identity_keys), sorted([v for v in ds.config.metadata.identity]))
 
         with self.assertRaises(AttributeError):
             ds.config.metadata = 'foo'
@@ -58,7 +72,7 @@ class Test(TestBase):
             db.session.commit()
             raise AssertionError('Dupe unexpectedly saved. It seems unique constraint is broken.')
         except IntegrityError as exc:
-            self.assertIn('UNIQUE constraint failed', exc.message)
+            self.assertIn('UNIQUE constraint failed', str(exc))
 
     @unittest.skip("Credentials need to be fixed")
     def test_config_postgres_unicode(self):
@@ -70,7 +84,7 @@ class Test(TestBase):
 
         dsn = rc.database('pg-func-test', return_dsn=True)
 
-        print dsn
+        print(dsn)
 
         db = Database(dsn)
 
@@ -82,16 +96,10 @@ class Test(TestBase):
 
         db.commit()
 
-        ds.config.library.build.url = u'http:/foo/bar/baz/øé'
+        ds.config.library.build.url = 'http:/foo/bar/baz/øé'
 
         ds.config.sync['lib']['foobar'] = time.time()
 
         ds.commit()
 
-        print ds.config.library.build.url
-
-
-
-
-
-
+        print(ds.config.library.build.url)

@@ -55,19 +55,10 @@ Running the ambry tests
     $ pip install -r requirements/dev.txt
     $ python setup.py test
 
-Test command options:
-  --verbosity - verbosity of the tests, 1 by default.
-  --failfast - if given, stop testing on first fail.
+Postgres extensions notes (Note: If you use virtualenv see DEVEL-README.md)
+==========================================================================
+Full text search
 
-Examples:
-
-.. code-block:: bash
-
-    $ python setup.py test --verbosity=2 --failfast
-
-
-FTS (Full text search) notes
-===========================
 Datasets search implemented on top of PostgreSQL requires postgresql-contrib and pg_trgm extension.
 
 1. Install postgresql-contrib package.
@@ -86,14 +77,16 @@ Datasets search implemented on top of PostgreSQL requires postgresql-contrib and
     # create extension
     $ psql <db_name> -c 'CREATE EXTENSION pg_trgm;'
 
-Postgres tests need pg_trgm extension. It's not possible to add it to the test db on the fly, so you
-need to create template and add extension to the template to pass postgres tests. Later test database
-will be created from that template. If postgres does not have such template all postgres tests will be skipped.
+Foreign Data Wrapper (need to query partition files packed with psgpack.)
 
+1. Install multicorn:
 .. code-block:: bash
 
-    $ psql postgres -c 'CREATE DATABASE template0_trgm TEMPLATE template0;'
-    $ psql template0_trgm -c 'CREATE EXTENSION pg_trgm;'
+    wget https://github.com/Kozea/Multicorn/archive/v1.2.3.zip
+    unzip v1.2.3.zip
+    cd Multicorn-1.2.3
+    make && sudo make install
 
-    # To create database from template we need copy permission.
-    $ psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_trgm';"
+2. Install ambryfdw:
+.. code-block:: bash
+    pip install ambryfdw

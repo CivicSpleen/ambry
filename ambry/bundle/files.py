@@ -28,11 +28,12 @@ import sys
 import time
 import yaml
 
-from six import string_types, iteritems
+from six import string_types, iteritems, u, iterkeys
+from six.moves import zip as six_izip
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import File
-from ambry.util import Constant, get_logger
+from ambry.util import Constant, get_logger, drop_empty
 
 logger = get_logger(__name__)
 
@@ -125,10 +126,9 @@ class BuildSourceFile(object):
 
         if self.exists() and bool(self.size()) and not self.record.size:
             # The fs exists, but the record is empty
-
             return self.SYNC_DIR.FILE_TO_RECORD
 
-        if self.fs_modtime > self.record.modified and self.record.source_hash != self.fs_hash:
+        if (self.fs_modtime or 0) > (self.record.modified or 0) and self.record.source_hash != self.fs_hash:
             # Filesystem is newer
 
             return self.SYNC_DIR.FILE_TO_RECORD
@@ -138,7 +138,7 @@ class BuildSourceFile(object):
 
             return self.SYNC_DIR.RECORD_TO_FILE
 
-        if self.record.modified > self.fs_modtime:
+        if (self.record.modified or 0) > (self.fs_modtime or 0):
             # Record is newer
 
             return self.SYNC_DIR.RECORD_TO_FILE
@@ -193,7 +193,7 @@ class RowBuildSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
         rows = []
-        with self._fs.open(fn_path, 'rb') as f:
+        with self._fs.open(fn_path) as f:
             for row in csv.reader(f):
                 row = [e if e.strip() != '' else None for e in row]
                 if any(bool(e) for e in row):
@@ -217,12 +217,10 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fn_path = file_name(self._file_const)
 
-        hl_index = None
-
         # Some types have special representations in spreadsheets, particularly lists and dicts
         def munge_types(v):
             if isinstance(v, (list, tuple)):
-                return u','.join(unicode(e).replace(',','\,') for e in v)
+                return u(',').join(u(e).replace(',', '\,') for e in v)
             elif isinstance(v, dict):
                 import json
                 return json.dumps(v)
@@ -450,7 +448,6 @@ class SourcesFile(RowBuildSourceFile):
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
-        from ..orm.source import DataSource
 
         fr = self._dataset.bsfile(self._file_const)
 
@@ -464,9 +461,7 @@ class SourcesFile(RowBuildSourceFile):
         # for that row. The bool and filter return false when none of the values
         # are non-empty. Then zip again to transpose to original form.
 
-        # TODO: next row is so complicated. Try to refactor.
-        # FIXME: Needs smart 2to3 conversion. Auto conversion breaks tests.
-        non_empty_rows = zip(*[col for col in zip(*contents) if bool(filter(bool, col[1:]))])
+        non_empty_rows = drop_empty(contents)
 
         s = self._dataset._database.session
 
@@ -475,7 +470,7 @@ class SourcesFile(RowBuildSourceFile):
             if i == 0:
                 header = row
             else:
-                d = dict(list(zip(header, row)))
+                d = dict(six_izip(header, row))
 
                 if 'widths' in d:
                     del d['widths']  # Obsolete column in old spreadsheets.
@@ -517,8 +512,7 @@ class SourcesFile(RowBuildSourceFile):
             rows = [list(rows[0].keys())] + [list(r.values()) for r in rows]
 
             # Transpose trick to remove empty columns
-            # FIXME: needs smart 2to3 conversion. Auto conversion breaks tests.
-            rows = zip(*[col for col in zip(*rows) if bool(filter(bool, col[1:]))])
+            rows = list(drop_empty(rows))
         else:
             # No contents, so use the default file
             import csv
@@ -528,6 +522,7 @@ class SourcesFile(RowBuildSourceFile):
 
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
+
 
 class SchemaFile(RowBuildSourceFile):
 
@@ -635,9 +630,9 @@ class SchemaFile(RowBuildSourceFile):
                 initial_rows.append(row)
 
                 # this should put all of the data fields at the end of the headers
-                for v in row.keys():
-                    if v not in headers:
-                        headers.append(v)
+                for k in iterkeys(row):
+                    if k not in headers:
+                        headers.append(k)
 
         rows = list()
 
@@ -667,8 +662,7 @@ class SchemaFile(RowBuildSourceFile):
         # Transpose trick to remove empty columns
         if rows:
             rows_before_transpose = len(rows)
-            # FIXME: Needs smart 2to3 conversion. Auto-conversion breaks tests.
-            rows = zip(*[r for r in zip(*rows) if bool(filter(bool, r[1:]))])
+            rows = list(drop_empty(rows))
             assert rows_before_transpose == len(rows)  # The transpose trick removes all of the rows if anything goes wrong
 
         else:

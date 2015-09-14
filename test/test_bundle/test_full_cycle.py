@@ -3,9 +3,7 @@ Test large-scale builds of all of the test bundles, installing them to a library
 """
 
 from test.test_base import TestBase
-import unittest
 
-from ambry.bundle import Bundle
 
 class Test(TestBase):
 
@@ -40,8 +38,8 @@ class Test(TestBase):
         source_dir = fsopendir(self.setup_temp_dir())
 
         for f in base_dir.walkfiles():
-            source_dir.makedir(os.path.dirname(f), recursive = True, allow_recreate=True)
-            source_dir.setcontents(f,base_dir.getcontents(f))
+            source_dir.makedir(os.path.dirname(f), recursive=True, allow_recreate=True)
+            source_dir.setcontents(f, base_dir.getcontents(f))
 
         for f in source_dir.walkfiles(wildcard='bundle.yaml'):
 
@@ -64,19 +62,17 @@ class Test(TestBase):
             b.set_file_system(source_url=source_url, build_url=build_url)
 
             b.sync()
-
-            print "Loaded bundle: {}".format(b.identity.fqname)
+            print("Loaded bundle: {}".format(b.identity.fqname))
 
         for bi in l.bundles:
 
             if 'casters' in bi.identity.vid or 'process' in bi.identity.vid:
-                continue # This one has caster errors in it.
+                continue  # This one has caster errors in it.
 
-            print 'Running bundle', str(bi.identity.fqname)
+            print('Running bundle', str(bi.identity.fqname))
             b = l.bundle(bi.identity.vid)
             b.sync_in()
             b = b.cast_to_subclass()
             b.run()
             b.metadata.about.remote = 'test'
             b.checkin()
-

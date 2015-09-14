@@ -20,7 +20,7 @@ class Test(TestBase):
 
         # retrieve config from database to be sure all saved properly.
         contacts = bundle.library.dataset(bundle.dataset.vid).config.metadata.contacts
-        self.assertEquals(contacts.analyst.url, 'http://example.com')
+        self.assertEqual(contacts.analyst.url, 'http://example.com')
 
         # now delete key in the bundle.yaml and sync_in again
         bundle_content = bundle.source_fs.open('bundle.yaml').read()
@@ -51,7 +51,7 @@ class Test(TestBase):
 
         # retrieve config from database to be sure all saved properly.
         contacts = bundle.library.dataset(bundle.dataset.vid).config.metadata.contacts
-        self.assertEquals(contacts.analyst.url, 'http://example.com')
+        self.assertEqual(contacts.analyst.url, 'http://example.com')
 
         # now delete analyst group in the bundle.yaml and sync_in again
         bundle_content = bundle.source_fs.open('bundle.yaml').read()

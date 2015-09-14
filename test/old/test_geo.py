@@ -35,7 +35,7 @@ class Test(TestBase):
         for row in p.query(
                 "SELECT quote(AsBinary(GEOMETRY)) as wkb, quote(GEOMETRY) "
                 "FROM geot2"):
-            print row
+            print(row)
             # g = row['GEOMETRY']
             # print g.encode('hex')
             # print type(row['GEOMETRY'])
@@ -73,10 +73,10 @@ class Test(TestBase):
 
             score = r['score'] if r else None
 
-            print '------', score, addr_id
-            print row.p
-            print '> ', text
-            print '< ', parsed
+            print('------', score, addr_id)
+            print(row.p)
+            print('> ', text)
+            print('< ', parsed)
 
     def test_csv_geocoding(self):
         from ambry.geo.geocoder import Geocoder
@@ -102,9 +102,9 @@ class Test(TestBase):
 
                 score = r['score'] if r else None
 
-                print '------', score, addr_id
-                print '> ', text
-                print '< ', parsed
+                print('------', score, addr_id)
+                print('> ', text)
+                print('< ', parsed)
 
     def test_geocoding_csv_geocoder(self):
         from ambry.geo.geocoder import Geocoder
@@ -131,9 +131,9 @@ class Test(TestBase):
             if not r:
                 score = r['score'] if r else None
 
-                print '------', score, addr_id
-                print '> ', text
-                print '< ', parsed
+                print('------', score, addr_id)
+                print('> ', text)
+                print('< ', parsed)
 
     def test_txt_geocoding(self):
         from ambry.geo.geocoder import Geocoder
@@ -159,9 +159,9 @@ class Test(TestBase):
 
                 score = r['score'] if r else None
 
-                print '------', score, addr_id
-                print '> ', text
-                print '< ', parsed
+                print('------', score, addr_id)
+                print('> ', text)
+                print('< ', parsed)
 
     def test_dstk(self):
         from ambry.util import parse_url_to_dict, unparse_url_dict
@@ -176,13 +176,13 @@ class Test(TestBase):
         ]
 
         for url in urls:
-            self.assertEquals(url, unparse_url_dict(parse_url_to_dict(url)))
+            self.assertEqual(url, unparse_url_dict(parse_url_to_dict(url)))
 
-        self.assertEquals(
+        self.assertEqual(
             'postgres://account-username:account-password@foo.bar.bingo:5432/mydatabase',
             unparse_url_dict(self.rc.service('dstk')))
 
-        self.assertEquals(
+        self.assertEqual(
             'postgres://account-username:account-password@foo.bar.bingo:5432/mydatabase',
             unparse_url_dict(self.rc.service('geocoder')))
 
@@ -203,8 +203,8 @@ class Test(TestBase):
         dstk_gc = DstkGeocoder(dstk_service, address_gen())
 
         for k, r in dstk_gc.geocode():
-            print '---'
-            print "{:6s} {}".format(str(r['confidence']) if r else '', k)
+            print('---')
+            print("{:6s} {}".format(str(r['confidence']) if r else '', k))
             pprint.pprint(r)
 
 

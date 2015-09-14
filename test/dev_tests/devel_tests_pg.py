@@ -18,5 +18,5 @@ class Test(BasePostgreSQLTest):
 
         for i in range(10):
             nextid = con.execute(seq)
-            print nextid.next_number('foobar')
+            print(nextid.next_number('foobar'))
 

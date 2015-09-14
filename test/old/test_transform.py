@@ -41,7 +41,7 @@ class Test(TestBase):
 
         memo = None
         for row in data:
-            row = dict(zip(('one', 'two', 'three'), row))
+            row = dict(list(zip(('one', 'two', 'three'), row)))
             memo = schema.intuit(row, memo)
 
         pprint.pprint(memo)

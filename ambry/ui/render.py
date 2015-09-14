@@ -7,7 +7,7 @@ from pygments import highlight
 from pygments.lexers.sql import SqlLexer
 from pygments.formatters import HtmlFormatter
 
-from six import StringIO
+from six import StringIO, string_types
 import sqlparse
 
 import jinja2.tests
@@ -86,7 +86,7 @@ def pretty_time(s):
 
 
 def resolve(t):
-    if isinstance(t, basestring):
+    if isinstance(t, string_types):
         return t
     elif isinstance(t, (Identity, Table)):
         return t.vid

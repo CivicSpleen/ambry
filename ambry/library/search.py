@@ -105,7 +105,7 @@ class Search(object):
         results = self.search_datasets(search_phrase, limit)
 
         for r in results:
-            vid = r.vid or ObjectNumber.parse(iter(r.partitions).next()).as_dataset
+            vid = r.vid or ObjectNumber.parse(next(iter(r.partitions))).as_dataset
 
             r.vid = vid
 

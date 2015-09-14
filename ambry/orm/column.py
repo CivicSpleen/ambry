@@ -7,9 +7,12 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 
+import sys
 import datetime
 
 import dateutil
+
+import six
 
 import sqlalchemy
 
@@ -18,14 +21,16 @@ from sqlalchemy import Column as SAColumn, Integer, Boolean, UniqueConstraint
 from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 
-from sqlalchemy.sql import text
-
 from ..util import memoize
 
 from . import Base, MutationDict, MutationList,  JSONEncodedObj, BigIntegerType, GeometryType
 
 from ambry.orm.code import Code
 from ambry.identity import ColumnNumber, ObjectNumber
+
+
+if sys.version_info > (3,):
+    buffer = memoryview
 
 
 class Column(Base):
@@ -71,8 +76,8 @@ class Column(Base):
 
     data = SAColumn('c_data', MutationDict.as_mutable(JSONEncodedObj))
 
-    codes = relationship(Code, backref='column', order_by="asc(Code.key)",
-                         cascade="save-update, delete, delete-orphan")
+    codes = relationship(Code, backref='column', order_by='asc(Code.key)',
+                         cascade='save-update, delete, delete-orphan')
 
     __table_args__ = (
         UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_c_sequence_id'),
@@ -82,7 +87,7 @@ class Column(Base):
     # FIXME. These types should be harmonized with   SourceColumn.DATATYPE
     DATATYPE_STR = 'str'
     DATATYPE_INTEGER = 'int'
-    DATATYPE_INTEGER64 = 'long'
+    DATATYPE_INTEGER64 = 'long' if six.PY2 else 'int'
     DATATYPE_FLOAT = 'float'
     DATATYPE_DATE = 'date'
     DATATYPE_TIME = 'time'
@@ -99,7 +104,7 @@ class Column(Base):
     types = {
         # Sqlalchemy, Python, Sql,
 
-        DATATYPE_STR: (sqlalchemy.types.String, str, 'VARCHAR'),
+        DATATYPE_STR: (sqlalchemy.types.String, six.binary_type, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
         DATATYPE_INTEGER64: (BigIntegerType, int, 'INTEGER64'),
         DATATYPE_FLOAT: (sqlalchemy.types.Float, float, 'REAL'),
@@ -107,11 +112,11 @@ class Column(Base):
         DATATYPE_TIME: (sqlalchemy.types.Time, datetime.time, 'TIME'),
         DATATYPE_TIMESTAMP: (sqlalchemy.types.DateTime, datetime.datetime, 'TIMESTAMP'),
         DATATYPE_DATETIME: (sqlalchemy.types.DateTime, datetime.datetime, 'DATETIME'),
-        DATATYPE_POINT: (GeometryType, str, 'POINT'),
-        DATATYPE_LINESTRING: (GeometryType, str, 'LINESTRING'),
-        DATATYPE_POLYGON: (GeometryType, str, 'POLYGON'),
-        DATATYPE_MULTIPOLYGON: (GeometryType, str, 'MULTIPOLYGON'),
-        DATATYPE_GEOMETRY: (GeometryType, str, 'GEOMETRY'),
+        DATATYPE_POINT: (GeometryType, six.binary_type, 'POINT'),
+        DATATYPE_LINESTRING: (GeometryType, six.binary_type, 'LINESTRING'),
+        DATATYPE_POLYGON: (GeometryType, six.binary_type, 'POLYGON'),
+        DATATYPE_MULTIPOLYGON: (GeometryType, six.binary_type, 'MULTIPOLYGON'),
+        DATATYPE_GEOMETRY: (GeometryType, six.binary_type, 'GEOMETRY'),
         DATATYPE_BLOB: (sqlalchemy.types.LargeBinary, buffer, 'BLOB')
     }
 
@@ -205,7 +210,7 @@ class Column(Base):
     def schema_type(self):
 
         if not self.datatype:
-            from exc import ConfigurationError
+            from .exc import ConfigurationError
             raise ConfigurationError("Column '{}' has no datatype".format(self.name))
 
         # let it fail with KeyError if datatype is unknown.
@@ -239,16 +244,16 @@ class Column(Base):
     def convert_python_type(cls, py_type_in, name=None):
 
         type_map = {
-            unicode: str
+            six.text_type: six.binary_type
         }
 
-        for col_type, (sla_type, py_type, sql_type) in cls.types.items():
+        for col_type, (sla_type, py_type, sql_type) in six.iteritems(cls.types):
 
             if py_type == type_map.get(py_type_in, py_type_in):
                 if col_type == 'blob' and name and name.endswith('geometry'):
                     return cls.DATATYPE_GEOMETRY
 
-                elif sla_type != GeometryType: # Total HACK. FIXME
+                elif sla_type != GeometryType:  # Total HACK. FIXME
                     return col_type
 
         return None
@@ -275,7 +280,7 @@ class Column(Base):
 
         if self.data:
             # Copy data fields into top level dict, but don't overwrite existind values.
-            for k, v in self.data.items():
+            for k, v in six.iteritems(self.data):
                 if k not in d and k not in ('table', 'stats', '_codes', 'data'):
                     d[k] = v
 
@@ -288,17 +293,15 @@ class Column(Base):
         :return:
 
         """
-        return {k: v for k, v in self.dict.items() if v and k != '_codes'}
+        return {k: v for k, v in six.iteritems(self.dict) if v and k != '_codes'}
 
     @property
     def insertable_dict(self):
         """Like dict, but properties have the table prefix, so it can be
         inserted into a row."""
-
-        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ('table', 'stats', '_codes')}
-
-        x = {('c_' + k).strip('_'): v for k, v in d.items()}
-
+        SKIP_KEYS = ('table', 'stats', '_codes')
+        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS}
+        x = {('c_' + k).strip('_'): v for k, v in six.iteritems(d)}
         return x
 
     @staticmethod
@@ -312,7 +315,7 @@ class Column(Base):
         """
         import re
         try:
-            return re.sub('_+','_',re.sub('[^\w_]','_',name).lower()).rstrip('_')
+            return re.sub('_+', '_', re.sub('[^\w_]', '_', name).lower()).rstrip('_')
         except TypeError:
             raise TypeError(
                 'Trying to mangle name with invalid type of: ' + str(type(name)))
@@ -387,7 +390,7 @@ class Column(Base):
         else:
             data = self.data
 
-        for k, v in data.items():
+        for k, v in six.iteritems(data):
             d[k] = v
 
         return d

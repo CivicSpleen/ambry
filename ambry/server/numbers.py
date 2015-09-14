@@ -43,6 +43,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+from six import string_types
 
 from bottle import error, hook, get, request, response  # , redirect, put, post
 from bottle import HTTPResponse, install  # , static_file, url
@@ -54,7 +55,6 @@ import logging
 
 import ambry.client.exceptions as exc
 import ambry.util
-
 
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
@@ -163,7 +163,7 @@ class AllJSONPlugin(object):
             if isinstance(rv, HTTPResponse):
                 return rv
 
-            if isinstance(rv, basestring):
+            if isinstance(rv, string_types):
                 return rv
 
             # Attempt to serialize, raises exception on failure
@@ -314,8 +314,9 @@ def get_next(redis, assignment_class=None, space=''):
         redis.set(next_key, nxt)
         redis.set(delay_key, delay)
 
-    global_logger.info("ip={} ok={} since={} nxt={} delay={} wait={} safe={}".format(ip, ok, since, nxt, delay, wait,
-                                                                                     safe))
+    log_msg = 'ip={} ok={} since={} nxt={} delay={} wait={} safe={}'\
+        .format(ip, ok, since, nxt, delay, wait, safe)
+    global_logger.info(log_msg)
 
     if ok:
         number = redis.incr(number_key)
@@ -329,7 +330,7 @@ def get_next(redis, assignment_class=None, space=''):
         redis.sadd(authallocated_key, dn)
 
     else:
-        raise exc.TooManyRequests(" Access will resume in {} seconds".format(wait))
+        raise exc.TooManyRequests(' Access will resume in {} seconds'.format(wait))
 
     return dict(ok=ok,
                 number=str(dn),
@@ -388,6 +389,7 @@ def get_echo_term(name, redis):
 @get('/echo/<term>')
 def get_echo_term(term, redis):
     """Test function to see if the server is working."""
+    # FIXME: Why twice? See previous function.
 
     return [term]
 
@@ -404,7 +406,7 @@ def _run(host, port, redis, unregistered_key, reloader=False, **kwargs):
 
     install(RedisPlugin(pool))
 
-    print host, port
+    print(host, port)
 
     return run(host=host, port=port, reloader=reloader, server='paste')
 

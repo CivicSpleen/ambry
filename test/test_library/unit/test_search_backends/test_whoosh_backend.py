@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 import os
+
+from six import u
 
 from test.test_base import TestBase
 
@@ -101,7 +102,7 @@ class DatasetWhooshIndexTest(TestBase):
         self.assertEqual(all_docs[0]['vid'], dataset.vid)
 
         # update
-        doc['doc'] = 'updated'
+        doc['doc'] = u('updated')
         self.backend.dataset_index._index_document(doc, force=True)
         all_docs = list(self.backend.dataset_index.index.searcher().documents(doc='updated'))
         self.assertEqual(len(all_docs), 1)
@@ -110,9 +111,9 @@ class DatasetWhooshIndexTest(TestBase):
     # _get_generic_schema tests
     def test_returns_whoosh_schema(self):
         schema = self.backend.dataset_index._get_generic_schema()
-        self.assertItemsEqual(
-            ['vid', 'doc', 'keywords', 'title'],
-            schema.names())
+        self.assertEqual(
+            sorted(['vid', 'doc', 'keywords', 'title']),
+            sorted(schema.names()))
 
     # _delete tests
     def test_deletes_dataset_from_index(self):
@@ -192,9 +193,9 @@ class IdentifierWhooshIndexTest(TestBase):
     # _get_generic_schema tests
     def test_returns_whoosh_schema(self):
         schema = self.backend.identifier_index._get_generic_schema()
-        self.assertItemsEqual(
-            ['identifier', 'name', 'type'],
-            schema.names())
+        self.assertEqual(
+            sorted(['identifier', 'name', 'type']),
+            sorted(schema.names()))
 
     # _delete tests
     def test_deletes_identifier_from_index(self):
@@ -294,7 +295,7 @@ class PartitionWhooshIndexTest(TestBase):
         self.assertIn(partition1.vid, all_vids)
 
         # update
-        doc['doc'] = 'updated'
+        doc['doc'] = u('updated')
         self.backend.partition_index._index_document(doc, force=True)
         all_docs = list(self.backend.partition_index.index.searcher().documents(doc='updated'))
         self.assertEqual(len(all_docs), 1)
@@ -303,9 +304,9 @@ class PartitionWhooshIndexTest(TestBase):
     # _get_generic_schema tests
     def test_returns_whoosh_schema(self):
         schema = self.backend.partition_index._get_generic_schema()
-        self.assertItemsEqual(
-            ['dataset_vid', 'doc', 'keywords', 'title', 'vid'],
-            schema.names())
+        self.assertEqual(
+            sorted(['dataset_vid', 'doc', 'keywords', 'title', 'vid']),
+            sorted(schema.names()))
 
     # _make_query_from_terms tests
     def test_creates_doc_query_string_from_about(self):

@@ -8,15 +8,15 @@ __docformat__ = 'restructuredtext en'
 
 from time import time
 
-from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer, Boolean,\
-    event, UniqueConstraint, text
+from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer,\
+    event, UniqueConstraint
 from sqlalchemy.orm import object_session, relationship
 
 from six import iterkeys
 
+from ambry.orm import next_sequence_id
+from ambry.identity import GeneralNumber1
 from . import Base, JSONAlchemy
-from ..identity import ObjectNumber, DatasetNumber
-
 
 
 class Config(Base):
@@ -26,6 +26,7 @@ class Config(Base):
         UniqueConstraint('co_d_vid', 'co_type', 'co_group', 'co_key', name='_type_group_key_uc'),)
 
     id = SAColumn('co_id', String(32), primary_key=True)
+    sequence_id = SAColumn('co_sequence_id', Integer, nullable=False, index=True)
 
     d_vid = SAColumn('co_d_vid', String(16), ForeignKey('datasets.d_vid'), index=True, doc='Dataset vid')
     type = SAColumn('co_type', String(200), doc='Type of the config: metadata, process, sync, etc...')
@@ -33,12 +34,14 @@ class Config(Base):
     key = SAColumn('co_key', String(200),  doc='Key of the config')
     value = SAColumn('co_value', JSONAlchemy(Text()),  doc='Value of the config key.')
     modified = SAColumn('co_modified', Integer(),
-        doc='Modification date: time in seconds since the epoch as a integer.')
+                        doc='Modification date: time in seconds since the epoch as a integer.')
 
-    # FIXME. Foreign key constraints may it hard to dump all of the configs to a new bundle database in
+    # Foreign key constraints may it hard to dump all of the configs to a new bundle database in
     # ambry.orm.database.Database#copy_dataset, so I've removed the foreign key constraint.
+    # TODO: Write test for that note.
 
-    parent_id = SAColumn(String(32), ForeignKey('config.co_id'), nullable=True, doc='Id of the parent config.')
+    parent_id = SAColumn(String(32), ForeignKey('config.co_id'), nullable=True,
+                         doc='Id of the parent config.')
 
     parent = relationship('Config',  remote_side=[id])
     children = relationship('Config')
@@ -52,17 +55,10 @@ class Config(Base):
 
     @staticmethod
     def before_insert(mapper, conn, target):
-
         if not target.id:
-            import hashlib
-            import time
-
             assert bool(target.d_vid)
-
-            # FIXME This is a bit of a mess, much longer than it should be. Unfortunately, there seem to be few other options
-            # since the trick used in partitions doesn't work for mass updates to many configs.
-            target.id = "{}{}{}".format(target.d_vid, target.type,
-                                        hashlib.md5(str(target.group)+str(target.key)+str(target.parent_id)).hexdigest()[:8] )
+            target.sequence_id = next_sequence_id(object_session(target), {}, target.d_vid, Config)
+            target.id = str(GeneralNumber1('F', target.d_vid, target.sequence_id))
 
         Config.before_update(mapper, conn, target)
 
@@ -74,6 +70,7 @@ class Config(Base):
 
 event.listen(Config, 'before_insert', Config.before_insert)
 event.listen(Config, 'before_update', Config.before_update)
+
 
 class ConfigTypeGroupAccessor(object):
 
@@ -89,10 +86,12 @@ class ConfigTypeGroupAccessor(object):
 
         # find all matched configs and populate configs cache.
 
-        configs =  (self._session.query(Config)
+        configs = self._session\
+            .query(Config)\
             .filter_by(d_vid=self._dataset.vid,
                        type=self._type_name,
-                       group=self._group_name)).all()
+                       group=self._group_name)\
+            .all()
 
         self._configs = {}
 

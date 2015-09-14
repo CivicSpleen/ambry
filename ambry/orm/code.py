@@ -6,27 +6,32 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
+from six import iteritems
+
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer
-from sqlalchemy import  Text, String, ForeignKey
+from sqlalchemy import Text, String, ForeignKey
 
 from ambry.identity import ObjectNumber
 
 from . import Base, MutationDict, JSONEncodedObj
+
 
 class Code(Base):
 
     """Code entries for variables."""
     __tablename__ = 'codes'
 
-    c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'), primary_key=True,index=True,nullable=False)
+    c_vid = SAColumn('cd_c_vid', String(20), ForeignKey('columns.c_vid'), primary_key=True,
+                     index=True, nullable=False)
 
-    d_vid = SAColumn('cd_d_vid', String(20), ForeignKey('datasets.d_vid'), primary_key=True, nullable=False, index=True)
+    d_vid = SAColumn('cd_d_vid', String(20), ForeignKey('datasets.d_vid'), primary_key=True,
+                     nullable=False, index=True)
 
-    key = SAColumn('cd_skey',String(20), primary_key=True,nullable=False,index=True)  # String version of the key, the value in the dataset
-    ikey = SAColumn( 'cd_ikey',Integer,index=True)  # Set only if the key is actually an integer
+    key = SAColumn('cd_skey', String(20), primary_key=True, nullable=False, index=True)  # String version of the key, the value in the dataset
+    ikey = SAColumn('cd_ikey', Integer, index=True)  # Set only if the key is actually an integer
 
-    value = SAColumn('cd_value', Text,nullable=False)  # The value the key maps to
+    value = SAColumn('cd_value', Text, nullable=False)  # The value the key maps to
     description = SAColumn('cd_description', Text)
 
     source = SAColumn('cd_source', Text)
@@ -42,7 +47,6 @@ class Code(Base):
 
         if self.data:
             self.data.update(kwargs)
-
 
     def __repr__(self):
         return "<code: {}->{} >".format(self.key, self.value)
@@ -62,12 +66,10 @@ class Code(Base):
                 # and these don't have associated class properties.
                 continue
 
-
-
     @property
     def insertable_dict(self):
 
-        d =  {('cd_' + k).strip('_'): v for k, v in self.dict.items()}
+        d = {('cd_' + k).strip('_'): v for k, v in iteritems(self.dict)}
 
         # the `key` property is not named after its db column
         d['cd_skey'] = d['cd_key']

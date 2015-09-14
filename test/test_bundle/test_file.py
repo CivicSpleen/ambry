@@ -21,7 +21,7 @@ class Test(unittest.TestCase):
     def dump_database(self, db, table):
 
         for row in db.connection.execute("SELECT * FROM {}".format(table)):
-            print row
+            print(row)
 
     def compare_files(self, fs1, fs2, file_const):
         from ambry.util import md5_for_file
@@ -72,7 +72,7 @@ class Test(unittest.TestCase):
         bsfa = BuildSourceFileAccessor(ds, source_fs)
 
         for i in range(5):
-            print i, bsfa.sync()
+            print(i, bsfa.sync())
 
         db.commit()
 
@@ -100,17 +100,17 @@ class Test(unittest.TestCase):
 
         bsfa = BuildSourceFileAccessor(ds, source_fs)
         # Report 4 files to sync from file to record
-        self.assertEquals(4, dict(bsfa.sync_dirs()).values().count('ftr'))
+        self.assertEqual(4, list(dict(bsfa.sync_dirs()).values()).count('ftr'))
         # Report did 4 syncs
-        self.assertEquals(4, dict(bsfa.sync()).values().count('ftr'))
+        self.assertEqual(4, list(dict(bsfa.sync()).values()).count('ftr'))
         # Report non left to do.
-        self.assertEquals(0, dict(bsfa.sync()).values().count('ftr'))
+        self.assertEqual(0, list(dict(bsfa.sync()).values()).count('ftr'))
 
         bsf = ds.bsfile(File.BSFILE.META)
         bsf.modified = time.time()
 
         # Now there is one in the other direction
-        self.assertEquals(1, dict(bsfa.sync()).values().count('rtf'))
+        self.assertEqual(1, list(dict(bsfa.sync()).values()).count('rtf'))
 
     @unittest.skip("Broken and don't know why, but doesn't appear to be important")
     def test_sources_file(self):

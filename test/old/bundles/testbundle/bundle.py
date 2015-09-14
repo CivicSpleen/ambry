@@ -182,4 +182,4 @@ class Bundle(BuildBundle):
 
         com = self.library.dep('communities').partition
 
-        print com.database.path
+        print(com.database.path)

@@ -4,13 +4,10 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
-from __future__ import unicode_literals
 from collections import Mapping, OrderedDict, MutableMapping
 import copy
-import logging
 
-from six import StringIO
-from six import iteritems, iterkeys, itervalues
+from six import iteritems, iterkeys, itervalues, StringIO, text_type, binary_type, string_types, b
 from six.moves.html_parser import HTMLParser
 
 from sqlalchemy.orm import object_session
@@ -20,7 +17,7 @@ from ambry.orm.exc import MetadataError
 
 from ambry.util import get_logger
 
-logger = get_logger(__name__, level=logging.INFO)
+logger = get_logger(__name__)
 
 
 class AttrDict(OrderedDict):
@@ -54,7 +51,7 @@ class AttrDict(OrderedDict):
     @staticmethod
     def flatten_dict(data, path=tuple()):
         dst = list()
-        for k, v in data.items():
+        for k, v in iteritems(data):
             k = path + (k,)
             if isinstance(v, Mapping):
                 for v in v.flatten(k):
@@ -198,6 +195,8 @@ class StructuredPropertyTree(object):
 
         self._errors = {}
 
+        self._cached_configs = {}  # key is parent config, values are children of that parent.
+
         self._term_values = AttrDict()
 
         self.register_members()
@@ -236,18 +235,39 @@ class StructuredPropertyTree(object):
                 session.delete(conf)
                 session.commit()
 
+    def _get_path(self):
+        """ Returns tuple with full path. """
+        return tuple()
+
     def build_from_db(self, dataset):
         logger.debug(
             'Building property tree from db. dataset: {}, type: {}'.format(dataset.vid, self._type))
         session = object_session(dataset)
 
         # optimization to use only one db hit.
+        instance_to_path_map = {}  # key is Config instance, value if tuple with path.
+
         configs = session.query(Config)\
             .filter_by(d_vid=dataset.vid, type=self._type)\
             .all()
 
-        configs_map = {x.id: x for x in configs}
+        # optimization: cache all configs to reduce db hits
+        for config in configs:
 
+            path = []
+            current = config
+            while current.parent:
+                # iterating until the root.
+                if current.parent and current.parent.key:
+                    path.insert(0, current.parent.key)
+                current = current.parent
+
+            if config.key:
+                path.append(config.key)
+            self._cached_configs[tuple(path)] = config
+            instance_to_path_map[config] = tuple(path)
+
+        # populate all keys of the tree with appropriate values from db.
         for config in configs:
             if not config.parent_id:
                 # Skip root config
@@ -259,7 +279,7 @@ class StructuredPropertyTree(object):
                 continue
 
             # value found, populate.
-            _set_value(configs_map, self, config)
+            _set_value(instance_to_path_map, self._cached_configs, self, config)
 
         # tree is bound after build from db.
         self.link_config(session, dataset)
@@ -271,9 +291,8 @@ class StructuredPropertyTree(object):
     def link_config(self, session, dataset):
         logger.debug(
             'Binding top level config to the db. dataset: {}, type: {}'.format(dataset.vid, self._type))
-
-        self._config, created = get_or_create(
-            session, Config,
+        self._config, created = _get_config_instance(
+            self, session,
             parent_id=None, d_vid=dataset.vid,
             type=self._type)
 
@@ -380,6 +399,10 @@ class Group(object):
         self._key = None
         self._config = None  # appropriate orm.config.Config instance of the group
 
+    def _get_path(self):
+        """ Returns tuple with full path (including the key). """
+        return self._parent._get_path() + (self._key,)
+
     def update_config(self):
         """ Updates or creates config of that group. Requires tree bound to db. """
         dataset = self._top._config.dataset
@@ -387,10 +410,12 @@ class Group(object):
         logger.debug(
             'Updating group config. dataset: {}, type: {}, key: {}'.format(dataset.vid, self._top._type, self._key))
 
-        self._config, created = get_or_create(
-            session, Config,
+        self._config, created = _get_config_instance(
+            self, session,
             parent_id=self._parent._config.id, d_vid=dataset.vid,
             group=self._key, key=self._key, type=self._top._type)
+        if created:
+            self._top._cached_configs[self._get_path()] = self._config
         self._top._add_valid(self._config)
 
         if created:
@@ -720,6 +745,10 @@ class Term(object):
         self._top = parent._top
         self._fqkey = self._parent._fqkey + '.' + self._key
 
+    def _get_path(self):
+        """ Returns tuple with full path (including the key). """
+        return self._parent._get_path() + (self._key,)
+
     def update_config(self):
         """ Creates or updates db config of the term. Requires bound to db tree. """
         dataset = self._top._config.dataset
@@ -730,10 +759,12 @@ class Term(object):
         if not self._parent._config:
             self._parent.update_config()
 
-        self._config, created = get_or_create(
-            session, Config,
+        self._config, created = _get_config_instance(
+            self, session,
             parent=self._parent._config, d_vid=dataset.vid,
             type=self._top._type, key=self._key)
+        if created:
+            self._top._cached_configs[self._get_path()] = self._config
 
         # We update ScalarTerm and ListTerm values only. Composite terms (DictTerm for example)
         # should not contain value.
@@ -795,7 +826,7 @@ class MLStripper(HTMLParser):
         return ''.join(self.fed)
 
 
-class _ScalarTermS(str):
+class _ScalarTermS(binary_type):
     """A scalar term for extension for  strings, with support for Jinja substitutions"""
 
     def __new__(cls, string, jinja_sub, term):
@@ -803,7 +834,7 @@ class _ScalarTermS(str):
         return ob
 
     def __init__(self, string, jinja_sub, term):
-        super(_ScalarTermS, self).__init__(string)
+        super(_ScalarTermS, self).__init__()
         self.jinja_sub = jinja_sub
         self._term = term
 
@@ -823,14 +854,14 @@ class _ScalarTermS(str):
         return s.get_data()
 
 
-class _ScalarTermU(unicode):  # TODO: Need 2to3 conversion.
+class _ScalarTermU(text_type):
     """A scalar term for extension for unicode, with support for Jinja substitutions"""
     def __new__(cls, string, jinja_sub, term):
         ob = super(_ScalarTermU, cls).__new__(cls, string)
         return ob
 
     def __init__(self, string, jinja_sub, term):
-        super(_ScalarTermU, self).__init__(string)
+        super(_ScalarTermU, self).__init__()
         self.jinja_sub = jinja_sub
         self._term = term
 
@@ -867,7 +898,7 @@ class ScalarTerm(Term):
 
         def jinja_sub(st):
 
-            if isinstance(st, basestring):  # TODO: need 2to3 conversion.
+            if isinstance(st, string_types):
                 from jinja2 import Template
 
                 try:
@@ -882,12 +913,12 @@ class ScalarTerm(Term):
 
             return st
 
-        if isinstance(st, str):  # TODO: Need 2to3 conversion.
+        if isinstance(st, binary_type):
             return _ScalarTermS(st, jinja_sub, self)
-        elif isinstance(st, unicode):  # TODO: Need 2to3 conversion.
+        elif isinstance(st, text_type):
             return _ScalarTermU(st, jinja_sub, self)
         elif st is None:
-            return _ScalarTermS('', jinja_sub, self)
+            return _ScalarTermS(b(''), jinja_sub, self)
         else:
             return st
 
@@ -1100,8 +1131,8 @@ class ListTerm(Term):
         return iter(self._term_values)
 
 
-def _set_value(configs_map, prop_tree, config_instance):
-    """ Finds appropriate term in the prop_tree and sets it value from config_instance.
+def _set_value(instance_to_path_map, path_to_instance_map, prop_tree, config_instance):
+    """ Finds appropriate term in the prop_tree and sets its value from config_instance.
 
     Args:
         configs_map (dict): key is id of the config, value is Config instance (AKA cache of the configs)
@@ -1109,28 +1140,12 @@ def _set_value(configs_map, prop_tree, config_instance):
         config_instance (Config):
 
     """
+    path = instance_to_path_map[config_instance]
 
-    #
-    # collect path from the root to the value key. Do not include root and value config to the path.
-    #
-
-    path = []
-    path_elem = config_instance.parent
-
-    # TODO: use cached configs to walk.
-    while True:
-        if path_elem.parent is None:
-            break
-        path.insert(0, path_elem)
-        path_elem = path_elem.parent
-
-    #
-    # find appropriate group and populate matched term.
-    #
-
+    # find group
     group = prop_tree
-    for elem in path:
-        group = getattr(group, elem.key)
+    for elem in path[:-1]:
+        group = getattr(group, elem)
 
     assert group._key == config_instance.parent.key
     setattr(group, config_instance.key, config_instance.value)
@@ -1138,13 +1153,24 @@ def _set_value(configs_map, prop_tree, config_instance):
     #
     # bind config to the term
     #
-    # FIXME: Make all the terms to store config the same way.
+    # FIXME: Make all the terms to store config instance the same way.
     term = getattr(group, config_instance.key)
-    if hasattr(term, '_term'):
-        # ScalarTermS and ScalarTermU case
-        term._term._config = config_instance
-    elif hasattr(term, '_config'):
-        term._config = config_instance
+    try:
+        if hasattr(term, '_term'):
+            # ScalarTermS and ScalarTermU case
+            term._term._config = config_instance
+            return
+    except KeyError:
+        # python3 case. TODO: Find the way to make it simple.
+        pass
+
+    try:
+        if hasattr(term, '_config'):
+            term._config = config_instance
+            return
+    except KeyError:
+        # python3 case. TODO: Find the way to make it simple.
+        pass
     else:
         pass  # the setting should have been handled by setattr(group, key, config.value)
 
@@ -1169,3 +1195,25 @@ def get_or_create(session, model, **kwargs):
         session.add(instance)
         session.commit()
         return instance, True
+
+
+def _get_config_instance(group_or_term, session, **kwargs):
+    """ Finds appropriate config instance and returns it.
+
+    Args:
+        group_or_term (Group or Term):
+        session (Sqlalchemy session):
+        kwargs (dict): kwargs to pass to get_or_create.
+
+    Returns:
+        tuple of (Config, bool):
+    """
+    path = group_or_term._get_path()
+    cached = group_or_term._top._cached_configs.get(path)
+    if cached:
+        config = cached
+        created = False
+    else:
+        # does not exist or not yet cached
+        config, created = get_or_create(session, Config, **kwargs)
+    return config, created

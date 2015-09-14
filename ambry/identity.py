@@ -1733,7 +1733,7 @@ class NumberServer(object):
         self.last_response = None
         self.next_time = None
 
-    def next(self):  # 2to3 can break it. Need extra check.
+    def __next__(self):
 
         if self.key:
             params = dict(access_key=self.key)
@@ -1782,6 +1782,9 @@ class NumberServer(object):
 
         if self.next_time and time.time() < self.next_time:
             time.sleep(self.next_time - time.time())
+
+# port to python2
+NumberServer.next = NumberServer.__next__
 
 
 class IdentitySet(object):

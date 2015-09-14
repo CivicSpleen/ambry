@@ -11,6 +11,7 @@ import sys
 from time import time
 import traceback
 from functools import partial
+
 from six import string_types, iteritems, u, b
 
 from geoid.civick import GVid
@@ -22,6 +23,7 @@ import ambry.etl
 from ..util import get_logger, Constant
 
 indent = '    '  # Indent for structured log output
+
 
 class Bundle(object):
 
@@ -1027,7 +1029,7 @@ class Bundle(object):
 
             self.debug('Final methods')
             for m in pl.final:
-                self.debug(indent + b(m))
+                self.debug(indent + m)
                 getattr(self, m)(pl)
 
             if pl.stopped:
@@ -1091,7 +1093,7 @@ class Bundle(object):
         """Write a report of the pipeline out to a file """
         from datetime import datetime
         self.build_fs.makedir('pipeline', allow_recreate=True)
-        v = """
+        v = u("""
 Pipeline {}
 ========================================================
 {}

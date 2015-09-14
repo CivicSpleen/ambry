@@ -26,7 +26,7 @@ class Bundle(BuildBundle):
                 reader = csv.reader(f)
                 with p.inserter() as ins:
                     for row in reader:
-                        d = dict(zip(header, row))
+                        d = dict(list(zip(header, row)))
                         del d['id']
                         ins.insert(d)
                         lr()

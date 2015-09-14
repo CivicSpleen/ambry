@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
+
 import itertools
 import logging
 from math import log
 from pprint import pformat
 import re
 
-from six import iterkeys, iteritems
+from six import iterkeys, iteritems, u, string_types
 
 from nltk.stem.lancaster import LancasterStemmer
 
@@ -348,18 +348,18 @@ class BaseDatasetIndex(BaseIndex):
         columns = '\n'.join(
             [' '.join(list(str(e) for e in t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
 
-        doc = '\n'.join([unicode(x) for x in [dataset.config.metadata.about.title,
-                                              dataset.config.metadata.about.summary,
-                                              dataset.identity.id_,
-                                              dataset.identity.vid,
-                                              dataset.identity.source,
-                                              dataset.identity.name,
-                                              dataset.identity.vname,
-                                              columns]])
+        doc = '\n'.join([u('{}').format(x) for x in [dataset.config.metadata.about.title,
+                                                     dataset.config.metadata.about.summary,
+                                                     dataset.identity.id_,
+                                                     dataset.identity.vid,
+                                                     dataset.identity.source,
+                                                     dataset.identity.name,
+                                                     dataset.identity.vname,
+                                                     columns]])
 
         # From the source, make a variety of combinations for keywords:
         # foo.bar.com -> "foo foo.bar foo.bar.com bar.com"
-        parts = unicode(dataset.identity.source).split('.')
+        parts = u('{}').format(dataset.identity.source).split('.')
         sources = (['.'.join(g) for g in [parts[-i:] for i in range(2, len(parts) + 1)]]
                    + ['.'.join(g) for g in [parts[:i] for i in range(0, len(parts))]])
 
@@ -371,15 +371,21 @@ class BaseDatasetIndex(BaseIndex):
             except (KeyError, ValueError):
                 return g
 
-        try:
-            about_time = list(dataset.config.metadata.about.time)
-        except TypeError:
-            about_time = [dataset.config.metadata.about.time]
+        def as_list(value):
+            """ Converts value to the list. """
+            if not value:
+                return []
+            if isinstance(value, string_types):
+                lst = [value]
+            else:
+                try:
+                    lst = list(value)
+                except TypeError:
+                    lst = [value]
+            return lst
 
-        try:
-            about_grain = list(dataset.config.metadata.about.grain)
-        except TypeError:
-            about_grain = [dataset.config.metadata.about.grain]
+        about_time = as_list(dataset.config.metadata.about.time)
+        about_grain = as_list(dataset.config.metadata.about.grain)
 
         keywords = (
             list(dataset.config.metadata.about.groups) +
@@ -389,10 +395,10 @@ class BaseDatasetIndex(BaseIndex):
             sources)
 
         document = dict(
-            vid=unicode(dataset.identity.vid),
-            title=unicode(dataset.identity.name) + ' ' + unicode(dataset.config.metadata.about.title),
-            doc=unicode(doc),
-            keywords=' '.join(unicode(x) for x in keywords)
+            vid=u('{}').format(dataset.identity.vid),
+            title=u('{} {}').format(dataset.identity.name, dataset.config.metadata.about.title),
+            doc=u('{}').format(doc),
+            keywords=' '.join(u('{}').format(x) for x in keywords)
         )
 
         return document
@@ -466,8 +472,7 @@ class BasePartitionIndex(BaseIndex):
                 return g
             except ValueError:
                 logger.debug("Failed to parse gvid '{}' from partition '{}' grain coverage"
-                             .format(g, partition.identity.vname ))
-
+                             .format(g, partition.identity.vname))
 
         keywords = (
             ' '.join(partition.space_coverage) + ' ' +
@@ -475,19 +480,18 @@ class BasePartitionIndex(BaseIndex):
             ' '.join(str(x) for x in partition.time_coverage)
         )
 
-        doc_field = unicode(
-            values + ' ' + schema + ' ' +
-            ' '.join([
-                unicode(partition.identity.vid),
-                unicode(partition.identity.id_),
-                unicode(partition.identity.name),
-                unicode(partition.identity.vname)]))
+        doc_field = u('{} {} {}').format(
+            values, schema, ' '.join([
+                u'{}'.format(partition.identity.vid),
+                u'{}'.format(partition.identity.id_),
+                u'{}'.format(partition.identity.name),
+                u'{}'.format(partition.identity.vname)]))
 
         document = dict(
-            vid=unicode(partition.identity.vid),
-            dataset_vid=unicode(partition.identity.as_dataset().vid),
-            title=unicode(partition.table.description),
-            keywords=unicode(keywords),
+            vid=u'{}'.format(partition.identity.vid),
+            dataset_vid=u'{}'.format(partition.identity.as_dataset().vid),
+            title=u'{}'.format(partition.table.description),
+            keywords=u'{}'.format(keywords),
             doc=doc_field)
 
         return document
@@ -580,9 +584,9 @@ class BaseIdentifierIndex(BaseIndex):
 
         """
         return {
-            'identifier': unicode(identifier['identifier']),
-            'type': unicode(identifier['type']),
-            'name': unicode(identifier['name'])
+            'identifier': u('{}').format(identifier['identifier']),
+            'type': u('{}').format(identifier['type']),
+            'name': u('{}').format(identifier['name'])
         }
 
 
@@ -683,7 +687,7 @@ class SearchTermParser(object):
         comps = []
         for t in bymarker:
             t = list(t)
-            if t[0] == 'in' and len(t[1]) == 1 and isinstance(t[1][0][1], basestring) and self.stem(
+            if t[0] == 'in' and len(t[1]) == 1 and isinstance(t[1][0][1], string_types) and self.stem(
                     t[1][0][1]) in self.by_terms:
                 t[0] = 'by'
 
