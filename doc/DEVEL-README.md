@@ -156,15 +156,22 @@ py.test test/test_metadata -x
 
 
 ### To write python2/python3 compatible code:
+
 Ambry uses one code base for both - python2 and python3. This requires some extra work.
-1. Tests should be run in both - python2 and python3. FIXME: Not ready yet.
-2. Run 2to3 before push for all files you changed. FIXME: Not ready yet.
+
+    1. Tests should run in both - python2 and python3. FIXME: Not ready yet.
+    
+    2. Run 2to3 before push for all files you changed. FIXME: Not ready yet.
 
 Usefull hints:
-1. Use print() instead of print. For complicated cases (print("", file=sys.stderr) for example) use six.print\_.
-2. Use six.iteritems, six.iterkeys, six.itervalues instead of {}.iteritems, {}.iterkeys, {}.itervalues if you need iterator.
-3. If you need lists from {}.keys, {}.values wrap both with list - list({}.keys()), list({}.values())
-4. Use urlparse from six:
+
+    1. Use print() instead of print. For complicated cases (print('', file=sys.stderr) for example) use six.print_.
+    
+    2. Use six.iteritems, six.iterkeys, six.itervalues instead of {}.iteritems, {}.iterkeys, {}.itervalues if you need iterator.
+    
+    3. If you need lists from {}.keys, {}.values wrap both with list - list({}.keys()), list({}.values())
+    
+    4. Use urlparse from six:
 ```python
 from six.moves.urllib.parse import urlparse
 ```
@@ -172,7 +179,8 @@ instead of (py2 style)
 ```python
 from urlparse import urlparse
 ```
-5. Use StringIO from the six package:
+
+    5. Use StringIO from the six package:
 ```python
 from six import StringIO
 ```
@@ -180,7 +188,8 @@ instead of (py2 style)
 ```python
 from StringIO import StringIO
 ```
-6. Use filterfalse from the six package:
+
+    6. Use filterfalse from the six package:
 ```python
 from six import filterfalse
 ```
@@ -188,7 +197,8 @@ instead of (py2 style)
 ```python
 from itertools import ifilterfalse
 ```
-7. Use six.string_types to check for string:
+
+    7. Use six.string_types to check for string:
 ```python
 isinstance(value, string_types)
 ```
@@ -196,7 +206,8 @@ instead of (py2 style)
 ```python
 isinstance(value, basestring)
 ```
-8. Use six.moves.builtins for builtins access:
+
+    8. Use six.moves.builtins for builtins access:
 ```python
 from six.moves import builtins
 ```
@@ -204,23 +215,27 @@ instead of (py2 style)
 ```python
 import __builtins__
 ```
-9. Use __bool__ instead of __nonzero__. For python2 compatibility use next hack:
+
+    9. Use \__bool__ instead of \__nonzero__. For python2 compatibility use next hack:
 ```python
 class Foo(object):
     def __bool__(self):
         return bool(...)
 
 Foo.__nonzero__ = Foo.__bool__
-If you do so, 2to3 will not replace __nonzero__.
 ```
-10. Use six.u() if you need unicode, use six.b() if you need bytestring:
+Doing so prevents 2to3 to replace \__nonzero__.
+
+    10. Use six.u() if you need unicode, use six.b() if you need bytestring:
 ```python
 u('some-str')
 ```
-instead of ```python
+instead of
+```python
 u'some-str'
 ```
-11. Use six.u() if you need to call __unicode__. Use six.b() if you need to call __str__:
+
+    11. Use six.u() if you need to call \__unicode__. Use six.b() if you need to call \__str__:
 ```python
 u('{}').format(instance)
 ```
@@ -236,7 +251,8 @@ instead of
 ```python
 str(instance)
 ```
-12. Use six.text_type and six.binary_type instead of str and unicode types.
+
+    12. Use six.text_type and six.binary_type instead of str and unicode types.
 ```python
 types = [int, six.binary_type]
 ```
