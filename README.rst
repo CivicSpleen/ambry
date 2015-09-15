@@ -1,6 +1,8 @@
 Ambry Databundles
 ================
 
+This is the legacy version; don't do new development here. 
+
 Install
 =======
 
