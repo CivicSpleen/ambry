@@ -216,7 +216,7 @@ instead of (py2 style)
 import __builtins__
 ```
 
-    9. Use \__bool\__ instead of \__nonzero\__. For python2 compatibility use next hack:
+    9. Use \__bool__ instead of \__nonzero__. For python2 compatibility use next hack:
 ```python
 class Foo(object):
     def __bool__(self):
@@ -224,7 +224,7 @@ class Foo(object):
 
 Foo.__nonzero__ = Foo.__bool__
 ```
-Doing so prevents 2to3 to replace \__nonzero\__.
+Doing so prevents 2to3 to replace \__nonzero__.
 
     10. Use six.u() if you need unicode, use six.b() if you need bytestring:
 ```python
@@ -235,7 +235,7 @@ instead of
 u'some-str'
 ```
 
-    11. Use six.u() if you need to call __unicode__. Use six.b() if you need to call __str__:
+    11. Use six.u() if you need to call \__unicode__. Use six.b() if you need to call \__str__:
 ```python
 u('{}').format(instance)
 ```
