@@ -156,13 +156,16 @@ py.test test/test_metadata -x
 
 
 ### To write python2/python3 compatible code:
+
 Ambry uses one code base for both - python2 and python3. This requires some extra work.
+
     1. Tests should run in both - python2 and python3. FIXME: Not ready yet.
+    
     2. Run 2to3 before push for all files you changed. FIXME: Not ready yet.
 
 Usefull hints:
 
-    1. Use print() instead of print. For complicated cases (print("", file=sys.stderr) for example) use six.print\_.
+    1. Use print() instead of print. For complicated cases (print('', file=sys.stderr) for example) use six.print_.
     
     2. Use six.iteritems, six.iterkeys, six.itervalues instead of {}.iteritems, {}.iterkeys, {}.itervalues if you need iterator.
     
