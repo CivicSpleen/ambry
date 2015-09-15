@@ -161,6 +161,7 @@ Ambry uses one code base for both - python2 and python3. This requires some extr
     2. Run 2to3 before push for all files you changed. FIXME: Not ready yet.
 
 Usefull hints:
+
     1. Use print() instead of print. For complicated cases (print("", file=sys.stderr) for example) use six.print\_.
     
     2. Use six.iteritems, six.iterkeys, six.itervalues instead of {}.iteritems, {}.iterkeys, {}.itervalues if you need iterator.
@@ -212,15 +213,15 @@ instead of (py2 style)
 import __builtins__
 ```
 
-    9. Use __bool__ instead of __nonzero__. For python2 compatibility use next hack:
+    9. Use \__bool\__ instead of \__nonzero\__. For python2 compatibility use next hack:
 ```python
 class Foo(object):
     def __bool__(self):
         return bool(...)
 
 Foo.__nonzero__ = Foo.__bool__
-If you do so, 2to3 will not replace __nonzero__.
 ```
+Doing so prevents 2to3 to replace \__nonzero\__.
 
     10. Use six.u() if you need unicode, use six.b() if you need bytestring:
 ```python
