@@ -379,8 +379,11 @@ class Library(object):
             with p.datafile.open(mode='rb') as fin:
                 self.logger.info('Checking in {}'.format(p.identity.vname))
 
+                calls = [0]
                 def progress(bytes):
-                    self.logger.info('Checking in {}; {} bytes'.format(p.identity.vname, bytes))
+                    calls[0] += 1
+                    if calls[0] % 4 == 0:
+                        self.logger.info('Checking in {}; {} bytes'.format(p.identity.vname, bytes))
 
                 remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
                 event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)

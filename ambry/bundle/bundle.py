@@ -288,7 +288,9 @@ class Bundle(object):
         self.session.delete(p._partition)
 
     def source(self, name):
-        return self.dataset.source_file(name)
+        source =  self.dataset.source_file(name)
+        source._bundle = self
+        return source
 
     def source_pipe(self, source):
         """Create a source pipe for a source, giving it access to download files to the local cache"""
@@ -766,6 +768,7 @@ class Bundle(object):
         """
         from ambry_sources import get_source
         from ambry_sources.sources import FixedSource, GeneratorSource
+        from ambry.etl import GeneratorSourcePipe
 
         # They are the same in this function, but are different elsewhere, so we have both for
         # consistence.
@@ -776,6 +779,7 @@ class Bundle(object):
         elif not isinstance(sources, (list,tuple)):
             sources = [sources]
 
+        processed_sources = []
         for i, source in enumerate(sources):
 
             if isinstance(source, basestring):
@@ -785,6 +789,8 @@ class Bundle(object):
 
                 if not source:
                     raise BundleError("Failed to get source for '{}'".format(source_name))
+
+            processed_sources.append(source)
 
             if not force and source.datafile.exists:
                 self.log("Source {} already ingested, skipping".format(source.name))
@@ -816,11 +822,13 @@ class Bundle(object):
                                                  (source.spec.name,) + source.datafile.report_progress()), 3):
                 source.datafile.load_rows(s, s.spec)
 
+            self.log("Ingested: {}".format(source.datafile.path))
+
         self.commit()
 
         # Do these updates, even if we skipped ingestion, so that the source tables will be generates if they
         # had been cleaned from the database, but the ingested files still exists.
-        for i, source in enumerate(sources):
+        for i, source in enumerate(processed_sources):
             source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
 
@@ -1101,7 +1109,7 @@ Pipeline {}
 Pipeline Headers
 ================
 {}
-""".format(str(datetime.now()),unicode(pl), pl.headers_report())
+""".format(str(datetime.now()),unicode(pl), pl.headers_report()))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 

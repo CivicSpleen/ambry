@@ -220,7 +220,10 @@ class RowBuildSourceFile(BuildSourceFile):
         # Some types have special representations in spreadsheets, particularly lists and dicts
         def munge_types(v):
             if isinstance(v, (list, tuple)):
-                return u(',').join(u(e).replace(',', '\,') for e in v)
+                # The `e` variable can be an integer or a string, so it needs to be
+                # converted to a string before the replace. This was originally done with unicode(),
+                # but got replaced with u() in conversion to py3, but u() for py2 doesn't do the string conversion correctly.
+                return u(',').join(unicode(e).replace(',', '\,') for e in v)
             elif isinstance(v, dict):
                 import json
                 return json.dumps(v)

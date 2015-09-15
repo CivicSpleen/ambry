@@ -59,6 +59,7 @@ class Test(TestBase):
 
     def test_complete_build(self):
         """Build the simple bundle"""
+        from ambry.etl import GeneratorSourcePipe
 
         from geoid import civick, census
 
@@ -73,6 +74,8 @@ class Test(TestBase):
 
         self.assertEquals('new', b.state)
         b.ingest()
+
+        self.assertEquals(6000, sum(1 for row in b.source('source1').datafile.reader))
 
         self.assertEquals(1, len(b.source_tables))
 

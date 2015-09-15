@@ -20,7 +20,7 @@ from . import Column, Partition, Table, Dataset, Config, File,\
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 107
+SCHEMA_VERSION = 108
 
 POSTGRES_SCHEMA_NAME = 'ambrylib'
 POSTGRES_PARTITION_SCHEMA_NAME = 'partitions'

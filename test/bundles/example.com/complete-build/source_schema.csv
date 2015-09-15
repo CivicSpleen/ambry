@@ -1,1 +1,12 @@
 table,position,source_header,dest_header,datatype,valuetype,start,width,size,summary,description
+demo,0,uuid_a1046ef5_90e8_47b1_b623_aef2fe80713f,uuid,str,,,,,,
+demo,1,int_64,int,int,,,,,,
+demo,2,float_5_4062450996,float,float,,,,,,
+demo,3,categorical_blue,categorical,str,,,,,,
+demo,4,ordinal_3,ordinal,int,,,,,,
+demo,5,gaussian_100_884120458,gaussian,float,,,,,,
+demo,6,triangle_900_428701567,triangle,float,,,,,,
+demo,7,exponential_144_827191842,exponential,float,,,,,,
+demo,8,year_2003,year,int,,,,,,
+demo,9,date_2003_04_24,date,date,,,,,,
+demo,10,bg_gvid_2q000300053,bg_gvid,str,,,,,,

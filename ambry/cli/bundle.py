@@ -218,7 +218,8 @@ def bundle_parser(cmd):
                            help='Re-ingest already ingested files')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
                            help='Syncrhonize before and after')
-
+    command_p.add_argument('sources', nargs='*', type=str,
+                           help='Sources to ingest, instead of running all sources')
 
 
     #
@@ -542,7 +543,7 @@ def bundle_ingest(args, l, rc):
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l).cast_to_subclass()
-    b.ingest(force = args.force)
+    b.ingest(sources=args.sources,force = args.force)
     b.set_last_access(Bundle.STATES.INGEST)
 
     if args.sync:
