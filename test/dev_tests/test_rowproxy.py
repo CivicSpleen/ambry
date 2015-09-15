@@ -2,10 +2,6 @@
 import os
 import unittest
 
-import xlrd
-
-from ambry.etl.intuit import RowIntuiter
-
 from contexttimer import Timer
 
 class Test(unittest.TestCase):
