@@ -220,10 +220,7 @@ class RowBuildSourceFile(BuildSourceFile):
         # Some types have special representations in spreadsheets, particularly lists and dicts
         def munge_types(v):
             if isinstance(v, (list, tuple)):
-                # The `e` variable can be an integer or a string, so it needs to be
-                # converted to a string before the replace. This was originally done with unicode(),
-                # but got replaced with u() in conversion to py3, but u() for py2 doesn't do the string conversion correctly.
-                return u(',').join(unicode(e).replace(',', '\,') for e in v)
+                return u(',').join(u('{}').format(e).replace(',', '\,') for e in v)
             elif isinstance(v, dict):
                 import json
                 return json.dumps(v)
@@ -394,7 +391,6 @@ class PythonSourceFile(StringSourceFile):
 
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
-
 
     def import_bundle(self):
         """Add the filesystem to the Python sys path with an import hook, then import
@@ -596,7 +592,7 @@ class SchemaFile(RowBuildSourceFile):
             if not row.get('datatype', False):
                 raise ConfigurationError('Row error: no type on line {}'.format(line_no))
 
-            row['datatype'] = old_types_map.get(row['datatype'].lower(),row['datatype'])
+            row['datatype'] = old_types_map.get(row['datatype'].lower(), row['datatype'])
 
             table = get_or_new_table(row)
 
