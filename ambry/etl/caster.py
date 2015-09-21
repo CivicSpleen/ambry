@@ -70,16 +70,16 @@ def parse_float(caster, name, v):
 
 def parse_str(caster, name, v):
 
-    # This is often a no-op, but it ocassionally converted numbers into strings
+    # This is often a no-op, but it ocassionally convertes numbers into strings
 
     try:
-        return str(v)
+        return str(v).strip()
     except UnicodeEncodeError:
-        return unicode(v)
+        return unicode(v).strip()
 
 
 def parse_unicode(caster, name, v):
-    return unicode(v)
+    return unicode(v).strip()
 
 
 def parse_type(type_, caster,  name, v):

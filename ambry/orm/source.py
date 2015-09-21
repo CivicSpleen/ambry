@@ -76,11 +76,17 @@ class DataSourceBase(object):
         return self._source_table
 
     @property
+    def resolved_dest_table_name(self):
+
+        return self.dest_table_name if self.dest_table_name else (
+            self.source_table_name if self.source_table_name else self.name)
+
+    @property
     def dest_table(self):
         from .exc import NotFoundError
 
         if not self._dest_table:
-            name = self.dest_table_name if self.dest_table_name else self.name
+            name = self.resolved_dest_table_name
 
             try:
                 self._dest_table = self.dataset.table(name)
@@ -141,7 +147,7 @@ class DataSourceBase(object):
             with self.datafile.reader as r:
 
                 st = self.source_table
-                for col in r.meta['schema']:
+                for col in r.columns:
 
                     c = st.column(col['name'])
 

@@ -66,36 +66,41 @@ class LibraryFilesystem():
         # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
         # https://github.com/boto/boto/issues/2836
         if r.startswith('s3'):
-            from fs.s3fs import S3FS
-            from ambry.util import parse_url_to_dict
-
-            import ssl
-
-            _old_match_hostname = ssl.match_hostname
-
-            def _new_match_hostname(cert, hostname):
-                if hostname.endswith('.s3.amazonaws.com'):
-                    pos = hostname.find('.s3.amazonaws.com')
-                    hostname = hostname[:pos].replace('.', '') + hostname[pos:]
-                return _old_match_hostname(cert, hostname)
-
-            ssl.match_hostname = _new_match_hostname
-
-            pd = parse_url_to_dict(r)
-
-            account = self._config.account(pd['netloc'])
-
-            s3 =  S3FS(
-                bucket = pd['netloc'],
-                prefix = pd['path'],
-                aws_access_key = account['access'],
-                aws_secret_key = account['secret'],
-
-            )
-
-            #ssl.match_hostname = _old_match_hostname
-
-            return s3
+            return self.s3(r)
 
         else:
             return fsopendir(r, create_dir = True)
+
+    def s3(self, url):
+        from fs.s3fs import S3FS
+        from ambry.util import parse_url_to_dict
+        from ambry.dbexceptions import ConfigurationError
+
+        import ssl
+
+        _old_match_hostname = ssl.match_hostname
+
+        def _new_match_hostname(cert, hostname):
+            if hostname.endswith('.s3.amazonaws.com'):
+                pos = hostname.find('.s3.amazonaws.com')
+                hostname = hostname[:pos].replace('.', '') + hostname[pos:]
+            return _old_match_hostname(cert, hostname)
+
+        ssl.match_hostname = _new_match_hostname
+
+        pd = parse_url_to_dict(url)
+
+
+        account = self._config.account(pd['netloc'])
+
+        s3 = S3FS(
+            bucket=pd['netloc'],
+            prefix=pd['path'],
+            aws_access_key=account.get('access'),
+            aws_secret_key=account.get('secret'),
+
+        )
+
+        # ssl.match_hostname = _old_match_hostname
+
+        return s3

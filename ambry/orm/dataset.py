@@ -346,6 +346,10 @@ class Dataset(Base):
             .filter(DataSource.d_vid == self.vid)
             .first())
 
+        if not source:
+            from exc import NotFoundError
+            raise NotFoundError("Failed to find source for name : '{}' ".format(name))
+
         return source
 
     def new_source_table(self, name):

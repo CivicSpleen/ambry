@@ -47,19 +47,23 @@ class Bundle(object):
     # Other things that can be part of the 'last action'
     STATES.INFO = 'info'
 
+    # If the bundle is in test mode, only run 1000 rows, selected from the first 100,000
+    TEST_ROWS = 1000  # Number of test rows to select from file.
+
+
     # Default body content for pipelines
     default_pipelines = {
 
         'build': {
             'first': [],
-            'body': [
-                ambry.etl.MapToSourceTable
+            'map': [
+                ambry.etl.MapSourceHeaders
             ],
-            'augment' : [],
             'cast': [
                 ambry.etl.CasterPipe
             ],
-            'intuit': [],
+            'select': [],
+            'augment': [],
             'last': [],
             'store': [
                 ambry.etl.SelectPartition,
@@ -73,7 +77,7 @@ class Bundle(object):
         },
     }
 
-    def __init__(self, dataset, library, source_url=None, build_url=None):
+    def __init__(self, dataset, library, source_url=None, build_url=None, test = False):
         import logging
         import signal
 
@@ -99,6 +103,8 @@ class Bundle(object):
         self._identity = None
 
         self._orig_alarm_handler = signal.SIG_DFL # For start_progress_loggin
+
+        self.test = test # Set to true to trigger test behavior
 
         self.init()
 
@@ -134,7 +140,7 @@ class Bundle(object):
         try:
             clz = bsf.import_bundle()
 
-            return clz(self._dataset, self._library, self._source_url, self._build_url)
+            return clz(self._dataset, self._library, self._source_url, self._build_url, self.test)
 
         except Exception as e:
             raise BundleError("Failed to load bundle code file, skipping : {}".format(e))
@@ -507,7 +513,7 @@ class Bundle(object):
 
             # Or, use signal.itimer()? Maybe, but this way, the handler will stop if there is
             # an exception, rather than getting regular exceptions.
-            signal.alarm(1)
+            signal.alarm(interval)
 
         old_handler = signal.signal(signal.SIGALRM, handler)
 
@@ -609,7 +615,7 @@ class Bundle(object):
 
         self.sync_in()
 
-        if not self.ingest(sources = sources, force = force, clean = clean):
+        if not self.ingest(sources = sources, force = force, clean_files = clean):
             self.error('Run: failed to ingest')
             return False
 
@@ -759,49 +765,49 @@ class Bundle(object):
     # General Phase Runs
     #
 
-    def ingest(self, sources = None, force = False, clean = False):
+    def ingest(self, sources = None, force = False, clean_files=False):
         """
         Load sources files into MPR files, attached to the source record
+        :param source: Sources or destination table name. If tables, the parameter is converted to the set of sources
+        that have that table as a destination table.
         :param force: Delete files before loading.
         :param clean: Same as force; exists for consistency
         :return:
         """
         from ambry_sources import get_source
         from ambry_sources.sources import FixedSource, GeneratorSource
-        from ambry.etl import GeneratorSourcePipe
-
-        # They are the same in this function, but are different elsewhere, so we have both for
-        # consistence.
-        force = force or clean
+        from ambry.orm.exc import NotFoundError
 
         if not sources:
             sources = self.sources
         elif not isinstance(sources, (list,tuple)):
             sources = [sources]
 
+
         processed_sources = []
         for i, source in enumerate(sources):
 
             if isinstance(source, basestring):
                 source_name = source
-                source = self.source(source)
-                source._bundle = self
 
                 if not source:
                     raise BundleError("Failed to get source for '{}'".format(source_name))
 
             processed_sources.append(source)
 
-            if not force and source.datafile.exists:
-                self.log("Source {} already ingested, skipping".format(source.name))
-                continue
-            elif force:
-                source.datafile.remove()
+            if source.datafile.exists:
+                if clean_files:
+                    source.datafile.remove()
+                else:
+                    self.log("Source {} already ingested, skipping".format(source.name))
+                    continue
+
 
             self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
 
             if source.url:
-                s = get_source(source.spec, self.library.download_cache, clean = force)
+                with self.progress_logging(lambda: ("Downloading {}", (source.url,)), 10):
+                    s = get_source(source.spec, self.library.download_cache, clean = force)
 
                 if isinstance(s, FixedSource):
                     s.spec.columns = list(source.source_table.columns)
@@ -819,7 +825,7 @@ class Bundle(object):
                 s = GeneratorSource(source.spec, gen_cls(self, source), use_row_spec = False)
 
             with self.progress_logging(lambda : ("Ingesting {}: {} {} of {}, rate: {}",
-                                                 (source.spec.name,) + source.datafile.report_progress()), 3):
+                                                 (source.spec.name,) + source.datafile.report_progress()), 10):
                 source.datafile.load_rows(s, s.spec)
 
             self.log("Ingested: {}".format(source.datafile.path))
@@ -834,15 +840,21 @@ class Bundle(object):
 
         return True
 
-    def schema(self):
+    def schema(self, tables = None, force = False, clean = False):
         """Generate destination schemas"""
         from itertools import groupby
         from operator import attrgetter
+
+        if clean:
+            self.dataset.delete_tables_partitions()
+            self.commit()
 
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
         for t, sources in groupby(sorted(self.sources, key=keyfunc), keyfunc):
 
+            if tables and t.name not in tables:
+                continue
 
             # Get all of the header names, for each source, associating the header position in the table
             # with the header, then sort on the postition. This will produce a stream of header names
@@ -889,6 +901,7 @@ class Bundle(object):
             if name in self.metadata.pipelines:
                 pipe_config = self.metadata.pipelines[name]
                 pipe_name = name
+
                 break
 
         # The pipe_config can either be a list, in which case it is a list of pipe pipes for the body segment
@@ -963,9 +976,11 @@ class Bundle(object):
 
         :param phase:
         :param stage:
-        :param sources:
+        :param sources: Source names or destination table names.
         :return:
         """
+
+        from ambry.orm.exc import NotFoundError
 
         assert isinstance(stage, string_types) or stage is None
 
@@ -1005,17 +1020,29 @@ class Bundle(object):
             if not isinstance(sources, (list, tuple)):
                 sources = [sources]
 
+            resolved_sources = []
+            errors = []
             for source in sources:
                 if isinstance(source, string_types):
-                    source_obj = self.source(source)
-                    if not source_obj:
-                        raise PhaseError("Could not find source named '{}' ".format(source))
-                    source_objs.append(source_obj)
+
+                    try:
+                        resolved_sources.append( self.source(source))
+                    except NotFoundError:
+                        # Maybe the source is actually a table name, so find all of the sorces that have
+                        # the tables as a dest_table.
+                        table = self.table(source)
+                        try:
+                            resolved_sources += filter(lambda x: x.resolved_dest_table_name == table.name, self.sources)
+                        except:
+                            errors.append(source)
 
                 else:
-                    source_objs.append(source)
+                    resolved_sources.append(source)
 
-            sources = source_objs
+            sources = resolved_sources
+
+            if errors:
+                raise NotFoundError("Failed to find these source names / table names:  ".format(errors))
 
         log_msg = 'Processing {} sources, stage {} ; {}'\
             .format(len(sources), stage, [x.name for x in sources[:10]])
@@ -1024,16 +1051,21 @@ class Bundle(object):
 
         for i, source in enumerate(sources):
 
-            self.logger.info('Running phase {} for source {} '.format(phase, source.name))
-
             pl = self.pipeline(phase, source)
+
+            self.logger.info('Running phase {} for source {} with pipeline {}'.format(phase, source.name, pl.name))
 
             # Doing this before hand to get at least some information about the pipline,
             # in case there is an error during the run. It will get overwritten with more information
             # after asecussful run
             self.final_log_pipeline(pl)
 
-            pl.run()
+            with self.progress_logging(lambda: ("Run source {}: {} rows, {} rows/sec",
+                                                (source.spec.name,) + pl.sink.report_progress()), 10):
+
+                rows_count = int(min(source.datafile.n_rows, self.TEST_ROWS) ) if self.test else None
+
+                pl.run(count = rows_count)
 
             self.debug('Final methods')
             for m in pl.final:
@@ -1230,34 +1262,27 @@ Pipeline Headers
 
             parent = self.partitions.get_or_new_partition(name, type=Partition.TYPE.UNION)
 
-            headers = None
-            i = 1
-
             if parent.datafile.exists:
                 self.log("Removing exising datafile {}".format(parent.datafile.path))
                 parent.datafile.remove()
 
-            with parent.datafile.writer as w, \
-                 self.progress_logging(lambda : ("Coalescing: {} {} of {}, rate: {}",
-                                                     parent.datafile.report_progress()), 3):
+            headers = None
+            i = 1
+
+            logger = lambda: ("Coalescing: {} {} of {}, rate: {}", parent.datafile.report_progress())
+
+            with parent.datafile.writer as w, self.progress_logging(logger, 10):
 
                 for seg in sorted(segments, key=lambda x: b(x.name)):
 
                     self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
 
                     with self.wrap_partition(seg).datafile.reader as reader:
-                        if not headers:
-                            headers = reader.headers
-                            w.insert_headers(headers)
-
-                        for i, row in enumerate(reader.rows):
-                            row[0] = i
-                            w.insert_row(row)
+                        for row in reader.rows:
+                            w.insert_row((i,)+row[1:])
                             i += 1
 
                 self.debug(indent + "Coalesced {} rows ".format(i))
-
-            self.commit()
 
             parent.finalize()
             self.commit()

@@ -1068,6 +1068,33 @@ class _GetchWindows:
 getch = _Getch()
 
 
+def scrape(library, url, as_html=False):
+
+    if url.startswith('s3:'):
+        s3 = library.filesystem.s3(url)
+        return scrape_s3(url, s3, as_html = as_html)
+    else:
+        return scrape_urls_from_web_page()
+
+def scrape_s3(root_url, s3, as_html=False):
+    from os.path import join
+    d = dict(external_documentation={}, sources={}, links={})
+
+    for f in s3.walkfiles('/'):
+        if as_html:
+            try:
+                url, _ = s3.getpathurl(f).split('?',1)
+            except ValueError:
+                url = s3.getpathurl(f)
+        else:
+            url = join(root_url, f.strip('/'))
+
+        fn = f.strip('/')
+
+        d['sources'][fn] = dict(url=url, description='', title=fn)
+
+    return d
+
 def scrape_urls_from_web_page(page_url):
     parts = list(urlsplit(page_url))
 
@@ -1115,7 +1142,7 @@ def scrape_urls_from_web_page(page_url):
             fn = base
             ext = ''
 
-        try:  # Yaml adds a lot of junk to encode unicode.
+        try:  # Yaml adds a lot of junk to encode unicode. # FIXME. SHould use safe_dump instead
             fn = str(fn)
             url = str(url)
             text = str(text)

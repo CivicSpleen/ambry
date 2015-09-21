@@ -94,6 +94,9 @@ def using_bundle(args, l, print_loc=True):
 
     b = l.bundle(ref)
 
+    if args.test:
+        b.test = True
+
     return b
 
 
@@ -181,6 +184,8 @@ def bundle_parser(cmd):
                            help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action='store_true',
                            help='Also report partition details')
+    command_p.add_argument('-q', '--quiet', default=False, action='store_true',
+                           help='Just report the minimum information, ')
 
     command_p.add_argument('term', nargs='?', type=str, help='Bundle source directory or file')
 
@@ -213,7 +218,8 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('ingest', help='Build or install download and convert data to internal file format')
     command_p.set_defaults(subcommand='ingest')
 
-    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
+    command_p.add_argument('-c', '--clean-tables', default=False, action='store_true', help='Clean and rebuild source tables')
+    command_p.add_argument('-C', '--clean-files', default=False, action='store_true', help='Delete and re-download files')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Re-ingest already ingested files')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
@@ -221,6 +227,19 @@ def bundle_parser(cmd):
     command_p.add_argument('sources', nargs='*', type=str,
                            help='Sources to ingest, instead of running all sources')
 
+    #
+    # Schema Command
+    #
+    command_p = sub_cmd.add_parser('schema', help='Generation the destination schema')
+    command_p.set_defaults(subcommand='schema')
+
+    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Remove all columns from existing tavbles')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Re-run the schema, even if it already exists.')
+    command_p.add_argument('-s', '--sync', default=False, action='store_true',
+                           help='Syncrhonize before and after')
+    command_p.add_argument('tables', nargs='*', type=str,
+                           help='Only run the schema for the named tables. ')
 
     #
     # Build Command
@@ -347,11 +366,8 @@ def bundle_parser(cmd):
     command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to export')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
-
-
     command_p = sub_cmd.add_parser('cluster', help='Cluster sources by similar headers')
     command_p.set_defaults(subcommand='cluster')
-
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -359,7 +375,10 @@ def bundle_info(args, l, rc):
     if args.which:
         ref, frm = get_bundle_ref(args, l)
         b = using_bundle(args, l, print_loc=False)
-        prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
+        if args.quiet:
+            prt(ref)
+        else:
+            prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
         return
 
     b = using_bundle(args, l, print_loc=False)
@@ -534,16 +553,31 @@ def bundle_ingest(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
 
-    if args.clean:
-        b.clean()
-        b.set_last_access(Bundle.STATES.CLEANED)
+    if args.sync:
+        b.sync_in()
+
+    if args.clean_tables:
+        b.dataset.source_tables[:] = []
+        b.commit()
+
+    # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
+    b = using_bundle(args, l).cast_to_subclass()
+    b.ingest(sources=args.sources,force = args.force, clean_files=args.clean_files)
+    b.set_last_access(Bundle.STATES.INGEST)
+
+    if args.sync:
+        b.sync_out()
+
+def bundle_schema(args, l, rc):
+
+    b = using_bundle(args, l).cast_to_subclass()
 
     if args.sync:
         b.sync_in()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l).cast_to_subclass()
-    b.ingest(sources=args.sources,force = args.force)
+    b.schema(tables=args.tables,force = args.force, clean = args.clean)
     b.set_last_access(Bundle.STATES.INGEST)
 
     if args.sync:
@@ -574,7 +608,7 @@ def bundle_build(args, l, rc):
     b = b.cast_to_subclass()
 
     # Only force build. To force an ingest, must explicitly run ingest.
-    b.ingest(sources=args.sources)
+    # b.ingest(sources=args.sources)
 
     b.build(sources=args.sources, force = args.force)
 
@@ -851,6 +885,13 @@ def bundle_new(args, l, rc):
 
         fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
+    if args.dryrun:
+        from ..identity import Identity
+        d['revision'] = 1
+        d['id'] = 'dXXX'
+        print(str(Identity.from_dict(d)))
+        return
+
     try:
         b = l.new_bundle(assignment_class=args.key, **d)
 
@@ -858,7 +899,6 @@ def bundle_new(args, l, rc):
         fatal("Can't create dataset; one with a conflicting name already exists")
 
     print(b.identity.fqname)
-
 
 def bundle_import(args, l, rc):
 

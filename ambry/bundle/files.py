@@ -357,7 +357,7 @@ class MetadataFile(DictBuildSourceFile):
             o = fr.unpacked_contents
 
         else:
-            o = yaml.safe_load(file_default(self._file_const), encoding='utf-8')
+            o = yaml.safe_load(file_default(self._file_const))
 
             try:
                 act = self._bundle.library.config.account('ambry').to_dict()
@@ -451,6 +451,7 @@ class SourcesFile(RowBuildSourceFile):
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
+        from ambry.orm.exc import NotFoundError
 
         fr = self._dataset.bsfile(self._file_const)
 
@@ -492,11 +493,10 @@ class SourcesFile(RowBuildSourceFile):
 
                 d['d_vid'] = self._dataset.vid
 
-                ds = self._dataset.source_file(d['name'])
-                if ds:
+                try:
+                    ds = self._dataset.source_file(d['name'])
                     ds.update(**d)
-
-                else:
+                except NotFoundError:
                     name = d['name']
                     del d['name']
                     ds = self._dataset.new_source(name, **d)
@@ -758,7 +758,7 @@ def file_default(const):
 
     path = os.path.join(os.path.dirname(df.__file__),  file_name(const))
 
-    with open(path) as f:
+    with open(path,'rb') as f:
         return f.read()
 
 
