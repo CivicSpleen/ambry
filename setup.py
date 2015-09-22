@@ -23,7 +23,6 @@ ambry_meta = imp.load_source('_meta', 'ambry/_meta.py')
 long_description = open('README.rst').read()
 
 
-
 def find_package_data():
     """ Returns package_data, because setuptools is too stupid to handle nested directories.
 
@@ -45,7 +44,6 @@ def find_package_data():
                 l.append(path)
 
     return {'ambry': l}
-
 
 class TestCommand(Command):
     """Custom distutils command to run the test suite."""
@@ -79,10 +77,7 @@ d = dict(
     author_email=ambry_meta.__email__,
     url='https://github.com/CivicKnowledge/ambry',
     packages=find_packages(),
-    scripts=['scripts/bambry', 'scripts/bambry.bat',
-             'scripts/ambry', 'scripts/ambry.bat',
-             'scripts/xambry',
-             'scripts/ambry-load-sqlite', 'scripts/ambry_build_all'],
+    scripts=['scripts/bambry', 'scripts/ambry'],
     package_data=find_package_data(),
     license=ambry_meta.__license__,
     cmdclass={'test': TestCommand},
