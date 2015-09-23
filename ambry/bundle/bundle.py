@@ -380,6 +380,31 @@ class Bundle(object):
 
         return self._build_fs
 
+    @property
+    def build_partition_fs(self):
+        """Return a pyfilesystem subdirectory for the build directory for the bundle. This the sub-directory
+        of the build FS that holds the compiled SQLite file and the partition data files"""
+
+        base_path = os.path.dirname(self.identity.cache_key)
+
+        if not self.build_fs.exists(base_path):
+            self.build_fs.makedir(base_path, allow_recreate=True)
+
+        return self.build_fs.opendir(base_path)
+
+    @property
+    def build_ingest_fs(self):
+        """Return a pyfilesystem subdirectory for the ingested source files"""
+
+        base_path = 'ingest'
+
+        if not self.build_fs.exists(base_path):
+            self.build_fs.makedir(base_path, allow_recreate=True)
+
+
+        return self.build_fs.opendir(base_path)
+
+
     def phase_search_names(self, source, phase):
         search = []
 
@@ -686,6 +711,48 @@ class Bundle(object):
         if ds.bsfile(File.BSFILE.SCHEMA).has_contents:
             self.dataset.tables[:] = []
 
+        self.log('---- Done Cleaning ----')
+
+        return True
+
+    def clean_source(self, force=False):
+        """Like clean, but also clears out files. """
+
+
+    def clean_tables(self, force=False):
+        """Like clean, but also clears out files. """
+
+    def clean_partitions(self, force=False):
+        """Delete partition records and any built partition files.  """
+        import shutil
+
+        self.dataset.delete_partitions()
+
+        shutil.rmtree(self.build_partition_dir.getsyspath('/'))
+
+    def clean_build(self, force=False):
+        """Delete the build directory and all ingested files """
+        import shutil
+
+        self.clean_files()
+
+        shutil.rmtree(self.build_fs.getsyspath('/'))
+
+
+    def clean_files(self, force=False):
+        """Delete all ingested file records, but leave the ingested files in the build directory """
+
+        self.dataset.files[:] = []
+
+    def clean_all(self, force=False):
+        """Like clean, but also clears out files. """
+
+        self.clean()
+
+
+    def clean_process_meta(self):
+        """Remove all process and build metadata"""
+
         ds.config.build.clean()
         ds.config.process.clean()
 
@@ -693,18 +760,6 @@ class Bundle(object):
 
         self.state = self.STATES.CLEANED
 
-        self.log('---- Done Cleaning ----')
-
-        return True
-
-    def clean_all(self, force=False):
-        """Like clean, but also clears out files. """
-
-        self.clean()
-        self.dataset.files[:] = []
-
-        import shutil
-        shutil.rmtree(self.build_fs.getsyspath('/'))
 
     #
     # Prepare
@@ -812,7 +867,6 @@ class Bundle(object):
                     self.log("Source {} already ingested, skipping".format(source.name))
                     continue
 
-
             self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
 
             if source.url:
@@ -916,10 +970,18 @@ class Bundle(object):
 
                 break
 
-        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the body segment
+        if pipe_name:
+            pl.name = pipe_name
+        else:
+            pl.name = phase
+
+        pl.phase = phase
+
+        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the         augment segment
         # or it could be a dict, in which case each is a list of pipes for the named segments.
 
         def apply_config(pl, pipe_config):
+
             if isinstance(pipe_config, (list, tuple)):
                 # Just convert it to dict form for the next section
 
@@ -929,7 +991,7 @@ class Bundle(object):
                 for pipe in pipe_config:
                     store.append(pipe) if isinstance(pipe, PartitionWriter) else body.append(pipe)
 
-                pipe_config = dict(body=body, store=store)
+                pipe_config = dict(augment=body, store=store)
 
             if pipe_config:
                 pl.configure(pipe_config)
@@ -940,12 +1002,6 @@ class Bundle(object):
         if 'all' in self.metadata.pipelines:
             apply_config(pl, self.metadata.pipelines['all'])
 
-        if pipe_name:
-            pl.name = pipe_name
-        else:
-            pl.name = phase
-
-        pl.phase = phase
 
         # Allows developer to over ride pipe configuration in code
         self.edit_pipeline(pl)

@@ -214,8 +214,18 @@ def bundle_parser(cmd):
     # Clean Command
     #
     command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
-    command_p.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Force cleaning a built or finalized bundle')
+    command_p.add_argument('-a', '--all', default=False, action='store_true',
+                           help='Clean everything: metadata, partitions, tables, config, everything. ')
+    command_p.add_argument('-S', '--source', default=False, action='store_true',
+                           help='Clean the source tables schema, but not ingested source files.  ')
+    command_p.add_argument('-f', '--files', default=False, action='store_true',
+                           help='Clean the ingested files')
+    command_p.add_argument('-t', '--tables', default=False, action='store_true',
+                           help='Clean destination tables')
+    command_p.add_argument('-p', '--partitions', default=False, action='store_true',
+                           help='Clean any built partitions')
+    command_p.add_argument('-b', '--build', default=False, action='store_true',
+                           help='Clean the build directory')
     command_p.set_defaults(subcommand='clean')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
@@ -545,7 +555,22 @@ def bundle_finalize(args, l, rc):
 
 def bundle_clean(args, l, rc):
     b = using_bundle(args, l).cast_to_subclass()
-    b.clean_all(force=args.force)
+
+    if args.source or args.all:
+        pass
+
+    if args.files or args.all:
+        pass
+
+    if args.tables or args.all:
+        pass
+
+    if args.partitions or args.all:
+        pass
+
+    if args.build or args.all:
+        pass
+
     b.set_last_access(Bundle.STATES.NEW)
 
 
@@ -634,13 +659,12 @@ def bundle_build(args, l, rc):
 
     b = b.cast_to_subclass()
 
-    # Only force build. To force an ingest, must explicitly run ingest.
-    # b.ingest(sources=args.sources)
-
     if args.table:
         sources = list(s for s in b.sources if s.dest_table_name in args.tables)
     else:
         sources = args.source
+
+
 
     b.build(sources=sources, force = args.force)
 

@@ -97,14 +97,12 @@ class DataSourceBase(object):
 
     @property
     def datafile(self):
+        """Return an MPR datafile from the /ingest directory of the build filesystem"""
         from ambry_sources import MPRowsFile
         from os.path import join
 
         if self._datafile is None:
-
-            name = self._bundle.identity.name.as_partition(table=self.name, format='source')
-
-            self._datafile = MPRowsFile(self._bundle.build_fs, name.cache_key)
+            self._datafile = MPRowsFile(self._bundle.build_ingest_fs, self.name)
 
         return self._datafile
 
