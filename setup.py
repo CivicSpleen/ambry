@@ -96,9 +96,8 @@ d = dict(
     install_requires=[x for x in reversed([str(x.req) for x in requirements])],
     tests_require=['pytest'],
     extras_require={
-        'pgsql': ['psycopg2'],
-        'geo': ['sh', 'gdal'],
-        'server': ['paste', 'bottle']}
+        'server': ['paste', 'bottle']
+    }
 )
 
 setup(**d)
