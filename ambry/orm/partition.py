@@ -272,6 +272,9 @@ class Partition(Base, DictableMixin):
             def items(self):
                 return list(self.__dict__.items())
 
+            def iteritems(self):
+                return iter(list(self.__dict__.items()))
+
             def __getitem__(self, k):
                 return self.__dict__[k]
 

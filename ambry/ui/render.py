@@ -17,21 +17,17 @@ from flask.json import JSONEncoder as FlaskJSONEncoder
 from flask.json import dumps
 from flask import Response, make_response, url_for
 
-from geoid.civick import GVid
-
-import unicodecsv
 
 from ambry.identity import ObjectNumber, NotObjectNumberError, Identity
+from ambry.bundle import Bundle
 from ambry.library import new_library
 from ambry.orm import Table
 from ambry.orm.exc import NotFoundError
-from ambry.warehouse.manifest import Manifest
 from ambry.util import get_logger
-from ambry.util.flo import StringQueue
+
 import ambry.ui.templates as tdir
 
-from . import renderer
-
+from ambry.util import get_logger
 
 logger = get_logger(__name__)
 
@@ -90,10 +86,8 @@ def resolve(t):
         return t
     elif isinstance(t, (Identity, Table)):
         return t.vid
-    elif isinstance(t, (Identity, Table)):
-        return t.vid
-    elif isinstance(t, Manifest):
-        return t.uid
+    elif isinstance(t, Bundle):
+        return t.identity.vid
     elif isinstance(t, dict):
         if 'identity' in t:
             return t['identity'].get('vid', None)
@@ -263,6 +257,14 @@ def format_sql(sql):
         SqlLexer(),
         HtmlFormatter())
 
+def iter_as_dict(itr):
+    """Given an iterable, return a comprehension with the dict version of each element"""
+    from operator import attrgetter
+
+    ag = attrgetter('dict')
+
+    return [ ag(e) for e in itr if hasattr(e, 'dict') ]
+
 
 @property
 def pygmentize_css(self):
@@ -271,63 +273,29 @@ def pygmentize_css(self):
 
 class Renderer(object):
 
-    def __init__(self, content_type='html', session={}, blueprints=None):
+    def __init__(self, library, context_generator, env = None, content_type='html', session=None,
+                blueprints=None):
 
-        try:
-            self.library = new_library()
-            self.doc_cache = self.library.doc_cache
-        except:
-            raise
+        self.library = library
+        self.cg = context_generator
 
         self.css_files = ['css/style.css', 'css/pygments.css']
 
-        self.env = Environment(loader=PackageLoader('ambry.ui', 'templates'))
-
-        self.extracts = []
+        self.env = env if env else Environment(loader=PackageLoader('ambry.ui', 'templates'))
 
         # Set to true to get Render to return json instead
         self.content_type = content_type
 
         self.blueprints = blueprints
 
-        self.session = session
+        self.session = session if session else {}
 
         # Monkey patch to get the equalto test
 
-    def maybe_render(self, rel_path, render_lambda, metadata=None, force=False):
-        """Check if a file exists and maybe render it."""
-        metadata = metadata or {}
+    def cts(self, ct, session=None):
+        """Return a clone with the content type set, and maybe the session"""
 
-        if rel_path[0] == '/':
-            rel_path = rel_path[1:]
-
-        if rel_path.endswith('.html'):
-            metadata['content-type'] = 'text/html'
-
-        elif rel_path.endswith('.css'):
-            metadata['content-type'] = 'text/css'
-
-        try:
-            if not self.cache.has(rel_path) or force:
-
-                with self.cache.put_stream(rel_path, metadata=metadata) as s:
-                    t = render_lambda()
-                    if t:
-                        s.write(t.encode('utf-8'))
-                extracted = True
-            else:
-                extracted = False
-
-            completed = True
-
-        except:
-            completed = False
-            extracted = True
-            raise
-
-        finally:
-            self.extracts.append(
-                extract_entry(extracted, completed, rel_path, self.cache.path(rel_path)))
+        return Renderer(self.library, self.cg, self.env, content_type = ct, session = session)
 
     def cc(self):
         """return common context values."""
@@ -343,6 +311,7 @@ class Renderer(object):
             return wrapper
 
         return {
+            'iter_as_dict': iter_as_dict,
             'format_sql': format_sql,
             'pretty_time': pretty_time,
             'from_root': lambda x: x,
@@ -350,7 +319,6 @@ class Renderer(object):
             'schema_path': schema_path,
             'table_path': table_path,
             'partition_path': partition_path,
-            'manifest_path': manifest_path,
             'store_path': store_path,
             'store_table_path': store_table_path,
             'proto_vid_path': proto_vid_path,
@@ -362,260 +330,17 @@ class Renderer(object):
 
     def render(self, template, *args, **kwargs):
 
+        kwargs.update(self.cc())
+        kwargs['l'] = self.library
+
+        if isinstance(template, string_types):
+            template = self.env.get_template(template)
+
         if self.content_type == 'json':
-            return Response(
-                dumps(kwargs, cls=JSONEncoder, indent=4),
-                mimetype='application/json')
+            return Response(dumps(kwargs, cls=JSONEncoder, indent=4),mimetype='application/json')
 
         else:
             return template.render(*args, **kwargs)
-
-    def compiled_times(self):
-        """Compile all of the time entried from cache calls to one per key."""
-        return self.doc_cache.compiled_times()
-
-    def clean(self):
-        """Clean up the extracts on failures."""
-        for e in self.extracts:
-            if e.completed is False and os.path.exists(e.abs_path):
-                os.remove(e.abs_path)
-
-    def error500(self, e):
-        template = self.env.get_template('500.html')
-
-        return self.render(template, e=e, **self.cc())
-
-    def index(self, term=None):
-
-        template = self.env.get_template('index.html')
-
-        return self.render(
-            template,
-            last_search_terms=self.session.get('last_search_terms', ''),
-            last_search_results=self.session.get('last_search_results', None),
-            l=self.doc_cache.library_info(),
-            **self.cc())
-
-    def bundles_index(self):
-        """Render the bundle Table of Contents for a library."""
-        template = self.env.get_template('toc/bundles.html')
-
-        bundles = self.doc_cache.bundle_index()
-
-        return self.render(template, bundles=bundles, **self.cc())
-
-    def tables_index(self):
-
-        template = self.env.get_template('toc/tables.html')
-
-        tables = self.doc_cache.get_tables()
-
-        return self.render(template, tables=tables, **self.cc())
-
-    def bundle(self, vid):
-        """Render documentation for a single bundle."""
-
-        template = self.env.get_template('bundle/index.html')
-
-        b = self.doc_cache.bundle(vid)
-
-        for p in list(b['partitions'].values()):
-            p['description'] = b['tables'][p['table_vid']].get('description', '')
-
-        return self.render(template, b=b, **self.cc())
-
-    def bundle_summary(self, vid):
-        """Render documentation for a single bundle."""
-
-        template = self.env.get_template('bundle/index.html')
-
-        b = self.doc_cache.bundle_summary(vid)
-
-        return self.render(template, b=b, **self.cc())
-
-    def schemacsv(self, vid):
-        """Render documentation for a single bundle."""
-        response = make_response(self.doc_cache.get_schemacsv(vid))
-        response.headers['Content-Disposition'] = 'attachment; filename={}-schema.csv'.format(vid)
-        return response
-
-    def schema(self, vid):
-        """Render documentation for a single bundle."""
-        template = self.env.get_template('bundle/schema.html')
-
-        b_data = self.doc_cache.bundle(vid)
-
-        b = self.library.bundle(vid)
-
-        schema_reader = reader(StringIO(b.schema.as_csv()))
-
-        del b_data['partitions']
-        del b_data['tables']
-
-        schema = dict(
-            header=next(reader),
-            rows=[x for x in schema_reader])
-
-        return self.render(template, b=b_data, schema=schema, **self.cc())
-
-    def table(self, bvid, tid):
-
-        template = self.env.get_template('table.html')
-
-        b = self.doc_cache.bundle(bvid)
-
-        del b['partitions']
-        del b['tables']
-
-        t = self.doc_cache.table(tid)
-
-        return self.render(template, b=b, t=t, **self.cc())
-
-    def partition(self, pvid):
-
-        template = self.env.get_template('bundle/partition.html')
-
-        p = self.doc_cache.partition(pvid)
-
-        p['table'] = self.doc_cache.table(p['table_vid'])
-
-        if 'geo_coverage' in p:
-
-            all_idents = self.library.search.identifier_map
-
-            for gvid in p['geo_coverage']['vids']:
-                try:
-                    p['geo_coverage']['names'].append(all_idents[gvid])
-                except KeyError:
-                    g = GVid.parse(gvid)
-                    try:
-                        phrase = "All {} in {} ".format(
-                            g.level_plural.title(), all_idents[str(g.promote())])
-                        p['geo_coverage']['names'].append(phrase)
-                    except KeyError:
-                        pass
-
-        return self.render(template, p=p, **self.cc())
-
-    def store(self, uid):
-
-        template = self.env.get_template('store/index.html')
-
-        store = self.doc_cache.warehouse(uid)
-
-        assert store
-
-        # Update the manifest to get the whole object
-        store['manifests'] = {
-            uid: self.doc_cache.manifest(uid) for uid in store['manifests']}
-
-        # Count tables and columns. The columns are only counted when that are in a partition
-        # table, but the tables are also counted if they are indexed
-        table_count = 0
-        column_count = 0
-        indexed_table_count = 0
-        indexed_column_count = 0
-
-        for table, data in list(store['tables'].items()):
-            if data['type'] == "table":
-                table_count += 1
-                column_count += len(data['columns'])
-
-            if data['type'] == "indexed":
-                indexed_table_count += 1
-                indexed_column_count += len(data['columns'])
-
-        store['counts'] = dict(
-            table_count=table_count,
-            column_count=column_count,
-            indexed_table_count=indexed_table_count,
-            indexed_column_count=indexed_column_count
-        )
-
-        return self.render(template, s=store, **self.cc())
-
-    def store_table(self, uid, tid):
-
-        # Copy so we don't modify the cached version
-        store = dict(list(self.doc_cache.warehouse(uid).items()))
-
-        t = store['tables'][tid]
-
-        del store['partitions']
-        del store['manifests']
-        del store['tables']
-
-        if self.content_type == 'csv':
-
-            def yield_csv():
-                h = ['seq_id', 'vid', 'datatype',  'column_name', 'alt_name',  'description',
-                     'user_column_name', 'user_description']
-
-                f = StringQueue()
-
-                w = unicodecsv.writer(f)
-
-                w.writerow(h)
-                yield f.read()
-
-                for c in sorted(list(t['columns'].values()), key=lambda c: c['sequence_id']):
-
-                    w.writerow([
-                        c['sequence_id'],
-                        c['vid'],
-                        c['datatype'],
-                        c['name'],
-                        c['altname'],
-                        c.get('description', ''),
-                        c.get('user_column_name', ''),
-                        c.get('user_description', ''),
-                    ])
-
-                    yield f.read()  # Returns everything previously written
-
-            return Response(
-                yield_csv(), mimetype='text/csv',
-                headers={'Content-Disposition': 'attachment; filename=table-{}.csv'.format(t['vid'])})
-
-        else:
-            template = self.env.get_template('store/table.html')
-
-            return self.render(template, s=store, t=t, **self.cc())
-
-    def info(self, app_config, run_config):
-
-        template = self.env.get_template('info.html')
-
-        return self.render(template, app_config=app_config, **self.cc())
-
-    def manifest(self, muid):
-        """F is the file object associated with the manifest."""
-        from ambry.warehouse.manifest import Manifest
-        # from ambry.identity import ObjectNumber
-
-        template = self.env.get_template('manifest/index.html')
-
-        m_dict = self.doc_cache.get_manifest(muid)
-
-        m = Manifest(m_dict['text'])
-
-        return self.render(template, m=m,
-                           md=m_dict,
-                           **self.cc())
-
-    def collections_index(self):
-        """Collections/Warehouses."""
-        template = self.env.get_template('toc/collections.html')
-
-        collections = {f.ref: dict(
-            title=f.data['title'],
-            summary=f.data['summary'] if f.data['summary'] else '',
-            dsn=f.path,
-            manifests=[m.ref for m in f.linked_manifests],
-            cache=f.data['cache'],
-            class_type=f.type_) for f in self.library.stores}
-
-        return self.render(template, collections=collections, **self.cc())
 
     @property
     def css_dir(self):
@@ -628,117 +353,18 @@ class Renderer(object):
     def js_dir(self):
         return os.path.join(os.path.abspath(os.path.dirname(tdir.__file__)), 'js')
 
-    def place_search(self, term):
-        """Incremental search, search as you type."""
+    def bundle_index(self):
 
-        results = []
-        for identifier in self.library.search.search_identifiers(term):
-            results.append({'label': identifier.name})
+        cxt = dict(
+            bundles = [ b for b in self.library.bundles]
+        )
 
-        return Response(dumps(results, cls=JSONEncoder, indent=4), mimetype='application/json')
+        return self.render('toc/bundles.html', **cxt)
 
-    def bundle_search(self,  terms):
-        """Incremental search, search as you type."""
 
-        self.session['last_search_terms'] = terms
+    def bundle(self, vid):
+        cxt = dict(
+            b = self.library.bundle(vid)
+        )
 
-        final_results = []
-
-        init_results = self.library.search.search_datasets(terms)
-        parsed = self.library.search.get_parsed_query()
-
-        pvid_limit = 5
-
-        all_idents = self.library.search.identifier_map
-
-        for result in sorted(init_results, key=lambda e: e.score, reverse=True):
-
-            try:
-                d = self.doc_cache.dataset(result.vid)
-            except NotFoundError:
-                logger.error('Failed to find dataset {}'.format(result.vid))
-                continue
-
-            d['partition_count'] = len(result.partitions)
-            d['partitions'] = {}
-
-            for pvid in list(result.partitions)[:pvid_limit]:
-
-                p = self.doc_cache.partition(pvid)
-
-                p['table'] = self.doc_cache.table(p['table_vid'])
-
-                if 'geo_coverage' in p:
-                    for gvid in p['geo_coverage']['vids']:
-                        try:
-
-                            p['geo_coverage']['names'].append(all_idents[gvid])
-
-                        except KeyError:
-                            g = GVid.parse(gvid)
-                            try:
-                                phrase = "All {} in {} ".format(
-                                    g.level_plural.title(), all_idents[str(g.promote())])
-                                p['geo_coverage']['names'].append(phrase)
-                            except KeyError:
-                                pass
-
-                d['partitions'][pvid] = p
-
-            final_results.append(d)
-
-        template = self.env.get_template('search/results.html')
-
-        # Collect facets to display to the user, for additional sorting
-        facets = {
-            'years': set(),
-            'sources': set(),
-            'states': set()
-        }
-
-        for r in final_results:
-            facets['sources'].add(r['source'])
-            for p in list(r['partitions'].values()):
-                if 'time_coverage' in p and p['time_coverage']:
-                    facets['years'] |= set(p['time_coverage']['years'])
-
-                if 'geo_coverage' in p:
-                    for gvid in p['geo_coverage']['vids']:
-                        g = GVid.parse(gvid)
-
-                        if g.level == 'state' and not g.is_summary:
-                            # facets['states'].add( (gvid, all_idents[gvid]))
-                            try:
-                                facets['states'].add(all_idents[gvid])
-                            except KeyError:
-                                pass  # TODO Should probably announce an error
-
-        self.session['last_search_results'] = final_results
-
-        return self.render(template, query=parsed, results=final_results, facets=facets, **self.cc())
-
-    def generate_sources(self):
-
-        lj = self.doc_cache.get_library()
-
-        sources = {}
-        for vid, b in list(lj['bundles'].items()):
-
-            source = b['identity']['source']
-
-            if source not in sources:
-                sources[source] = {
-                    'bundles': {}
-                }
-
-            sources[source]['bundles'][vid] = b
-
-        return sources
-
-    def sources(self):
-
-        template = self.env.get_template('sources/index.html')
-
-        sources = self.generate_sources()
-
-        return self.render(template, sources=sources, **self.cc())
+        return self.render('bundle/index.html', **cxt)

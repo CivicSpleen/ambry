@@ -1,12 +1,12 @@
 {% extends "layout.html" %}
-{% block title %}{{b.meta.about.title}}{% endblock %}
+{% block title %}{{b.metadata.about.title}}{% endblock %}
 {% block head %}
     {{ super() }}
 {% endblock %}
 {% block masthead %}
-    <h1 class="title">{{b.meta.about.title}}</h1>
+    <h1 class="title">{{b.metadata.about.title}}</h1>
     <p>Dataset {{b.identity.fqname}}. <a href="{{schema_path(b.identity.vid,'html')}}">Schema</a></p>
-    {% if b.meta.about.summary -%}<p>{{b.meta.about.summary}}</p>{% endif -%}
+    {% if b.metadata.about.summary -%}<p>{{b.metadata.about.summary}}</p>{% endif -%}
 {% endblock %}
 
 {% block body %}

@@ -6,7 +6,7 @@ Copyright 2014, Civic Knowledge. All Rights Reserved
 
 import os
 import functools
-from flask import Flask
+from flask import Flask, g
 from flask.ext.session import Session
 from ambry.util import memoize
 
@@ -29,56 +29,37 @@ app_config = {
     'SESSION_FILE_DIR': '/tmp/ambrydoc/sessions/'
 }
 
+class AmbryAppContext(object):
+    """Ambry specific objects for the application context"""
 
-def expiring_memoize(obj):
-    """Like memoize, but forgets after 10 seconds."""
-    from collections import defaultdict
-    cache = obj.cache = {}
-    last_access = obj.last_access = defaultdict(int)
+    def __init__(self):
+        from ambry import get_library
+        from context import ContextGenerator
+        from render import Renderer
 
-    @functools.wraps(obj)
-    def memoizer(*args, **kwargs):
-        import time
+        self.library = get_library()
+        self.context_generator = ContextGenerator(self.library)
+        self.renderer = Renderer(self.library, self.context_generator)
 
-        key = str(args) + str(kwargs)
+        import logging
 
-        if last_access[key] and last_access[key] + 10 < time.time():
-            if key in cache:
-                del cache[key]
+        path = self.library.filesystem.logs()
 
-        last_access[key] = time.time()
+        print('Logging to: ', path)
 
-        if key not in cache:
-            cache[key] = obj(*args, **kwargs)
-        return cache[key]
+        logging.basicConfig(filename=path, level=logging.DEBUG)
 
-    return memoizer
+    def render(self, template, *args, **kwargs):
+        return self.renderer.render(template, *args, **kwargs)
 
+def aac(): # Ambry Application Context
+    """Opens a new database connection if there is none yet for the
+    current application context.
+    """
+    if not hasattr(g, 'aac'):
+        g.acc = AmbryAppContext()
 
-@memoize
-def fscache():
-    from ckcache import parse_cache_string, new_cache
-
-    cache_config = parse_cache_string(app_config['cache'])
-    return new_cache(cache_config)
-
-
-def renderer(content_type='html', session=None):
-
-    session = session if session else {}
-
-    from .render import Renderer
-    return Renderer(content_type=content_type, session=session)
-
-
-def setup_logging():
-    import logging
-
-    path = fscache().path('ambrydoc.log', missing_ok=True)
-
-    print('Logging to: ', path)
-
-    logging.basicConfig(filename=path, level=logging.DEBUG)
+    return g.acc
 
 
 app = Flask(__name__)
@@ -92,5 +73,5 @@ if False:  # How to use a proxy
 app.config.update(app_config)
 Session(app)
 
-# FIXME:: Unused import or flask magic? Write a comment if flask magic.
+# Flask Magic. The views have to be imported for Flask to use them.
 import ambry.ui.views

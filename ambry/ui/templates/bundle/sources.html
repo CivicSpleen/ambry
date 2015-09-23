@@ -1,16 +1,15 @@
 <!-- Sources -->
-{% if b.meta.sources and b.meta.sources.items() -%}
+{% if b.sources  -%}
 <div >
 
     <h2>Sources</h2>
 
     <table id="sources-table" class="table table_condensed ">
-    {% for k,e in b.meta.sources.items() %}
+    {% for s in b.sources %}
         <tr>
-            <td>{{k}}</td>
-            <td>{{e.title}}</td>
-            <td>{{e.description}}</td>
-            <td><a href="{{e.url}}" >{{e.url}}</a></td>
+            <td>{{s.name}}</td>
+            <td>{{s.description}}</td>
+            <td><a href="{{s.url}}" >{{s.url}}</a></td>
 
         </tr>
     {% endfor -%}

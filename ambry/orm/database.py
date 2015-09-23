@@ -483,7 +483,10 @@ class Database(object):
 
         ssq = self.session.query
 
+        ssq(Code).filter(Code.d_vid == ds.vid).delete()
+        ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
+
 
     def copy_dataset(self, ds):
         from ..util import toposort

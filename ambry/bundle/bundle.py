@@ -112,14 +112,18 @@ class Bundle(object):
         """An overridable initialization method, called in the Bundle constructor"""
         pass
 
-    def set_file_system(self, source_url=None, build_url=None):
+    def set_file_system(self, source_url=False, build_url=False):
         """Set the source file filesystem and/or build  file system"""
 
-        assert isinstance(source_url, string_types) or source_url is None
-        assert isinstance(build_url, string_types) or build_url is None
+        assert isinstance(source_url, string_types) or source_url is None or source_url is False
+        assert isinstance(build_url, string_types) or build_url is False
 
         if source_url:
             self._source_url = source_url
+            self.dataset.config.library.source.url = self._source_url
+            self.dataset.commit()
+        elif source_url is None:
+            self._source_url = None
             self.dataset.config.library.source.url = self._source_url
             self.dataset.commit()
 
@@ -699,6 +703,9 @@ class Bundle(object):
         self.clean()
         self.dataset.files[:] = []
 
+        import shutil
+        shutil.rmtree(self.build_fs.getsyspath('/'))
+
     #
     # Prepare
     #
@@ -765,7 +772,7 @@ class Bundle(object):
     # General Phase Runs
     #
 
-    def ingest(self, sources = None, force = False, clean_files=False):
+    def ingest(self, sources = None, tables = None, force = False, clean_files=False):
         """
         Load sources files into MPR files, attached to the source record
         :param source: Sources or destination table name. If tables, the parameter is converted to the set of sources
@@ -779,16 +786,19 @@ class Bundle(object):
         from ambry.orm.exc import NotFoundError
 
         if not sources:
-            sources = self.sources
+            if tables:
+                sources = list(s for s in self.sources if s.dest_table_name in tables)
+            else:
+                sources = self.sources
         elif not isinstance(sources, (list,tuple)):
             sources = [sources]
-
 
         processed_sources = []
         for i, source in enumerate(sources):
 
             if isinstance(source, basestring):
                 source_name = source
+                source = self.source(source_name)
 
                 if not source:
                     raise BundleError("Failed to get source for '{}'".format(source_name))
@@ -840,6 +850,7 @@ class Bundle(object):
 
         return True
 
+
     def schema(self, tables = None, force = False, clean = False):
         """Generate destination schemas"""
         from itertools import groupby
@@ -856,6 +867,8 @@ class Bundle(object):
             if tables and t.name not in tables:
                 continue
 
+            self.log("Populating table: {}".format(t.name))
+
             # Get all of the header names, for each source, associating the header position in the table
             # with the header, then sort on the postition. This will produce a stream of header names
             # that may have duplicates, but with is generally in the order the headers appear in the
@@ -864,7 +877,6 @@ class Bundle(object):
                              for i, col in enumerate(source.source_table.columns) ]))
 
             for pos, name, datatype, desc in headers:
-
                 t.add_column(name=name, datatype=datatype, description=desc)
 
         self.commit()
@@ -1204,14 +1216,17 @@ Pipeline Headers
         the build, then save the schema back to the tables, if it was revised
         during the build."""
 
-        self.build_post_cast_error_codes()
-
-        self.build_post_unify_partitions()
-
         try:
+            self.build_post_cast_error_codes()
+
+            self.build_post_unify_partitions()
+
             self.build_post_write_bundle_file()
         except Exception as e:
-            self.error("Failed to write bundle file: {}".format(e))
+            self.set_error_state()
+            self.state = phase + '_error'
+            self.commit()
+            raise
 
         self.library.search.index_bundle(self, force = True)
 
