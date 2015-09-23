@@ -5,7 +5,7 @@ import unittest
 from contexttimer import Timer
 
 class Test(unittest.TestCase):
-
+    @unittest.skip("Development Test")
     def test_basic(self):
 
         from ambry.etl.pipeline import RowProxy

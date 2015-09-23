@@ -6,8 +6,7 @@ from contexttimer import Timer
 import tables
 
 class Test(unittest.TestCase):
-
-
+    @unittest.skip("Development Test")
     def test_pytables(self):
         import datetime
         from random import randint, random

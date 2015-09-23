@@ -417,6 +417,8 @@ class Test(TestBase):
         p = list(b.partitions)[0]
         p_vid = p.vid
 
+        print p.datafile.reader.info
+
         self.assertEqual(497054, int(sum(row[3] for row in p.stream())))
 
         self.assertEqual('build', l.partition(p_vid).location)

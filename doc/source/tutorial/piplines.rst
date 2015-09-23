@@ -1,4 +1,4 @@
-COnfigure the Pipelines
+Configure the Pipelines
 =======================
 
 The pipeline is...
