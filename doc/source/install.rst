@@ -4,7 +4,7 @@
 Installing Ambry
 ################
 
-Ambry is a complex package that has dependencies on a lot of other code, some of which are hard to build from source, so there are a few different was to install it. 
+Ambry is a complex package that has dependencies on a lot of other code, some of which are hard to build from source, so there are a few different ways to install it. 
 
 * `Mac OS X`_
 * `Linux, Ubuntu`_
