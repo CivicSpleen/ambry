@@ -314,6 +314,7 @@ def main(argsv=None, ext_logger=None):
     else:
         rc_path = args.config
 
+
     funcs = {
         'bundle': bundle_command,
         'library': library_command,
@@ -339,20 +340,21 @@ def main(argsv=None, ext_logger=None):
     else:
         try:
             rc = get_runconfig(rc_path)
+            
 
         except ConfigurationError:
-            fatal("Could not find configuration file at {}\nRun 'ambry config install; to create one ", rc_path)
+            fatal("Could not find configuration file \nRun 'ambry config install; to create one ")
 
         global global_run_config
         global_run_config = rc
 
         if not rc.environment.get('category', False):
-            raise ConfigurationError("Must set a config value for environment.class, one of: "
-                                     "development, production, testing, staging")
+            
+            warn("environment.class isn't set in config '{}' ; assuming 'development' ".format(rc_path))
+            
+            rc.environment['class'] = 'development'
 
-        if not rc.environment.get('category', False):
-            raise ConfigurationError("Must set a config value for environment.class, one of: "
-                                     "development, production, testing, staging")
+            
 
     if f is None:
         fatal('Error: No command: ' + args.command)

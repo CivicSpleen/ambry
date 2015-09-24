@@ -93,24 +93,26 @@ class RunConfig(object):
             files = [
                 RunConfig.ROOT_CONFIG,
                 path if path else RunConfig.USER_CONFIG,
-                RunConfig.USER_ACCOUNTS,
                 RunConfig.DIR_CONFIG]
 
         loaded = False
 
         for f in files:
-
             if f is not None and os.path.exists(f):
                 try:
-                    loaded = True
-
                     config.loaded.append(f)
                     config.update_yaml(f)
+                    loaded = True
                 except TypeError:
                     pass  # Empty files will produce a type error
 
         if not loaded:
             raise ConfigurationError("Failed to load any config from: {}".format(files))
+        
+
+        if os.path.exists(RunConfig.USER_ACCOUNTS):
+            config.loaded.append(RunConfig.USER_ACCOUNTS)
+            config.update_yaml(RunConfig.USER_ACCOUNTS)
 
         object.__setattr__(self, 'config', config)
         object.__setattr__(self, 'files', files)
@@ -535,7 +537,7 @@ def normalize_dsn_or_dict(d):
             )
 
     else:
-
+        
         up = d.get('username', '') or ''
 
         if d.get('password'):
