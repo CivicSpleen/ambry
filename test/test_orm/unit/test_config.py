@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
-import unittest
 from time import time
 
-from sqlalchemy.exc import IntegrityError
-
-from six import binary_type
+from six import text_type
 
 import fudge
 
@@ -50,7 +47,7 @@ class TestConfig(TestBase):
         ds = DatasetFactory()
         config1 = ConfigFactory(d_vid=ds.vid)
         repr_str = config1.__repr__()
-        self.assertIsInstance(repr_str, binary_type)
+        self.assertIsInstance(repr_str, text_type)
         self.assertIn(config1.d_vid, repr_str)
         self.assertIn(config1.group, repr_str)
         self.assertIn(config1.key, repr_str)
