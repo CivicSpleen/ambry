@@ -43,22 +43,6 @@ def root_parser(cmd):
     sp.add_argument('term', type=str, nargs='?',
                     help='Name or ID of the bundle or partition')
 
-    sp = cmd.add_parser('meta', help='Dump the metadata for a bundle')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='meta')
-    sp.add_argument('term', type=str, nargs='?',
-                    help='Name or ID of the bundle or partition')
-    sp.add_argument('-k', '--key', default=False, type=str,
-                    help='Return the value of a specific key')
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('-y', '--yaml', default=False, action='store_true',
-                       help='Output yaml')
-    group.add_argument('-j', '--json', default=False, action='store_true',
-                       help='Output json')
-    group.add_argument('-r', '--rows', default=False, action='store_true',
-                       help='Output key/value pair rows')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
-                    help='Query commands to find packages with. ')
 
     sp = cmd.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(command='root')
@@ -92,6 +76,11 @@ def root_parser(cmd):
     sp = cmd.add_parser('import', help='Import multiple source directories')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='import')
+    sp.add_argument('-d', '--detach', default=False, action='store_true',
+                    help="Detach the imported source. Don't set the location of the imported source as the"
+                    " source directory for the bundle ")
+    sp.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Force importing an already imported bundle')
     sp.add_argument('term', nargs=1, type=str, help='Base directory')
 
     #
@@ -137,9 +126,11 @@ def root_list(args, l, rc):
     import json
 
     if args.fields:
-        header = ['vid'] + list( str(e).strip() for e in args.fields.split(','))
+        display_header = False
+        header = list( str(e).strip() for e in args.fields.split(','))
 
     else:
+        display_header = True
         header = ['vid', 'vname', 'state', 'source_fs']
 
     records = []
@@ -172,8 +163,11 @@ def root_list(args, l, rc):
             rows[row[0]] = dict(list(zip(header, row)))
 
         print(json.dumps(rows))
-    else:
+    elif display_header:
         print(tabulate(records, headers=header))
+    else:
+        for row in records:
+            print ' '.join(row)
 
 
 def root_info(args, l, rc):
@@ -242,9 +236,10 @@ def root_doc(args, l, rc):
     from logging import FileHandler
     import webbrowser
 
-    cache_dir = l._doc_cache.path('', missing_ok=True)
 
     app_config['port'] = args.port if args.port else 8085
+
+    cache_dir = l.filesystem.logs()
 
     file_handler = FileHandler(os.path.join(cache_dir, 'web.log'))
     file_handler.setLevel(logging.WARNING)
@@ -252,10 +247,14 @@ def root_doc(args, l, rc):
 
     print('Serving documentation for cache: ', cache_dir)
 
+    url = 'http://localhost:{}/'.format(app_config['port'])
+
     if not args.debug:
         # Don't open the browser on debugging, or it will re-open on every
         # application reload
-        webbrowser.open('http://localhost:{}/'.format(app_config['port']))
+        webbrowser.open(url)
+    else:
+        print("Running at: {}".format(url))
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
 
@@ -292,21 +291,22 @@ def root_import(args, l, rc):
         try:
             b = l.bundle(bid)
 
-            prt("Skipping existing  bundle: {}".format(b.identity.fqname))
-
-            continue
+            if not args.force:
+                prt("Skipping existing  bundle: {}".format(b.identity.fqname))
+                continue
 
         except NotFoundError:
+            b = None
+
+        if not b:
             b = l.new_from_bundle_config(config)
-
             prt("Loading bundle: {}".format(b.identity.fqname))
+        else:
+            prt("Loading existing bundle: {}".format(b.identity.fqname))
 
-            b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
+        b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
 
-            b.sync_in()
+        b.sync_in()
 
-
-
-
-
-
+        if args.detach:
+            b.set_file_system(source_url=None)

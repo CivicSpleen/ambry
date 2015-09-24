@@ -13,11 +13,11 @@
 
         {% if w %}<th>Installed</th>{% endif %}
     </tr>
-    {% for p in b.partitions.values()|sort(attribute='table') -%}
+    {% for p in b.partitions|sort(attribute='identity.name') -%}
     <tr>
         <td><a href="{{partition_path(b,p)}}">{{p.vid}}</a></td>
         <td>{{p.name}}</td>
-        <td>{{p.table}}</td>
+        <td>{{p.table.name}}</td>
         <td>{{p.description}}</td>
 
 

@@ -272,6 +272,9 @@ class Partition(Base, DictableMixin):
             def items(self):
                 return list(self.__dict__.items())
 
+            def iteritems(self):
+                return iter(list(self.__dict__.items()))
+
             def __getitem__(self, k):
                 return self.__dict__[k]
 
@@ -334,10 +337,14 @@ class Partition(Base, DictableMixin):
         # Write the stats for this partition back into the partition
 
         with self.datafile.writer as w:
-            w.set_schema(
-                [ dict(pos = c.sequence_id, name = c.name, description = c.description, type = c.python_type.__name__)
-                  for c in self.table.columns]
-            )
+            for i, c in enumerate(self.table.columns,1):
+                wc = w.column(i)
+                assert wc.pos == c.sequence_id
+                wc.name = c.name
+                wc.description = c.description
+                wc.type = c.python_type.__name__
+
+
 
         stats = self.datafile.run_stats()
 

@@ -1,0 +1,78 @@
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
+"""
+from six import iteritems
+
+from ..cli import prt, err, fatal, warn, _print_info  # @UnresolvedImport
+from ambry.util import Progressor
+
+
+def util_parser(cmd):
+    import argparse
+
+    #
+    # Library Command
+    #
+    lib_p = cmd.add_parser('util', help='Miscelaneous utilities')
+    lib_p.set_defaults(command='util')
+
+    asp = lib_p.add_subparsers(title='Utility commands', help='command help')
+
+    sp = asp.add_parser('test', help='Just test the util cli')
+    sp.set_defaults(subcommand='test')
+    sp.add_argument('-w', '--watch', default=False, action='store_true',
+                    help='Check periodically for new files.')
+    sp.add_argument('-f', '--force', default=False, action='store_true', help='Push all files')
+    sp.add_argument('-n', '--dry-run', default=False, action='store_true',
+                    help="Dry run, don't actually send the files.")
+
+    sp = asp.add_parser('scrape', help='Scrape')
+    sp.set_defaults(subcommand='scrape')
+    sp.add_argument('url', nargs=1)  # Get everything else.
+    group = sp.add_mutually_exclusive_group(required=True)
+    group.add_argument('-d', '--doc', default=False, action='store_const', const='external_documentation', dest='group',
+                       help='Show documentation links')
+    group.add_argument('-s', '--source', default=False, action='store_const', const='sources', dest='group',
+                       help='Show sources links')
+    group.add_argument('-l', '--links', default=False, action='store_const', const='links', dest='group',
+                       help='Show other links')
+
+    sp.add_argument('-c', '--csv', default=False, action='store_true', help='Output to CSV')
+
+def util_command(args, rc):
+    from ..library import new_library
+    from . import global_logger
+
+    l = new_library(rc)
+
+    l.logger = global_logger
+
+    globals()['util_' + args.subcommand](args, l, rc)
+
+def util_scrape(args, l, config):
+    from ambry.util import  scrape
+    from tabulate import tabulate
+    import re
+
+    d = scrape(l, args.url[0], as_html = True)[args.group]
+
+    headers = 'name description url'.split()
+    rows = []
+    for k, v in d.items():
+        v['description'] = re.sub(r'\s+',' ',v['description']).strip()
+        rows.append([k, v['description'], v['url']])
+
+    if args.csv:
+        import csv
+        import sys
+        w = csv.writer(sys.stdout)
+        w.writerow(headers)
+        w.writerows(rows)
+        sys.stdout.flush()
+    else:
+        print tabulate(rows, headers)
+
+

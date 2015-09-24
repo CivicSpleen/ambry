@@ -146,7 +146,7 @@ class Pipe(object):
             row = self.process_body(row)
 
             if row:
-                assert len(row) == header_len, (self.headers, row)
+                assert len(row) == header_len, (self.headers, row, type(self))
                 yield row
 
         self.finish()
@@ -245,15 +245,33 @@ class Sink(Pipe):
 
     def __init__(self, count=None):
         self._count = count
+        self.i = 0
+        self._start_time = None
 
     def run(self, count=None, *args, **kwargs):
+        from time import time
+
+        self._start_time = time()
 
         count = count if count else self._count
 
         for i, row in enumerate(self._source_pipe):
-
+            self.i = i
             if count and i == count:
                 break
+
+    def report_progress(self):
+        """
+        This function can be called from a higher level to report progress. It is usually called from an alarm
+        signal handler which is installed just before starting an operation:
+
+
+        :return: Tuple: (process description, #records, #total records, #rate)
+        """
+        from time import time
+
+        return (self.i,
+                round(float(self.i) / float(time() - self._start_time), 2))
 
 
 class IterSource(Pipe):
@@ -463,7 +481,6 @@ class Select(Pipe):
         :param pred: Callable or string. If a string, it must be just an expression which can take arguments source and row
         :return:
         """
-
         if isinstance(pred, basestring):
             self.pred_str = pred
             self.pred = eval('lambda source, row: {}'.format(pred))
@@ -539,7 +556,7 @@ class MapHeader(Pipe):
         for row in rg:
             yield row
 
-class MapToSourceTable(Pipe):
+class MapSourceHeaders(Pipe):
     """Alter the header using the source_header and dest_header in the source table """
 
     def __init__(self, error_on_fail=True):
@@ -1375,7 +1392,7 @@ class WriteToPartition(Pipe, PartitionWriter):
             self._datafiles[df_key] = (p, header_mapper, body_mapper)
 
             # It is a new datafile, so it needs a header.
-            p.datafile.writer.set_schema(header_mapper(self.headers))
+            p.datafile.writer.headers = header_mapper(self.headers)
 
         try:
             p.datafile.writer.insert_row(body_mapper(row))
@@ -1476,9 +1493,9 @@ class Pipeline(OrderedDict):
     name = None
     phase = None
     final = None
+    sink = None
 
-    _group_names = ['source', 'first', 'body', 'augment', 'cast', 
-                    'intuit', 'last', 'store', 'final']
+    _group_names = ['source', 'first', 'map', 'cast', 'augment', 'select', 'last', 'store', 'final']
 
     def __init__(self, bundle=None,  *args, **kwargs):
 
@@ -1488,6 +1505,7 @@ class Pipeline(OrderedDict):
         super(Pipeline, self).__setattr__('phase', None)
         super(Pipeline, self).__setattr__('final', [])
         super(Pipeline, self).__setattr__('stopped', False)
+        super(Pipeline, self).__setattr__('sink', None)
 
         for k, v in iteritems(kwargs):
             if k not in self._group_names:
@@ -1502,6 +1520,8 @@ class Pipeline(OrderedDict):
 
         if args:
             self.__setitem__('body', PipelineSegment(self, 'body', *args))
+
+
 
     def _subset(self, subset):
         """Return a new pipeline with a subset of the sections"""
@@ -1671,7 +1691,7 @@ class Pipeline(OrderedDict):
             return super(Pipeline, self).__getattr__(k)
 
     def __setattr__(self, k, v):
-        if k.startswith('_OrderedDict__') or k in ('name', 'phase'):
+        if k.startswith('_OrderedDict__') or k in ('name', 'phase', 'sink'):
             return super(Pipeline, self).__setattr__(k, v)
 
         self.__setitem__(k, v)
@@ -1718,18 +1738,18 @@ class Pipeline(OrderedDict):
 
                     chain, last = self._collect()
 
-                    sink = Sink(count=count)
-                    sink.set_source_pipe(last)
+                    self.sink = Sink(count=count)
+                    self.sink.set_source_pipe(last)
 
-                    sink.run()
+                    self.sink.run()
 
             else:
                 chain, last = self._collect()
 
-                sink = Sink(count=count)
-                sink.set_source_pipe(last)
+                self.sink = Sink(count=count)
+                self.sink.set_source_pipe(last)
 
-                sink.run()
+                self.sink.run()
 
         except StopPipe:
             super(Pipeline, self).__setattr__('stopped', True)
@@ -1750,7 +1770,8 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
 
         for pipe in chain:
-            out.append((pipe.segment.name if hasattr(pipe, 'segment') else u('?: {}').format(pipe)))
+            segment_name = pipe.segment.name if hasattr(pipe, 'segment') else '?'
+            out.append(u('{}: {}').format(segment_name,pipe))
 
         out.append('final: ' + str(self.final))
 

@@ -56,9 +56,9 @@ def get_bundle_ref(args, l):
         return (args.id, '-i argument')
 
     try:
-        if args.term:
-            l.bundle(args.term)  # Exception if not exists
-            return (args.term, 'argument')
+        if args.ref:
+            l.bundle(args.ref)  # Exception if not exists
+            return (args.ref, 'argument')
     except (AttributeError, NotFoundError, NotObjectNumberError):
         pass
 
@@ -93,6 +93,9 @@ def using_bundle(args, l, print_loc=True):
         prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
 
     b = l.bundle(ref)
+
+    if args.test:
+        b.test = True
 
     return b
 
@@ -146,10 +149,12 @@ def bundle_parser(cmd):
     group.add_argument('-c', '--config', default=False, action='store_const', const='configs', dest='table',
                        help='Dump configs')
     group.add_argument('-f', '--files', default=False, action='store_const', const='files', dest='table',
-                       help='Dump files')
+                       help='Dump bundle definition files')
+    group.add_argument('-i', '--ingested', default=False, action='store_const', const='ingested', dest='table',
+                       help='List ingested data sources')
     group.add_argument('-s', '--sources', default=False, action='store_const',
                        const='datasources', dest='table',
-                       help='Dump sources')
+                       help='Dump data source records')
     group.add_argument('-T', '--source_tables', default=False, action='store_const',
                        const='sourcetables', dest='table',
                        help='Dump source tables')
@@ -162,7 +167,7 @@ def bundle_parser(cmd):
     group.add_argument('-P', '--pipes', default=False, action='store_const',
                        const='pipes', dest='table',
                        help='Dump destination tables')
-    command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Set
     command_p = sub_cmd.add_parser('set', help='Set configuration and state values')
@@ -181,15 +186,21 @@ def bundle_parser(cmd):
                            help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action='store_true',
                            help='Also report partition details')
+    command_p.add_argument('-q', '--quiet', default=False, action='store_true',
+                           help='Just report the minimum information, ')
 
-    command_p.add_argument('term', nargs='?', type=str, help='Bundle source directory or file')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     #
     # Sync Command
     #
     command_p = sub_cmd.add_parser('sync', help='Sync with a source representation')
     command_p.set_defaults(subcommand='sync')
-    command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+    command_p.add_argument('-f', '--files', default=False, action='store_true',
+                           help='Sync from files to records')
+    command_p.add_argument('-r', '--records', default=False, action='store_true',
+                           help='Sync from records to files')
 
     #
     #     duplicate Command
@@ -197,14 +208,26 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('duplicate',
                                    help='Increment a bundles version number and create a new bundle')
     command_p.set_defaults(subcommand='duplicate')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     #
     # Clean Command
     #
     command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
-    command_p.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Force cleaning a built or finalized bundle')
+    command_p.add_argument('-a', '--all', default=False, action='store_true',
+                           help='Clean everything: metadata, partitions, tables, config, everything. ')
+    command_p.add_argument('-S', '--source', default=False, action='store_true',
+                           help='Clean the source tables schema, but not ingested source files.  ')
+    command_p.add_argument('-f', '--files', default=False, action='store_true',
+                           help='Clean the ingested files')
+    command_p.add_argument('-t', '--tables', default=False, action='store_true',
+                           help='Clean destination tables')
+    command_p.add_argument('-p', '--partitions', default=False, action='store_true',
+                           help='Clean any built partitions')
+    command_p.add_argument('-b', '--build', default=False, action='store_true',
+                           help='Clean the build directory')
     command_p.set_defaults(subcommand='clean')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
 
     #
@@ -213,14 +236,34 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('ingest', help='Build or install download and convert data to internal file format')
     command_p.set_defaults(subcommand='ingest')
 
-    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
+    command_p.add_argument('-c', '--clean-tables', default=False, action='store_true', help='Clean and rebuild source tables')
+    command_p.add_argument('-C', '--clean-files', default=False, action='store_true', help='Delete and re-download files')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Re-ingest already ingested files')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
                            help='Syncrhonize before and after')
-    command_p.add_argument('sources', nargs='*', type=str,
+    command_p.add_argument('-t', '--table', action='append',
+                           help='Only run the schema for the named tables. ')
+    command_p.add_argument('-S', '--source',  action='append',
                            help='Sources to ingest, instead of running all sources')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
+    #
+    # Schema Command
+    #
+    command_p = sub_cmd.add_parser('schema', help='Generation the destination schema')
+    command_p.set_defaults(subcommand='schema')
+
+    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Remove all columns from existing tavbles')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Re-run the schema, even if it already exists.')
+    command_p.add_argument('-s', '--sync', default=False, action='store_true',
+                           help='Synchronize before and after')
+    command_p.add_argument('-t', '--table', action='append',
+                           help='Only run the schema for the named tables. ')
+    command_p.add_argument('-S', '--source', action='append',
+                           help='Sources to ingest, instead of running all sources')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     #
     # Build Command
@@ -228,15 +271,18 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
     command_p.set_defaults(subcommand='build')
     #command_p.add_argument('-s', '--sync', default=False, action='store_true', help='Sync with build source files')
-    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
+    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Delete partitions before building')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Build even built or finalized bundles')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
                            help='Syncrhonize before building')
 
-    command_p.add_argument('sources', nargs='*', type=str,
-                           help='Sources to run, instead of running all sources')
+    command_p.add_argument('-S', '--source', action='append',
+                           help='Sources to build, instead of running all sources')
+    command_p.add_argument('-t', '--table', action='append',
+                           help='Build only sources that output to these destination tables')
 
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     #
     # Phase Command
@@ -305,6 +351,10 @@ def bundle_parser(cmd):
                                    help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
 
+    #
+    # edit
+    #
+
     command_p = sub_cmd.add_parser('edit', help='Edit a bundle file')
     command_p.set_defaults(subcommand='edit')
 
@@ -347,11 +397,8 @@ def bundle_parser(cmd):
     command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to export')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
-
-
     command_p = sub_cmd.add_parser('cluster', help='Cluster sources by similar headers')
     command_p.set_defaults(subcommand='cluster')
-
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -359,7 +406,10 @@ def bundle_info(args, l, rc):
     if args.which:
         ref, frm = get_bundle_ref(args, l)
         b = using_bundle(args, l, print_loc=False)
-        prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
+        if args.quiet:
+            prt(ref)
+        else:
+            prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
         return
 
     b = using_bundle(args, l, print_loc=False)
@@ -420,9 +470,9 @@ def bundle_info(args, l, rc):
     print(tabulate(join(info[0]), tablefmt='plain'))
 
     # DIsplay info about a partition, if one was provided
-    if args.term:
+    if args.ref:
         try:
-            p = b.partition(args.term)
+            p = b.partition(args.ref)
 
             info = [list(), list()]
 
@@ -442,24 +492,26 @@ def bundle_info(args, l, rc):
 
     if args.stats:
 
-        from ambry.etl.stats import text_hist
         from textwrap import wrap
         from terminaltables import SingleTable
+        from itertools import islice
 
         for p in b.partitions:
             rows = ['Column LOM Count Uniques Values'.split()]
-            keys = [k for k, v in iteritems(p.stats_dict)]
             d = p.stats_dict
+            keys = [k for k, v in iteritems(d)]
+
             for c in p.table.columns:
                 if c.name in keys:
                     k = c.name
                     v = d[c.name]
 
-                    rows.append([
-                        str(k), str(v.lom), str(v.count), str(v.nuniques),
-                        text_hist(int(x) for x in v.hist) if v.lom == 'i' else (
-                            '\n'.join(wrap(', '.join(sorted(str(x) for x in iterkeys(v.uvalues)[:10])), 50)))
-                    ])
+                    if v.lom == 'i':
+                        values = v.text_hist
+                    else:
+                        values = '\n'.join(wrap(', '.join(islice(sorted(str(x) for x in iterkeys(v.uvalues)), None, 10)), 50))
+
+                    rows.append([ str(k), str(v.lom), str(v.count), str(v.nuniques), values])
 
             #print tabulate(row, tablefmt='plain')
             print(SingleTable(rows, title='Stats for ' + str(p.identity.name)).table)
@@ -486,7 +538,7 @@ def bundle_duplicate(args, l, rc):
     b = using_bundle(args, l)
 
     if not b.is_finalized:
-        fatal("Can't increments a bundle unless it is finalized")
+        fatal("Can't increment a bundle unless it is finalized")
 
     nb = l.duplicate(b)
 
@@ -503,7 +555,22 @@ def bundle_finalize(args, l, rc):
 
 def bundle_clean(args, l, rc):
     b = using_bundle(args, l).cast_to_subclass()
-    b.clean_all(force=args.force)
+
+    if args.source or args.all:
+        pass
+
+    if args.files or args.all:
+        pass
+
+    if args.tables or args.all:
+        pass
+
+    if args.partitions or args.all:
+        pass
+
+    if args.build or args.all:
+        pass
+
     b.set_last_access(Bundle.STATES.NEW)
 
 
@@ -518,15 +585,22 @@ def bundle_sync(args, l, rc):
 
     b = using_bundle(args, l)
 
+    sync_out = (not args.records and not args.files) or args.records
+    sync_in = (not args.records and not args.files) or args.files
+
     try:
         b = b.cast_to_subclass()
     except BundleError as e:
         err("Failed to load bundle code file: {}".format(e))
 
-    prt("Sync in")
-    b.sync_in()
-    prt("Sync out")
-    b.sync_out()
+    if sync_in:
+        prt("Sync in")
+        b.sync_in()
+
+    if sync_out:
+        prt("Sync out")
+        b.sync_out()
+
     b.set_last_access(Bundle.STATES.SYNCED)
 
 
@@ -534,16 +608,32 @@ def bundle_ingest(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
 
-    if args.clean:
-        b.clean()
-        b.set_last_access(Bundle.STATES.CLEANED)
+    if args.sync:
+        b.sync_in()
+
+    if args.clean_tables:
+        b.dataset.source_tables[:] = []
+        b.commit()
+
+    # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
+    b = using_bundle(args, l, print_loc=False).cast_to_subclass()
+    b.ingest(sources=args.source,force = args.force, clean_files=args.clean_files)
+    b.set_last_access(Bundle.STATES.INGEST)
+
+    if args.sync:
+        b.sync_out()
+
+def bundle_schema(args, l, rc):
+
+    b = using_bundle(args, l).cast_to_subclass()
 
     if args.sync:
         b.sync_in()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l).cast_to_subclass()
-    b.ingest(sources=args.sources,force = args.force)
+    b = using_bundle(args, l, print_loc=False).cast_to_subclass()
+    b.ingest(tables=args.table, force=args.force)
+    b.schema(tables=args.table,force = args.force, clean = args.clean)
     b.set_last_access(Bundle.STATES.INGEST)
 
     if args.sync:
@@ -560,11 +650,7 @@ def bundle_build(args, l, rc):
         b.state = Bundle.STATES.PREPARED
 
     if args.clean:
-        if not b.clean():
-            b.error("Clean failed, not building")
-            return False
-        b.set_last_access(Bundle.STATES.CLEANED)
-        b.commit()
+        b.dataset.delete_partitions()
 
     if args.sync:
         b.sync_in()
@@ -573,10 +659,14 @@ def bundle_build(args, l, rc):
 
     b = b.cast_to_subclass()
 
-    # Only force build. To force an ingest, must explicitly run ingest.
-    b.ingest(sources=args.sources)
+    if args.table:
+        sources = list(s for s in b.sources if s.dest_table_name in args.tables)
+    else:
+        sources = args.source
 
-    b.build(sources=args.sources, force = args.force)
+
+
+    b.build(sources=sources, force = args.force)
 
     if args.sync:
         b.sync_out()
@@ -782,19 +872,21 @@ def bundle_dump(args, l, rc):
                 row = OrderedDict((k, v) for k, v in iteritems(c.row) if k in
                                   ['table', 'column', 'id', 'datatype', 'caster', 'description'])
 
-                if i == 0:
+                if i == 0: # Add the table headers
+                    records.append(' ' * len(h) for h in row.keys())
                     records.append(list(row.keys()))  # once for each table
+                    records.append( '-'*len(h) for h in row.keys())
 
                 records.append(list(row.values()))
 
         records = drop_empty(records)
         if records:
-            headers, records = records[0], records[1:]
+            _, records = records[0], records[1:]
         else:
             headers = []
 
     elif args.table == 'pipes':
-        terms = args.term
+        terms = args.ref
 
         b.import_lib()
 
@@ -810,16 +902,16 @@ def bundle_dump(args, l, rc):
 
         records = None
 
+    elif args.table == 'ingested':
+        terms = args.ref
+
+        headers = 'name path'.split()
+        records = []
+        for s in b.sources:
+            records.append((s.name, s.datafile.syspath))
+
     if records:
         print(tabulate(records, headers=headers))
-
-
-def bundle_config_scrape(args, b, st, rc):
-    raise NotImplementedError
-
-
-def bundle_repopulate(args, b, st, rc):
-    raise NotImplementedError()
 
 
 def bundle_new(args, l, rc):
@@ -851,6 +943,13 @@ def bundle_new(args, l, rc):
 
         fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
+    if args.dryrun:
+        from ..identity import Identity
+        d['revision'] = 1
+        d['id'] = 'dXXX'
+        print(str(Identity.from_dict(d)))
+        return
+
     try:
         b = l.new_bundle(assignment_class=args.key, **d)
 
@@ -858,7 +957,6 @@ def bundle_new(args, l, rc):
         fatal("Can't create dataset; one with a conflicting name already exists")
 
     print(b.identity.fqname)
-
 
 def bundle_import(args, l, rc):
 
@@ -1040,14 +1138,15 @@ def bundle_extract(args, l, rc):
 
     for p in b.partitions:
         b.logger.info('Extracting: {} '.format(p.name))
-        with bfs.open(p.name + '.csv', 'wb') as f:
+        with bfs.open(p.name + '.csv', 'wb') as f, p.datafile.reader as r:
             w = csv.writer(f)
-            for i, row in enumerate(p.datafile.reader()):
+            w.writerow(r.headers)
+            if limit:
+                from itertools import islice
+                w.writerows(islice(r.rows,None, limit))
+            else:
+                w.writerows(r.rows)
 
-                if limit and i > limit:
-                    break
-
-                w.writerow(row)
 
     b.logger.info('Extracted to: {}'.format(bfs.getsyspath('/')))
 

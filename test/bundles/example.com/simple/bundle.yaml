@@ -70,6 +70,7 @@ pipelines:
         - WriteToPartition
     test:
     - PrintEvery(10)
+    - 'Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )'
     test2:
     - 'MatchPredicate(lambda r: r[2] == ''g'')'
     - 'Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )'

@@ -120,7 +120,6 @@ class Dataset(Base):
     def config(self):
         return ConfigAccessor(self)
 
-
     def next_sequence_id(self, table_class):
         """Return the next sequence id for a object, identified by the vid of the parent object, and the database prefix
         for the child object. On the first call, will load the max sequence number
@@ -135,7 +134,6 @@ class Dataset(Base):
         from sqlalchemy.orm import object_session
 
         return next_sequence_id(object_session(self), self._sequence_ids, self.vid, table_class)
-
 
     def table(self, ref):
         from .exc import NotFoundError
@@ -346,6 +344,10 @@ class Dataset(Base):
             .filter(DataSource.d_vid == self.vid)
             .first())
 
+        if not source:
+            from exc import NotFoundError
+            raise NotFoundError("Failed to find source for name : '{}' ".format(name))
+
         return source
 
     def new_source_table(self, name):
@@ -513,7 +515,7 @@ class ConfigAccessor(object):
         from sqlalchemy import or_
 
         rows = []
-        configs = self.session\
+        configs = self.dataset.session\
             .query(SAConfig)\
             .filter(or_(SAConfig.group == 'config', SAConfig.group == 'process'),
                     SAConfig.d_vid == self.dataset.vid)\

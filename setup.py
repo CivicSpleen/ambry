@@ -10,7 +10,6 @@ from pip.req import parse_requirements
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
 
-
 if sys.version_info <= (2, 6):
     error = 'ERROR: ambry requires Python Version 2.7 or above...exiting.'
     print >> sys.stderr, error
@@ -21,7 +20,6 @@ if sys.version_info <= (2, 6):
 ambry_meta = imp.load_source('_meta', 'ambry/_meta.py')
 
 long_description = open('README.rst').read()
-
 
 def find_package_data():
     """ Returns package_data, because setuptools is too stupid to handle nested directories.
@@ -44,7 +42,6 @@ def find_package_data():
                 l.append(path)
 
     return {'ambry': l}
-
 
 class PyTest(TestCommand):
     user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
@@ -80,10 +77,7 @@ d = dict(
     author_email=ambry_meta.__email__,
     url='https://github.com/CivicKnowledge/ambry',
     packages=find_packages(),
-    scripts=['scripts/bambry', 'scripts/bambry.bat',
-             'scripts/ambry', 'scripts/ambry.bat',
-             'scripts/xambry',
-             'scripts/ambry-load-sqlite', 'scripts/ambry_build_all'],
+    scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh' ],
     package_data=find_package_data(),
     license=ambry_meta.__license__,
     cmdclass={'test': PyTest},
@@ -102,9 +96,8 @@ d = dict(
     install_requires=[x for x in reversed([str(x.req) for x in requirements])],
     tests_require=['pytest'],
     extras_require={
-        'pgsql': ['psycopg2'],
-        'geo': ['sh', 'gdal'],
-        'server': ['paste', 'bottle']}
+        'server': ['paste', 'bottle']
+    }
 )
 
 setup(**d)

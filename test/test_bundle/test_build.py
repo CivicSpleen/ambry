@@ -110,6 +110,14 @@ class Test(TestBase):
 
         self.assertEquals('build_done', b.state)
 
+    def test_complete_build_run(self):
+        """Build the complete-load"""
+
+        b = self.setup_bundle('complete-build', build_url=self.setup_temp_dir())
+        b.sync_in()
+        b = b.cast_to_subclass()
+        b.run()
+
     def test_complete_load(self):
         """Build the complete-load"""
 

@@ -7,8 +7,7 @@ import unittest
 from ambry.bundle import Bundle
 
 class Test(BasePostgreSQLTest):
-
-
+    @unittest.skip("Development Test")
     def test_sequence(self):
         from sqlalchemy import Sequence
 

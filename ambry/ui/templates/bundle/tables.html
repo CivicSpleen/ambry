@@ -9,7 +9,7 @@
         <th>Description</th>
 
     </tr>
-    {% for t in b.tables.values()|sort(attribute='vid') -%}
+    {% for t in b.tables|sort(attribute='vid') -%}
     <tr>
         <td><a href="{{table_path(b,t)}}">{{t.vid}}</a></td>
         <td>{{t.name}}</td>

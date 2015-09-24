@@ -281,11 +281,13 @@ def get_parser():
     from .config import config_parser
     from .bundle import bundle_parser
     from .root import root_parser
+    from .util import util_parser
 
     library_parser(cmd)
     config_parser(cmd)
     bundle_parser(cmd)
     root_parser(cmd)
+    util_parser(cmd)
 
     return parser
 
@@ -295,6 +297,7 @@ def main(argsv=None, ext_logger=None):
     from .config import config_command
     from .bundle import bundle_command
     from .root import root_command
+    from .util import util_command
     from ..dbexceptions import ConfigurationError
 
     parser = get_parser()
@@ -316,6 +319,7 @@ def main(argsv=None, ext_logger=None):
         'library': library_command,
         'config': config_command,
         'root': root_command,
+        'util': util_command,
     }
 
     global global_logger

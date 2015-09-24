@@ -20,9 +20,7 @@ nltk==3.0.2
 numpy==1.9.2
 oauth2client==1.4.12
 pandas<=0.15.1
-pdfminer==20140328
 Pygments==2.0.2
-pysqlite==2.6.3
 python-dateutil==2.4.2
 pytz==2015.4
 PyYAML==3.11
@@ -42,6 +40,6 @@ livestats==1.0
 tabulate==0.7.5
 watchdog==0.8.3
 filelock==2.0.4
-ambry-sources
+ambry-sources>=0.0.5
 unicodecsv==0.12.0
 fs==0.5.2

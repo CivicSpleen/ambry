@@ -1205,7 +1205,6 @@ class GeneralNumber2(ObjectNumber):
             ObjectNumber.base62_encode(self.num2).rjust(self.DLEN.OTHER2, '0') +
             ObjectNumber._rev_str(self.revision))
 
-
 class Identity(object):
 
     """Identities represent the defining set of information about a bundle or a

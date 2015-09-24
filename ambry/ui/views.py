@@ -1,6 +1,6 @@
 
 import os
-from . import app, renderer
+from . import app, aac
 
 
 from flask import g, current_app, send_from_directory, request, abort
@@ -15,31 +15,40 @@ def close_connection(exception):
 
 @app.errorhandler(500)
 def page_not_found(e):
-    return renderer().error500(e)
+
+    aac().render('500.html', e=e)
+
+@app.route('/')
+@app.route('/index')
+def index():
+    return aac().render('foo.html')
+
+@app.route('/bundles.<ct>')
+def bundle_index(ct):
+    return aac().renderer.cts(ct).bundle_index()
+
+@app.route('/bundles/<vid>.<ct>')
+def bundle(vid, ct):
+    return aac().renderer.cts(ct).bundle(vid)
+
+
+#--------------------------
+# Old Code Below Here
 
 
 # Really should be  serving this from a static directory, but this
 # is easier for now.
 @app.route('/css/<name>')
 def css_file(name):
-    return send_from_directory(renderer().css_dir, name)
+    return send_from_directory(aac().renderer.css_dir, name)
 
 
 @app.route('/js/<path:path>')
 def js_file(path):
     import os.path
 
-    return send_from_directory(*os.path.split(os.path.join(renderer().js_dir,path)))
+    return send_from_directory(*os.path.split(os.path.join(aac().renderer.js_dir,path)))
 
-
-@app.route('/')
-@app.route('/index')
-def index():
-    import time
-
-    session['time_time'] = time.time() # Just for testing
-
-    return renderer(session=session).index()
 
 
 @app.route('/index.<ct>')
@@ -67,9 +76,6 @@ def bundle_search():
     return renderer(session=session).bundle_search(terms=request.args['terms'])
 
 
-@app.route('/bundles/<vid>.<ct>')
-def get_bundle(vid, ct):
-    return renderer(content_type=ct).bundle(vid)
 
 
 @app.route('/bundles/summary/<vid>.<ct>')
@@ -85,10 +91,6 @@ def get_schema(vid, ct):
     else:
         return renderer(content_type=ct).schema(vid)
 
-
-@app.route('/bundles.<ct>')
-def get_bundles(ct):
-    return renderer(content_type=ct).bundles_index()
 
 
 @app.route('/tables.<ct>')

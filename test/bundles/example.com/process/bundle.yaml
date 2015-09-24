@@ -1,7 +1,7 @@
 about:
     remote: test
     access: internal
-    summary: A bundle to test row intuition, tyoe intuition and pipelines. 
+    summary: A bundle to test row intuition, type intuition and pipelines.
     title: Process Example Bundle
 contacts:
     creator:
