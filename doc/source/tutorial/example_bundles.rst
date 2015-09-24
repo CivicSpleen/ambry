@@ -105,7 +105,7 @@ If that looks good, you can build the bundles. Because these bundles were create
     $ bambry schema
     $ bambry build
 
-The ``ingest`` and ``schema`` phases  update the bundle soruce files, so the next time the bundle is checked out and buld, you'd only need to run the ``build`` phase. 
+The ``ingest`` and ``schema`` phases  update the bundle source files, so the next time the bundle is checked out and build, you'd only need to run the ``build`` phase. 
 
 After the build is complete, the bundle list should show that the ``simple`` bundle has been built:
 
@@ -188,7 +188,7 @@ The files in the build directory with a ``.mpr`` extension is a proprietary form
 Bundle Source
 **************
 
-One thing we haven't seen yet is the source. When the sources were imported from the ambry source directory, we used the ``-d`` option so changes to the soruce files would not be written back into the ambry soruce directory. The imported bundle will store sources in the default location, which is specified in the ``Source FS`` url. But, that directory is empty now, because the source files have not been exported to it. 
+One thing we haven't seen yet is the source. When the sources were imported from the ambry source directory, we used the ``-d`` option so changes to the source files would not be written back into the ambry source directory. The imported bundle will store sources in the default location, which is specified in the ``Source FS`` url. But, that directory is empty now, because the source files have not been exported to it. 
 
 To export the bundle source files, run :command:`bambry export`. Then visit the source directory to see some of the files that were involved in making the bundle. 
 
