@@ -156,10 +156,10 @@ def config_install(args, l, rc):
     rc = get_runconfig(install_file)
 
     for name in iterkeys(rc.group('filesystem')):
-        fs = rc.filesystem(name)
+        dr = rc.filesystem(name)
 
         try:
-            dr = fs['dir']
+
             if not os.path.exists(dr):
                 prt("Making directory: {}".format(dr))
                 os.makedirs(dr)
