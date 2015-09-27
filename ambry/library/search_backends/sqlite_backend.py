@@ -58,7 +58,7 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         logger.debug('Creating dataset FTS table.')
 
         query = """\
-            CREATE VIRTUAL TABLE dataset_index USING fts3(
+            CREATE VIRTUAL TABLE IF NOT EXISTS dataset_index USING fts3(
                 vid VARCHAR(256) NOT NULL,
                 title TEXT,
                 keywords TEXT,
@@ -135,20 +135,26 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             datasets[partition.dataset_vid].partitions.add(partition.vid)
         return list(datasets.values())
 
-    def list_documents(self, limit = None):
-        """
-        List document vids.
+    def list_documents(self, limit=None):
+        """ Generates vids of all indexed datasets.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
-        """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
 
-        query = ("SELECT vid FROM dataset_index "+limit_str)
+        Generates:
+            str: vid of the dataset.
+        """
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
+
+        query = ('SELECT vid FROM dataset_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['vid']
-
 
     def _as_document(self, dataset):
         """ Converts dataset to document indexed by to FTS index.
@@ -234,7 +240,7 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
         logger.debug('Creating identifier FTS table.')
 
         query = """\
-            CREATE VIRTUAL TABLE identifier_index USING fts3(
+            CREATE VIRTUAL TABLE IF NOT EXISTS identifier_index USING fts3(
                 identifier VARCHAR(256) NOT NULL,
                 type VARCHAR(256) NOT NULL,
                 name TEXT
@@ -275,15 +281,22 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
                 type=type, name=name)
 
     def list_documents(self, limit=None):
-        """
-        List document vids.
+        """ Generates vids of all indexed identifiers.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
-        """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
 
-        query = ("SELECT identifier FROM identifier_index " + limit_str)
+        Generates:
+            str: vid of the document.
+        """
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
+
+        query = ('SELECT identifier FROM identifier_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['identifier']
@@ -407,15 +420,23 @@ class PartitionSQLiteIndex(BasePartitionIndex):
                 vid=vid, dataset_vid=dataset_vid, score=score)
 
     def list_documents(self, limit=None):
-        """
-        List document vids.
+        """ Generates vids of all indexed partitions.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
-        """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
 
-        query = ("SELECT vid FROM partition_index " + limit_str)
+        Generates:
+            str: vid of the document.
+        """
+
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
+
+        query = ('SELECT vid FROM partition_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['vid']
