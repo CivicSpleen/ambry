@@ -136,13 +136,20 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         return list(datasets.values())
 
     def list_documents(self, limit=None):
-        """
-        List document vids.
+        """ Generates vids of all indexed datasets.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
+
+        Generates:
+            str: vid of the dataset.
         """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
 
         query = ('SELECT vid FROM dataset_index ' + limit_str)
 
@@ -274,15 +281,22 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
                 type=type, name=name)
 
     def list_documents(self, limit=None):
-        """
-        List document vids.
+        """ Generates vids of all indexed identifiers.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
-        """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
 
-        query = ("SELECT identifier FROM identifier_index " + limit_str)
+        Generates:
+            str: vid of the document.
+        """
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
+
+        query = ('SELECT identifier FROM identifier_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['identifier']
@@ -406,15 +420,23 @@ class PartitionSQLiteIndex(BasePartitionIndex):
                 vid=vid, dataset_vid=dataset_vid, score=score)
 
     def list_documents(self, limit=None):
-        """
-        List document vids.
+        """ Generates vids of all indexed partitions.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
-        """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
 
-        query = ("SELECT vid FROM partition_index " + limit_str)
+        Generates:
+            str: vid of the document.
+        """
+
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
+
+        query = ('SELECT vid FROM partition_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['vid']
