@@ -38,6 +38,7 @@ fs==0.5.2
 msgpack-python==0.4.6
 livestats==1.0
 tabulate==0.7.5
+terminaltables==1.2.1
 watchdog==0.8.3
 filelock==2.0.4
 ambry-sources>=0.0.6

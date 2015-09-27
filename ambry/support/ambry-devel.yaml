@@ -11,12 +11,14 @@ library:
 
 filesystem:
     root: /var/ambry
-    downloads: '{root}/cache/downloads'
-    extracts: '{root}/cache/extracts'
-    documentation: '{root}/cache/documentation'
-    python: '{root}/cache/python'
+    downloads: '{root}/downloads'
+    extracts: '{root}/extracts'
+    python: '{root}/python'
+    documentation: '{root}/doc'
+    build: '{root}/build'
     source: '{root}/source'
-    warehouses: '{root}/warehouses'
+    search: '{root}/search'
+    logs: '{root}/logs'
 
 services:
     numbers:

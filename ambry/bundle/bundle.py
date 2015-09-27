@@ -42,6 +42,7 @@ class Bundle(object):
     STATES.INSTALLING = 'install'
     STATES.INSTALLED = 'install_done'
     STATES.META = 'meta'
+    STATES.SCHEMA = 'schema'
     STATES.INGEST = 'ingest'
 
     # Other things that can be part of the 'last action'
