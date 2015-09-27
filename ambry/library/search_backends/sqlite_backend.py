@@ -58,7 +58,7 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         logger.debug('Creating dataset FTS table.')
 
         query = """\
-            CREATE VIRTUAL TABLE dataset_index USING fts3(
+            CREATE VIRTUAL TABLE IF NOT EXISTS dataset_index USING fts3(
                 vid VARCHAR(256) NOT NULL,
                 title TEXT,
                 keywords TEXT,
@@ -135,7 +135,7 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             datasets[partition.dataset_vid].partitions.add(partition.vid)
         return list(datasets.values())
 
-    def list_documents(self, limit = None):
+    def list_documents(self, limit=None):
         """
         List document vids.
 
@@ -144,11 +144,10 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         """
         limit_str = 'LIMIT {}'.format(limit) if limit else ''
 
-        query = ("SELECT vid FROM dataset_index "+limit_str)
+        query = ('SELECT vid FROM dataset_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['vid']
-
 
     def _as_document(self, dataset):
         """ Converts dataset to document indexed by to FTS index.
@@ -234,7 +233,7 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
         logger.debug('Creating identifier FTS table.')
 
         query = """\
-            CREATE VIRTUAL TABLE identifier_index USING fts3(
+            CREATE VIRTUAL TABLE IF NOT EXISTS identifier_index USING fts3(
                 identifier VARCHAR(256) NOT NULL,
                 type VARCHAR(256) NOT NULL,
                 name TEXT
