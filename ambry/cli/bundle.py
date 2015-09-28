@@ -525,7 +525,7 @@ def bundle_info(args, l, rc):
                          ', '.join(str(e) for e in p.time_coverage[:5]), ', '.join(p.space_coverage[:5]),
                          ', '.join(p.grain_coverage[:5])])
         print('\nPartitions')
-        print(tabulate(rows, headers = "Vid Name Table Time Space Grain".split()))
+        print(tabulate(rows, headers="Vid Name Table Time Space Grain".split()))
 
 
 def check_built(b):
@@ -618,11 +618,12 @@ def bundle_ingest(args, l, rc):
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l, print_loc=False).cast_to_subclass()
-    b.ingest(sources=args.source,force = args.force, clean_files=args.clean_files)
+    b.ingest(sources=args.source, force=args.force, clean_files=args.clean_files)
     b.set_last_access(Bundle.STATES.INGEST)
 
     if args.sync:
         b.sync_out()
+
 
 def bundle_schema(args, l, rc):
 
@@ -634,7 +635,7 @@ def bundle_schema(args, l, rc):
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l, print_loc=False).cast_to_subclass()
     b.ingest(tables=args.table, force=args.force)
-    b.schema(tables=args.table,force = args.force, clean = args.clean)
+    b.schema(tables=args.table, force=args.force, clean=args.clean)
     b.set_last_access(Bundle.STATES.INGEST)
 
     if args.sync:
@@ -665,14 +666,13 @@ def bundle_build(args, l, rc):
     else:
         sources = args.source
 
-
-
-    b.build(sources=sources, force = args.force)
+    b.build(sources=sources, force=args.force)
 
     if args.sync:
         b.sync_out()
 
     b.set_last_access(Bundle.STATES.BUILT)
+
 
 def bundle_phase(args, l, rc):
 
