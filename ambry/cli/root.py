@@ -236,7 +236,6 @@ def root_doc(args, l, rc):
     from logging import FileHandler
     import webbrowser
 
-
     app_config['port'] = args.port if args.port else 8085
 
     cache_dir = l.filesystem.logs()

@@ -248,7 +248,7 @@ class Test(TestBase):
         b.run()
         print list(b.build_fs.walkfiles())
 
-        self.assertTrue(b.build_fs.exists('/example.com/simple-0.1.3/source/simple.mpr'))
+        self.assertTrue(b.build_fs.exists('/example.com/simple-0.1.3/simple.mpr'))
 
         p = list(b.partitions)[0]
         self.assertEquals(10000, len(list(p.stream())))

@@ -11,25 +11,23 @@ class Test(unittest.TestCase):
         from ambry.valuetype.usps import StateAbr
 
         sa =  StateAbr('AZ')
-        self.assertEquals('AZ' ,sa)
-        self.assertEquals(4, sa.fips)
-        self.assertEquals('Arizona', sa.name)
+        self.assertEqual('AZ' ,sa)
+        self.assertEqual(4, sa.fips)
+        self.assertEqual('Arizona', sa.name)
 
         # Convert to a FIPS code
-        self.assertEquals('04', sa.fips.str)
-        self.assertEquals('04000US04', sa.fips.geoid)
-        self.assertEquals('04', sa.fips.tiger)
-        self.assertEquals('0E04', sa.fips.gvid)
-        self.assertEquals('Arizona', sa.fips.name)
+        self.assertEqual('04', sa.fips.str)
+        self.assertEqual('04000US04', sa.fips.geoid)
+        self.assertEqual('04', sa.fips.tiger)
+        self.assertEqual('0E04', sa.fips.gvid)
+        self.assertEqual('Arizona', sa.fips.name)
+        self.assertEqual('AZ', sa.fips.usps.fips.usps)
 
-        print sa.fips.usps.fips.usps
+        print
 
         from ambry.valuetype.census import AcsGeoid
 
         g = AcsGeoid('15000US530330018003')
 
-        print g.state.name, g.state.usps
-
-
-
-
+        self.assertEqual('Washington', g.state.name)
+        self.assertEqual('WA', g.state.usps)

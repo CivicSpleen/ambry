@@ -1,0 +1,30 @@
+# A configuration with the file database, rather than a membory database
+# needed to exhibit bug #107
+environment:
+    category: development
+
+filesystem:
+    root: '/tmp/test'
+    downloads: '{root}/downloads'
+    extracts: '{root}/extracts'
+    python: '{root}/python'
+    documentation: '{root}/doc'
+    build: '{root}/build'
+    source: '{root}/source'
+    search: '{root}/search'
+
+library:
+  database: sqlite:////tmp/file-test-db.db
+
+    test: 's3://test.library.civicknowledge.com/devel'
+    test-orig: '{root}/test-remote'
+    example: '{root}/example-remote'
+
+
+services:
+    numbers:
+        self-key:
+        unregistered-key: fe78d179-8e61-4cc5-ba7b-263d8d3602b9
+        host: numbers.ambry.io
+        port: 80
+

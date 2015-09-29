@@ -12,9 +12,10 @@ from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIn
     DatasetSearchResult, PartitionSearchResult, SearchTermParser
 
 from ambry.util import get_logger
+import logging
 
 logger = get_logger(__name__, propagate=False)
-
+#logger.setLevel(logging.DEBUG)
 
 class SQLiteSearchBackend(BaseSearchBackend):
 
@@ -117,11 +118,14 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         search_phrase = search_phrase.replace('-', '_')
         query, query_params = self._make_query_from_terms(search_phrase)
 
-        raw_connection = self.backend.library.database.engine.raw_connection()
-        raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
+        connection = self.backend.library.database.connection
+        # Operate on the raw connection
+        connection.connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
 
         logger.debug('Searching datasets using `{}` query.'.format(query))
-        results = self.backend.library.database.connection.execute(query, **query_params).fetchall()
+        results = connection.execute(query,
+                                     **query_params).fetchall()  # Query on the Sqlite proxy to the raw connection
+
         datasets = defaultdict(DatasetSearchResult)
         for result in results:
             vid, score = result
@@ -397,8 +401,9 @@ class PartitionSQLiteIndex(BasePartitionIndex):
 
         query, query_params = self._make_query_from_terms(terms)
 
-        raw_connection = self.backend.library.database.engine.raw_connection()
-        raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
+        connection = self.backend.library.database.connection
+
+        connection.connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
 
         # SQLite FTS implementation does not allow to create indexes on FTS tables.
         # see https://sqlite.org/fts3.html 1.5. Summary, p 1:
@@ -406,9 +411,7 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         #
         # So, filter years range here.
 
-        results = self.backend.library.database.connection\
-            .execute(query, query_params)\
-            .fetchall()
+        results = connection.execute(query, query_params).fetchall()
 
         for result in results:
             vid, dataset_vid, score, db_from_year, db_to_year = result

@@ -192,7 +192,7 @@ class AmbryReadyMixin(object):
         self._assert_finds_partition(partition, 'about cucumber')
 
         # finds dataset extended with partition
-        found = self.backend.dataset_index.search('about cucumber')
+        found = self.backend.search('about cucumber')
         self.assertEqual(len(found), 1)
         self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)

@@ -43,6 +43,7 @@ class TestBase(unittest.TestCase):
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
+    @classmethod
     def get_rc(self, name='ambry.yaml'):
         import os
         from test import bundlefiles
@@ -171,7 +172,7 @@ class PostgreSQLTestBase(TestBase):
     @classmethod
     def _create_postgres_test_db(cls, conf=None):
         if not conf:
-            conf = get_runconfig()
+            conf = TestBase.get_rc() # get_runconfig()
 
         # we need valid postgres dsn.
         if not ('database' in conf.dict and 'postgresql-test' in conf.dict['database']):

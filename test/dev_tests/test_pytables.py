@@ -3,11 +3,12 @@ import os
 import unittest
 
 from contexttimer import Timer
-import tables
+
 
 class Test(unittest.TestCase):
     @unittest.skip("Development Test")
     def test_pytables(self):
+        import tables
         import datetime
         from random import randint, random
         from uuid import uuid4
@@ -69,7 +70,7 @@ class Test(unittest.TestCase):
 
         h5file.close()
 
-
+    @unittest.skip("Development Test")
     def test_datafile_read_write(self):
         from ambry_sources.mpf import MPRowsFile
         from fs.opener import fsopendir

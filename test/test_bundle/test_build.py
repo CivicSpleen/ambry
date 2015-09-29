@@ -91,11 +91,11 @@ class Test(TestBase):
 
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
                           b.dataset.partitions[0].space_coverage)
-        self.assertEquals(u'2qZZZZZZZZZ', b.dataset.partitions[0].grain_coverage[0])
+        self.assertEquals(u'2qZZZZZZZZZZ', b.dataset.partitions[0].grain_coverage[0])
 
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
                           b.dataset.partitions[2].space_coverage)
-        self.assertEquals([u'2qZZZZZZZZZ'], b.dataset.partitions[2].grain_coverage)
+        self.assertEquals([u'2qZZZZZZZZZZ'], b.dataset.partitions[2].grain_coverage)
 
         self.assertEqual(4, len(b.dataset.partitions))
         self.assertEqual(2, len(b.dataset.tables))

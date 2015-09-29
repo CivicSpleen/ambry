@@ -108,7 +108,6 @@ class RunConfig(object):
 
         if not loaded:
             raise ConfigurationError("Failed to load any config from: {}".format(files))
-        
 
         if os.path.exists(RunConfig.USER_ACCOUNTS):
             config.loaded.append(RunConfig.USER_ACCOUNTS)
