@@ -136,7 +136,6 @@ class DataSourceBase(object):
         """Return true if the URL is probably downloadable, and is not a reference or a template"""
         return self.urltype not in ('ref', 'template')
 
-
     def update_table(self):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
@@ -172,6 +171,7 @@ class DataSourceBase(object):
                 self.start_line = r.info['data_start_row']
                 self.end_line = r.info['data_end_row']
 
+
 class DataSource(DataSourceBase, Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""
 
@@ -204,8 +204,8 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     header_lines = SAColumn('ds_header_lines', MutationList.as_mutable(JSONEncodedObj))
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
-    urltype = SAColumn('ds_urltype', Text)  # null or zip
-    filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed
+    urltype = SAColumn('ds_urltype', Text)  # null, zip, ref, template
+    filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed, partition
     encoding = SAColumn('ds_encoding', Text)
     url = SAColumn('ds_url', Text)
     ref = SAColumn('ds_ref', Text)
@@ -218,7 +218,6 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     __table_args__ = (
         UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_ds_d_vid'),
     )
-
 
 
 class TransientDataSource(DataSourceBase):
