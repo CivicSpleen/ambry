@@ -828,7 +828,7 @@ class Bundle(object):
     # General Phase Runs
     #
 
-    def ingest(self, sources = None, tables = None, force = False, clean_files=False):
+    def ingest(self, sources=None, tables=None, force=False, clean_files=False):
         """
         Load sources files into MPR files, attached to the source record
         :param source: Sources or destination table name. If tables, the parameter is converted to the set of sources
@@ -839,14 +839,13 @@ class Bundle(object):
         """
         from ambry_sources import get_source
         from ambry_sources.sources import FixedSource, GeneratorSource
-        from ambry.orm.exc import NotFoundError
 
         if not sources:
             if tables:
                 sources = list(s for s in self.sources if s.dest_table_name in tables)
             else:
                 sources = self.sources
-        elif not isinstance(sources, (list,tuple)):
+        elif not isinstance(sources, (list, tuple)):
             sources = [sources]
 
         processed_sources = []
@@ -871,8 +870,8 @@ class Bundle(object):
             self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
 
             if source.url:
-                with self.progress_logging(lambda: ("Downloading {}", (source.url,)), 10):
-                    s = get_source(source.spec, self.library.download_cache, clean = force)
+                with self.progress_logging(lambda: ('Downloading {}', (source.url,)), 10):
+                    s = get_source(source.spec, self.library.download_cache, clean=force)
 
                 if isinstance(s, FixedSource):
                     s.spec.columns = list(source.source_table.columns)
@@ -882,18 +881,18 @@ class Bundle(object):
 
                 if hasattr(self, source.generator):
                     gen_cls = getattr(self, source.generator)
-                elif source.generator in  sys.modules['ambry.build'].__dict__:
+                elif source.generator in sys.modules['ambry.build'].__dict__:
                     gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
                 else:
                     gen_cls = self.import_lib().__dict__[source.generator]
 
-                s = GeneratorSource(source.spec, gen_cls(self, source), use_row_spec = False)
+                s = GeneratorSource(source.spec, gen_cls(self, source), use_row_spec=False)
 
-            with self.progress_logging(lambda : ("Ingesting {}: {} {} of {}, rate: {}",
-                                                 (source.spec.name,) + source.datafile.report_progress()), 10):
+            with self.progress_logging(lambda: ('Ingesting {}: {} {} of {}, rate: {}',
+                                               (source.spec.name,) + source.datafile.report_progress()), 10):
                 source.datafile.load_rows(s, s.spec)
 
-            self.log("Ingested: {}".format(source.datafile.path))
+            self.log('Ingested: {}'.format(source.datafile.path))
 
         self.commit()
 
@@ -905,8 +904,7 @@ class Bundle(object):
 
         return True
 
-
-    def schema(self, tables = None, force = False, clean = False):
+    def schema(self, tables=None, force=False, clean=False):
         """Generate destination schemas"""
         from itertools import groupby
         from operator import attrgetter
