@@ -488,9 +488,9 @@ class ConfigAccessor(object):
     def build(self):
         """Access build configuration values as attributes. See self.process
             for a usage example"""
-        from .config import ConfigGroupAccessor
+        from .config import BuildConfigGroupAccessor
 
-        return ConfigGroupAccessor(self.dataset, 'buildstate')
+        return BuildConfigGroupAccessor(self.dataset, 'buildstate')
 
     @property
     def sync(self):

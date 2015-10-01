@@ -131,7 +131,7 @@ def root_list(args, l, rc):
 
     else:
         display_header = True
-        header = ['vid', 'vname', 'state', 'source_fs']
+        header = ['vid', 'vname', 'state', 'source_fs', 'about.title']
 
     records = []
 

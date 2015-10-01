@@ -11,12 +11,12 @@ about:
     source: '{{contact_source.creator.org}}'
     space: California
     subject: demo
-    summary: A bundle to demonstrate building data from a program, from {{contact_source.creator.org}}.
+    summary: A bundle to demonstrate building data from a generator, from {{contact_source.creator.org}}.
     tags:
     - example
     - demo
     time: 2010
-    title: A More Complete Example Bundle, For BUilding
+    title: Building from a Generator
 contacts:
     analyst:
         org: Example Com

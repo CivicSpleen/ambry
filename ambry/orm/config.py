@@ -160,6 +160,10 @@ class ConfigGroupAccessor(object):
         for config in [config for config in self._dataset.configs if config.type == self._type_name]:
             self._dataset.configs.remove(config)
 
+    def __iter__(self):
+        for config in [config for config in self._dataset.configs if config.type == self._type_name]:
+            yield config.dict
+
     def __getattr__(self, k):
         return ConfigTypeGroupAccessor(self._dataset, self._type_name, k)
 
@@ -174,3 +178,47 @@ class ConfigGroupAccessor(object):
 
     def __setitem__(self, key, value):
         self.__setattr__(key, value)
+
+
+class BuildConfigGroupAccessor(ConfigGroupAccessor):
+    """A config group acessor for the build group, which can calculate values and format times"""
+
+    # FIXME! These functions should return sensible value when the underlying config items are missing
+    # or have non-integer values
+
+    @property
+    def build_duration(self):
+        """Return the difference between build and build_done states"""
+
+        return int(self.state.build_done) - int(self.state.build)
+
+    @property
+    def build_duration_pretty(self):
+        """Return the difference between build and build_done states, in a human readable format"""
+        from ambry.util import pretty_time
+
+        return pretty_time(int(self.state.build_done) - int(self.state.build))
+
+    @property
+    def built_datetime(self):
+        """Return the built time as a datetime object"""
+        from datetime import datetime
+
+        return datetime.fromtimestamp(self.state.build_done)
+
+    @property
+    def new_datetime(self):
+        """Return the time the bundle was created as a datetime object"""
+        from datetime import datetime
+
+        return datetime.fromtimestamp(self.state.new)
+
+    @property
+    def last_datetime(self):
+        """Return the time of the last operation on the bundle as a datetime object"""
+        from datetime import datetime
+
+        try:
+            return datetime.fromtimestamp(self.state.lasttime)
+        except TypeError:
+            return None

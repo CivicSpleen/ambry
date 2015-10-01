@@ -11,12 +11,12 @@ about:
     source: '{{contact_source.creator.org}}'
     space: California
     subject: demo
-    summary: A bundle to demonstrate building data from a program, from {{contact_source.creator.org}}.
+    summary: A simple, one source file bundle.
     tags:
     - example
     - demo
     time: 2010
-    title: A More Complete Example Bundle, For BUilding
+    title: A simple, one source file bundle.
 contacts:
     creator:
         email: bob@bob.com

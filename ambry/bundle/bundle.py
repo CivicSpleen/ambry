@@ -333,9 +333,25 @@ class Bundle(object):
         return list(s for s in self.dataset.sources if not s.is_downloadable)
 
     @property
+    def config(self):
+        """Return the Cofig acessors. THe returned object has properties for acessing other
+        groups of configuration values:
+
+        - build: build state
+        - metadata: raw acess to metadata values
+        - sync: Synchronization times among the build source files, file records, and objects.
+
+        """
+        return self.dataset.config
+
+    @property
     def metadata(self):
         """Return the Metadata acessor"""
         return self.dataset.config.metadata
+
+    @property
+    def documentation(self):
+        """Return the documentation, from the documentation.md file, with template substitutions"""
 
     @property
     def build_source_files(self):
@@ -1542,7 +1558,20 @@ Pipeline Headers
         pass  # Remove files in the file system other resource.
 
     def field_row(self, fields):
-        """Return a list of values to match the fielsds values"""
+        """
+        Return a list of values to match the fields values. This is used when listing bundles to
+        produce a table of information about the bundle.
+
+        :param fields: A list of names of data items.
+        :return: A list of values, in the same order as the fields input
+
+        The names in the fields llist can be:
+
+        - state: The current build state
+        - source_fs: The URL of the build source filesystem
+        - about.*: Any of the metadata fields in the about section
+
+        """
 
         row = self.dataset.row(fields)
 
@@ -1552,23 +1581,25 @@ Pipeline Headers
                 row[i] = self.state
             elif f == 'source_fs':
                 row[i] = self.source_fs
-            elif f.startswith('about'):
+            elif f.startswith('about'): # all metadata in the about section, ie: about.title
                 _,key = f.split('.')
                 row[i] = self.metadata.about[key]
 
         return row
 
     def clear_states(self):
+        """Delete  all of the build state information"""
         return self.dataset.config.build.clean()
 
     @property
     def state(self):
+        """Return the current build state"""
         return self.dataset.config.build.state.current
 
     @property
     def error_state(self):
         """Set the error condition"""
-        self.dataset.config.build.state.lastime = time()
+        self.dataset.config.build.state.lasttime = time()
         return self.dataset.config.build.state.error
 
     @state.setter
@@ -1578,7 +1609,7 @@ Pipeline Headers
         self.dataset.config.build.state.current = state
         self.dataset.config.build.state.error = False
         self.dataset.config.build.state[state] = time()
-        self.dataset.config.build.state.lastime = time()
+        self.dataset.config.build.state.lasttime = time()
 
     def set_error_state(self):
         self.dataset.config.build.state.error = time()

@@ -16,7 +16,7 @@ about:
     - example
     - demo
     time: 2010
-    title: A More Complete Example Bundle, For Loading
+    title: Load a wide range of source files
 build:
     dict1:
         dict2:

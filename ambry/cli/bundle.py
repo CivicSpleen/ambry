@@ -251,8 +251,8 @@ def bundle_parser(cmd):
     #
     # Schema Command
     #
-    command_p = sub_cmd.add_parser('schema', help='Generation the destination schema')
-    command_p.set_defaults(subcommand='schema')
+    command_p = sub_cmd.add_parser('meta', help='Generate the source and ddestination schemas')
+    command_p.set_defaults(subcommand='meta')
 
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Remove all columns from existing tavbles')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
@@ -275,6 +275,8 @@ def bundle_parser(cmd):
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Delete partitions before building')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Build even built or finalized bundles')
+    command_p.add_argument('-m', '--meta', default=False, action='store_true',
+                          help='Run the meta process before building')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
                            help='Syncrhonize before building')
 
@@ -625,7 +627,7 @@ def bundle_ingest(args, l, rc):
         b.sync_out()
 
 
-def bundle_schema(args, l, rc):
+def bundle_meta(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
 
@@ -650,6 +652,10 @@ def bundle_build(args, l, rc):
         check_built(b)
     else:
         b.state = Bundle.STATES.PREPARED
+
+    if args.meta:
+        bundle_meta(args,l,rc)
+
 
     if args.clean:
         b.dataset.delete_partitions()
