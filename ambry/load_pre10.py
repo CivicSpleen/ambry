@@ -3,12 +3,17 @@
 import os
 import yaml
 
+import msgpack
+
 from fs.opener import fsopendir
+
+from six import iteritems
 
 from ambry.bundle import Bundle
 from ambry.cli.bundle import check_built
 from ambry.library import new_library
 from ambry.orm.exc import NotFoundError
+from ambry.orm.file import File
 from ambry.run import get_runconfig
 
 
@@ -23,6 +28,12 @@ Usage:
 USAGE = '''
 python load_pre10.py <file_or_dir>
 '''
+
+# List of bundles loaded without errors sorted by name.
+# FIXME: Sort by name.
+SUCCESS_LIST = [
+    'bls.gov-laus-decomp/bls.gov-laus-decomp.yaml',
+]
 
 
 def _import(file_full_name):
@@ -54,7 +65,40 @@ def _import(file_full_name):
         print('Loading existing bundle: {}'.format(b.identity.fqname))
 
     b.set_file_system(source_url=os.path.dirname(fs.getsyspath(file_name)))
-    b.sync_in()
+
+    if 'build' in config and 'sources' in config['build']:
+        # create sources file.
+        rows = [
+            ['name', 'title', 'dest_table_name', 'time', 'space', 'grain',
+             'description', 'url', 'urltype', 'filetype',
+             'start_line', 'end_line',
+             'segment']
+        ]
+        for i, (name, source) in enumerate(iteritems(config['build']['sources'])):
+            start_line = None
+            end_line = None
+            if 'row_spec' in source:
+                start_line = int(source['row_spec'].get('data_start_line') or 0) or None
+                end_line = int(source['row_spec'].get('data_end_line') or 0) or None
+            row = [
+                name, name, source.get('table') or name, source.get('time', config['about']['time']),
+                source.get('space', config['about']['space']), source.get('grain', config['about']['grain']),
+                source.get('description', ''), source['url'], source.get('urltype', ''),
+                source.get('filetype'),
+                start_line, end_line,
+                source.get('segment')]
+            assert len(row) == len(rows[0]), 'Length of the row does not match to the length of the header.'
+            rows.append(row)
+
+        file_const = File.BSFILE.SOURCES  # Or, another BSFILE for a different type of file.
+        file_record = b.dataset.bsfile(file_const)
+        file_record.mime_type = 'application/msgpack'
+        file_record.update_contents(msgpack.packb(rows, encoding='utf-8'))
+        b.commit()
+
+    # Sync to objects
+    b.sync_objects()
+    b.sync(force='rtf', defaults=True)
     return b
 
 
