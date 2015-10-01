@@ -1,0 +1,6 @@
+table,datatype,column,description
+,,,
+simple,int,id,A simple int
+simple,str,uuid,A lonely uuid
+simple,int,int,A more serious int
+simple,float,float,An emotionally conflicted float
