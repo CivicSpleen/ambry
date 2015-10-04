@@ -58,7 +58,11 @@ SUCCESS_LIST = [
     'example.com-segmented-orig.yaml',
     'clarinova.com-2010census-sf1-casnd.yaml',
     'example.com-segmented.yaml',
-
+    'abc.ca.gov-alcohol_licenses-orig.yaml',
+    'oshpd.ca.gov-pqi.yaml',
+    'clarinova.com-crosswalks-census-casnd.yaml',
+    'clarinova.com-crime-incidents-casnd-geocoded.yaml',
+    'cde.ca.gov-graduates.yaml',
 ]
 
 
