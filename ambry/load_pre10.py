@@ -43,7 +43,21 @@ SUCCESS_LIST = [
     'civicknowledge.com-poverty.yaml',
     'civicknowledge.com-terms.yaml',
     'sandiego.gov-opendsd.yaml',
-    'civicknowledge.com-housing.yaml'
+    'civicknowledge.com-housing.yaml',
+    'exceptionalgrowth.org-nets-ca.yaml',
+    'clarinova.com-streets-casnd.yaml',
+    'clarinova.com-places-2013.yaml',
+    'clarinova.com-parcels-casnd.yaml',
+    'clarinova.com-street_lights-casnd.yaml',
+    'sandiegodata.org-places-casnd.yaml',
+    'example.com-level3.yaml',
+    'clarinova.com-alcohol_licenses-casnd.yaml',
+    'oshpd.ca.gov-psi.yaml',
+    'example.com-altdb-orig.yaml',
+    'example.com-random.yaml',
+    'example.com-segmented-orig.yaml',
+    'clarinova.com-2010census-sf1-casnd.yaml',
+    'example.com-segmented.yaml',
 
 ]
 
@@ -93,8 +107,9 @@ def _import(file_full_name):
                 start_line = int(source['row_spec'].get('data_start_line') or 0) or None
                 end_line = int(source['row_spec'].get('data_end_line') or 0) or None
             row = [
-                name, name, source.get('table') or name, source.get('time', config['about']['time']),
-                source.get('space', config['about']['space']), source.get('grain', config['about']['grain']),
+                name, name, source.get('table') or name, source.get('time', config['about'].get('time')),
+                source.get('space', config['about'].get('space')),
+                source.get('grain', config['about'].get('grain')),
                 source.get('description', ''), source['url'], source.get('urltype', ''),
                 source.get('filetype'),
                 start_line, end_line,
@@ -184,7 +199,7 @@ def main():
                 _build(b)
                 success_list.append(yaml_file)
             except Exception as exc:
-                fail_list.append((yaml_file, str(exc)))
+                fail_list.append((yaml_file, '{}: {}'.format(exc.__class__, exc)))
         open('success.txt', 'w').write('\n'.join(success_list))
         open('fails.txt', 'w').write('\n'.join(['{}, {}'.format(x, y) for (x, y) in fail_list]))
         print('Done:')
