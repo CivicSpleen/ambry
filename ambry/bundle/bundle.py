@@ -18,9 +18,11 @@ from geoid.civick import GVid
 from geoid import NotASummaryName
 
 from ambry.dbexceptions import PhaseError, BuildError, BundleError, FatalError
-
+from ambry.orm import File
 import ambry.etl
 from ..util import get_logger, Constant
+
+from ambry_sources.exceptions import MissingCredentials
 
 indent = '    '  # Indent for structured log output
 
@@ -51,8 +53,7 @@ class Bundle(object):
     # If the bundle is in test mode, only run 1000 rows, selected from the first 100,000
     TEST_ROWS = 1000  # Number of test rows to select from file.
 
-
-    # Default body content for pipelines
+    #  Default body content for pipelines
     default_pipelines = {
 
         'build': {
@@ -78,7 +79,7 @@ class Bundle(object):
         },
     }
 
-    def __init__(self, dataset, library, source_url=None, build_url=None, test = False):
+    def __init__(self, dataset, library, source_url=None, build_url=None, test=False):
         import logging
         import signal
 
@@ -103,9 +104,9 @@ class Bundle(object):
 
         self._identity = None
 
-        self._orig_alarm_handler = signal.SIG_DFL # For start_progress_loggin
+        self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
 
-        self.test = test # Set to true to trigger test behavior
+        self.test = test  # Set to true to trigger test behavior
 
         self.init()
 
@@ -140,7 +141,6 @@ class Bundle(object):
 
         :return:
         """
-        from ambry.orm import File
         bsf = self.build_source_files.file(File.BSFILE.BUILD)
         try:
             clz = bsf.import_bundle()
@@ -148,11 +148,10 @@ class Bundle(object):
             return clz(self._dataset, self._library, self._source_url, self._build_url, self.test)
 
         except Exception as e:
-            raise BundleError("Failed to load bundle code file, skipping : {}".format(e))
+            raise BundleError('Failed to load bundle code file, skipping : {}'.format(e))
 
     def import_lib(self):
         """Import the lib.py file from the bundle"""
-        from ambry.orm import File
         return self.build_source_files.file(File.BSFILE.LIB).import_lib()
 
     def load_requirements(self):
@@ -188,7 +187,7 @@ class Bundle(object):
     @property
     def identity(self):
         if not self._identity:
-            self._identity =  self.dataset.identity
+            self._identity = self.dataset.identity
 
         return self._identity
 
@@ -236,7 +235,6 @@ class Bundle(object):
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
 
-
         raise NotImplementedError("Haven't finished this!")
 
     def new_partition(self, table, **kwargs):
@@ -275,7 +273,7 @@ class Bundle(object):
         :return:
         """
 
-        return self.dataset.new_table(name = name, add_id = add_id, **kwargs)
+        return self.dataset.new_table(name=name, add_id=add_id, **kwargs)
 
     def wrap_partition(self, p):
 
@@ -299,13 +297,13 @@ class Bundle(object):
         self.session.delete(p._partition)
 
     def source(self, name):
-        source =  self.dataset.source_file(name)
+        source = self.dataset.source_file(name)
         source._bundle = self
         return source
 
     def source_pipe(self, source):
         """Create a source pipe for a source, giving it access to download files to the local cache"""
-        from ambry.etl import DatafileSourcePipe, GeneratorSourcePipe
+        from ambry.etl import DatafileSourcePipe
         if isinstance(source, string_types):
             source = self.source(source)
 
@@ -402,9 +400,7 @@ class Bundle(object):
         if not self.build_fs.exists(base_path):
             self.build_fs.makedir(base_path, allow_recreate=True)
 
-
         return self.build_fs.opendir(base_path)
-
 
     def phase_search_names(self, source, phase):
         search = []
@@ -510,7 +506,6 @@ class Bundle(object):
 
         return _ProgressLogger()
 
-
     def start_progress_logging(self, f, interval=2):
         """
         Call the function ``f`` every ``interval`` seconds to produce a logging message to be passed
@@ -533,13 +528,13 @@ class Bundle(object):
 
             r = f()
 
-            if isinstance(r, (tuple,list)):
+            if isinstance(r, (tuple, list)):
                 try:
                     self.log(r[0].format(*r[1]))
                 except IndexError:
-                    self.log(str(r)+" (Bad log format)") # Well, at least log something
+                    self.log(str(r) + ' (Bad log format)')  # Well, at least log something
             else:
-                self.log(str(r) + ' '+str(type(r)))
+                self.log(str(r) + ' ' + str(type(r)))
 
             # Or, use signal.itimer()? Maybe, but this way, the handler will stop if there is
             # an exception, rather than getting regular exceptions.
@@ -547,7 +542,7 @@ class Bundle(object):
 
         old_handler = signal.signal(signal.SIGALRM, handler)
 
-        if not self._orig_alarm_handler: # Only want the handlers from other outside sources
+        if not self._orig_alarm_handler:  # Only want the handlers from other outside sources
             self._orig_alarm_handler = old_handler
 
         signal.alarm(interval)
@@ -564,7 +559,7 @@ class Bundle(object):
             signal.signal(signal.SIGALRM, self._orig_alarm_handler)
             self._orig_alarm_handler = None
 
-            signal.alarm(0) # Cancel any currently active alarm.
+            signal.alarm(0)  # Cancel any currently active alarm.
 
     #
     # Source Synced
@@ -594,7 +589,7 @@ class Bundle(object):
         self.log("---- Synchronized ----")
         self.dataset.commit()
 
-        self.library.search.index_bundle(self, force = True)
+        self.library.search.index_bundle(self, force=True)
 
         return syncs
 
@@ -604,7 +599,7 @@ class Bundle(object):
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
 
-        self.library.search.index_bundle(self, force = True)
+        self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
     def sync_objects_in(self):
@@ -637,7 +632,7 @@ class Bundle(object):
     #
     # Do All; Run the full process
 
-    def run(self,sources = None, force = False, clean = False):
+    def run(self, sources=None, force=False, clean=False):
 
         if self.is_finalized:
             self.error("Can't run; bundle is finalized")
@@ -645,7 +640,7 @@ class Bundle(object):
 
         self.sync_in()
 
-        if not self.ingest(sources = sources, force = force, clean_files = clean):
+        if not self.ingest(sources=sources, force=force, clean_files=clean):
             self.error('Run: failed to ingest')
             return False
 
@@ -653,7 +648,7 @@ class Bundle(object):
             self.error('Run: failed to build schema')
             return False
 
-        if not self.build(sources=sources, force = force):
+        if not self.build(sources=sources, force=force):
             self.error('Run: failed to build')
             return False
 
@@ -719,7 +714,6 @@ class Bundle(object):
     def clean_source(self, force=False):
         """Like clean, but also clears out files. """
 
-
     def clean_tables(self, force=False):
         """Like clean, but also clears out files. """
 
@@ -739,9 +733,8 @@ class Bundle(object):
 
         shutil.rmtree(self.build_fs.getsyspath('/'))
 
-
     def clean_files(self, force=False):
-        """Delete all ingested file records, but leave the ingested files in the build directory """
+        """ Delete all ingested file records, but leave the ingested files in the build directory """
 
         self.dataset.files[:] = []
 
@@ -750,17 +743,13 @@ class Bundle(object):
 
         self.clean()
 
-
     def clean_process_meta(self):
         """Remove all process and build metadata"""
-
+        ds = self.dataset
         ds.config.build.clean()
         ds.config.process.clean()
-
         ds.commit()
-
         self.state = self.STATES.CLEANED
-
 
     #
     # Prepare
@@ -831,7 +820,8 @@ class Bundle(object):
     def ingest(self, sources=None, tables=None, force=False, clean_files=False):
         """
         Load sources files into MPR files, attached to the source record
-        :param source: Sources or destination table name. If tables, the parameter is converted to the set of sources
+        :param source: Sources or destination table name. If tables, the parameter
+            is converted to the set of sources
         that have that table as a destination table.
         :param force: Delete files before loading.
         :param clean: Same as force; exists for consistency
@@ -839,6 +829,11 @@ class Bundle(object):
         """
         from ambry_sources import get_source
         from ambry_sources.sources import FixedSource, GeneratorSource
+
+        def account_accessor(url, accounts=self.library.config.accounts):
+            # return empty dict if credentials do not exist
+            # to force ambry_sources to raise exception with required config.
+            return accounts.get(url, {})
 
         if not sources:
             if tables:
@@ -870,8 +865,22 @@ class Bundle(object):
             self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
 
             if source.url:
+
                 with self.progress_logging(lambda: ('Downloading {}', (source.url,)), 10):
-                    s = get_source(source.spec, self.library.download_cache, clean=force)
+                    try:
+                        s = get_source(
+                            source.spec, self.library.download_cache,
+                            clean=force, account_accessor=account_accessor)
+                    except MissingCredentials as exc:
+                        formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
+                        msg = \
+                            'Missing credentials for {location}.\n'\
+                            'Hint: Check accounts section of your ~/.ambry-accounts.yaml '\
+                            'for {location} credentials. If there is no such, use next template to '\
+                            'add credentials:\n'\
+                            '{location}:\n'\
+                            '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
+                        raise Exception(msg)
 
                 if isinstance(s, FixedSource):
                     s.spec.columns = list(source.source_table.columns)
@@ -926,8 +935,8 @@ class Bundle(object):
             # with the header, then sort on the postition. This will produce a stream of header names
             # that may have duplicates, but with is generally in the order the headers appear in the
             # sources. The duplicates are properly handled when we add the columns in add_column()
-            headers = sorted(set([ (i, col.name, col.datatype, col.description) for source in sources
-                             for i, col in enumerate(source.source_table.columns) ]))
+            headers = sorted(set([(i, col.name, col.datatype, col.description) for source in sources
+                             for i, col in enumerate(source.source_table.columns)]))
 
             for pos, name, datatype, desc in headers:
                 t.add_column(name=name, datatype=datatype, description=desc)
@@ -976,8 +985,9 @@ class Bundle(object):
 
         pl.phase = phase
 
-        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the         augment segment
-        # or it could be a dict, in which case each is a list of pipes for the named segments.
+        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the
+        # augment segment or it could be a dict, in which case each is a list of pipes
+        # for the named segments.
 
         def apply_config(pl, pipe_config):
 
@@ -1000,7 +1010,6 @@ class Bundle(object):
         # One more time, for the configuration for 'all' phases
         if 'all' in self.metadata.pipelines:
             apply_config(pl, self.metadata.pipelines['all'])
-
 
         # Allows developer to over ride pipe configuration in code
         self.edit_pipeline(pl)
@@ -1082,7 +1091,6 @@ class Bundle(object):
                     sources.append(source)
         else:
             # Use the named sources, but ensure they are all source objects.
-            source_objs = []
 
             if not isinstance(sources, (list, tuple)):
                 sources = [sources]
@@ -1093,13 +1101,14 @@ class Bundle(object):
                 if isinstance(source, string_types):
 
                     try:
-                        resolved_sources.append( self.source(source))
+                        resolved_sources.append(self.source(source))
                     except NotFoundError:
                         # Maybe the source is actually a table name, so find all of the sorces that have
                         # the tables as a dest_table.
                         table = self.table(source)
                         try:
-                            resolved_sources += filter(lambda x: x.resolved_dest_table_name == table.name, self.sources)
+                            resolved_sources += filter(
+                                lambda x: x.resolved_dest_table_name == table.name, self.sources)
                         except:
                             errors.append(source)
 
@@ -1120,19 +1129,20 @@ class Bundle(object):
 
             pl = self.pipeline(phase, source)
 
-            self.logger.info('Running phase {} for source {} with pipeline {}'.format(phase, source.name, pl.name))
+            self.logger.info(
+                'Running phase {} for source {} with pipeline {}'.format(phase, source.name, pl.name))
 
             # Doing this before hand to get at least some information about the pipline,
             # in case there is an error during the run. It will get overwritten with more information
             # after asecussful run
             self.final_log_pipeline(pl)
 
-            with self.progress_logging(lambda: ("Run source {}: {} rows, {} rows/sec",
+            with self.progress_logging(lambda: ('Run source {}: {} rows, {} rows/sec',
                                                 (source.spec.name,) + pl.sink.report_progress()), 10):
 
-                rows_count = int(min(source.datafile.n_rows, self.TEST_ROWS) ) if self.test else None
+                rows_count = int(min(source.datafile.n_rows, self.TEST_ROWS)) if self.test else None
 
-                pl.run(count = rows_count)
+                pl.run(count=rows_count)
 
             self.debug('Final methods')
             for m in pl.final:
@@ -1157,7 +1167,7 @@ class Bundle(object):
 
         return True
 
-    def run_phase(self, phase, stage='main', sources=None, force = False):
+    def run_phase(self, phase, stage='main', sources=None, force=False):
 
         assert isinstance(stage, string_types) or stage is None
 
@@ -1175,9 +1185,8 @@ class Bundle(object):
             phase_post = partial(self.post_phase, phase)
 
         try:
-
             step_name = 'Pre-{}'.format(phase)
-            if not phase_pre(force = force):
+            if not phase_pre(force=force):
                 self.log("---- Skipping {} ---- ".format(phase))
                 return False
 
@@ -1208,7 +1217,7 @@ Pipeline {}
 Pipeline Headers
 ================
 {}
-""".format(str(datetime.now()),unicode(pl), pl.headers_report()))
+""".format(str(datetime.now()), unicode(pl), pl.headers_report()))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
@@ -1227,7 +1236,6 @@ Pipeline Headers
     def meta_schema(self, sources=None):
         return self.run_phase('schema', sources=sources)
 
-
     #
     # Build
     #
@@ -1243,7 +1251,7 @@ Pipeline Headers
 
     def pre_build(self, phase='build', force=False):
         assert isinstance(force, bool)
-        r =  self.pre_phase(phase, force=force)
+        r = self.pre_phase(phase, force=force)
 
         if not r:
             return False
@@ -1261,10 +1269,9 @@ Pipeline Headers
 
         return True
 
-
-    def build(self,  stage='main', sources=None, force = False):
+    def build(self,  stage='main', sources=None, force=False):
         assert isinstance(stage, string_types) or stage is None
-        return self.run_phase('build', sources=sources, stage=stage, force = force)
+        return self.run_phase('build', sources=sources, stage=stage, force=force)
 
     def post_build(self, phase='build'):
         """After the build, update the configuration with the time required for
@@ -1273,17 +1280,15 @@ Pipeline Headers
 
         try:
             self.build_post_cast_error_codes()
-
             self.build_post_unify_partitions()
-
             self.build_post_write_bundle_file()
-        except Exception as e:
+        except Exception:
             self.set_error_state()
             self.state = phase + '_error'
             self.commit()
             raise
 
-        self.library.search.index_bundle(self, force = True)
+        self.library.search.index_bundle(self, force=True)
 
         self.state = phase + '_done'
 
@@ -1551,7 +1556,7 @@ Pipeline Headers
             elif f == 'source_fs':
                 row[i] = self.source_fs
             elif f.startswith('about'):
-                _,key = f.split('.')
+                _, key = f.split('.')
                 row[i] = self.metadata.about[key]
 
         return row
