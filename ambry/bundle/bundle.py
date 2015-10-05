@@ -852,9 +852,16 @@ class Bundle(object):
     # General Phase Runs
     #
 
-
-
     def ingest(self, sources=None, tables=None, force=False, clean_files=False):
+        try:
+            self.state = self.STATES.INGESTING
+            self._ingest(sources, tables, force, clean_files)
+        except:
+            self.set_error_state()
+            self.commit()
+            raise
+
+    def _ingest(self, sources=None, tables=None, force=False, clean_files=False):
         """
         Load sources files into MPR files, attached to the source record
         :param source: Sources or destination table name. If tables, the parameter is converted to the set of sources
