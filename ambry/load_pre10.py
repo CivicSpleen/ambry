@@ -157,7 +157,7 @@ def _ingest(b):
     force = True
     clean_files = True
     b.ingest(force=force, clean_files=clean_files)
-    b.set_last_access(Bundle.STATES.INGEST)
+
     # FIXME: Validate ingest.
 
 
