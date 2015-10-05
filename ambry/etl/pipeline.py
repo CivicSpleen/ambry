@@ -26,6 +26,7 @@ class PipelineError(Exception):
         self.extra = ''
         self.extra_section = ''
 
+        assert isinstance(pipe, Pipe), "Got a  type: "+str(type(pipe))
 
     def __str__(self):
         return """
@@ -166,6 +167,32 @@ class Pipe(object):
 
     def __str__(self):
         return self.print_header()
+
+class RowProxyPipe(Pipe):
+    """A pipe that passes a RowProxy object into the process_body method"""
+
+    def __iter__(self):
+        from ambry_sources.sources.util import RowProxy
+        rg = iter(self._source_pipe)
+
+        self.headers = self.process_header(next(rg))
+
+        yield self.headers
+
+        header_len = len(self.headers)
+
+        rp = RowProxy(self.headers)
+
+        for row in rg:
+
+            row = self.process_body(rp.set_row(row)).row
+
+            if row:
+                assert len(row) == header_len, (self.headers, row, type(self))
+                yield row
+
+        self.finish()
+
 
 
 class DatafileSourcePipe(Pipe):
@@ -1264,10 +1291,9 @@ class SelectPartition(Pipe):
     partition a row is written to. By default, uses a partition name that consists of only the
      destination table of the source and a segment of the id of the source"""
 
-    def __init__(self, select_f=None, as_dict=False):
+    def __init__(self, select_f=None):
 
         self._default = None
-        self._as_dict = as_dict
 
         # Under the theory that removing an if is faster.
         if select_f:
@@ -1280,9 +1306,13 @@ class SelectPartition(Pipe):
         else:
             self.process_body = self.process_body_default
 
+        self._row_proxy = None
+
     def process_header(self, row):
+        from ambry_sources.sources.util import RowProxy
         self._default = PartialPartitionName(table=self.source.dest_table.name, segment=self.source.sequence_id)
         self._orig_headers = row
+        self._row_proxy = RowProxy(row)
         return row + ['_pname']
 
     def process_body(self, row):
@@ -1291,10 +1321,7 @@ class SelectPartition(Pipe):
 
     def process_body_select(self, row):
 
-        if self._as_dict:
-            name = self.select_f(self.source, dict(list(zip(self.headers, row))))
-        else:
-            name = self.select_f(self.source, row)
+        name = self.select_f(self.source, self._row_proxy.set_row(row))
 
         # Name must be a dict
         if not isinstance(name, PartialPartitionName):
@@ -1382,12 +1409,14 @@ class WriteToPartition(Pipe, PartitionWriter):
                     from ..orm.partition import Partition
 
                     p = self.bundle.partitions.new_partition(pname, type=Partition.TYPE.SEGMENT)
-                    self.bundle.commit()
+                    #self.bundle.commit()
                     p.clean()
 
                 self._partitions[pname] = p
 
-            header_mapper, body_mapper = make_table_map(p.table, self._headers[self.source.name])
+            table = self.bundle.table(p.table_name)
+            assert bool(table)
+            header_mapper, body_mapper = make_table_map(table, self._headers[self.source.name])
 
             self._datafiles[df_key] = (p, header_mapper, body_mapper)
 
@@ -1495,7 +1524,7 @@ class Pipeline(OrderedDict):
     final = None
     sink = None
 
-    _group_names = ['source', 'first', 'map', 'cast', 'augment', 'select', 'last', 'store', 'final']
+    _group_names = ['source', 'first', 'map', 'cast', 'augment', 'select', 'last', 'select_partition', 'write', 'final']
 
     def __init__(self, bundle=None,  *args, **kwargs):
 
@@ -1520,7 +1549,6 @@ class Pipeline(OrderedDict):
 
         if args:
             self.__setitem__('body', PipelineSegment(self, 'body', *args))
-
 
 
     def _subset(self, subset):
@@ -1556,7 +1584,7 @@ class Pipeline(OrderedDict):
                 return pipe
 
         def pipe_location(pipe):
-
+            """Return a location prefix from a pipe, or None if there isn't one """
             if not isinstance(pipe, string_types):
                 return None
 
@@ -1579,6 +1607,7 @@ class Pipeline(OrderedDict):
 
                 # Check if any of the pipes have a location command. If not, the pipe is cleared and the set of
                 # pipes replaces the ones that are there.
+
                 if not any( bool(pipe_location(pipe)) for pipe in pipes ):
                     # Nope, they are all clean
                     self[segment_name] = [eval_pipe(pipe) for pipe in pipes]
@@ -1712,6 +1741,7 @@ class Pipeline(OrderedDict):
 
         if len(chain):
             last = chain[0]
+
             for p in chain[1:]:
                 assert not inspect.isclass(p)
                 p.set_source_pipe(last)

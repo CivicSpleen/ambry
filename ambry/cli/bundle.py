@@ -499,6 +499,12 @@ def bundle_info(args, l, rc):
         from terminaltables import SingleTable
         from itertools import islice
 
+        def cast_str(x):
+            try:
+                return unicode(x)
+            except:
+                return str(x)
+
         for p in b.partitions:
             rows = ['Column LOM Count Uniques Values'.split()]
             d = p.stats_dict
@@ -512,9 +518,10 @@ def bundle_info(args, l, rc):
                     if v.lom == 'i':
                         values = v.text_hist
                     else:
-                        values = '\n'.join(wrap(', '.join(islice(sorted(str(x) for x in iterkeys(v.uvalues)), None, 10)), 50))
+                        values = '\n'.join(wrap(', '.join(islice(sorted(cast_str(x)
+                                            for x in iterkeys(v.uvalues)), None, 10)), 50))
 
-                    rows.append([ str(k), str(v.lom), str(v.count), str(v.nuniques), values])
+                    rows.append([ cast_str(k), cast_str(v.lom), cast_str(v.count), cast_str(v.nuniques), values])
 
             #print tabulate(row, tablefmt='plain')
             print(SingleTable(rows, title='Stats for ' + str(p.identity.name)).table)
@@ -557,25 +564,30 @@ def bundle_finalize(args, l, rc):
 
 
 def bundle_clean(args, l, rc):
+
     b = using_bundle(args, l).cast_to_subclass()
 
     if args.source or args.all:
-        pass
+        prt('Clean sources')
+        b.clean_sources()
 
     if args.files or args.all:
-        pass
+        prt('Clean files')
+        b.clean_files()
 
     if args.tables or args.all:
-        pass
+        prt('Clean tables and partitions')
+        b.dataset.delete_tables_partitions()
 
-    if args.partitions or args.all:
-        pass
+    elif args.partitions or args.all:
+        prt('Clean partitions')
+        b.clean_partitions()
 
     if args.build or args.all:
         pass
 
     b.set_last_access(Bundle.STATES.NEW)
-
+    b.commit()
 
 def bundle_download(args, l, rc):
     b = using_bundle(args, l).cast_to__subclass()

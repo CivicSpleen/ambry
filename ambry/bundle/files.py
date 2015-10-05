@@ -76,6 +76,16 @@ class BuildSourceFile(object):
         return self._dataset.bsfile(self._file_const)
 
     @property
+    def record_content(self):
+        """Return the contents of the file record"""
+        return self.record.unpacked_contents
+
+    @property
+    def file_content(self):
+        """Return the contents of the file system file"""
+        return self._fs.getcontents(file_name(self._file_const))
+
+    @property
     def default(self):
         """Return default contents"""
         return file_default(self._file_const)
@@ -91,6 +101,10 @@ class BuildSourceFile(object):
     @property
     def path(self):
         return self._fs.getsyspath(file_name(self._file_const))
+
+    @property
+    def file_name(self):
+        return file_name(self._file_const)
 
     @property
     def fs_modtime(self):
@@ -113,7 +127,7 @@ class BuildSourceFile(object):
 
         fn_path = file_name(self._file_const)
 
-        with self._fs.open(fn_path) as f:
+        with self._fs.open(fn_path, mode='rb') as f:
             return md5_for_file(f)
 
     def sync_dir(self):
@@ -176,9 +190,14 @@ class BuildSourceFile(object):
         """Load a file in the filesystem into the file record"""
         raise NotImplementedError
 
+    def record_to_fh(self, f):
+        """Create a filesystem file from a File"""
+        raise NotImplementedError
+
     def record_to_fs(self):
         """Create a filesystem file from a File"""
         raise NotImplementedError
+
 
 
 class RowBuildSourceFile(BuildSourceFile):
@@ -209,8 +228,7 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fr.modified = self.fs_modtime
 
-    def record_to_fs(self):
-        """Create a filesystem file from a File"""
+    def record_to_fh(self,f):
         import unicodecsv as csv
 
         fr = self._dataset.bsfile(self._file_const)
@@ -223,19 +241,31 @@ class RowBuildSourceFile(BuildSourceFile):
                 return u(',').join(u('{}').format(e).replace(',', '\,') for e in v)
             elif isinstance(v, dict):
                 import json
+
                 return json.dumps(v)
             else:
                 return v
 
         if fr.contents:
-            with self._fs.open(fn_path, 'wb') as f:
-                w = csv.writer(f)
-                for i, row in enumerate(fr.unpacked_contents):
 
-                    w.writerow(munge_types(e) for e in row)
+            w = csv.writer(f)
+            for i, row in enumerate(fr.unpacked_contents):
+                w.writerow(munge_types(e) for e in row)
 
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
+
+    def record_to_fs(self):
+        """Create a filesystem file from a File"""
+        import unicodecsv as csv
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        fn_path = file_name(self._file_const)
+
+        if fr.contents:
+            with self._fs.open(fn_path, 'wb') as f:
+                self.record_to_fh(f)
 
 
 class DictBuildSourceFile(BuildSourceFile):
@@ -248,7 +278,7 @@ class DictBuildSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
         if fn_path.endswith('.yaml'):
-            with self._fs.open(fn_path) as f:
+            with self._fs.open(fn_path, mode='r', encoding='utf-8') as f:
                 fr.update_contents(msgpack.packb(yaml.safe_load(f)))
             fr.mime_type = 'application/msgpack'
         else:
@@ -258,6 +288,18 @@ class DictBuildSourceFile(BuildSourceFile):
 
         fr.modified = self.fs_modtime
 
+    def record_to_fh(self, f):
+        """Write the record, in filesystem format, to a file handle or file object"""
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        fn_path = file_name(self._file_const)
+
+        if fr.contents:
+            yaml.safe_dump(fr.unpacked_contents, f, default_flow_style=False, encoding='utf-8')
+            fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
+
     def record_to_fs(self):
         """Create a filesystem file from a File"""
 
@@ -266,11 +308,8 @@ class DictBuildSourceFile(BuildSourceFile):
         fn_path = file_name(self._file_const)
 
         if fr.contents:
-            with self._fs.open(fn_path, 'wb') as f:
-
-                yaml.safe_dump(fr.unpacked_contents, f, default_flow_style=False, encoding='utf-8')
-            fr.source_hash = self.fs_hash
-            fr.modified = self.fs_modtime
+            with self._fs.open(fn_path, 'w', encoding='utf-8') as f:
+                self.record_to_fh(f)
 
 
 class StringSourceFile(BuildSourceFile):
@@ -302,6 +341,14 @@ class StringSourceFile(BuildSourceFile):
         fr.source_hash = self.fs_hash
         fr.modified = self.fs_modtime
 
+    def record_to_fh(self, f):
+        fr = self._dataset.bsfile(self._file_const)
+
+        if fr.contents:
+            f.write(fr.contents)
+            fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
+
     def record_to_fs(self):
         """Create a filesystem file from a File"""
 
@@ -309,10 +356,7 @@ class StringSourceFile(BuildSourceFile):
 
         if fr.contents:
             with self._fs.open(file_name(self._file_const), 'wb') as f:
-                f.write(fr.contents)
-
-            fr.source_hash = self.fs_hash
-            fr.modified = self.fs_modtime
+                self.record_to_fh(f)
 
 
 class MetadataFile(DictBuildSourceFile):
@@ -766,9 +810,30 @@ class BuildSourceFileAccessor(object):
         self._dataset = dataset
         self._fs = filesystem
 
+
     @property
     def build_file(self):
+        raise DeprecationWarning("Use self.build_bundle")
         return self.file(File.BSFILE.BUILD)
+
+    def __getattr__(self, item):
+        """Converts the file_constants into acessor names to return bsfiles.
+
+        See File.BSFILE for the const string values. Returns a file via the self.file() method
+
+        """
+
+        if not item in file_info_map.keys():
+            return super(BuildSourceFileAccessor, self).__getattr__(item)
+
+        else:
+            return self.file(item)
+
+
+    def __iter__(self):
+
+        for key in file_info_map.keys():
+            yield(self.file(key))
 
     @property
     def meta_file(self):

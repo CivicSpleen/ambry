@@ -43,7 +43,8 @@ class Bundle(object):
     STATES.INSTALLED = 'install_done'
     STATES.META = 'meta'
     STATES.SCHEMA = 'schema'
-    STATES.INGEST = 'ingest'
+    STATES.INGESTING = 'ingest'
+    STATES.INGESTED = 'ingest_done'
 
     # Other things that can be part of the 'last action'
     STATES.INFO = 'info'
@@ -63,13 +64,10 @@ class Bundle(object):
             'cast': [
                 ambry.etl.CasterPipe
             ],
-            'select': [],
             'augment': [],
             'last': [],
-            'store': [
-                ambry.etl.SelectPartition,
-                ambry.etl.WriteToPartition
-            ],
+            'select_partition': [ambry.etl.SelectPartition],
+            'write': [ambry.etl.WriteToPartition],
             'final': [
                 'final_log_pipeline',
                 'final_finalize_segments',
@@ -352,6 +350,11 @@ class Bundle(object):
     @property
     def documentation(self):
         """Return the documentation, from the documentation.md file, with template substitutions"""
+
+        # Return the documentation as a scalar term, which has .text() and .html methods to do
+        # metadata substitution using Jinja
+
+        return self.metadata.scalar_term(self.build_source_files.documentation.record_content)
 
     @property
     def build_source_files(self):
@@ -732,12 +735,17 @@ class Bundle(object):
 
         return True
 
-    def clean_source(self, force=False):
+    def clean_sources(self, force=False):
         """Like clean, but also clears out files. """
+
+        self.dataset.sources[:] = []
+        self.dataset.source_tables[:] = []
 
 
     def clean_tables(self, force=False):
-        """Like clean, but also clears out files. """
+        """Like clean, but also clears out schema tables and the partitions that depend on them. . """
+
+        self.dataset.delete_tables_partitions()
 
     def clean_partitions(self, force=False):
         """Delete partition records and any built partition files.  """
@@ -844,6 +852,8 @@ class Bundle(object):
     # General Phase Runs
     #
 
+
+
     def ingest(self, sources=None, tables=None, force=False, clean_files=False):
         """
         Load sources files into MPR files, attached to the source record
@@ -876,6 +886,7 @@ class Bundle(object):
 
             processed_sources.append(source)
 
+            # Clean or skip
             if source.datafile.exists:
                 if clean_files:
                     source.datafile.remove()
@@ -890,7 +901,13 @@ class Bundle(object):
                     s = get_source(source.spec, self.library.download_cache, clean=force)
 
                 if isinstance(s, FixedSource):
-                    s.spec.columns = list(source.source_table.columns)
+                    from ambry_sources.sources.spec import ColumnSpec
+
+                    s.spec.columns = [ ColumnSpec(c.name, c.position, c.start, c.width)
+                                       for c in source.source_table.columns ]
+
+
+                    s.spec.start_line = 0 # Turns off intuiting as well
 
             elif source.generator:
                 import sys
@@ -906,6 +923,7 @@ class Bundle(object):
 
             with self.progress_logging(lambda: ('Ingesting {}: {} {} of {}, rate: {}',
                                                (source.spec.name,) + source.datafile.report_progress()), 10):
+
                 source.datafile.load_rows(s, s.spec)
 
             self.log('Ingested: {}'.format(source.datafile.path))
@@ -1205,10 +1223,17 @@ class Bundle(object):
             phase_post()
 
         except Exception as e:
-            self.rollback()
-            self.error('{} phase, stage {} failed: {}'.format(step_name, stage, e))
-            self.set_error_state()
+            from sqlalchemy.exc import InvalidRequestError
             raise
+            try:
+                self.error('{} phase, stage {} failed: {}'.format(step_name, stage, e))
+                self.rollback()
+            except InvalidRequestError:
+                # self.error can throw another InvalidRequest error, so must use
+                # regular logging.
+                self.log('ERROR: {} phase, stage {} failed: {}'.format(step_name, stage, e))
+
+            raise e
 
         return True
 
@@ -1295,7 +1320,7 @@ Pipeline Headers
             self.build_post_write_bundle_file()
         except Exception as e:
             self.set_error_state()
-            self.state = phase + '_error'
+
             self.commit()
             raise
 
@@ -1378,6 +1403,8 @@ Pipeline Headers
                 self.session.delete(s)
 
     def final_finalize_segments(self, pl):
+
+        self.commit()
 
         try:
             for p in pl[ambry.etl.PartitionWriter].partitions:
@@ -1611,6 +1638,7 @@ Pipeline Headers
 
     def set_error_state(self):
         self.dataset.config.build.state.error = time()
+        self.state = self.state + '_error'
 
     def set_last_access(self, tag):
         """Mark the time that this bundle was last accessed"""

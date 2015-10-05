@@ -50,11 +50,9 @@ class Names(DictGroup):
     vname = ScalarTerm()
 
 
-class Dependencies(DictGroup):
+class Dependencies(VarDictGroup):
     """Bundle dependencies"""
-    counties = ScalarTerm()
-    facility_index = ScalarTerm()
-    facility_info = ScalarTerm()
+
 
 
 class Requirements(VarDictGroup):

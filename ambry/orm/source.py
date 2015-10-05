@@ -172,6 +172,17 @@ class DataSourceBase(object):
                 self.end_line = r.info['data_end_row']
 
 
+    @property
+    def abbrev_url(self):
+        from ..util import parse_url_to_dict, unparse_url_dict
+
+        d = parse_url_to_dict(self.url)
+
+        d['path'] = '/.../' + d['path'].split('/').pop()
+
+        return unparse_url_dict(d)
+
+
 class DataSource(DataSourceBase, Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""
 

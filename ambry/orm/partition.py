@@ -101,6 +101,7 @@ class Partition(Base, DictableMixin):
     _bundle  = None # Set when returned from a bundle.
     _datafile = None
     _datafile_writer = None
+    _stats_dict = None
 
     @property
     def identity(self):
@@ -194,8 +195,6 @@ class Partition(Base, DictableMixin):
 
         for c in self.table.columns:
 
-
-
             if c.name not in stats:
                 continue
 
@@ -267,20 +266,24 @@ class Partition(Base, DictableMixin):
                 return str(self.__dict__)
 
             def __repr__(self):
-                return str(self.__dict__)
+                return repr(self.__dict__)
 
             def items(self):
                 return list(self.__dict__.items())
 
             def iteritems(self):
-                return iter(list(self.__dict__.items()))
+                return self.__dict__.iteritems()
 
             def __getitem__(self, k):
                 return self.__dict__[k]
 
-        cols = {s.column.name: Bunch(s.dict) for s in self.stats}
 
-        return Bunch(cols)
+        if not self._stats_dict:
+            cols = {s.column.name: Bunch(s.dict) for s in self.stats}
+
+            self._stats_dict = Bunch(cols)
+
+        return self._stats_dict
 
     def build_sample(self):
 
@@ -343,7 +346,6 @@ class Partition(Base, DictableMixin):
                 wc.name = c.name
                 wc.description = c.description
                 wc.type = c.python_type.__name__
-
 
 
         stats = self.datafile.run_stats()
@@ -423,9 +425,36 @@ class Partition(Base, DictableMixin):
 
         return iter(reader)
 
-
-
     # ============================
+
+
+    def _set_ids(self):
+        if not self.sequence_id:
+            from .exc import DatabaseError
+
+            raise DatabaseError("Sequence ID must be set before insertion")
+
+        if not self.vid:
+            assert bool(self.d_vid)
+            assert bool(self.sequence_id)
+            on = ObjectNumber.parse(self.d_vid).as_partition(self.sequence_id)
+            self.vid = str(on)
+            self.id = str(on.rev(None))
+
+        if not self.data:
+            self.data = {}
+
+    def _update_names(self):
+        """Update the derived names"""
+        d = self.dict
+        d['table'] = self.table_name
+
+        name = PartialPartitionName(**d).promote(self.dataset.identity.name)
+
+        self.name = str(name.name)
+        self.vname = name.vname
+        self.cache_key = name.cache_key
+        self.fqname = self.identity.fqname
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -433,35 +462,18 @@ class Partition(Base, DictableMixin):
         object and create an ObjectNumber value for the id_"""
         from sqlalchemy import text
 
-        if not target.sequence_id:
-            from .exc import DatabaseError
-            raise DatabaseError("Sequence ID must be set before insertion")
-
-        if not target.vid:
-            assert bool(target.d_vid)
-            assert bool(target.sequence_id)
-            on = ObjectNumber.parse(target.d_vid).as_partition(target.sequence_id)
-            target.vid = str(on)
-            target.id = str(on.rev(None))
-
-        if not target.data:
-            target.data = {}
+        target._set_ids()
 
         Partition.before_update(mapper, conn, target)
+
+
 
     @staticmethod
     def before_update(mapper, conn, target):
         """"""
 
-        d = target.dict
-        d['table'] = target.table_name
+        target._update_names()
 
-        name = PartialPartitionName(**d).promote(target.dataset.identity.name)
-
-        target.name = str(name.name)
-        target.vname = name.vname
-        target.cache_key = name.cache_key
-        target.fqname = target.identity.fqname
 
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)

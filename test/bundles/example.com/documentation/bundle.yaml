@@ -37,7 +37,20 @@ contacts:
         name: Bob Bobson
         org: Example Com
         url: http://example.com
-dependencies: {}
+external_documentation:
+    lena:
+        description: If you are going to have the PostScript tiger, you have to have
+            Lenna too.
+        title: "Lena S\xF6derberg"
+        url: https://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png
+    sb_graphic:
+        description: An interesting graphic about something.
+        title: A pretty Picture
+        url: http://www.cde.ca.gov/ta/tg/sa/documents/sbacgraphic.pdf
+    tiger:
+        description: The classic PostScript test file.
+        title: That PostScript Tiger
+        url: http://www.sanface.com/pdf/epdtest.pdf
 identity:
     dataset: documentation
     id: documentat

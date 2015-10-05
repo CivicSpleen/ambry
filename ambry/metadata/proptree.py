@@ -358,6 +358,35 @@ class StructuredPropertyTree(object):
 
         return self._term_values.dump(stream, map_view=map_view)
 
+    def _jinja_sub(self, st):
+        """Create a Jina template engine, then perform substitutions on a string"""
+
+        if isinstance(st, string_types):
+            from jinja2 import Template
+
+            try:
+                for i in range(5):  # Only do 5 recursive substitutions.
+                    st = Template(st).render(**(self._top.dict))
+                    if '{{' not in st:
+                        break
+                return st
+            except Exception as e:
+                raise ValueError(
+                    "Failed to render jinja template for metadata value '{}': {}".format(st, e))
+
+        return st
+
+    def scalar_term(self, st):
+        """Return a _ScalarTermS or _ScalarTermU from a string, to perform text and HTML substitutions"""
+        if isinstance(st, binary_type):
+            return _ScalarTermS(st, self._jinja_sub)
+        elif isinstance(st, text_type):
+            return _ScalarTermU(st, self._jinja_sub)
+        elif st is None:
+            return _ScalarTermS(b(''), self._jinja_sub)
+        else:
+            return st
+
 
 class Group(object):
     """A group of terms. Groups are descriptors, so when they are acessed, as class variables, the
@@ -753,8 +782,9 @@ class Term(object):
         """ Creates or updates db config of the term. Requires bound to db tree. """
         dataset = self._top._config.dataset
         session = object_session(self._top._config)
-        logger.debug('Updating term config. dataset: {}, type: {}, key: {}, value: {}'.format(
-                dataset, self._top._type, self._key, self.get()))
+
+        #logger.debug('Updating term config. dataset: {}, type: {}, key: {}, value: {}'.format(
+        #        dataset, self._top._type, self._key, self.get()))
 
         if not self._parent._config:
             self._parent.update_config()
@@ -775,10 +805,11 @@ class Term(object):
                 session.commit()
         self._top._add_valid(self._config)
 
-        if created:
-            logger.debug('New config created and bound to the term. config: {}'.format(self._config))
-        else:
-            logger.debug('Existing config bound to the term. config: {}'.format(self._config))
+        # Tese lines fail when the term includes unicode
+        #if created:
+        #    logger.debug('New config created and bound to the term. config: {}'.format(self._config))
+        #else:
+        #    logger.debug('Existing config bound to the term. config: {}'.format(self._config))
 
     def null_entry(self):
         raise NotImplementedError("Not implemented by {}".format(type(self)))
@@ -829,14 +860,13 @@ class MLStripper(HTMLParser):
 class _ScalarTermS(binary_type):
     """A scalar term for extension for  strings, with support for Jinja substitutions"""
 
-    def __new__(cls, string, jinja_sub, term):
+    def __new__(cls, string, jinja_sub):
         ob = super(_ScalarTermS, cls).__new__(cls, string)
         return ob
 
-    def __init__(self, string, jinja_sub, term):
+    def __init__(self, string, jinja_sub):
         super(_ScalarTermS, self).__init__()
         self.jinja_sub = jinja_sub
-        self._term = term
 
     @property
     def html(self):
@@ -856,14 +886,13 @@ class _ScalarTermS(binary_type):
 
 class _ScalarTermU(text_type):
     """A scalar term for extension for unicode, with support for Jinja substitutions"""
-    def __new__(cls, string, jinja_sub, term):
+    def __new__(cls, string, jinja_sub):
         ob = super(_ScalarTermU, cls).__new__(cls, string)
         return ob
 
-    def __init__(self, string, jinja_sub, term):
+    def __init__(self, string, jinja_sub):
         super(_ScalarTermU, self).__init__()
         self.jinja_sub = jinja_sub
-        self._term = term
 
     @property
     def html(self):
@@ -896,31 +925,7 @@ class ScalarTerm(Term):
 
         st = self._parent._term_values.get(self._key, None)
 
-        def jinja_sub(st):
-
-            if isinstance(st, string_types):
-                from jinja2 import Template
-
-                try:
-                    for i in range(5):  # Only do 5 recursive substitutions.
-                        st = Template(st).render(**(self._top.dict))
-                        if '{{' not in st:
-                            break
-                    return st
-                except Exception as e:
-                    raise ValueError(
-                        "Failed to render jinja template for metadata value '{}': {}".format(st, e))
-
-            return st
-
-        if isinstance(st, binary_type):
-            return _ScalarTermS(st, jinja_sub, self)
-        elif isinstance(st, text_type):
-            return _ScalarTermU(st, jinja_sub, self)
-        elif st is None:
-            return _ScalarTermS(b(''), jinja_sub, self)
-        else:
-            return st
+        return self._top.scalar_term(st)
 
     def null_entry(self):
         return None

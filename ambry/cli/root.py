@@ -126,12 +126,13 @@ def root_list(args, l, rc):
     import json
 
     if args.fields:
-        display_header = False
         header = list( str(e).strip() for e in args.fields.split(','))
+
+        display_header = len(args.fields) > 1
 
     else:
         display_header = True
-        header = ['vid', 'vname', 'state', 'source_fs', 'about.title']
+        header = ['vid', 'vname', 'state', 'about.title']
 
     records = []
 
@@ -163,6 +164,7 @@ def root_list(args, l, rc):
             rows[row[0]] = dict(list(zip(header, row)))
 
         print(json.dumps(rows))
+
     elif display_header:
         print(tabulate(records, headers=header))
     else:

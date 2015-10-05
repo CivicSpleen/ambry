@@ -176,6 +176,11 @@ class Partitions(object):
 
         p = self.bundle.dataset.new_partition(data=data, **kwargs)
 
+        # These are called from before_insert and before_update,
+        # but calling them here can avoid some requirements for early commits()
+        p._set_ids()
+        p._update_names()
+
         return self.bundle.wrap_partition(p)
 
     def get_or_new_partition(self, pname, data=None, **kwargs):

@@ -1194,7 +1194,7 @@ def pretty_time(s, granularity=3):
                 seconds -= value * count
                 if value == 1:
                     name = name.rstrip('s')
-                result.append('{} {}'.format(value, name))
+                result.append('{} {}'.format(int(value), name))
 
         return ', '.join(result[:granularity])
 
