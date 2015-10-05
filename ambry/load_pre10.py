@@ -32,13 +32,62 @@ python load_pre10.py <file_or_dir>
 # List of bundles loaded without errors sorted by name.
 # FIXME: Sort by name.
 SUCCESS_LIST = [
-    'bls.gov-laus-decomp/bls.gov-laus-decomp.yaml',
+    'bls.gov-laus-decomp.yaml',
+    'cdc.gov-mrfei.yaml',
+    'cde.ca.gov-api-combined.yaml',
+    'clarinova.com-dates-casnd.yaml',
+    'sandiego.gov-businesses-casnd-orig.yaml',
+    'clarinova.com-us_crime_incidents-state.yaml',
+    'cde.ca.gov-api-combined.yaml',
+    'cde.ca.gov-schools-combined.yaml',
+    'civicknowledge.com-poverty.yaml',
+    'civicknowledge.com-terms.yaml',
+    'sandiego.gov-opendsd.yaml',
+    'civicknowledge.com-housing.yaml',
+    'exceptionalgrowth.org-nets-ca.yaml',
+    'clarinova.com-streets-casnd.yaml',
+    'clarinova.com-places-2013.yaml',
+    'clarinova.com-parcels-casnd.yaml',
+    'clarinova.com-street_lights-casnd.yaml',
+    'sandiegodata.org-places-casnd.yaml',
+    'example.com-level3.yaml',
+    'clarinova.com-alcohol_licenses-casnd.yaml',
+    'oshpd.ca.gov-psi.yaml',
+    'example.com-altdb-orig.yaml',
+    'example.com-random.yaml',
+    'example.com-segmented-orig.yaml',
+    'clarinova.com-2010census-sf1-casnd.yaml',
+    'example.com-segmented.yaml',
+    'abc.ca.gov-alcohol_licenses-orig.yaml',
+    'oshpd.ca.gov-pqi.yaml',
+    'clarinova.com-crosswalks-census-casnd.yaml',
+    'clarinova.com-crime-incidents-casnd-geocoded.yaml',
+    'cde.ca.gov-graduates.yaml',
+    'example.com-simple-builder.yaml',
+    'oshpd.ca.gov-facilities-index.yaml',
+    'oshpd.ca.gov-msdrg-county.yaml',
+    'bea.gov-international-transactions-orig.yaml',
+    'sandiegodata.org-bad_addresses-casnd.yaml',
+    'example.com-simple-orig.yaml',
+    'sandag.org-popest.yaml',
+    'civicknowledge.com-index-health_facilities-ca.yaml',
+    'oshpd.ca.gov-patient_discharges-hospital.yaml',
+    'clarinova.com-places-casnd.yaml',
+    'cde.ca.gov-fitness-pivoted.yaml',
+    'clarinova.com-collisions-casnd.yaml',
+    'clarinova.com-crime-incidents-casnd-linked.yaml',
+    'sangis.org-parcels-orig.yaml',
+    'example.com-concurrency.yaml',
+    'clarinova.com-geocode-casnd.yaml',
+    'example.com-combined.yaml',
+    'cde.ca.gov-api-orig.yaml',
+    '211sandiego.org-calls-p1ye2014-dedupe.yaml',
 ]
 
 
 def _import(file_full_name):
     """ Imports bundle with given file name. """
-    print('Starting import...')
+    print('Starting import {}...'.format(file_full_name))
     dir_name = os.path.dirname(file_full_name)
     file_name = os.path.basename(file_full_name)
     fs = fsopendir(dir_name)
@@ -81,8 +130,9 @@ def _import(file_full_name):
                 start_line = int(source['row_spec'].get('data_start_line') or 0) or None
                 end_line = int(source['row_spec'].get('data_end_line') or 0) or None
             row = [
-                name, name, source.get('table') or name, source.get('time', config['about']['time']),
-                source.get('space', config['about']['space']), source.get('grain', config['about']['grain']),
+                name, name, source.get('table') or name, source.get('time', config['about'].get('time')),
+                source.get('space', config['about'].get('space')),
+                source.get('grain', config['about'].get('grain')),
                 source.get('description', ''), source['url'], source.get('urltype', ''),
                 source.get('filetype'),
                 start_line, end_line,
@@ -152,10 +202,30 @@ def main():
         _ingest(b)
         _schema(b)
         _build(b)
-
     else:
         # directory
-        raise NotImplementedError()
+        success_list = []
+        fail_list = []
+        for dir_name, subdir_list, file_list in os.walk(args[0]):
+            # convert to absolute path
+            dir_name = os.path.abspath(dir_name)
+            yaml_file = '{}.yaml'.format(dir_name.split('/')[-1])
+            full_path = os.path.join(dir_name, yaml_file)
+            if yaml_file in SUCCESS_LIST:
+                continue
+            if not os.path.exists(full_path):
+                continue
+            try:
+                b = _import(full_path)
+                _ingest(b)
+                _schema(b)
+                _build(b)
+                success_list.append(yaml_file)
+            except Exception as exc:
+                fail_list.append((yaml_file, '{}: {}'.format(exc.__class__, exc)))
+        open('success.txt', 'w').write('\n'.join(success_list))
+        open('fails.txt', 'w').write('\n'.join(['{}, {}'.format(x, y) for (x, y) in fail_list]))
+        print('Done:')
 
 if __name__ == '__main__':
     main()
