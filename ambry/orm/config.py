@@ -196,16 +196,20 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
     def build_duration_pretty(self):
         """Return the difference between build and build_done states, in a human readable format"""
         from ambry.util import pretty_time
-
-        return pretty_time(int(self.state.build_done) - int(self.state.build))
+        try:
+            return pretty_time(int(self.state.build_done) - int(self.state.build))
+        except TypeError: # one of the values is  None or not a number
+            return None
 
     @property
     def built_datetime(self):
         """Return the built time as a datetime object"""
         from datetime import datetime
-
-        return datetime.fromtimestamp(self.state.build_done)
-
+        try:
+            return datetime.fromtimestamp(self.state.build_done)
+        except TypeError:
+            # build_done is null
+            return None
     @property
     def new_datetime(self):
         """Return the time the bundle was created as a datetime object"""

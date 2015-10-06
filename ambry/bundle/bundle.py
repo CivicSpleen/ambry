@@ -11,7 +11,7 @@ import sys
 from time import time
 import traceback
 from functools import partial
-
+from decorator import decorator
 from six import string_types, iteritems, u, b
 
 from geoid.civick import GVid
@@ -26,6 +26,27 @@ from ambry_sources.exceptions import MissingCredentials
 
 indent = '    '  # Indent for structured log output
 
+def _CaptureException(f, *args, **kwargs):
+    """Decorator implementation for capturing exceptions."""
+    from ambry.dbexceptions import LoggedException
+
+    b = args[0]  # The 'self' argument
+
+    try:
+        return f(*args, **kwargs)
+    except Exception as e:
+
+        if b.capture_exceptions:
+            b.exception(e)
+            b.commit()
+            raise LoggedException(e, b)
+        else:
+            raise
+
+def CaptureException(f, *args, **kwargs):
+    """Decorator to capture exceptions and convert them to a dict that can be
+    returned as JSON."""
+    return decorator(_CaptureException, f)  # Preserves signature
 
 class Bundle(object):
 
@@ -106,6 +127,9 @@ class Bundle(object):
 
         self.test = test  # Set to true to trigger test behavior
 
+        self.capture_exceptions = False #  If set to true ( in CLI ), will catch and log exceptions internally.
+        self.exit_on_fatal = True
+
         self.init()
 
     def init(self):
@@ -143,7 +167,9 @@ class Bundle(object):
         try:
             clz = bsf.import_bundle()
 
-            return clz(self._dataset, self._library, self._source_url, self._build_url, self.test)
+            b =  clz(self._dataset, self._library, self._source_url, self._build_url, self.test)
+            b.capture_exceptions = self.capture_exceptions
+            return b
 
         except Exception as e:
             raise BundleError('Failed to load bundle code file, skipping : {}'.format(e))
@@ -438,6 +464,8 @@ class Bundle(object):
 
         return search
 
+
+
     @property
     def logger(self):
         """The bundle logger."""
@@ -447,11 +475,21 @@ class Bundle(object):
             ident = self.identity
             template = "%(levelname)s " + ident.sname + " %(message)s"
 
-            self._logger = get_logger(__name__, template=template, stream=sys.stdout)
+            file_name = self.build_fs.getsyspath('build_log.txt')
+
+            self._logger = get_logger(__name__, template=template, stream=sys.stdout, file_name=file_name)
 
             self._logger.setLevel(self._log_level)
 
         return self._logger
+
+    def log_to_file(self, message):
+        """Write a log message only to the file"""
+
+        with self.build_fs.open('build_log.txt', 'a+') as f:
+            f.write(unicode(message+'\n'))
+
+
 
     def log(self, message, **kwargs):
         """Log the messsage."""
@@ -472,6 +510,20 @@ class Bundle(object):
 
         self.set_error_state()
         self.logger.error(message)
+
+    def exception(self, e):
+        """Log an error messsage.
+
+        :param message:  Log message.
+
+        """
+        if str(e) not in self._errors:
+            self._errors.append(str(e))
+
+        self.set_error_state()
+        self.dataset.config.build.state.exception_type = str(e.__class__.__name__)
+        self.dataset.config.build.state.exception = str(e)
+        self.logger.exception(e)
 
     def warn(self, message):
         """Log an error messsage.
@@ -762,6 +814,7 @@ class Bundle(object):
         """ Delete all ingested file records, but leave the ingested files in the build directory """
 
         self.dataset.files[:] = []
+        self.dataset.files[:] = []
 
     def clean_all(self, force=False):
         """Like clean, but also clears out files. """
@@ -842,12 +895,13 @@ class Bundle(object):
     # General Phase Runs
     #
 
+    @CaptureException
     def ingest(self, sources=None, tables=None, force=False, clean_files=False):
         try:
             self.state = self.STATES.INGESTING
             self._ingest(sources, tables, force, clean_files)
-        except:
-            self.set_error_state()
+        except Exception as e:
+            self.error('Failed to ingest source={}, tables={}'.format(sources, tables))
             self.commit()
             raise
 
@@ -923,7 +977,6 @@ class Bundle(object):
                     s.spec.columns = [ ColumnSpec(c.name, c.position, c.start, c.width)
                                        for c in source.source_table.columns ]
 
-
                     s.spec.start_line = 0 # Turns off intuiting as well
 
             elif source.generator:
@@ -944,6 +997,8 @@ class Bundle(object):
                 source.datafile.load_rows(s, s.spec)
 
             self.log('Ingested: {}'.format(source.datafile.path))
+
+        self.state = self.STATES.INGESTED
 
         self.commit()
 
@@ -1622,6 +1677,10 @@ Pipeline Headers
             elif f.startswith('about'): # all metadata in the about section, ie: about.title
                 _,key = f.split('.')
                 row[i] = self.metadata.about[key]
+            elif f.startswith('state'):
+                _, key = f.split('.')
+                row[i] = self.dataset.config.build.state[key]
+
 
         return row
 
@@ -1645,13 +1704,17 @@ Pipeline Headers
         """Set the current build state and record the tim eto maintain history"""
 
         self.dataset.config.build.state.current = state
-        self.dataset.config.build.state.error = False
         self.dataset.config.build.state[state] = time()
         self.dataset.config.build.state.lasttime = time()
 
+        self.dataset.config.build.state.error = False
+        self.dataset.config.build.state.exception = None
+        self.dataset.config.build.state.exception_type = None
+
     def set_error_state(self):
         self.dataset.config.build.state.error = time()
-        self.state = self.state + '_error'
+        self.state = self.state + ('_error' if not self.state.endswith('_error') else '')
+
 
     def set_last_access(self, tag):
         """Mark the time that this bundle was last accessed"""

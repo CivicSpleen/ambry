@@ -31,6 +31,7 @@ def bundle_command(args, rc):
     from ..library import new_library
     from . import global_logger
     from ambry.orm.exc import ConflictError
+    from ambry.dbexceptions import LoggedException
 
     l = new_library(rc)
     l.logger = global_logger
@@ -44,6 +45,10 @@ def bundle_command(args, rc):
         globals()['bundle_' + args.subcommand](args, l, rc)
     except ConflictError as e:
         fatal(str(e))
+    except LoggedException as e:
+        exc = e.exc
+        b = e.bundle
+        b.fatal(str(exc))
 
 def get_bundle_ref(args, l):
     """ Use a variety of methods to determine which bundle to use
@@ -92,10 +97,12 @@ def using_bundle(args, l, print_loc=True):
     if print_loc:
         prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
 
-    b = l.bundle(ref)
+    b = l.bundle(ref, True)
 
     if args.test:
         b.test = True
+    if print_loc: # Try to only do this once
+        b.log_to_file('==============================')
 
     return b
 
@@ -182,6 +189,8 @@ def bundle_parser(cmd):
                            help='Report the reference of the bundles that will be accessed by other commands')
     command_p.add_argument('-s', '--source_dir', default=False, action='store_true',
                            help='Display the source directory')
+    command_p.add_argument('-b', '--build_dir', default=False, action='store_true',
+                           help='Display the build directory')
     command_p.add_argument('-S', '--stats', default=False, action='store_true',
                            help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action='store_true',
@@ -408,7 +417,9 @@ def bundle_info(args, l, rc):
 
     if args.which:
         ref, frm = get_bundle_ref(args, l)
+
         b = using_bundle(args, l, print_loc=False)
+
         if args.quiet:
             prt(ref)
         else:
@@ -421,6 +432,9 @@ def bundle_info(args, l, rc):
 
     if args.source_dir:
         print(b.source_fs.getsyspath('/'))
+        return
+    elif args.build_dir:
+        print(b.build_fs.getsyspath('/'))
         return
 
     def inf(column, k, v):
@@ -769,7 +783,8 @@ def bundle_checkin(args, l, rc):
 
     ref, frm = get_bundle_ref(args, l)
 
-    b = l.bundle(ref)
+    b = l.bundle(ref, True)
+
 
     remote, path = b.checkin()
 
@@ -781,7 +796,7 @@ def bundle_set(args, l, rc):
 
     ref, frm = get_bundle_ref(args, l)
 
-    b = l.bundle(ref)
+    b = l.bundle(ref, True)
 
     if args.state:
         prt("Setting state to {}".format(args.state))
@@ -794,7 +809,7 @@ def bundle_dump(args, l, rc):
 
     ref, frm = get_bundle_ref(args, l)
 
-    b = l.bundle(ref)
+    b = l.bundle(ref, True)
 
     prt("Dumping {} for {}\n".format(args.table, b.identity.fqname))
 
@@ -996,7 +1011,7 @@ def bundle_import(args, l, rc):
     bid = config['identity']['id']
 
     try:
-        b = l.bundle(bid)
+        b = l.bundle(ref, True)
     except NotFoundError:
         b = l.new_from_bundle_config(config)
 

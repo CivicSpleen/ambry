@@ -242,7 +242,6 @@ def main():
                 with open('success.txt', 'a') as f:
                     f.write('\n{}'.format(yaml_file))
             except Exception as exc:
-                print(exc)
                 if b.state.endswith('_error'):
                     # It has expected error, because:
                     # > If the state doesn’t end with _error, make an issue. If it does, then we’ll

@@ -142,13 +142,18 @@ class File(Base, DictableMixin):
     @property
     def modified_datetime(self):
         from datetime import datetime
-        return datetime.fromtimestamp(self.modified)
-
+        try:
+            return datetime.fromtimestamp(self.modified)
+        except TypeError:
+            return None
     @property
     def modified_ago(self):
         from ambry.util import pretty_time
         from time import time
-        return pretty_time(time() - self.modified)
+        try:
+            return pretty_time(time() - self.modified)
+        except TypeError:
+            return None
 
     def __init__(self,  **kwargs):
         super(File, self).__init__( **kwargs)

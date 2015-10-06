@@ -52,23 +52,22 @@ def get_logger(name, file_name=None, stream=None, template=None, propagate=False
     logger.setLevel(level)
     logger.propagate = propagate
 
-    if not template:
-        template = '%(name)s %(process)s %(levelname)s %(message)s'
-
     formatter = logging.Formatter(template)
 
-    if not file_name and not stream:
+    if not stream:
         stream = sys.stdout
 
+    logger.handlers = []
     handler = logging.StreamHandler(stream=stream)
     handler.setFormatter(formatter)
-
-    logger.handlers = []
     logger.addHandler(handler)
 
+    if file_name:
+        handler = logging.FileHandler(file_name)
+        handler.setFormatter(logging.Formatter('%(asctime)s '+template))
+        logger.addHandler(handler)
+
     return logger
-
-
 
 
 # From https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
