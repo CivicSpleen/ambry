@@ -20,6 +20,15 @@ class BundleError(Exception):
         Exception.__init__(self, message, *args, **kwargs)
 
 
+class LoggedException(Exception):
+    """Signal that an exception has been logged and handled, and should not be logged again"""
+
+    def __init__(self, exc, bundle):
+        self.exc = exc
+        self.bundle = bundle
+
+        Exception.__init__(self, str(exc))
+
 class BadRequest(BundleError):
 
     """The function call or request was malformed or incorrect."""

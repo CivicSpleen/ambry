@@ -219,7 +219,7 @@ class Library(object):
 
         return b
 
-    def bundle(self, ref):
+    def bundle(self, ref, capture_exceptions = False):
         """Return a bundle build on a dataset, with the given vid or id reference"""
         from ..identity import NotObjectNumberError
         from ..orm.exc import NotFoundError
@@ -235,7 +235,10 @@ class Library(object):
         if not ds:
             raise NotFoundError('Failed to find dataset for ref: {}'.format(ref))
 
-        return Bundle(ds, self)
+        b =  Bundle(ds, self)
+        b.capture_exceptions = capture_exceptions
+
+        return b
 
     @property
     def bundles(self):

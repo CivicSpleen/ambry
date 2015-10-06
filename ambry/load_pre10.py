@@ -222,6 +222,7 @@ def main():
                 _build(b)
                 success_list.append(yaml_file)
             except Exception as exc:
+
                 fail_list.append((yaml_file, '{}: {}'.format(exc.__class__, exc)))
         open('success.txt', 'w').write('\n'.join(success_list))
         open('fails.txt', 'w').write('\n'.join(['{}, {}'.format(x, y) for (x, y) in fail_list]))
