@@ -84,15 +84,29 @@ SUCCESS_LIST = [
     '211sandiego.org-calls-p1ye2014-dedupe.yaml',
 ]
 
+EXPECTED_ERROR_LIST = [
+    'cde.ca.gov-schools.yaml',
+    'oshpd.ca.gov-facilities-cross.yaml',
+    'sangis.org-places-orig.yaml',
+    'oshpd.ca.gov-facilities.yaml',
+    'livegoode.com-monarch_referrals.yaml',
+    'sandiegodata.org.crime-201303.yaml',
+    'oshpd.ca.gov-msdgr-top25.yaml',
+    'ssa.gov-oasdi_trustee_report.yaml',
+    'medicare.gov-compare-suppliers.yaml',
+    'example.com-manifest.yaml',
+    'sandiego.gov-opendsd-index.yaml',
+    'rtfhsd.org.rtfhsd.org-pitc-orig.yaml',
+    'sandi.net-boundaries-2014.yaml',
+]
 
-def _import(file_full_name):
+
+def _import(library, file_full_name):
     """ Imports bundle with given file name. """
     print('Starting import {}...'.format(file_full_name))
     dir_name = os.path.dirname(file_full_name)
     file_name = os.path.basename(file_full_name)
     fs = fsopendir(dir_name)
-    rc = get_runconfig(None)
-    library = new_library(rc)
     config = yaml.load(fs.getcontents(file_name))
     bid = config['identity']['id']
 
@@ -195,36 +209,53 @@ def main():
         print(USAGE)
         return
 
+    rc = get_runconfig(None)
+    library = new_library(rc)
+
     if args[0].endswith('.yaml'):
         # single bundle
 
-        b = _import(args[0])
+        b = _import(library, args[0])
         _ingest(b)
         _schema(b)
         _build(b)
     else:
         # directory
-        success_list = []
-        fail_list = []
+        # empty log files.
+        open('success.txt', 'w').close()
+        open('errors.txt', 'w').close()
+        open('fails.txt', 'w').close()
         for dir_name, subdir_list, file_list in os.walk(args[0]):
             # convert to absolute path
             dir_name = os.path.abspath(dir_name)
             yaml_file = '{}.yaml'.format(dir_name.split('/')[-1])
             full_path = os.path.join(dir_name, yaml_file)
-            if yaml_file in SUCCESS_LIST:
+            if yaml_file in SUCCESS_LIST or yaml_file in EXPECTED_ERROR_LIST:
                 continue
             if not os.path.exists(full_path):
                 continue
             try:
-                b = _import(full_path)
+                b = _import(library, full_path)
                 _ingest(b)
                 _schema(b)
                 _build(b)
-                success_list.append(yaml_file)
+                with open('success.txt', 'a') as f:
+                    f.write('\n{}'.format(yaml_file))
             except Exception as exc:
-                fail_list.append((yaml_file, '{}: {}'.format(exc.__class__, exc)))
-        open('success.txt', 'w').write('\n'.join(success_list))
-        open('fails.txt', 'w').write('\n'.join(['{}, {}'.format(x, y) for (x, y) in fail_list]))
+                print(exc)
+                if b.state.endswith('_error'):
+                    # It has expected error, because:
+                    # > If the state doesn’t end with _error, make an issue. If it does, then we’ll
+                    # > improve the logging features in ambry so we can examine the logs and errors
+                    # > from the ambry API, to make a work list for fixes.
+                    # >   Eric.
+                    with open('errors.txt', 'a') as f:
+                        f.write('file: {} | b.state: {}\n'.format(yaml_file, b.state))
+                else:
+                    with open('fails.txt', 'a') as f:
+                        f.write(
+                            'file: {} | b.state: {} | error: {}: {}\n'
+                            .format(yaml_file, b.state, exc.__class__, exc))
         print('Done:')
 
 if __name__ == '__main__':
