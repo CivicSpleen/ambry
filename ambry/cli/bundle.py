@@ -189,6 +189,8 @@ def bundle_parser(cmd):
                            help='Report the reference of the bundles that will be accessed by other commands')
     command_p.add_argument('-s', '--source_dir', default=False, action='store_true',
                            help='Display the source directory')
+    command_p.add_argument('-b', '--build_dir', default=False, action='store_true',
+                           help='Display the build directory')
     command_p.add_argument('-S', '--stats', default=False, action='store_true',
                            help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action='store_true',
@@ -415,7 +417,9 @@ def bundle_info(args, l, rc):
 
     if args.which:
         ref, frm = get_bundle_ref(args, l)
+
         b = using_bundle(args, l, print_loc=False)
+
         if args.quiet:
             prt(ref)
         else:
@@ -428,6 +432,9 @@ def bundle_info(args, l, rc):
 
     if args.source_dir:
         print(b.source_fs.getsyspath('/'))
+        return
+    elif args.build_dir:
+        print(b.build_fs.getsyspath('/'))
         return
 
     def inf(column, k, v):
