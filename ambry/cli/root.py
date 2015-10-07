@@ -17,7 +17,7 @@ def root_parser(cmd):
     sp.set_defaults(subcommand='list')
     sp.add_argument('-f', '--fields', type=str,
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
-    sp.add_argument('-s', '--sort', help='Sort partitions')
+    sp.add_argument('-s', '--sort', help='Sort outputs on a field')
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-t', '--tab', action='store_true', help='Print field tab seperated, without pretty table and header')
     group.add_argument('-j', '--json', action='store_true',

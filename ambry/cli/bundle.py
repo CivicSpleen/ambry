@@ -357,6 +357,17 @@ def bundle_parser(cmd):
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
 
     #
+    # Ampr
+    #
+
+    command_p = sub_cmd.add_parser('ampr', help='Run the ampr command on a source or partition')
+    command_p.set_defaults(subcommand='ampr')
+    from ambry_sources.cli import make_arg_parser
+    make_arg_parser(command_p)
+
+
+
+    #
     # repopulate
     #
     command_p = sub_cmd.add_parser('repopulate',
@@ -776,7 +787,7 @@ def bundle_run(args, l, rc):
     if args.sync:
         b.sync_out()
 
-    print("RETURN: ", r)
+    prt("RETURN: ", r)
 
 
 def bundle_checkin(args, l, rc):
@@ -1039,6 +1050,8 @@ def bundle_export(args, l, rc):
 
     b.sync(force='rtf', defaults=args.defaults)
 
+    b.sync() # FIXME The fist sync doesn't set the identity properly.
+
     prt("Exported bundle: {}".format(b.source_fs))
 
 file_const_map = dict(
@@ -1051,6 +1064,7 @@ file_const_map = dict(
 
 
 def bundle_edit(args, l, rc):
+    """Runs a process that acesspt command key strokes and opens editoris for specific files. """
     import subprocess
 
     from ..util import getch
@@ -1183,6 +1197,25 @@ def bundle_extract(args, l, rc):
 
 
     b.logger.info('Extracted to: {}'.format(bfs.getsyspath('/')))
+
+def bundle_ampr(args, l, rc):
+
+    import os
+
+    b = using_bundle(args, l)
+
+    arg = args.path[0]
+    path = None
+    if os.path.exists(arg):
+        path = arg
+
+    if not path:
+        source = b.source(arg)
+        print 'HERE'
+        path = source.datafile.syspath
+
+    print path
+
 
 def bundle_cluster(args, l, rc):
 

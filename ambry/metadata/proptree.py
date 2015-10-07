@@ -371,8 +371,9 @@ class StructuredPropertyTree(object):
                         break
                 return st
             except Exception as e:
-                raise ValueError(
-                    "Failed to render jinja template for metadata value '{}': {}".format(st, e))
+                return st
+                #raise ValueError(
+                #    "Failed to render jinja template for metadata value '{}': {}".format(st, e))
 
         return st
 

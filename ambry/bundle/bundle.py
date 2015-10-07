@@ -246,20 +246,24 @@ class Bundle(object):
         return Partitions(self)
 
     def partition(self, ref=None, **kwargs):
-        """Return the Schema acessor"""
+        """Return a partition in this bundle for a vid reference or name parts"""
+
+        if not ref and not kwargs:
+            return None
 
         if ref:
 
             for p in self.partitions:
                 if p.vid == b(ref) or p.name == b(ref):
                     return p
+
             return None
 
         elif kwargs:
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
 
-        raise NotImplementedError("Haven't finished this!")
+        raise NotImplementedError("Haven't finished this!: '{}' ".format(ref))
 
     def new_partition(self, table, **kwargs):
         """

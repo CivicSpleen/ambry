@@ -136,6 +136,10 @@ class Partition(Base, DictableMixin):
 
         return self.type == self.TYPE.SEGMENT
 
+    @property
+    def description(self):
+        return self.table.description
+
     def __repr__(self):
         return '<{} partition: {}>'.format(self.format, self.vname)
 

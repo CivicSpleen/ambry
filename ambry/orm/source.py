@@ -102,7 +102,11 @@ class DataSourceBase(object):
         from os.path import join
 
         if self._datafile is None:
-            self._datafile = MPRowsFile(self._bundle.build_ingest_fs, self.name)
+            if self.urltype == 'partition':
+                p = self._bundle.library.partition(self.url)
+                self._datafile = p.datafile
+            else:
+                self._datafile = MPRowsFile(self._bundle.build_ingest_fs, self.name)
 
         return self._datafile
 
@@ -134,7 +138,7 @@ class DataSourceBase(object):
     @property
     def is_downloadable(self):
         """Return true if the URL is probably downloadable, and is not a reference or a template"""
-        return self.urltype not in ('ref', 'template')
+        return self.urltype not in ('ref', 'template','partition')
 
     def update_table(self):
         """Update the source table from the datafile"""
