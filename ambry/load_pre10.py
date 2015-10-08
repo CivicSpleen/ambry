@@ -32,72 +32,9 @@ python load_pre10.py <file_or_dir>
 # List of bundles loaded without errors sorted by name.
 # FIXME: Sort by name.
 SUCCESS_LIST = [
-    'bls.gov-laus-decomp.yaml',
-    'cdc.gov-mrfei.yaml',
-    'cde.ca.gov-api-combined.yaml',
-    'clarinova.com-dates-casnd.yaml',
-    'sandiego.gov-businesses-casnd-orig.yaml',
-    'clarinova.com-us_crime_incidents-state.yaml',
-    'cde.ca.gov-api-combined.yaml',
-    'cde.ca.gov-schools-combined.yaml',
-    'civicknowledge.com-poverty.yaml',
-    'civicknowledge.com-terms.yaml',
-    'sandiego.gov-opendsd.yaml',
-    'civicknowledge.com-housing.yaml',
-    'exceptionalgrowth.org-nets-ca.yaml',
-    'clarinova.com-streets-casnd.yaml',
-    'clarinova.com-places-2013.yaml',
-    'clarinova.com-parcels-casnd.yaml',
-    'clarinova.com-street_lights-casnd.yaml',
-    'sandiegodata.org-places-casnd.yaml',
-    'example.com-level3.yaml',
-    'clarinova.com-alcohol_licenses-casnd.yaml',
-    'oshpd.ca.gov-psi.yaml',
-    'example.com-altdb-orig.yaml',
-    'example.com-random.yaml',
-    'example.com-segmented-orig.yaml',
-    'clarinova.com-2010census-sf1-casnd.yaml',
-    'example.com-segmented.yaml',
-    'abc.ca.gov-alcohol_licenses-orig.yaml',
-    'oshpd.ca.gov-pqi.yaml',
-    'clarinova.com-crosswalks-census-casnd.yaml',
-    'clarinova.com-crime-incidents-casnd-geocoded.yaml',
-    'cde.ca.gov-graduates.yaml',
-    'example.com-simple-builder.yaml',
-    'oshpd.ca.gov-facilities-index.yaml',
-    'oshpd.ca.gov-msdrg-county.yaml',
-    'bea.gov-international-transactions-orig.yaml',
-    'sandiegodata.org-bad_addresses-casnd.yaml',
-    'example.com-simple-orig.yaml',
-    'sandag.org-popest.yaml',
-    'civicknowledge.com-index-health_facilities-ca.yaml',
-    'oshpd.ca.gov-patient_discharges-hospital.yaml',
-    'clarinova.com-places-casnd.yaml',
-    'cde.ca.gov-fitness-pivoted.yaml',
-    'clarinova.com-collisions-casnd.yaml',
-    'clarinova.com-crime-incidents-casnd-linked.yaml',
-    'sangis.org-parcels-orig.yaml',
-    'example.com-concurrency.yaml',
-    'clarinova.com-geocode-casnd.yaml',
-    'example.com-combined.yaml',
-    'cde.ca.gov-api-orig.yaml',
-    '211sandiego.org-calls-p1ye2014-dedupe.yaml',
 ]
 
 EXPECTED_ERROR_LIST = [
-    'cde.ca.gov-schools.yaml',
-    'oshpd.ca.gov-facilities-cross.yaml',
-    'sangis.org-places-orig.yaml',
-    'oshpd.ca.gov-facilities.yaml',
-    'livegoode.com-monarch_referrals.yaml',
-    'sandiegodata.org.crime-201303.yaml',
-    'oshpd.ca.gov-msdgr-top25.yaml',
-    'ssa.gov-oasdi_trustee_report.yaml',
-    'medicare.gov-compare-suppliers.yaml',
-    'example.com-manifest.yaml',
-    'sandiego.gov-opendsd-index.yaml',
-    'rtfhsd.org.rtfhsd.org-pitc-orig.yaml',
-    'sandi.net-boundaries-2014.yaml',
 ]
 
 
@@ -242,7 +179,17 @@ def main():
                 with open('success.txt', 'a') as f:
                     f.write('\n{}'.format(yaml_file))
             except Exception as exc:
-                if b.state.endswith('_error'):
+                state = ''
+                try:
+                    state = b.state
+                except Exception as exc:
+                    with open('fails.txt', 'a') as f:
+                        f.write(
+                            'State retrieve error: file: {} | error: {}: {}\n'
+                            .format(yaml_file, exc.__class__, exc))
+                    continue
+
+                if state.endswith('_error'):
                     # It has expected error, because:
                     # > If the state doesn’t end with _error, make an issue. If it does, then we’ll
                     # > improve the logging features in ambry so we can examine the logs and errors
