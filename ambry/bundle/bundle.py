@@ -86,6 +86,7 @@ class Bundle(object):
             'cast': [
                 ambry.etl.CasterPipe
             ],
+            'body': [],
             'augment': [],
             'last': [],
             'select_partition': [ambry.etl.SelectPartition],
@@ -355,8 +356,13 @@ class Bundle(object):
 
     @property
     def refs(self):
+
+        def set_bundle(s):
+            s._bundle = self
+            return s
+
         """Iterate over downloadable sources -- referecnes and templates"""
-        return list(s for s in self.dataset.sources if not s.is_downloadable)
+        return list(set_bundle(s) for s in self.dataset.sources if not s.is_downloadable)
 
     @property
     def config(self):
@@ -424,7 +430,7 @@ class Bundle(object):
                 # raise ConfigurationError(
                 #    'Must set build URL either in the constructor or the configuration')
 
-            self._build_fs = fsopendir(build_url)
+            self._build_fs = fsopendir(build_url, create_dir=True)
 
         return self._build_fs
 
@@ -479,7 +485,7 @@ class Bundle(object):
             ident = self.identity
             template = "%(levelname)s " + ident.sname + " %(message)s"
 
-            file_name = self.build_fs.getsyspath('build_log.txt')
+            file_name = self.build_fs.getsyspath('build_log.txt', allow_none = True)
 
             self._logger = get_logger(__name__, template=template, stream=sys.stdout, file_name=file_name)
 
@@ -673,7 +679,7 @@ class Bundle(object):
         from ambry.bundle.files import BuildSourceFile
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
-
+        self.log("---- Sync In ----")
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
@@ -715,7 +721,7 @@ class Bundle(object):
 
         self.sync_in()
 
-        if not self.ingest(sources=sources, force=force, clean_files=clean):
+        if not self.ingest(sources=sources, clean_files=clean):
             self.error('Run: failed to ingest')
             return False
 
@@ -771,16 +777,13 @@ class Bundle(object):
 
         ds.commit()
 
-        if ds.bsfile(File.BSFILE.SOURCES).has_contents:
-            self.dataset.sources[:] = []
+        self.clean_sources()
+        self.clean_tables()
+        self.clean_partitions()
+        self.clean_build()
+        self.clean_files()
 
         ds.commit()
-
-        if ds.bsfile(File.BSFILE.SOURCESCHEMA).has_contents:
-            self.dataset.source_tables[:] = []
-
-        if ds.bsfile(File.BSFILE.SCHEMA).has_contents:
-            self.dataset.tables[:] = []
 
         self.log('---- Done Cleaning ----')
 
@@ -804,7 +807,8 @@ class Bundle(object):
 
         self.dataset.delete_partitions()
 
-        shutil.rmtree(self.build_partition_dir.getsyspath('/'))
+        if self.build_partition_fs.exists:
+            shutil.rmtree(self.build_partition_fs.getsyspath('/'))
 
     def clean_build(self, force=False):
         """Delete the build directory and all ingested files """
@@ -812,12 +816,12 @@ class Bundle(object):
 
         self.clean_files()
 
-        shutil.rmtree(self.build_fs.getsyspath('/'))
+        if self.build_fs.exists:
+            shutil.rmtree(self.build_fs.getsyspath('/'))
 
     def clean_files(self, force=False):
         """ Delete all ingested file records, but leave the ingested files in the build directory """
 
-        self.dataset.files[:] = []
         self.dataset.files[:] = []
 
     def clean_all(self, force=False):
@@ -900,16 +904,16 @@ class Bundle(object):
     #
 
     @CaptureException
-    def ingest(self, sources=None, tables=None, force=False, clean_files=False):
+    def ingest(self, sources=None, tables=None, clean_files=False):
         try:
             self.state = self.STATES.INGESTING
-            self._ingest(sources, tables, force, clean_files)
+            return self._ingest(sources, tables,  clean_files)
         except Exception as e:
             self.error('Failed to ingest source={}, tables={}'.format(sources, tables))
             self.commit()
             raise
 
-    def _ingest(self, sources=None, tables=None, force=False, clean_files=False):
+    def _ingest(self, sources=None, tables=None,  clean_files=False):
         """
         Load sources files into MPR files, attached to the source record
         :param source: Sources or destination table name. If tables, the parameter
@@ -957,13 +961,35 @@ class Bundle(object):
 
             self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
 
-            if source.url:
+            if source.reftype == 'generator':
+                import sys
+
+                if hasattr(self, source.generator):
+                    gen_cls = getattr(self, source.generator)
+                elif source.generator in sys.modules['ambry.build'].__dict__:
+                    gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
+                else:
+                    gen_cls = self.import_lib().__dict__[source.generator]
+
+                spec = source.spec
+                spec.start_line = 1
+                spec.header_lines = [0]
+                s = GeneratorSource(spec, gen_cls(self, source))
+
+            elif source.reftype == 'mpr':
+                from ambry_sources.sources import MPRSource
+
+                df_name, predicate, headers = eval(source.ref)
+
+                s = MPRSource(source.spec, self.source(df_name).datafile, predicate, headers)
+
+            else:
 
                 with self.progress_logging(lambda: ('Downloading {}', (source.url,)), 10):
                     try:
                         s = get_source(
                             source.spec, self.library.download_cache,
-                            clean=force, account_accessor=account_accessor)
+                            clean=clean_files, account_accessor=account_accessor)
                     except MissingCredentials as exc:
                         formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
                         msg = \
@@ -983,22 +1009,10 @@ class Bundle(object):
 
                     s.spec.start_line = 0 # Turns off intuiting as well
 
-            elif source.generator:
-                import sys
-
-                if hasattr(self, source.generator):
-                    gen_cls = getattr(self, source.generator)
-                elif source.generator in sys.modules['ambry.build'].__dict__:
-                    gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
-                else:
-                    gen_cls = self.import_lib().__dict__[source.generator]
-
-                s = GeneratorSource(source.spec, gen_cls(self, source), use_row_spec=False)
-
             with self.progress_logging(lambda: ('Ingesting {}: {} {} of {}, rate: {}',
                                                (source.spec.name,) + source.datafile.report_progress()), 10):
 
-                source.datafile.load_rows(s, s.spec)
+                source.datafile.load_rows(s)
 
             self.log('Ingested: {}'.format(source.datafile.path))
 
@@ -1012,9 +1026,12 @@ class Bundle(object):
             source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
 
+        for i, source in enumerate(self.refs):
+            source.update_table()  # Generate the source tables.
+
         return True
 
-    def schema(self, tables=None, force=False, clean=False):
+    def schema(self, tables=None, clean=False):
         """Generate destination schemas"""
         from itertools import groupby
         from operator import attrgetter
@@ -1034,27 +1051,77 @@ class Bundle(object):
 
             # Get all of the header names, for each source, associating the header position in the table
             # with the header, then sort on the postition. This will produce a stream of header names
-            # that may have duplicates, but with is generally in the order the headers appear in the
+            # that may have duplicates, but which is generally in the order the headers appear in the
             # sources. The duplicates are properly handled when we add the columns in add_column()
-            headers = sorted(set([(i, col.name, col.datatype, col.description) for source in sources
+            columns = sorted(set([(i, col.name, col.datatype, col.description) for source in sources
                              for i, col in enumerate(source.source_table.columns)]))
 
-            for pos, name, datatype, desc in headers:
-                t.add_column(name=name, datatype=datatype, description=desc)
+            for pos, name, datatype, desc in columns:
+                t.add_column(name=name, datatype=datatype, description=desc, update_existing = True)
 
         self.commit()
         return True
 
-    def pipeline(self, phase, source=None):
-        """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
-        are filtered out later. """
+    def build_schema(self, tables=None, clean=False):
+        """Update or generate destination schemas by running a bit of the build process.
 
+        Runs the first 10 rows of each source, then extracts the schema from the end of the pipeline.
+
+        """
+        from itertools import groupby
+        from operator import attrgetter
+        from ambry.etl import Collect, Head
+
+        self.load_requirements() # Required to load bundle
+        self.import_lib() # Load bundle, pissibly get generators, pipelines, etc.
+
+        if clean:
+            self.dataset.delete_tables_partitions()
+            self.commit()
+
+        # Group the sources by the destination table name
+        keyfunc = attrgetter('dest_table')
+        for t, sources in groupby(sorted(self.sources+self.refs, key=keyfunc), keyfunc):
+
+            if tables and t.name not in tables:
+                continue
+
+            self.log("Populating table: {}".format(t.name))
+
+            for source in sources:
+                pl = self.pipeline('build',source)
+
+                pl.cast = []
+                pl.select_partition = []
+                pl.write = [Head, Collect]
+                pl.final = []
+
+                pl.run()
+
+                for h, c in zip(pl.write[Collect].headers,  pl.write[Collect].rows[0]):
+                    t.add_column(name=h, datatype=type(c).__name__,
+                                 update_existing = True)
+
+        self.commit()
+        return True
+
+    def pipeline(self, phase='build', source=None):
+        """
+        Construct the ETL pipeline for all phases. Segments that are not used for the current phase
+        are filtered out later.
+
+        :param phase_or_source: If a string, the phase name, otherwize, the source object
+        :param source: A source object, or a source string name
+        :return: an etl Pipeline
+        """
         from ambry.etl.pipeline import Pipeline, PartitionWriter
 
         if source:
             source = self.source(source) if isinstance(source, string_types) else source
         else:
             source = None
+
+        #phase = source.pipeline if source.pipeline and hasattr(source,'pipeline') else phase
 
         pl = Pipeline(self, source=self.source_pipe(source) if source else None)
 
@@ -1173,6 +1240,7 @@ class Bundle(object):
         self.load_requirements()
 
         def stage_match(source_stage, this_stage):
+            """Return true if the source stage should be run for the specified stage"""
             if not bool(source_stage) and (this_stage == 'main' or this_stage is None):
                 return True
 
@@ -1185,11 +1253,15 @@ class Bundle(object):
         if not sources:
             # Select sources that match this stage
             sources = []
-            for i, source in enumerate(self.sources):
-
+            # FIXME This could be a comprehension.
+            for source in self.sources:
                 if stage_match(source.stage, stage):
-                    # print 'MATCH ', source.stage, stage
                     sources.append(source)
+
+            for source in self.refs:
+                if stage_match(source.stage, stage) and source.dest_table_name:
+                    sources.append(source)
+
         else:
             # Use the named sources, but ensure they are all source objects.
 
@@ -1332,17 +1404,6 @@ Pipeline Headers
         self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
 
         self.build_fs.setcontents(path, v, encoding='utf8')
-
-    #
-    # Meta
-    #
-
-    def meta(self, sources=None):
-        self.run_phase('schema', sources=sources)
-        return True
-
-    def meta_schema(self, sources=None):
-        return self.run_phase('schema', sources=sources)
 
     #
     # Build

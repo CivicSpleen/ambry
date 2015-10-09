@@ -133,11 +133,13 @@ class Table(Base, DictableMixin):
 
             sequence_id = next_sequence_id(object_session(self), self._column_sequence, self.vid, Column)
 
+            assert sequence_id > len(self.columns), "{}: {} ! > {} ".format(name, sequence_id, len(self.columns))
+
             c = Column(t_vid=self.vid,
                        sequence_id=sequence_id,
                        vid=str(ColumnNumber(ObjectNumber.parse(self.vid), sequence_id)),
                        name=name,
-                       datatype='varchar')
+                       datatype='str')
             extant = False
 
         # Update possibly existing data
@@ -146,6 +148,10 @@ class Table(Base, DictableMixin):
         for key, value in list(kwargs.items()):
 
             if key[0] != '_' and key not in ['t_vid', 'name',  'sequence_id', 'data']:
+
+                # Don't update the type if the user has specfied a custom type
+                if key == 'datatype' and not c.type_is_builtin():
+                    continue
 
                 try:
                     setattr(c, key, value)
@@ -160,6 +166,8 @@ class Table(Base, DictableMixin):
         # the table.
         if c.name == 'id' and c.is_primary_key and not self.description:
             self.description = c.description
+
+
 
         if not extant:
             self.columns.append(c)

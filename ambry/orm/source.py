@@ -8,7 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
-
+from ambry.util import deprecated
 from os.path import splitext
 
 from six import iteritems
@@ -57,8 +57,10 @@ class DataSourceBase(object):
     def update(self, **kwargs):
 
         for k, v in iteritems(kwargs):
+
             if hasattr(self, k):
                 setattr(self, k, v)
+
 
     @property
     def source_table(self):
@@ -115,7 +117,10 @@ class DataSourceBase(object):
         """Return a SourceSpec to describe this source"""
         from ambry_sources.sources import SourceSpec
 
-        return SourceSpec(**self.dict)
+        url = self.ref
+
+        # Will get the URL twice; once as ref and onces as URL, but the ref is ignored
+        return SourceSpec(url, **self.dict)
 
     @property
     def column_map(self):
@@ -219,20 +224,49 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     header_lines = SAColumn('ds_header_lines', MutationList.as_mutable(JSONEncodedObj))
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
-    urltype = SAColumn('ds_urltype', Text)  # null, zip, ref, template
+
+    pipeline = SAColumn('ds_pipeline', Text)
+
     filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed, partition
     encoding = SAColumn('ds_encoding', Text)
-    url = SAColumn('ds_url', Text)
-    ref = SAColumn('ds_ref', Text)
+
     hash = SAColumn('ds_hash', Text)
 
-    generator = SAColumn('ds_generator', Text)  # class name for a Pipe to generator rows
+    reftype = SAColumn('ds_reftype', Text)  # null, zip, ref, template
+    ref = SAColumn('ds_ref', Text)
 
     account_acessor = None
 
     __table_args__ = (
         UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_ds_d_vid'),
     )
+
+    @property
+    def urltype(self):
+        return self.reftype
+
+
+    @urltype.setter
+    def urltype(self, v):
+        self.reftype = v
+
+    @property
+    def url(self):
+        return self.ref
+
+    @url.setter
+    def url(self, v):
+        self.ref = v
+
+    @property
+    def generator(self):
+        return self.ref
+
+    @generator.setter
+    def generator(self, v):
+        self.reftype = 'generator'
+        self.ref = v
+
 
 
 class TransientDataSource(DataSourceBase):

@@ -22,7 +22,7 @@ library:
 
 database:
 
-  test-database: sqlite:////tmp/foobar.db
+  test-database: sqlite://
   postgres-test: postgres://user:pass@host # Do not include db name here because db will be created while tests running
 
   pg-func-test: postgres://ambry10@warehouse2/ambry10-test

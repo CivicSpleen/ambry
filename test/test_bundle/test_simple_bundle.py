@@ -71,7 +71,7 @@ class Test(TestBase):
             u('sources.csv'), u('bundle.yaml'), u('schema.csv')]
         self.assertEqual(file_names, expected_names)
 
-        self.assertEqual(12, len(b.dataset.configs))
+        self.assertEqual(14, len(b.dataset.configs))
 
         self.assertFalse(b.is_prepared)
         self.assertFalse(b.is_built)
@@ -367,14 +367,12 @@ class Test(TestBase):
 
         return b
 
-
-
     def test_db_copy(self):
         from ambry.orm.database import Database
 
         b = self.setup_bundle('simple')
-
-        b.run()
+        b.sync_in()
+        self.assertTrue(b.run())
 
         import tempfile
 

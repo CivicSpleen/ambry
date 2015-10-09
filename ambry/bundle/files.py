@@ -547,7 +547,9 @@ class SourcesFile(RowBuildSourceFile):
 
     def objects_to_record(self):
 
-        sorter = lambda r: ('A' if r['urltype'] == 'ref' else 'z' if r['urltype'] is None else r['urltype'], r['name'])
+        sorter = lambda r: ('A' if r['reftype'] == 'ref'
+                            else 'z' if r['reftype'] is None
+                            else r['reftype'], r['name'])
 
         rows = sorted([s.row for s in self._dataset.sources], key=sorter)
 
@@ -728,6 +730,18 @@ class SourceSchemaFile(RowBuildSourceFile):
         bsfile = self._dataset.bsfile(self._file_const)
 
         failures = set()
+
+        # Clear out all of the columns from existing tables. We don't clear out the
+        # tables, since they may be referenced by sources
+
+        for row in bsfile.dict_row_reader:
+            st = self._dataset.source_table(row['table'])
+
+            if st:
+                st.columns[:] = []
+
+        self._dataset.commit()
+
         for row in bsfile.dict_row_reader:
             st = self._dataset.source_table(row['table'])
 

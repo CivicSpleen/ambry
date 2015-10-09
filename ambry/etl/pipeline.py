@@ -200,6 +200,10 @@ class DatafileSourcePipe(Pipe):
 
     def __init__(self, bundle, source):
         self.bundle = bundle
+
+        if isinstance(source, string_types):
+            source = bundle.source(source)
+
         self._source = source
 
         self._datafile = source.datafile
@@ -213,8 +217,9 @@ class DatafileSourcePipe(Pipe):
 
         yield self._source.headers
 
-        for row in self._datafile.reader.rows:
-            yield row
+        with self._datafile.reader as r:
+            for row in r.rows:
+                yield row
 
         self.finish()
 
@@ -492,7 +497,7 @@ class Ticker(Pipe):
         print('== {} {} =='.format(self.source.name, self._name if self._name else ''))
         return row
 
-class Select(Pipe):
+class SelectRows(Pipe):
     """ Pass-through only rows that satisfy a predicate. The predicate may be
     specified as a callable, or a string, which will be evaled. The predicate has the signature f(source, row)
     where row is a RowProxy object.
@@ -530,6 +535,29 @@ class Select(Pipe):
 
     def __str__(self):
         return qualified_class_name(self) + ': pred = {} '.format(self.pred_str)
+
+class MatchPredicate(Pipe):
+    """Store rows that match a predicate. THe predicate is a function that takes the row as its
+    sole parameter and returns true or false.
+
+    Unlike the Select pipe, MatchPredicate passes all of the rows through and only stores the
+    ones that match
+
+    The matches can be retrieved from the pipeline via the ``matches`` property
+    """
+
+    def __init__(self, pred):
+        self._pred = pred
+        self.i = 0
+        self.matches = []
+
+    def process_body(self, row):
+
+        if self._pred(row):
+            self.matches.append(row)
+
+        return row
+
 
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one. If no header is specified in the
@@ -965,6 +993,24 @@ class Delete(AddDeleteExpand):
         return qualified_class_name(self) + "delete = "+ ', '.join(self.delete)
 
 
+class SelectColumns(AddDeleteExpand):
+    """Pass through only the sepcified columns, deleting all others.  """
+    def __init__(self, keep):
+        super(SelectColumns, self).__init__()
+
+        self.keep = keep
+
+    def process_header(self, row):
+        self.delete = filter(lambda e: e not in self.keep, row)
+
+        return super(SelectColumns, self).process_header(row)
+
+    def __str__(self):
+
+        return qualified_class_name(self) + "keep = "+ ', '.join(self.keep)
+
+
+
 class Edit(AddDeleteExpand):
     def __init__(self,  edit, as_dict=False):
         super(Edit, self).__init__(edit=edit, as_dict=as_dict)
@@ -1019,6 +1065,7 @@ class AddDerived(Pipe):
             self.processor = eval(self.code, ambry.valuetype.math.__dict__)
 
             self.row_proxy = RowProxy(headers)
+
 
         return headers
 
@@ -1135,6 +1182,21 @@ class Skip(Pipe):
             return row
 
 
+class Collect(Pipe):
+    """Collect rows so they can be viewed or processed after the run. """
+
+    def __init__(self):
+        self.rows = []
+
+    def process_body(self, row):
+        self.rows.append(row)
+        return row
+
+    def process_header(self, row):
+        return row
+
+
+
 class LogRate(Pipe):
 
     def __init__(self, output_f, N, message=None):
@@ -1223,24 +1285,6 @@ class PrintEvery(Pipe):
         return row
 
 
-class MatchPredicate(Pipe):
-    """Store rows that match a predicate. THe predicate is a function that takes the row as its
-    sole parameter and returns true or false.
-
-    The matches can be retrieved from the pipeline vial the ``matches`` property
-    """
-
-    def __init__(self, pred):
-        self._pred = pred
-        self.i = 0
-        self.matches = []
-
-    def process_body(self, row):
-
-        if self._pred(row):
-            self.matches.append(row)
-
-        return row
 
 
 class Reduce(Pipe):
@@ -1524,7 +1568,8 @@ class Pipeline(OrderedDict):
     final = None
     sink = None
 
-    _group_names = ['source', 'first', 'map', 'cast', 'augment', 'select', 'last', 'select_partition', 'write', 'final']
+    _group_names = ['source', 'first', 'map', 'cast', 'body', 'augment',
+                    'select', 'last', 'select_partition', 'write', 'final']
 
     def __init__(self, bundle=None,  *args, **kwargs):
 
@@ -1800,6 +1845,7 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
 
         for pipe in chain:
+
             segment_name = pipe.segment.name if hasattr(pipe, 'segment') else '?'
             out.append(u('{}: {}').format(segment_name,pipe))
 
