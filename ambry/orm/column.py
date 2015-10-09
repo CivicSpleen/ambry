@@ -36,6 +36,8 @@ if sys.version_info > (3,):
 class Column(Base):
     __tablename__ = 'columns'
 
+    _parent_col = 'c_t_vid'
+
     vid = SAColumn('c_vid', String(18), primary_key=True)
     id = SAColumn('c_id', String(15))
     sequence_id = SAColumn('c_sequence_id', Integer)
@@ -159,6 +161,10 @@ class Column(Base):
     def type_is_date(self):
         return self.datatype in (Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
 
+    def type_is_builtin(self):
+        """Return False if the datatype is not one of the builtin type"""
+        return self.datatype in self.types.keys()
+
     @property
     def sqlalchemy_type(self):
         return self.types[self.datatype][0]
@@ -172,6 +178,7 @@ class Column(Base):
             return import_valuetype(self.datatype)
         except AttributeError as e:
             return self.types[self.datatype][1]
+
 
     @property
     def python_type(self):

@@ -356,7 +356,6 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class):
 
     The child table must have a sequence_id value.
 
-
     :param session: Database session or connection ( must have an execute() method )
     :param sequence_ids: A dict for caching sequence ids
     :param parent_vid: The VID of the parent object, which sets the namespace for the sequence
@@ -367,7 +366,11 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class):
     from sqlalchemy import text
 
     seq_col = table_class.sequence_id.property.columns[0].name
-    dvid_col = table_class.d_vid.property.columns[0].name
+
+    try:
+        parent_col = table_class._parent_col
+    except AttributeError:
+        parent_col = table_class.d_vid.property.columns[0].name
 
     assert bool(parent_vid)
 
@@ -378,7 +381,7 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class):
     if not number and session:
 
         sql = text("SELECT max({seq_col})+1 FROM {table} WHERE {dvid_col} = '{vid}'"
-                   .format(table=table_class.__tablename__, dvid_col=dvid_col,
+                   .format(table=table_class.__tablename__, dvid_col=parent_col,
                            seq_col=seq_col, vid=parent_vid))
 
         max_id, = session.execute(sql).fetchone()

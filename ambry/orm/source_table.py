@@ -22,6 +22,8 @@ class SourceColumn(Base):
 
     __tablename__ = 'sourcecolumns'
 
+    _parent_col = 'sc_st_vid'
+
     DATATYPE = Constant()
     DATATYPE.INT = int.__name__
     DATATYPE.FLOAT = float.__name__
@@ -200,6 +202,8 @@ class SourceTable(Base):
         c = self.column(source_header)
         c_by_pos = self.column(position)
 
+
+        datatype = 'str' if datatype == 'unicode' else datatype
 
         assert not c or not c_by_pos or c.vid == c_by_pos.vid
 
