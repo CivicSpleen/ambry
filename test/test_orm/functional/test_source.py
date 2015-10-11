@@ -38,9 +38,7 @@ class Test(TestBase):
         #    print s.dest_table
 
         for i in range(10):
-            source = ds.new_source("source"+str(i))
+            source = ds.new_source('source' + str(i))
             ds.commit()
-            t  = source.source_table
-            self.assertEqual("source"+str(i), t.name)
-
-
+            t = source.source_table
+            self.assertEqual('source' + str(i), t.name)
