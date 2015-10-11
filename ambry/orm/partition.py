@@ -140,6 +140,10 @@ class Partition(Base, DictableMixin):
     def description(self):
         return self.table.description
 
+    @property
+    def headers(self):
+        return [ c.name for c in self.table.columns ]
+
     def __repr__(self):
         return '<{} partition: {}>'.format(self.format, self.vname)
 
@@ -351,7 +355,6 @@ class Partition(Base, DictableMixin):
                 wc.description = c.description
                 wc.type = c.python_type.__name__
 
-
         stats = self.datafile.run_stats()
 
         self.set_stats(stats)
@@ -372,21 +375,12 @@ class Partition(Base, DictableMixin):
         self.datafile.remove()
 
     @property
-    def datafile(self):
-        from ambry_sources import MPRowsFile
-        if self._datafile is None:
-
-            assert bool(self.cache_key)
-            self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
-
-        return self._datafile
-
-    @property
     def location(self):
 
         base_location = self._location
 
-        assert bool(base_location)
+        if not base_location:
+            return None
 
         if self._bundle.build_fs.exists(base_location):
             if self._bundle.build_fs.hashsyspath(base_location):
@@ -398,36 +392,38 @@ class Partition(Base, DictableMixin):
     def location(self, v):
         self._location = v
 
-    def stream(self):
-        """Yield rows of a partition, as an iterator. Data is taken from one of these locations:
-        - The warehouse, for installed data
-        - The build directory, for built data
-        - The remote, for checked in data.
-        """
+    @property
+    def datafile(self):
+        """Return the datafile for this partition, from the bulid directory, the remote, or the warehouse"""
+        from ambry_sources import MPRowsFile
 
-        from ..orm.exc import NotFoundError
-        from fs.errors import ResourceNotFoundError
+        if self._datafile is None:
+            if not self.location or self.location == 'build':
+                assert bool(self.cache_key)
+                self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
 
-        if self.location == 'build':
-            try:
-                reader = self.datafile.reader
-            except ResourceNotFoundError:
-                raise NotFoundError("Partition {} not found in location '{}'. System Path: {} "
-                                    .format(self.identity.fqname, self.location, self.datafile.syspath))
+            elif self.location == 'remote':
+                from ambry_sources import MPRowsFile
+                # Get bundle for this partition
+                # Actually ... this seems way to complex. Why note self._bundle.remote()
+                # FIXME
+                b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+                remote = self._bundle.library.remote(b)
 
-        elif self.location == 'remote':
-            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
-            remote = self._bundle.library.remote(b)
-            from ambry_sources import MPRowsFile
+                self._datafile = MPRowsFile(remote, self.cache_key)
 
-            f = MPRowsFile(remote, self.datafile.path)
-            reader = f.reader
+            elif self.location == 'warehouse':
+                raise NotImplementedError()
 
-        elif self.location == 'warehouse':
-            raise NotImplementedError()
+            else:
+                raise NotImplementedError()
 
+        return self._datafile
 
-        return iter(reader)
+    @property
+    def reader(self):
+        return self.datafile.reader
+
 
     # ============================
 
@@ -469,7 +465,6 @@ class Partition(Base, DictableMixin):
         target._set_ids()
 
         Partition.before_update(mapper, conn, target)
-
 
 
     @staticmethod

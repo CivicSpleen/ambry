@@ -254,12 +254,28 @@ def bundle_parser(cmd):
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     #
-    # Schema Command
+    # Meta Command
     #
-    command_p = sub_cmd.add_parser('meta', help='Generate the source and destination schemas')
+    command_p = sub_cmd.add_parser('meta', help='Clean, ingest and build the source and destination schemas')
     command_p.set_defaults(subcommand='meta')
 
-    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Remove all columns from existing tavbles')
+    command_p.add_argument('-c', '--clean', default=False, action='store_true',
+                           help='Remove the schema source files, schema.csv and source_schema.csv')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Re-run the schema, even if it already exists.')
+    command_p.add_argument('-b', '--build', action='store_true',
+                           help='Use the build process to determine the schema, not the source tables ')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+
+
+    #
+    # Schema Command
+    #
+    command_p = sub_cmd.add_parser('schema', help='Generate the source and destination schemas')
+    command_p.set_defaults(subcommand='scheam')
+
+    command_p.add_argument('-c', '--clean', default=False, action='store_true',
+                           help='Remove all columns from existing tavbles')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Re-run the schema, even if it already exists.')
     command_p.add_argument('-s', '--sync', default=False, action='store_true',
@@ -271,6 +287,7 @@ def bundle_parser(cmd):
     command_p.add_argument('-b', '--build', action='store_true',
                            help='Use the build process to determine the schema, not the source tables ')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+
 
 
     #
@@ -664,7 +681,7 @@ def bundle_ingest(args, l, rc):
         b.sync_out()
 
 
-def bundle_meta(args, l, rc):
+def bundle_schema(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
 
@@ -684,6 +701,34 @@ def bundle_meta(args, l, rc):
 
     if args.sync:
         b.sync_out()
+
+def bundle_meta(args, l, rc):
+
+    b = using_bundle(args, l).cast_to_subclass()
+
+    if not args.force:
+        check_built(b)
+
+    b.clean()
+
+    if args.clean:
+        b.clean_source_files()
+
+    b.sync_in()
+
+    # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
+    b = using_bundle(args, l, print_loc=False).cast_to_subclass()
+
+    b.ingest()
+
+    if args.build:
+        b.build_schema()
+    else:
+        b.schema()
+
+    b.set_last_access(Bundle.STATES.SCHEMA)
+
+    b.sync_out()
 
 
 def bundle_prepare(args, l, rc):
@@ -919,26 +964,25 @@ def bundle_dump(args, l, rc):
     elif args.table == 'tables':
         records = []
         headers = []
+        tables = {}
         for t in b.dataset.tables:
-            for i, c in enumerate(t.columns):
-                items = tuple((k, v) for k, v in iteritems(c.row) if k in
-                                  [ 'table', 'column', 'id', 'datatype', 'caster', 'description'])
 
-                row = OrderedDict( (('vid',c.vid),) + items)
+            print '---', t.name
 
-                if i == 0: # Add the table headers
+            def record_gen():
+                for i, row in enumerate([ c.row for c in t.columns]):
+                    if i == 0:
+                        yield row.keys()
+                    yield row.values()
 
-                    records.append(' ' * len(h) for h in row.keys())
-                    records.append(list(row.keys()))  # once for each table
-                    records.append( '-'*len(h) for h in row.keys())
+            records = list(record_gen())
 
-                records.append(list(row.values()))
+            records = drop_empty(records)
 
-        records = drop_empty(records)
-        if records:
-            _, records = records[0], records[1:]
-        else:
-            headers = []
+            print(tabulate(records[1:], headers=records[0]))
+
+
+        return # Can't follow the normal process b/c we have to run each table seperately.
 
     elif args.table == 'pipes':
         terms = args.ref

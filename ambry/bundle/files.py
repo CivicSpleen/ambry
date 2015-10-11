@@ -102,6 +102,15 @@ class BuildSourceFile(object):
     def path(self):
         return self._fs.getsyspath(file_name(self._file_const))
 
+
+    def remove(self):
+        from fs.errors import ResourceNotFoundError
+
+        try:
+            self._fs.remove(file_name(self._file_const))
+        except ResourceNotFoundError:
+            pass
+
     @property
     def file_name(self):
         return file_name(self._file_const)

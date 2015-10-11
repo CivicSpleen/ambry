@@ -612,33 +612,37 @@ class MapHeader(Pipe):
             yield row
 
 class MapSourceHeaders(Pipe):
-    """Alter the header using the source_header and dest_header in the source table """
+    """Alter the header using the source_header and dest_header in the source table. The primary
+     purpose of this pipe is to normalize multiple sources to one header structure, for instance,
+      there are multiple year releases of a file that have column name changes from year to year. """
 
-    def __init__(self, error_on_fail=True):
+    def __init__(self, error_on_fail=False):
 
         self.error_on_fail = error_on_fail
+        self.map = {}
 
     def process_header(self, row):
 
-        m = {c.source_header: c.dest_header for c in self.source.source_table.columns}
-
-        if not m:
-            raise BadSourceTable(self, self.source.source_table_name, "Malformed or entirely missing source table")
+        self.map = {c.source_header: c.dest_header for c in self.source.source_table.columns
+             if c.dest_header and c.source_header != c.dest_header}
 
         if self.error_on_fail:
             try:
-                headers =  list([m[h] for h in row])
+                headers =  list([self.map[h] for h in row])
             except KeyError:
                 for h in row:
-                    if not h in m:
+                    if not h in self.map:
                         # pipe, header, table,
                         raise MissingHeaderError( self, h, self.source.source_table,
                                                   "Failed to find header in source_table ")
 
         else:
-            headers = list([m.get(h, h) for h in row])
+            headers = list([self.map.get(h, h) for h in row])
 
         return headers
+
+    def __str__(self):
+        return qualified_class_name(self) + ': map = {} '.format(self.map)
 
 class MangleHeader(Pipe):
     """"Alter the header so the values are well-formed, converting to alphanumerics and underscores"""
@@ -1007,7 +1011,7 @@ class SelectColumns(AddDeleteExpand):
 
     def __str__(self):
 
-        return qualified_class_name(self) + "keep = "+ ', '.join(self.keep)
+        return qualified_class_name(self) + " keep = "+ ', '.join(self.keep)
 
 
 
@@ -1044,17 +1048,11 @@ class AddDerived(Pipe):
 
     def process_header(self, headers):
         import ambry.valuetype.math
+        import ambry.valuetype.string
 
-        parts = []
+        df_map = { c.name: c.derivedfrom for c in self.source.dest_table.columns if c.derivedfrom}
 
-        for i, c in enumerate(self.source.dest_table.columns):
-            if c.derivedfrom:
-                index = headers.index(c.name)
-                assert i == index
-
-                parts.append(c.derivedfrom)
-            else:
-                parts.append('row[{}]'.format(i))
+        parts = [ df_map.get(h, 'row[{}]'.format(i)) for i,h in enumerate(headers) ]
 
         if not parts:
             self.process_body = self.process_body_default
@@ -1062,10 +1060,13 @@ class AddDerived(Pipe):
             # FIXME: Should probably use itemgetter() instead of eval
             self.code = 'lambda caster,  row: [ {} ] '.format(','.join(parts))
 
-            self.processor = eval(self.code, ambry.valuetype.math.__dict__)
+            context = {}
+            context.update(ambry.valuetype.math.__dict__)
+            context.update(ambry.valuetype.string.__dict__)
+
+            self.processor = eval(self.code, context )
 
             self.row_proxy = RowProxy(headers)
-
 
         return headers
 
@@ -1338,12 +1339,15 @@ class SelectPartition(Pipe):
     def __init__(self, select_f=None):
 
         self._default = None
-
+        self._code = 'default'
         # Under the theory that removing an if is faster.
         if select_f:
 
             if not callable(self):
-                select_f = eval('lambda source, row: {}'.format(select_f))
+                self._code = 'lambda source, row: {}'.format(select_f)
+                select_f = eval(self._code)
+            else:
+                self._code = str(select_f)
 
             self.select_f = select_f
             self.process_body = self.process_body_select
@@ -1382,6 +1386,10 @@ class SelectPartition(Pipe):
     def process_body_default(self, row):
 
         return list(row) + [self._default]
+
+    def __str__(self):
+
+        return qualified_class_name(self) + " selector = {}".format(self._code)
 
 
 class PartitionWriter(object):
@@ -1568,8 +1576,8 @@ class Pipeline(OrderedDict):
     final = None
     sink = None
 
-    _group_names = ['source', 'first', 'map', 'cast', 'body', 'augment',
-                    'select', 'last', 'select_partition', 'write', 'final']
+    _group_names = ['source', 'first', 'map', 'cast', 'body',
+                    'last', 'select_partition', 'write', 'final']
 
     def __init__(self, bundle=None,  *args, **kwargs):
 

@@ -7,6 +7,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 from functools import wraps
+from six import text_type
 
 def import_valuetype(name):
     import importlib
@@ -43,6 +44,14 @@ class StrValue(str,ValueType):
 
     def __new__(cls, v):
         o = super(StrValue, cls).__new__(cls, cls.parse(v))
+        return o
+
+class TextValue(text_type,ValueType):
+
+    _pythontype = text_type
+
+    def __new__(cls, v):
+        o = super(TextValue, cls).__new__(cls, cls.parse(v))
         return o
 
 class IntValue(int,ValueType):

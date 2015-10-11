@@ -103,9 +103,7 @@ class Partitions(object):
         from ambry.orm import Partition as OrmPartition  # , Table
         from sqlalchemy.orm import joinedload  # , joinedload_all
 
-        assert isinstance(
-            pnq, PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(
-            type(pnq))
+        assert isinstance(pnq, PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(type(pnq))
 
         pnq = pnq.with_none()
 
@@ -138,7 +136,7 @@ class Partitions(object):
                 if pnq.table is None:
                     q = q.filter(OrmPartition.t_id is None)
                 else:
-                    tr = self.bundle.schema.table(pnq.table)
+                    tr = self.bundle.table(pnq.table)
 
                     if not tr:
                         raise ValueError("Didn't find table named {} in {} bundle path = {}".format(

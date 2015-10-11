@@ -88,6 +88,7 @@ class Column(Base):
 
     # FIXME. These types should be harmonized with   SourceColumn.DATATYPE
     DATATYPE_STR = 'str'
+    DATATYPE_UNICODE = 'unicode'
     DATATYPE_INTEGER = 'int'
     DATATYPE_INTEGER64 = 'long' if six.PY2 else 'int'
     DATATYPE_FLOAT = 'float'
@@ -106,7 +107,9 @@ class Column(Base):
     types = {
         # Sqlalchemy, Python, Sql,
 
+        # Here, 'str' means ascii, 'unicode' means not ascii
         DATATYPE_STR: (sqlalchemy.types.String, six.binary_type, 'VARCHAR'),
+        DATATYPE_UNICODE: (sqlalchemy.types.String, six.text_type, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
         DATATYPE_INTEGER64: (BigIntegerType, int, 'INTEGER64'),
         DATATYPE_FLOAT: (sqlalchemy.types.Float, float, 'REAL'),
@@ -145,7 +148,7 @@ class Column(Base):
         return self.type_is_real or self.type_is_int
 
     def type_is_text(self):
-        return self.python_type == str
+        return self.datatype == Column.DATATYPE_STR or self.datatype == Column.DATATYPE_UNICODE
 
     def type_is_geo(self):
         return self.datatype in (
@@ -354,8 +357,10 @@ class Column(Base):
         # Ignore codes we already have, but will not catch codes added earlier for this same
         # object, since the code are cached
 
+        from six import text_type
+
         for cd in self.codes:
-            if cd.key == str(key):
+            if cd.key == text_type(key):
                 return cd
 
         def cast_to_int(s):
@@ -365,7 +370,7 @@ class Column(Base):
                 return None
 
         cd = Code(c_vid=self.vid, t_vid=self.t_vid,
-                  key=str(key),
+                  key=text_type(key),
                   ikey=cast_to_int(key),
                   value=value,
                   source = source,
@@ -382,13 +387,14 @@ class Column(Base):
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
 
+        name_map = {
+            'name': 'column'
+        }
+
         d = OrderedDict([('table', self.table.name)] +
-                        [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                        [( name_map.get(p.key, p.key), getattr(self, p.key)) for p in self.__mapper__.attrs
                          if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
                                           'sequence_id', 'id', 'is_primary_key']])
-
-        d['column'] = d['name']
-        del d['name']
 
         if self.name == 'id':
             t = self.table

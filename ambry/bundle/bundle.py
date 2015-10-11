@@ -87,7 +87,6 @@ class Bundle(object):
                 ambry.etl.CasterPipe
             ],
             'body': [],
-            'augment': [],
             'last': [],
             'select_partition': [ambry.etl.SelectPartition],
             'write': [ambry.etl.WriteToPartition],
@@ -256,6 +255,7 @@ class Bundle(object):
 
             for p in self.partitions:
                 if p.vid == b(ref) or p.name == b(ref):
+                    p._bundle = self
                     return p
 
             return None
@@ -264,7 +264,10 @@ class Bundle(object):
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
 
-        raise NotImplementedError("Haven't finished this!: '{}' ".format(ref))
+            p =   self.partitions._find_orm(pnq).one()
+            if p:
+                p._bundle = self
+                return p
 
     def new_partition(self, table, **kwargs):
         """
@@ -837,6 +840,12 @@ class Bundle(object):
         ds.commit()
         self.state = self.STATES.CLEANED
 
+    def clean_source_files(self):
+        """Remove the schema.csv and source_schema.csv files"""
+
+        self.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
+        self.build_source_files.file(File.BSFILE.SCHEMA).remove()
+
     #
     # Prepare
     #
@@ -976,13 +985,6 @@ class Bundle(object):
                 spec.header_lines = [0]
                 s = GeneratorSource(spec, gen_cls(self, source))
 
-            elif source.reftype == 'mpr':
-                from ambry_sources.sources import MPRSource
-
-                df_name, predicate, headers = eval(source.ref)
-
-                s = MPRSource(source.spec, self.source(df_name).datafile, predicate, headers)
-
             else:
 
                 with self.progress_logging(lambda: ('Downloading {}', (source.url,)), 10):
@@ -990,6 +992,7 @@ class Bundle(object):
                         s = get_source(
                             source.spec, self.library.download_cache,
                             clean=clean_files, account_accessor=account_accessor)
+
                     except MissingCredentials as exc:
                         formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
                         msg = \
@@ -1099,7 +1102,7 @@ class Bundle(object):
                 pl.run()
 
                 for h, c in zip(pl.write[Collect].headers,  pl.write[Collect].rows[0]):
-                    t.add_column(name=h, datatype=type(c).__name__,
+                    t.add_column(name=h, datatype=type(c).__name__ if c is not None else 'str',
                                  update_existing = True)
 
         self.commit()
@@ -1168,7 +1171,7 @@ class Bundle(object):
                 for pipe in pipe_config:
                     store.append(pipe) if isinstance(pipe, PartitionWriter) else body.append(pipe)
 
-                pipe_config = dict(augment=body, store=store)
+                pipe_config = dict(body=body, store=store)
 
             if pipe_config:
                 pl.configure(pipe_config)
@@ -1468,14 +1471,15 @@ Pipeline Headers
     def build_post_cast_error_codes(self):
         """If there are casting errors, final_cast_errors will generate codes for the values. This rounte
          will report all of them and report an error. """
-
+        from six import text_type
         if len(self.dataset.codes):
             cast_errors = 0
             self.error('Casting Errors')
             for c in self.dataset.codes:
                 if c.source == 'cast_error':
                     self.error(
-                        indent + "Casting Errors {}.{} {}".format(c.column.table.name, c.column.name, c.key))
+                        text_type(indent) +
+                        text_type("Casting Errors {}.{} {}").format(c.column.table.name, c.column.name, c.key))
                     cast_errors += 1
 
             if cast_errors > 0:

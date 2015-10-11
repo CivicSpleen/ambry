@@ -253,7 +253,7 @@ class CasterPipe(Pipe):
                 col_code[i] = (c.name,c.caster)
 
             elif type_f.__name__ == c.datatype:
-                # Plain python type
+                # Plain python type, from the "datatype" column
 
                 env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: parse_{}(caster, header, v)"
                                    .format(type_f.__name__), self.env(i=i, header=c.name))
@@ -261,6 +261,7 @@ class CasterPipe(Pipe):
                 col_code[i] = (c.name, "parse_{}(caster, header, v)".format(type_f.__name__) )
 
             else:
+
                 # Special valuetype, not a normal python type
                 vt_name = c.datatype.replace('.','_')
                 self.add_to_env(import_valuetype(c.datatype), vt_name)
