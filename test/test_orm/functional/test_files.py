@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+from ambry.library import new_library
+from ambry.orm.file import File
 
-from sqlalchemy.exc import IntegrityError
-
-from ambry.orm.config import Config
 from test.test_base import TestBase
+
+from test.test_orm.factories import ConfigFactory, DatasetFactory
 
 
 class Test(TestBase):
@@ -11,10 +12,12 @@ class Test(TestBase):
     def test_basic(self):
         """Basic operations on datasets"""
 
-        from ambry.orm.file import File
+        rc = self.get_rc()
+        self.library = new_library(rc)
+        ConfigFactory._meta.sqlalchemy_session = self.library.database.session
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
 
-        db = self.new_database()
-        ds = self.new_db_dataset(db, n=0)
+        ds = DatasetFactory()
 
         bs1 = ds.bsfile(File.BSFILE.BUILD)
         bs2 = ds.bsfile(File.BSFILE.SCHEMA)
@@ -22,7 +25,3 @@ class Test(TestBase):
 
         self.assertEqual(bs1.id, bs3.id)
         self.assertNotEqual(bs1.id, bs2.id)
-
-        print(bs1.id)
-        print(bs2.id)
-        print(bs3.id)

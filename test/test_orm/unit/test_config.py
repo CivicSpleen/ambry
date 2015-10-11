@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
-import unittest
 from time import time
-
-from sqlalchemy.exc import IntegrityError
 
 from six import binary_type
 
 import fudge
 
+from ambry.library import new_library
 from ambry.orm.config import Config
 
 from test.test_base import TestBase
@@ -18,9 +16,10 @@ class TestConfig(TestBase):
 
     def setUp(self):
         super(TestConfig, self).setUp()
-        db = self.new_database()
-        ConfigFactory._meta.sqlalchemy_session = db.session
-        DatasetFactory._meta.sqlalchemy_session = db.session
+        rc = self.get_rc()
+        self.library = new_library(rc)
+        ConfigFactory._meta.sqlalchemy_session = self.library.database.session
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
 
     # dict tests
     def test_returns_dictionary_representation_of_the_config(self):
