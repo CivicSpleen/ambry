@@ -2,6 +2,8 @@
 
 import unittest
 
+import pytest
+
 from boto.exception import S3ResponseError
 
 from six.moves import zip as six_izip
@@ -257,6 +259,7 @@ class Test(TestBase):
         # self.assertEqual(v4, file_record(val='space')) # TODO This one still fails ...
         # self.assertEqual(v4, schema_object(val='space'))
 
+    @pytest.mark.slow
     def test_schema_update(self):
         """Check that changes to the source schema persist across re-running meta"""
         from ambry.orm.file import File
