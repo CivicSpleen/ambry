@@ -9,7 +9,8 @@ from ambry.library.search_backends.whoosh_backend import DatasetWhooshIndex, Par
 from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
 from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
 from ambry.library import new_library
-from test.test_orm.factories import PartitionFactory
+
+from test.test_orm.factories import PartitionFactory, DatasetFactory
 
 
 class SearchTest(TestBase):
@@ -20,6 +21,7 @@ class SearchTest(TestBase):
         self.backend = WhooshSearchBackend(self.library)
 
     def tearDown(self):
+        super(self.__class__, self).tearDown()
         if hasattr(self, 'backend'):
             self.backend.reset()
 
@@ -49,9 +51,11 @@ class SearchTest(TestBase):
 
     # index_library_datasets tests
     def test_indexes_library_datasets(self):
-        ds1 = self.new_db_dataset(self.library.database, n=1)
-        ds2 = self.new_db_dataset(self.library.database, n=2)
-        ds3 = self.new_db_dataset(self.library.database, n=3)
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
+        ds1 = DatasetFactory()
+        ds2 = DatasetFactory()
+        ds3 = DatasetFactory()
+        self.library.database.session.commit()
         self.assertEqual(len(self.library.datasets), 3)
 
         fake_index_one = fudge.Fake().is_callable()\
@@ -64,9 +68,10 @@ class SearchTest(TestBase):
             search.index_library_datasets()
 
     def test_indexes_library_datasets_partitions(self):
-        ds1 = self.new_db_dataset(self.library.database, n=1)
-        self.assertEqual(len(self.library.datasets), 1)
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        ds1 = DatasetFactory()
+        self.assertEqual(len(self.library.datasets), 1)
 
         partition1 = PartitionFactory(dataset=ds1)
         self.library.database.session.commit()
