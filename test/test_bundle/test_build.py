@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 
-import unittest
-
-from boto.exception import S3ResponseError
-
 from test.test_base import TestBase
-import shutil
 import os
+import shutil
+
+import pytest
 
 
 class Test(TestBase):
@@ -20,22 +18,21 @@ class Test(TestBase):
 
         return build_url
 
+    @pytest.mark.slow
     def test_simple_build(self):
         """Just check that it doesn't throw an exception"""
-        from ambry.orm.database import Database
 
         b = self.setup_bundle('simple', build_url=self.setup_temp_dir())
-        l = b._library
         b.sync_in()
 
         b.ingest()
 
-        self.assertEquals(1, len(b.source_tables))
-        self.assertEquals(0, len(b.tables))
+        self.assertEqual(1, len(b.source_tables))
+        self.assertEqual(0, len(b.tables))
 
         b.schema()
 
-        self.assertEquals(1, len(b.tables))
+        self.assertEqual(1, len(b.tables))
 
         b.build()
 
@@ -55,13 +52,11 @@ class Test(TestBase):
         # Check that the cells of the first row all have the right type.
         for c, v in zip(p.table.columns, row.row):
             if type(v) != unicode:  # It gets reported as string
-                self.assertEquals(type(v), c.python_type)
+                self.assertEqual(type(v), c.python_type)
 
+    @pytest.mark.slow
     def test_complete_build(self):
         """Build the simple bundle"""
-        from ambry.etl import GeneratorSourcePipe
-
-        from geoid import civick, census
 
         b = self.setup_bundle('complete-build', build_url=self.setup_temp_dir())
         b.sync_in()
@@ -72,16 +67,16 @@ class Test(TestBase):
         # 6000 rows and one header
         self.assertEqual(6001, len(list(RandomSourcePipe(b))))
 
-        self.assertEquals('new', b.state)
+        self.assertEqual('new', b.state)
         b.ingest()
 
-        self.assertEquals(6000, sum(1 for row in b.source('source1').datafile.reader))
+        self.assertEqual(6000, sum(1 for row in b.source('source1').datafile.reader))
 
-        self.assertEquals(1, len(b.source_tables))
+        self.assertEqual(1, len(b.source_tables))
 
         self.assertTrue(b.schema())
 
-        self.assertEquals(1, len(b.source_tables))
+        self.assertEqual(1, len(b.source_tables))
 
         self.assertTrue(b.build())
 
@@ -89,13 +84,13 @@ class Test(TestBase):
 
             self.assertIn(int(p.identity.time), p.time_coverage)
 
-        self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
-                          b.dataset.partitions[0].space_coverage)
-        self.assertEquals(u'2qZZZZZZZZZZ', b.dataset.partitions[0].grain_coverage[0])
+        self.assertEqual([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
+                         b.dataset.partitions[0].space_coverage)
+        self.assertEqual(u'2qZZZZZZZZZZ', b.dataset.partitions[0].grain_coverage[0])
 
-        self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
-                          b.dataset.partitions[2].space_coverage)
-        self.assertEquals([u'2qZZZZZZZZZZ'], b.dataset.partitions[2].grain_coverage)
+        self.assertEqual([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
+                         b.dataset.partitions[2].space_coverage)
+        self.assertEqual([u'2qZZZZZZZZZZ'], b.dataset.partitions[2].grain_coverage)
 
         self.assertEqual(4, len(b.dataset.partitions))
         self.assertEqual(2, len(b.dataset.tables))
@@ -104,28 +99,29 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
 
-        self.assertEquals(6000, sum(1 for row in p.datafile.reader))
+        self.assertEqual(6000, sum(1 for row in p.datafile.reader))
 
-        self.assertEquals(48, len(b.dataset.stats))
+        self.assertEqual(48, len(b.dataset.stats))
 
-        self.assertEquals('build_done', b.state)
+        self.assertEqual('build_done', b.state)
 
+    @pytest.mark.slow
     def test_complete_build_run(self):
         """Build the complete-load"""
-
         b = self.setup_bundle('complete-build', build_url=self.setup_temp_dir())
         b.sync_in()
         b = b.cast_to_subclass()
         b.run()
 
+    @pytest.mark.slow
     def test_complete_load(self):
         """Build the complete-load"""
-
         b = self.setup_bundle('complete-load', build_url=self.setup_temp_dir())
         b.sync_in()
         b = b.cast_to_subclass()
         b.run()
 
+    @pytest.mark.slow
     def test_dimensions(self):
         """Build the complete-load"""
 
@@ -140,6 +136,7 @@ class Test(TestBase):
         b = b.cast_to_subclass()
         b.run()
 
+    @pytest.mark.slow
     def test_generators(self):
         """Build the complete-load"""
 
@@ -154,16 +151,18 @@ class Test(TestBase):
         b = b.cast_to_subclass()
         b.run()
 
+    @pytest.mark.slow
     def test_complete_ref(self):
         """Build the complete-load"""
 
-        d =self.setup_temp_dir()
+        d = self.setup_temp_dir()
 
-        b = self.setup_bundle('complete-ref', build_url=d, source_url = d)
+        b = self.setup_bundle('complete-ref', build_url=d, source_url=d)
         b.sync_in()
         b = b.cast_to_subclass()
         b.run()
 
+    @pytest.mark.slow
     def test_casters(self):
         """Build the complete-load"""
         from ambry.dbexceptions import PhaseError
@@ -193,7 +192,7 @@ class Test(TestBase):
             else:
                 raise
 
-        self.assertEquals(1, len(list(b.partitions)))
+        self.assertEqual(1, len(list(b.partitions)))
 
         mn = mx = 0
         for row in list(b.partitions)[0].stream():
