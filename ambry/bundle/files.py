@@ -658,7 +658,6 @@ class SchemaFile(RowBuildSourceFile):
                 units=row.get('units', None),
                 universe=row.get('universe'),
                 update_existing= True)
-
         return warnings, errors
 
     def objects_to_record(self):
@@ -693,11 +692,11 @@ class SchemaFile(RowBuildSourceFile):
         for row in initial_rows:
 
             this_row = list()
-            for h in headers: # Every row is the same length, with combined set of headers
+            for h in headers:  # Every row is the same length, with combined set of headers
                 this_row.append(row.get(h, None))
 
             if name_index and this_row[name_index] == 'id':
-                #Blank to separate tables, but transpose trick fails if rows not all same size
+                # Blank to separate tables, but transpose trick fails if rows not all same size
                 rows.append([None for e in this_row])
 
             rows.append(this_row)
@@ -798,7 +797,7 @@ def file_default(const):
 
     path = os.path.join(os.path.dirname(df.__file__),  file_name(const))
 
-    with open(path,'rb') as f:
+    with open(path, 'rb') as f:
         return f.read()
 
 
@@ -809,7 +808,6 @@ class BuildSourceFileAccessor(object):
         self._bundle = bundle
         self._dataset = dataset
         self._fs = filesystem
-
 
     @property
     def build_file(self):
@@ -823,12 +821,11 @@ class BuildSourceFileAccessor(object):
 
         """
 
-        if not item in file_info_map.keys():
+        if item not in file_info_map.keys():
             return super(BuildSourceFileAccessor, self).__getattr__(item)
 
         else:
             return self.file(item)
-
 
     def __iter__(self):
 

@@ -43,6 +43,7 @@ def find_package_data():
 
     return {'ambry': l}
 
+
 class PyTest(TestCommand):
     user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
 
@@ -77,11 +78,10 @@ d = dict(
     author_email=ambry_meta.__email__,
     url='https://github.com/CivicKnowledge/ambry',
     packages=find_packages(),
-    scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh' ],
+    scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh'],
     package_data=find_package_data(),
     license=ambry_meta.__license__,
     cmdclass={'test': PyTest},
-    # test_suite='nose.collector',
     platforms='Posix; MacOS X; Linux',
     classifiers=[
         'Development Status :: 3 - Alpha',
