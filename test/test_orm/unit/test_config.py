@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from time import time
 
-from six import binary_type
+from six import text_type
 
 import fudge
 
@@ -45,11 +45,11 @@ class TestConfig(TestBase):
             self.assertEqual(getattr(config1, field), config1.dict[field])
 
     # __repr__ tests
-    def test_returns_config_as_string(self):
+    def test_returns_config_repr(self):
         ds = DatasetFactory()
         config1 = ConfigFactory(d_vid=ds.vid)
         repr_str = config1.__repr__()
-        self.assertIsInstance(repr_str, binary_type)
+        self.assertIsInstance(repr_str, text_type)
         self.assertIn(config1.d_vid, repr_str)
         self.assertIn(config1.group, repr_str)
         self.assertIn(config1.key, repr_str)

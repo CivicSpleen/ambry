@@ -325,11 +325,16 @@ class DatabaseTest(TestBase):
         self.sqlite_db.commit()
 
     def test_creates_column_table(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        ds1 = DatasetFactory()
+        self.sqlite_db.commit()
+        table = TableFactory(dataset=ds1)
         ColumnFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
         # Now all tables are created. Can we use ORM to create columns?
-
-        ColumnFactory()
+        ColumnFactory(table=table)
         self.sqlite_db.commit()
 
     def test_creates_partition_table(self):
