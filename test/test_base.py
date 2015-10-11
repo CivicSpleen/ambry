@@ -3,6 +3,7 @@ Created on Jun 22, 2012
 
 @author: eric
 """
+import os
 
 import unittest
 
@@ -29,8 +30,6 @@ class TestBase(unittest.TestCase):
 
         super(TestBase, self).setUp()
 
-        self.dsn = 'sqlite://'  # Memory database
-
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
@@ -39,6 +38,8 @@ class TestBase(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, 'library'):
             self.library.database.close()
+            if 'tmp' in self.library.database.path:
+                os.remove(self.library.database.path)
 
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
@@ -76,12 +77,6 @@ class TestBase(unittest.TestCase):
 
         for row in db.connection.execute('SELECT * FROM {}'.format(table)):
             print(row)
-
-    def new_database(self):
-        # FIXME: this connection will not be closed properly in a postgres case.
-        db = Database(self.dsn)
-        db.open()
-        return db
 
     def setup_bundle(self, name, source_url=None, build_url=None, library=None):
         """Configure a bundle from existing sources"""
