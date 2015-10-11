@@ -13,7 +13,6 @@ from test.test_base import TestBase
 class Test(TestBase):
 
     def test_filesystems(self):
-
         b = self.setup_bundle('simple')
         dir_list = list(b.source_fs.listdir())
         self.assertIn('bundle.py', dir_list)
@@ -23,6 +22,7 @@ class Test(TestBase):
 
     def test_phases(self):
         """Test copying a bundle to a remote, then streaming it back"""
+
         from ambry.etl import IterSource, MatchPredicate, Reduce
         from itertools import cycle
 
@@ -44,12 +44,8 @@ class Test(TestBase):
         pl = b.pipeline('test2')
         pl.source = source()
         pl.run()
-        print(pl)
         self.assertEqual((4950, 14950), pl[Reduce].accumulator)
         self.assertEqual(14, len(pl[MatchPredicate].matches))
-
-        print(pl)
-
 
     def test_simple_process(self):
         """Build the simple bundle"""
@@ -358,7 +354,7 @@ class Test(TestBase):
         # Already built can't build again
         self.assertFalse(b.build())
 
-        b.clean(force = True)
+        b.clean(force=True)
         self.assertTrue(b.build())
 
         self.assertTrue(b.finalize())
@@ -366,8 +362,6 @@ class Test(TestBase):
         self.assertFalse(b.clean())
 
         return b
-
-
 
     def test_db_copy(self):
         from ambry.orm.database import Database
@@ -469,5 +463,3 @@ class Test(TestBase):
                     id_sum += row[0]
 
                 self.assertEqual(18003000, id_sum)
-
-

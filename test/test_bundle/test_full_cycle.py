@@ -2,6 +2,7 @@
 Test large-scale builds of all of the test bundles, installing them to a library, and performing other operations.
 """
 
+import pytest
 from test.test_base import TestBase
 
 
@@ -18,6 +19,7 @@ class Test(TestBase):
 
         return build_url
 
+    @pytest.mark.slow
     def test_build_all(self):
         from test import bundles
         import os
@@ -62,7 +64,7 @@ class Test(TestBase):
             b.set_file_system(source_url=source_url, build_url=build_url)
 
             b.sync()
-            print("Loaded bundle: {}".format(b.identity.fqname))
+            print('Loaded bundle: {}'.format(b.identity.fqname))
 
         for bi in l.bundles:
 
