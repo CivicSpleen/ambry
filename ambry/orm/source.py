@@ -31,6 +31,9 @@ class DataSourceBase(object):
     _bundle = None  # Set externally
     _datafile = None
 
+    # reftypes for sources that should not be downloaded
+    NON_DOWNLOAD_REFTYPES = ('ref', 'template', 'partition')
+
     @property
     def dict(self):
         """A dict that holds key/values for all of the properties in the
@@ -143,7 +146,8 @@ class DataSourceBase(object):
     @property
     def is_downloadable(self):
         """Return true if the URL is probably downloadable, and is not a reference or a template"""
-        return self.urltype not in ('ref', 'template','partition')
+
+        return self.urltype not in self.NON_DOWNLOAD_REFTYPES
 
     def update_table(self):
         """Update the source table from the datafile"""
