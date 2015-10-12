@@ -3,6 +3,7 @@ Created on Jun 22, 2012
 
 @author: eric
 """
+import os
 
 import unittest
 
@@ -28,7 +29,6 @@ class TestBase(unittest.TestCase):
     def setUp(self):
 
         super(TestBase, self).setUp()
-
         self.dsn = 'sqlite://'  # Memory database
 
         # Make an array of dataset numbers, so we can refer to them with a single integer
@@ -39,6 +39,8 @@ class TestBase(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, 'library'):
             self.library.database.close()
+            if 'tmp' in self.library.database.path:
+                os.remove(self.library.database.path)
 
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
@@ -91,6 +93,7 @@ class TestBase(unittest.TestCase):
         from fs.errors import ParentDirectoryMissingError
         from ambry.library import new_library
         import yaml
+        from ambry.util import parse_url_to_dict
 
         if not library:
             rc = self.get_rc()
@@ -100,23 +103,23 @@ class TestBase(unittest.TestCase):
         self.db = self.library._db
 
         if not source_url:
-            source_url = 'mem://{}/source'.format(name)
+            source_url = 'mem://source'.format(name)
 
         if not build_url:
-            build_url = 'mem://{}/build'.format(name)
+            build_url = 'mem://build'.format(name)
 
-        try:  # One fails for real directories, the other for mem:
-            assert fsopendir(source_url, create_dir=True).isdirempty('/')
-            assert fsopendir(build_url, create_dir=True).isdirempty('/')
-        except ParentDirectoryMissingError:
-            assert fsopendir(source_url).isdirempty('/')
-            assert fsopendir(build_url).isdirempty('/')
+        for fs_url in (source_url, build_url):
+            d = parse_url_to_dict((fs_url))
+
+            # For persistent fs types, make sure it is empty before the test.
+            if d['scheme'] not in ('temp','mem'):
+                assert fsopendir(fs_url).isdirempty('/')
 
         test_source_fs = fsopendir(join(dirname(bundles.__file__), 'example.com', name))
 
         config = yaml.load(test_source_fs.getcontents('bundle.yaml'))
-        b = self.library.new_from_bundle_config(config)
 
+        b = self.library.new_from_bundle_config(config)
         b.set_file_system(source_url=source_url, build_url=build_url)
 
         self.copy_bundle_files(test_source_fs, b.source_fs)

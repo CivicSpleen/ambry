@@ -384,7 +384,6 @@ class Dataset(Base):
         assert file_const in list(File.path_map.keys())
 
         try:
-
             fr = object_session(self)\
                 .query(File)\
                 .filter(File.d_vid == self.vid)\
@@ -399,7 +398,6 @@ class Dataset(Base):
                       source='fs')
 
             object_session(self).add(fr)
-
         return fr
 
     @property

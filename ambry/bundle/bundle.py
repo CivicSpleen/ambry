@@ -12,7 +12,10 @@ from time import time
 import traceback
 from functools import partial
 from decorator import decorator
+
 from six import string_types, iteritems, u, b
+
+from fs.errors import NoSysPathError
 
 from geoid.civick import GVid
 from geoid import NotASummaryName
@@ -25,6 +28,9 @@ from ..util import get_logger, Constant
 from ambry_sources.exceptions import MissingCredentials
 
 indent = '    '  # Indent for structured log output
+
+BUILD_LOG_FILE = 'build_log.txt'
+
 
 def _CaptureException(f, *args, **kwargs):
     """Decorator implementation for capturing exceptions."""
@@ -43,10 +49,12 @@ def _CaptureException(f, *args, **kwargs):
         else:
             raise
 
+
 def CaptureException(f, *args, **kwargs):
     """Decorator to capture exceptions and convert them to a dict that can be
     returned as JSON."""
     return decorator(_CaptureException, f)  # Preserves signature
+
 
 class Bundle(object):
 
@@ -424,6 +432,7 @@ class Bundle(object):
     @property
     def build_fs(self):
         from fs.opener import fsopendir
+        from fs.errors import ParentDirectoryMissingError
 
         if not self._build_fs:
             build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
@@ -477,8 +486,6 @@ class Bundle(object):
 
         return search
 
-
-
     @property
     def logger(self):
         """The bundle logger."""
@@ -486,11 +493,17 @@ class Bundle(object):
         if not self._logger:
 
             ident = self.identity
-            template = "%(levelname)s " + ident.sname + " %(message)s"
+            template = '%(levelname)s ' + ident.sname + ' %(message)s'
 
-            file_name = self.build_fs.getsyspath('build_log.txt', allow_none = True)
+            if not self.build_fs.exists(BUILD_LOG_FILE):
+                self.build_fs.createfile(BUILD_LOG_FILE)
 
-            self._logger = get_logger(__name__, template=template, stream=sys.stdout, file_name=file_name)
+            try:
+                file_name = self.build_fs.getsyspath(BUILD_LOG_FILE)
+                self._logger = get_logger(__name__, template=template, stream=sys.stdout, file_name=file_name)
+            except NoSysPathError:
+                # file does not exists in the os - memory fs for example.
+                self._logger = get_logger(__name__, template=template, stream=sys.stdout)
 
             self._logger.setLevel(self._log_level)
 
@@ -499,10 +512,8 @@ class Bundle(object):
     def log_to_file(self, message):
         """Write a log message only to the file"""
 
-        with self.build_fs.open('build_log.txt', 'a+') as f:
-            f.write(unicode(message+'\n'))
-
-
+        with self.build_fs.open(BUILD_LOG_FILE, 'a+') as f:
+            f.write(unicode(message + '\n'))
 
     def log(self, message, **kwargs):
         """Log the messsage."""
@@ -811,7 +822,10 @@ class Bundle(object):
         self.dataset.delete_partitions()
 
         if self.build_partition_fs.exists:
-            shutil.rmtree(self.build_partition_fs.getsyspath('/'))
+            try:
+                shutil.rmtree(self.build_partition_fs.getsyspath('/'))
+            except NoSysPathError:
+                pass # If there isn't a syspath, probably don't need to delete.
 
     def clean_build(self, force=False):
         """Delete the build directory and all ingested files """
@@ -820,7 +834,10 @@ class Bundle(object):
         self.clean_files()
 
         if self.build_fs.exists:
-            shutil.rmtree(self.build_fs.getsyspath('/'))
+            try:
+                shutil.rmtree(self.build_fs.getsyspath('/'))
+            except NoSysPathError:
+                pass # If there isn't a syspath, probably don't need to delete.
 
     def clean_files(self, force=False):
         """ Delete all ingested file records, but leave the ingested files in the build directory """
@@ -1102,6 +1119,7 @@ class Bundle(object):
                 pl.run()
 
                 for h, c in zip(pl.write[Collect].headers,  pl.write[Collect].rows[0]):
+
                     t.add_column(name=h, datatype=type(c).__name__ if c is not None else 'str',
                                  update_existing = True)
 

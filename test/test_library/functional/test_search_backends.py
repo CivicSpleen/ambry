@@ -8,7 +8,7 @@ from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
 
-from test.test_orm.factories import PartitionFactory
+from test.test_orm.factories import PartitionFactory, DatasetFactory
 
 # Description of the search system:
 # https://docs.google.com/document/d/1jLGRsYt4G6Tfo6m_Dtry6ZFRnDWpW6gXUkNPVaGxoO4/edit#
@@ -40,7 +40,9 @@ class AmbryReadyMixin(object):
     # tests
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_add_dataset_to_the_index(self):
-        dataset = self.new_db_dataset(self.library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
+        dataset = DatasetFactory()
+        self.library.database.session.commit()
         self.backend.dataset_index.index_one(dataset)
 
         datasets = self.backend.dataset_index.all()
@@ -112,9 +114,12 @@ class AmbryReadyMixin(object):
     # partition add
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_add_partition_to_the_index(self):
-        dataset = self.new_db_dataset(self.library.database, n=0)
+        # dataset = self.new_db_dataset(self.library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        dataset = DatasetFactory()
         partition = PartitionFactory(dataset=dataset)
+        self.library.database.session.commit()
         self.backend.partition_index.index_one(partition)
         partitions = self.backend.partition_index.all()
         all_vids = [x.vid for x in partitions]
@@ -123,17 +128,21 @@ class AmbryReadyMixin(object):
     # partition search
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_vid(self):
-        dataset = self.new_db_dataset(self.library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        dataset = DatasetFactory()
         partition = PartitionFactory(dataset=dataset)
+        self.library.database.session.commit()
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, partition.vid)
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_id(self):
-        dataset = self.new_db_dataset(self.library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        dataset = DatasetFactory()
         partition = PartitionFactory(dataset=dataset)
+        self.library.database.session.commit()
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, partition.identity.id_)
 
@@ -148,9 +157,12 @@ class AmbryReadyMixin(object):
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_vname(self):
-        dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
+        # dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
+        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        dataset = DatasetFactory()
         partition = PartitionFactory(dataset=dataset)
+        self.library.database.session.commit()
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, str(partition.identity.vname))
 
@@ -192,7 +204,7 @@ class AmbryReadyMixin(object):
         self._assert_finds_partition(partition, 'about cucumber')
 
         # finds dataset extended with partition
-        found = self.backend.search('about cucumber')
+        found = self.backend.dataset_index.search('about cucumber')
         self.assertEqual(len(found), 1)
         self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)

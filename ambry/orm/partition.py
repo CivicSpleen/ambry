@@ -424,6 +424,11 @@ class Partition(Base, DictableMixin):
     def reader(self):
         return self.datafile.reader
 
+    def __iter__(self):
+
+        with self.reader as r:
+            for row in r:
+                yield row
 
     # ============================
 

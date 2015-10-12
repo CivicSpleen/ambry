@@ -221,7 +221,7 @@ class Test(TestBase):
             config =  yaml.load(f)
 
         config['pipelines']['build'] = dict(
-            augment=["Add({'a': lambda e,r,v: 1 }) "],
+            body=["Add({'a': lambda e,r,v: 1 }) "],
             last=["PrintRows(print_at='end')"],
             store=['SelectPartition','WriteToPartition']
         )
@@ -251,16 +251,14 @@ class Test(TestBase):
         self.assertTrue(b.build_fs.exists('/example.com/simple-0.1.3/simple.mpr'))
 
         p = list(b.partitions)[0]
-        self.assertEquals(10000, len(list(p.stream())))
+        self.assertEquals(10000, sum(1 for e in iter(p)))
 
         print b.build_fs.getcontents('/pipeline/build-simple.txt')
 
-        for i, row in enumerate(p.stream()):
+        for i, row in enumerate(p):
 
-            if i == 0:
-                self.assertEqual('a', row[-1])
-            else:
-                self.assertEqual(1, row[-1])
+            self.assertEqual(1, row.a)
+
             if i > 5:
                 break
 
@@ -279,7 +277,7 @@ class Test(TestBase):
             config = yaml.load(f)
 
         config['pipelines']['build'] = dict(
-            augment=["+Add({'a': lambda e,r,v: 1 }) "],
+            body=["+Add({'a': lambda e,r,v: 1 }) "],
             last=["PrintRows(print_at='end')"],
         )
 
@@ -288,7 +286,7 @@ class Test(TestBase):
         )
 
         config['pipelines']['schema'] = dict(
-            augment=["+Add({'a': lambda e,r,v: 1 }) "],
+            body=["+Add({'a': lambda e,r,v: 1 }) "],
         )
 
         with b.source_fs.open('bundle.yaml', 'wb') as f:
@@ -306,16 +304,14 @@ class Test(TestBase):
         self.assertTrue(b.build_fs.exists('/example.com/simple-0.1.3/simple.mpr'))
 
         p = list(b.partitions)[0]
-        self.assertEquals(10000, len(list(p.stream())))
+        self.assertEquals(10000, len(list(iter(p))))
 
         print b.build_fs.getcontents('/pipeline/build-simple.txt')
 
-        for i, row in enumerate(p.stream()):
+        for i, row in enumerate(iter(p)):
 
-            if i == 0:
-                self.assertEqual('a', row[-1])
-            else:
-                self.assertEqual(1, row[-1])
+            self.assertEqual(1, row['a'])
+
             if i > 5:
                 break
 
@@ -396,7 +392,7 @@ class Test(TestBase):
         self.assertEquals(10, len(pl[PrintRows].rows))
 
     def test_select(self):
-        from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Select
+        from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, SelectRows
 
         class Source(Pipe):
             def __iter__(self):
@@ -408,7 +404,7 @@ class Test(TestBase):
         # Sample
         pl = Pipeline(
             source=Source(),
-            first= Select("row.a == 100 or row.b == 1000"),
+            first= SelectRows("row.a == 100 or row.b == 1000"),
             last=PrintRows(count=50)
         )
 
@@ -507,7 +503,7 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
 
-        for i, row in enumerate(p.stream()):
+        for i, row in enumerate(p):
             if i > 5:
                 break
 

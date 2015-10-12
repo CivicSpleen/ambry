@@ -2,6 +2,8 @@
 
 import unittest
 
+import pytest
+
 from boto.exception import S3ResponseError
 
 from six.moves import zip as six_izip
@@ -13,7 +15,6 @@ from test.test_base import TestBase
 class Test(TestBase):
 
     def test_filesystems(self):
-
         b = self.setup_bundle('simple')
         dir_list = list(b.source_fs.listdir())
         self.assertIn('bundle.py', dir_list)
@@ -23,6 +24,7 @@ class Test(TestBase):
 
     def test_phases(self):
         """Test copying a bundle to a remote, then streaming it back"""
+
         from ambry.etl import IterSource, MatchPredicate, Reduce
         from itertools import cycle
 
@@ -44,12 +46,8 @@ class Test(TestBase):
         pl = b.pipeline('test2')
         pl.source = source()
         pl.run()
-        print(pl)
         self.assertEqual((4950, 14950), pl[Reduce].accumulator)
         self.assertEqual(14, len(pl[MatchPredicate].matches))
-
-        print(pl)
-
 
     def test_simple_process(self):
         """Build the simple bundle"""
@@ -261,6 +259,7 @@ class Test(TestBase):
         # self.assertEqual(v4, file_record(val='space')) # TODO This one still fails ...
         # self.assertEqual(v4, schema_object(val='space'))
 
+    @pytest.mark.slow
     def test_schema_update(self):
         """Check that changes to the source schema persist across re-running meta"""
         from ambry.orm.file import File
@@ -309,7 +308,7 @@ class Test(TestBase):
                 if col.source_header == source_header:
                     return col.dest_header
 
-        b.meta()
+        b.schema()
         b.sync_out()
         time.sleep(1)
         muck_schema_file('uuid', 'value1')
@@ -320,7 +319,7 @@ class Test(TestBase):
 
         self.assertEqual('value1', check_schema_record('uuid'))
 
-        b.meta()
+        b.schema()
 
         self.assertEqual('value1', check_schema_file('uuid'))
 
@@ -358,7 +357,7 @@ class Test(TestBase):
         # Already built can't build again
         self.assertFalse(b.build())
 
-        b.clean(force = True)
+        b.clean(force=True)
         self.assertTrue(b.build())
 
         self.assertTrue(b.finalize())
@@ -417,7 +416,7 @@ class Test(TestBase):
 
         print p.datafile.reader.info
 
-        self.assertEqual(497054, int(sum(row[3] for row in p.stream())))
+        self.assertEqual(497054, int(sum(row[3] for row in iter(p))))
 
         self.assertEqual('build', l.partition(p_vid).location)
 
@@ -446,9 +445,9 @@ class Test(TestBase):
 
         self.assertEqual('remote', l.partition(p_vid).location)
 
-        self.assertEqual(10000, len(list(p.stream())))
+        self.assertEqual(10000, sum(1 for _ in p))
 
-        self.assertEqual(497054, int(sum(row[3] for row in p.stream())))
+        self.assertEqual(497054, int(sum(row[3] for row in p )))
 
     def test_msgpack_build(self):
         """Build the simple bundle"""
@@ -467,5 +466,3 @@ class Test(TestBase):
                     id_sum += row[0]
 
                 self.assertEqual(18003000, id_sum)
-
-

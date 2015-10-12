@@ -12,11 +12,8 @@ from ambry.util import deprecated
 from os.path import splitext
 
 from six import iteritems
-# noinspection PyUnresolvedReferences
-from six.moves.urllib.parse import urlparse
 
-from sqlalchemy import Column as SAColumn
-from sqlalchemy import Text, String, ForeignKey, INTEGER, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, INTEGER, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from .source_table import SourceTable
@@ -24,6 +21,7 @@ from .table import Table
 
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
+
 
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
@@ -104,7 +102,6 @@ class DataSourceBase(object):
     def datafile(self):
         """Return an MPR datafile from the /ingest directory of the build filesystem"""
         from ambry_sources import MPRowsFile
-        from os.path import join
 
         if self._datafile is None:
             if self.urltype == 'partition':
@@ -180,10 +177,9 @@ class DataSourceBase(object):
             with self.datafile.reader as r:
 
                 self.header_lines = r.info['header_rows']
-                self.comment_lines =  r.info['comment_rows']
+                self.comment_lines = r.info['comment_rows']
                 self.start_line = r.info['data_start_row']
                 self.end_line = r.info['data_end_row']
-
 
     @property
     def abbrev_url(self):
@@ -205,7 +201,9 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     sequence_id = SAColumn('ds_sequence_id', INTEGER)
 
     name = SAColumn('ds_name', Text)
-    d_vid = SAColumn('ds_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False)
+    d_vid = SAColumn(
+        'ds_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False,
+        doc='Dataset vid')
 
     title = SAColumn('ds_title', Text)
 
@@ -213,7 +211,9 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     source_table_name = SAColumn('ds_st_name', Text)
     _source_table = relationship(SourceTable, backref='sources')
 
-    t_vid = SAColumn('ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True)
+    t_vid = SAColumn(
+        'ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True,
+        doc='Table vid')
     dest_table_name = SAColumn('ds_dt_name', Text)
     _dest_table = relationship(Table, backref='sources')
 

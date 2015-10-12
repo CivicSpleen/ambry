@@ -154,6 +154,11 @@ py.test test/test_metadata
 py.test test/test_metadata -x
 ```
 
+### To ignore slow tests while developing:
+```bash
+py.test test -k-slow
+```
+
 
 ### To write python2/python3 compatible code:
 
