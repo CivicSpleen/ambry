@@ -62,7 +62,7 @@ class Dataset(Base):
 
     codes = relationship('Code', backref='dataset', cascade="all, delete-orphan")
 
-    _database = None # Reference to the database, when dataset is retrieved from a database object
+    _database = None  # Reference to the database, when dataset is retrieved from a database object
 
     _sequence_ids = {}  # Cache of sequence numbers
 
@@ -318,18 +318,18 @@ class Dataset(Base):
         from .source import DataSource
         from ..identity import GeneralNumber1
 
-        if not 'sequence_id' in kwargs:
-            kwargs['sequence_id'] = self.next_sequence_id( DataSource)
+        if 'sequence_id' not in kwargs:
+            kwargs['sequence_id'] = self.next_sequence_id(DataSource)
 
-        if not 'd_vid' in kwargs:
+        if 'd_vid' not in kwargs:
             kwargs['d_vid'] = self.vid
         else:
             assert kwargs['d_vid'] == self.vid
 
-        if not 'vid' in kwargs:
+        if 'vid' not in kwargs:
             kwargs['vid'] = str(GeneralNumber1('S', self.vid, int(kwargs['sequence_id'])))
 
-        source = DataSource(name=name,   **kwargs)
+        source = DataSource(name=name, **kwargs)
 
         object_session(self).add(source)
 
@@ -338,11 +338,11 @@ class Dataset(Base):
     def source_file(self, name):
         from .source import DataSource
 
-        source = (object_session(self)
-            .query(DataSource)
-            .filter(DataSource.name == name)
-            .filter(DataSource.d_vid == self.vid)
-            .first())
+        source = object_session(self)\
+            .query(DataSource)\
+            .filter(DataSource.name == name)\
+            .filter(DataSource.d_vid == self.vid)\
+            .first()
 
         if not source:
             from exc import NotFoundError
