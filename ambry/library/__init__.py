@@ -233,6 +233,13 @@ class Library(object):
                 ds = None
 
         if not ds:
+            try:
+                p = self.partition(ref)
+                ds = p._bundle.dataset
+            except NotFoundError:
+                ds = None
+
+        if not ds:
             raise NotFoundError('Failed to find dataset for ref: {}'.format(ref))
 
         b =  Bundle(ds, self)
@@ -291,7 +298,10 @@ class Library(object):
         return db.path
 
     def duplicate(self, b):
-        """Duplicate a bundle, with a higher version number"""
+        """Duplicate a bundle, with a higher version number.
+
+        This only copies the files, under the theory that the bundle can be rebuilt from them.
+        """
 
         on = b.identity.on
         on.revision = on.revision + 1
@@ -316,26 +326,19 @@ class Library(object):
         ds = self.database.new_dataset(**d)
 
         nb = self.bundle(ds.vid)
+        nb.set_file_system(source_url=b.source_fs.getsyspath('/'))
         nb.state = Bundle.STATES.NEW
 
-        nb.set_last_access(Bundle.STATES.NEW)
+        nb.commit()
 
-        nb.set_file_system(source_url=self._fs.source(ds.name),
-                           build_url=self._fs.build(ds.name))
+        for f in b.dataset.files:
+            assert f.major_type == f.MAJOR_TYPE.BUILDSOURCE
+            nb.dataset.files.append(nb.dataset.bsfile(f.minor_type).update(f))
 
-        session = object_session(nb.dataset)
-
-        for f in session.query(File).filter(File.d_vid == ds.vid).options(lazyload('*')).all():
-
-            d = f.row
-
-            del d['id']
-            del d['d_vid']
-            del d['dataset']
-
-            nf = File(**d)
-
-            ds.files.append(nf)
+        # Load the metadata in to records, then back out again. The objects_to_record process will set the
+        # new identity object numbers in the metadata file
+        nb.build_source_files.file(File.BSFILE.META).record_to_objects()
+        nb.build_source_files.file(File.BSFILE.META).objects_to_record()
 
         ds.commit()
 

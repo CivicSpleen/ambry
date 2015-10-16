@@ -180,7 +180,10 @@ class Column(Base):
         try:
             return import_valuetype(self.datatype)
         except AttributeError as e:
-            return self.types[self.datatype][1]
+            try:
+                return self.types[self.datatype][1]
+            except KeyError:
+                raise KeyError("Failed to find type {} in column {}.{}".format(self.datatype, self.table.name, self.name))
 
 
     @property

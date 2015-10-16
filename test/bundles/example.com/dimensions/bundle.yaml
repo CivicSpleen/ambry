@@ -1,35 +1,35 @@
 about:
-    access: internal
-    remote: test
-    summary: A test of adding and processing extra dimension columns.
-    title: Dimension Processing Example
+  access: internal
+  remote: test
+  summary: A test of adding and processing extra dimension columns.
+  title: Dimension Processing Example
 contacts:
-    analyst:
-        org: Example Com
-        url: http://example.com
-    creator:
-        email: bob@bob.com
-        name: Bob Bobson
-        org: Example Com
-        url: http://example.com
+  analyst:
+    org: Example Com
+    url: http://example.com
+  creator:
+    email: bob@bob.com
+    name: Bob Bobson
+    org: Example Com
+    url: http://example.com
 external_documentation:
-    main_site:
-        description: Main website for Example.com
-        source: null
-        title: Main Website
-        url: http://example.com/
+  main_site:
+    description: Main website for Example.com
+    source: null
+    title: Main Website
+    url: http://example.com/
 identity:
-    dataset: dimension
-    id: ddimension
-    revision: 1
-    source: example.com
-    version: 0.1.1
+  dataset: dimension
+  id: ddimension
+  revision: 1
+  source: example.com
+  version: 0.1.1
 names:
-    fqname: example.com-dimension-0.1.1~ddimension001
-    name: example.com-dimension
-    vid: ddimension001
-    vname: example.com-dimension-0.1.1
+  fqname: example.com-dimension-0.1.1~ddimension001
+  name: example.com-dimension
+  vid: ddimension001
+  vname: example.com-dimension-0.1.1
 pipelines:
-    build:
-        cast:
-        - +AddDerived
+  build:
+    cast:
+    - +AddDerived

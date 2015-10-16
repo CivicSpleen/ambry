@@ -365,6 +365,10 @@ class Bundle(object):
     def source_tables(self):
         return self.dataset.source_tables
 
+
+    def source_table(self, ref):
+        return self.dataset.source_table(ref)
+
     @property
     def refs(self):
 
@@ -1073,7 +1077,7 @@ class Bundle(object):
             # with the header, then sort on the postition. This will produce a stream of header names
             # that may have duplicates, but which is generally in the order the headers appear in the
             # sources. The duplicates are properly handled when we add the columns in add_column()
-            columns = sorted(set([(i, col.name, col.datatype, col.description) for source in sources
+            columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in sources
                              for i, col in enumerate(source.source_table.columns)]))
 
             for pos, name, datatype, desc in columns:
@@ -1116,7 +1120,11 @@ class Bundle(object):
                 pl.write = [Head, Collect]
                 pl.final = []
 
+                self.final_log_pipeline(pl)
+
                 pl.run()
+                pl.phase = 'build_schema'
+                self.final_log_pipeline(pl)
 
                 for h, c in zip(pl.write[Collect].headers,  pl.write[Collect].rows[0]):
 
@@ -1202,6 +1210,14 @@ class Bundle(object):
 
         # Allows developer to over ride pipe configuration in code
         self.edit_pipeline(pl)
+
+        try:
+
+            pl.dest_table = source.dest_table_name
+            pl.source_table = source.source_table.name
+            pl.source_name = source.name
+        except AttributeError:
+            pl.dest_table = None
 
         return pl
 
@@ -1331,12 +1347,16 @@ class Bundle(object):
             # after asecussful run
             self.final_log_pipeline(pl)
 
-            with self.progress_logging(lambda: ('Run source {}: {} rows, {} rows/sec',
-                                                (source.spec.name,) + pl.sink.report_progress()), 10):
+            try:
+                with self.progress_logging(lambda: ('Run source {}: {} rows, {} rows/sec',
+                                                    (source.spec.name,) + pl.sink.report_progress()), 10):
 
-                rows_count = int(min(source.datafile.n_rows, self.TEST_ROWS)) if self.test else None
+                    rows_count = int(min(source.datafile.n_rows, self.TEST_ROWS)) if self.test else None
 
-                pl.run(count=rows_count)
+                    pl.run(count=rows_count)
+            except:
+                self.final_log_pipeline(pl)
+                raise
 
             self.debug('Final methods')
             for m in pl.final:
@@ -1412,13 +1432,17 @@ class Bundle(object):
         self.build_fs.makedir('pipeline', allow_recreate=True)
         v = u("""
 Pipeline {}
+phase        : {}
+source name  : {}
+source table : {}
+dest table   : {}
 ========================================================
 {}
 
 Pipeline Headers
 ================
 {}
-""".format(str(datetime.now()), unicode(pl), pl.headers_report()))
+""".format(str(datetime.now()),  pl.phase, pl.source_name, pl.source_table, pl.dest_table, unicode(pl),pl.headers_report()))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 

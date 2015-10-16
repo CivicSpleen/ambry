@@ -150,6 +150,7 @@ class DataSourceBase(object):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
 
+
         if self.datafile.exists:
             with self.datafile.reader as r:
 

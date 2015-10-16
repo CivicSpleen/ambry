@@ -167,6 +167,9 @@ class CasterPipe(Pipe):
         self.transform_code = ''
         self.col_code = []
 
+        self.new_headers = None
+        self.orig_headers = None
+
     def add_to_env(self, t, name=None):
         if not name:
             name = t.__name__
@@ -246,8 +249,9 @@ class CasterPipe(Pipe):
                 # Regular casters, from the "caster" column of the schema
                 caster_f = self.get_caster_f(c.caster)
                 self.add_to_env(caster_f)
-
-                env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: {}(v)".format(c.caster),
+                #  (pipe, bundle, source, row) should be a consistent call sig for user provided callbacks
+                env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: {}(caster, row, v )"
+                                   .format(c.caster),
                                    self.env(i=i, header=c.name))
 
                 col_code[i] = (c.name,c.caster)
@@ -288,35 +292,28 @@ class CasterPipe(Pipe):
 
         self.row_processor = eval(self.transform_code, self.env())
 
+        self.orig_headers = header
         # Return the table header, rather than the original row header.
-        self.new_header =  [ c.name for c in self.table.columns ]
+        self.new_headers =  [ c.name for c in self.table.columns ]
 
-        self.row_proxy = RowProxy(self.new_header)
+        self.row_proxy = RowProxy(self.orig_headers)
 
-        return self.new_header
+        return self.new_headers
 
     def process_body(self, row):
 
         self.error_accumulator = {}  # Clear the accumulator
-        try:
-            row = self.row_processor(self.row_proxy.set_row(row))
 
-            if len(row) != len(self.headers):
+        if len(row) != len(self.orig_headers):
+            raise CasterError('Header has {} items, Row has {} items\nheaders= {}'
+                              '\nrow    = {}'
+                              .format(len(self.orig_headers),
+                                      len(row),
+                                      self.orig_headers,
+                                      row
+                                      ))
 
-                raise CasterError("Row length does not match header length")
-
-        except IndexError:
-            raise IndexError('Header has {} items, Row has {} items, caster has {}\nheaders= {}\ncaster = {}\nrow    = {}'
-                             .format(len(self.headers), len(row), len(self.types),
-                                     self.headers, [t[0] for t in self.types], row))
-        except Exception as e:
-            m = str(e)
-
-            print self.pipeline
-
-            raise
-
-            raise Exception("Failed to process row '{}'\n{}".format(row, e))
+        row = self.row_processor(self.row_proxy.set_row(row))
 
         if self.error_handler:
             row, self.error_accumulator = self.error_handler(row, self.error_accumulator)

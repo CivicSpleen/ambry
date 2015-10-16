@@ -1,3 +1,4 @@
 name,description,reftype,ref
 dimensions,Basic test of dimensions,ref,http://public.source.civicknowledge.com/example.com/dimensions/geofile155.csv
 counties,Counties,,http://public.source.civicknowledge.com/example.com/dimensions/civicknowledge.com-entities-census-counties.csv
+integers,Lists of Integers,,http://public.source.civicknowledge.com/example.com/basics/integers.csv

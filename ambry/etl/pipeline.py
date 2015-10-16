@@ -147,7 +147,7 @@ class Pipe(object):
             row = self.process_body(row)
 
             if row:
-                assert len(row) == header_len, (self.headers, row, type(self))
+                assert len(row) == header_len, (header_len, self.headers, len(row), row, type(self))
                 yield row
 
         self.finish()
@@ -1058,7 +1058,8 @@ class AddDerived(Pipe):
             self.process_body = self.process_body_default
         else:
             # FIXME: Should probably use itemgetter() instead of eval
-            self.code = 'lambda caster,  row: [ {} ] '.format(','.join(parts))
+            # FIXME: (pipe, bundle, source, row) shoudl probably a consistent signature
+            self.code =  'lambda pipe, bundle, source, row: [ {} ] '.format(','.join(parts))
 
             context = {}
             context.update(ambry.valuetype.math.__dict__)
@@ -1074,7 +1075,7 @@ class AddDerived(Pipe):
 
         try:
 
-            return self.processor(self, self.row_proxy.set_row(row))
+            return self.processor(self, self.bundle, self.source, self.row_proxy.set_row(row))
         except Exception as e:
             self.error("Exception in AddDerived processor\ncode={}\nexception={}".format(self.code, str(e)))
             raise
@@ -1344,7 +1345,7 @@ class SelectPartition(Pipe):
         if select_f:
 
             if not callable(self):
-                self._code = 'lambda source, row: {}'.format(select_f)
+                self._code = 'lambda pipe, bundle, source, row: {}'.format(select_f)
                 select_f = eval(self._code)
             else:
                 self._code = str(select_f)
@@ -1369,7 +1370,7 @@ class SelectPartition(Pipe):
 
     def process_body_select(self, row):
 
-        name = self.select_f(self.source, self._row_proxy.set_row(row))
+        name = self.select_f(self, self.bundle, self.source, self._row_proxy.set_row(row))
 
         # Name must be a dict
         if not isinstance(name, PartialPartitionName):
@@ -1573,6 +1574,9 @@ class Pipeline(OrderedDict):
     bundle = None
     name = None
     phase = None
+    dest_table = None
+    source_table = None
+    source_name = None
     final = None
     sink = None
 
@@ -1585,6 +1589,9 @@ class Pipeline(OrderedDict):
         super(Pipeline, self).__setattr__('bundle', bundle)
         super(Pipeline, self).__setattr__('name', None)
         super(Pipeline, self).__setattr__('phase', None)
+        super(Pipeline, self).__setattr__('source_table', None)
+        super(Pipeline, self).__setattr__('dest_table', None)
+        super(Pipeline, self).__setattr__('source_name', None)
         super(Pipeline, self).__setattr__('final', [])
         super(Pipeline, self).__setattr__('stopped', False)
         super(Pipeline, self).__setattr__('sink', None)
@@ -1602,7 +1609,6 @@ class Pipeline(OrderedDict):
 
         if args:
             self.__setitem__('body', PipelineSegment(self, 'body', *args))
-
 
     def _subset(self, subset):
         """Return a new pipeline with a subset of the sections"""
@@ -1748,7 +1754,7 @@ class Pipeline(OrderedDict):
             # This maybe should be an error?
             super(Pipeline, self).__setitem__(k, v)
 
-        assert isinstance(self[k], PipelineSegment), "Unexpected type: {}".format(type(self[k]))
+        assert isinstance(self[k], PipelineSegment), "Unexpected type: {} for {}".format(type(self[k]), k)
 
     def __getitem__(self, k):
 
@@ -1773,7 +1779,7 @@ class Pipeline(OrderedDict):
             return super(Pipeline, self).__getattr__(k)
 
     def __setattr__(self, k, v):
-        if k.startswith('_OrderedDict__') or k in ('name', 'phase', 'sink'):
+        if k.startswith('_OrderedDict__') or k in ('name', 'phase', 'sink', 'dest_table', 'source_name', 'source_table'):
             return super(Pipeline, self).__setattr__(k, v)
 
         self.__setitem__(k, v)
@@ -1797,8 +1803,12 @@ class Pipeline(OrderedDict):
 
             for p in chain[1:]:
                 assert not inspect.isclass(p)
-                p.set_source_pipe(last)
-                last = p
+                try:
+                    p.set_source_pipe(last)
+                    last = p
+                except:
+                    print p
+                    raise
         else:
             last = None
 

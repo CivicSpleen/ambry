@@ -400,6 +400,8 @@ class MetadataFile(DictBuildSourceFile):
 
     def objects_to_record(self):
 
+        #FIXME -- this looks more like records to file
+
         fr = self._dataset.bsfile(self._file_const)
 
         if fr.has_contents:
@@ -425,6 +427,7 @@ class MetadataFile(DictBuildSourceFile):
         with self._fs.open(file_name(self._file_const), 'wb') as f:
             yaml.safe_dump(o, f, default_flow_style=False, indent=4, encoding='utf-8')
 
+        fr.update_contents(msgpack.packb(o))
 
 class PythonSourceFile(StringSourceFile):
 

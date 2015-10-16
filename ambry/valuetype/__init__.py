@@ -22,6 +22,13 @@ def python_type(name):
     return import_valuetype(name)._pythontype
 
 
+def try_except(try_f, except_f):
+    """Takes 2 colsures and executed them in a try / except block """
+    try:
+        return try_f()
+    except:
+        return except_f()
+
 class ValueType(object):
 
 

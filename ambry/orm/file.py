@@ -55,28 +55,33 @@ class File(Base, DictableMixin):
     d_vid = SAColumn('f_d_vid', String(16), ForeignKey('datasets.d_vid'), primary_key=True, nullable=False, index=True)
 
     path = SAColumn('f_path', Text, nullable=False)
-
     major_type = SAColumn('f_major_type', Text, nullable=False, index=True)
     minor_type = SAColumn('f_minor_type', Text, nullable=False, index=True)
-    mime_type = SAColumn('f_mime_type', Text)
 
     source = SAColumn('f_source', Text, nullable=False)
 
+    mime_type = SAColumn('f_mime_type', Text)
     preference = SAColumn('f_preference', String(1), default=PREFERENCE.MERGE) # 'F' for filesystem, 'O' for objects, "M" for merge
-
     state = SAColumn('f_state', Text)
     hash = SAColumn('f_hash', Text) # Hash of the contents
     modified = SAColumn('f_modified', Float)
     size = SAColumn('f_size', BigIntegerType)
     contents = SAColumn('f_contents', Binary)
-
     source_hash = SAColumn('f_source_hash', Text)  # Hash of the source_file
-
     data = SAColumn('f_data', MutationDict.as_mutable(JSONEncodedObj))
 
     __table_args__ = (
         UniqueConstraint('f_d_vid', 'f_path', 'f_major_type', 'f_minor_type',  name='u_ref_path'),
     )
+
+    def update(self, of):
+        """Update a file from another file, for copying"""
+
+        # The other values hsould be set when the file object is created with dataset.bsfile()
+        for p in ('mime_type', 'preference','state','hash','modified','size','contents','source_hash','data'):
+            setattr(self, p, getattr(of, p))
+
+        return self
 
     @property
     def unpacked_contents(self):

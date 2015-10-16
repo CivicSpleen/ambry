@@ -1,7 +1,7 @@
 # project requirements
 
 address-parser==0.0.1
-boto==2.38.0
+boto>=2.38.0
 beautifulsoup4==4.3.2
 ckcache>=0.1.6
 decorator>=4
@@ -24,7 +24,7 @@ Pygments==2.0.2
 python-dateutil==2.4.2
 pytz==2015.4
 PyYAML==3.11
-requests==2.6.0
+requests>=2.6.0
 semantic-version==2.4.1
 sh==1.11
 simplejson==3.6.5
@@ -34,7 +34,7 @@ sqlparse==0.1.15
 Werkzeug==0.10.4
 whoosh==2.7.0
 psycopg2==2.6
-fs==0.5.2
+fs>=0.5.2
 msgpack-python==0.4.6
 livestats==1.0
 tabulate==0.7.5
@@ -42,4 +42,4 @@ terminaltables==1.2.1
 watchdog==0.8.3
 filelock==2.0.4
 ambry-sources>=0.0.8
-unicodecsv==0.12.0
+unicodecsv>=0.12.0

@@ -169,6 +169,7 @@ class Test(TestBase):
         self.assertEqual('05000US06001', row['geoid3'])
         self.assertEqual(600, row['percent'])
 
+
     @pytest.mark.slow
     def test_generators(self):
         """Build the complete-load"""

@@ -252,6 +252,7 @@ class AmbryReadyMixin(object):
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_by(self):
         """ search by `source example.com by county` (granularity search) """
+
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(table, time=1, grain_coverage=['county'])

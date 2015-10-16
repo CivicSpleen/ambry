@@ -65,6 +65,7 @@ def get_bundle_ref(args, l):
             l.bundle(args.ref)  # Exception if not exists
             return (args.ref, 'argument')
     except (AttributeError, NotFoundError, NotObjectNumberError):
+
         pass
 
     if 'AMBRY_BUNDLE' in os.environ:
@@ -191,7 +192,7 @@ def bundle_parser(cmd):
                            help='Display the build directory')
     command_p.add_argument('-S', '--stats', default=False, action='store_true',
                            help='Also report column stats for partitions')
-    command_p.add_argument('-P', '--partitions', default=False, action='store_true',
+    command_p.add_argument('-p', '--partitions', default=False, action='store_true',
                            help='Also report partition details')
     command_p.add_argument('-q', '--quiet', default=False, action='store_true',
                            help='Just report the minimum information, ')
@@ -272,7 +273,7 @@ def bundle_parser(cmd):
     # Schema Command
     #
     command_p = sub_cmd.add_parser('schema', help='Generate the source and destination schemas')
-    command_p.set_defaults(subcommand='scheam')
+    command_p.set_defaults(subcommand='schema')
 
     command_p.add_argument('-c', '--clean', default=False, action='store_true',
                            help='Remove all columns from existing tavbles')
@@ -298,6 +299,9 @@ def bundle_parser(cmd):
 
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Build even built or finalized bundles')
+
+    command_p.add_argument('-q', '--quick', default=False, action='store_true',
+                           help="Just rebuild; don't clean or ingest")
 
     command_p.add_argument('-S', '--source', action='append',
                            help='Sources to build, instead of running all sources')
@@ -432,6 +436,20 @@ def bundle_parser(cmd):
 
     command_p = sub_cmd.add_parser('cluster', help='Cluster sources by similar headers')
     command_p.set_defaults(subcommand='cluster')
+
+    #
+    # Colmap
+    #
+
+    command_p = sub_cmd.add_parser('colmap', help='Create or load a column map')
+    command_p.set_defaults(subcommand='colmap')
+    group = command_p.add_mutually_exclusive_group(required=True)
+    group.add_argument('-c', '--create', default=False, action='store_true', help='Create the individual table maps')
+    group.add_argument('-b', '--build', default=False, action='store_true',
+                       help='Build the combined map from the table maps')
+    group.add_argument('-l', '--load', default=False, action='store_true',
+                       help='Load the combined map into the source tables')
+
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -578,7 +596,6 @@ def check_built(b):
         fatal("Can't perform operation; state = '{}'. "
               "Call `bambry clean` explicity or build with -f option".format(b.state))
 
-
 def bundle_duplicate(args, l, rc):
 
     b = using_bundle(args, l)
@@ -591,7 +608,6 @@ def bundle_duplicate(args, l, rc):
     nb.set_last_access(Bundle.STATES.NEW)
 
     prt("New Bundle: {} ".format(nb.identity.vname))
-
 
 def bundle_finalize(args, l, rc):
     b = using_bundle(args, l)
@@ -748,21 +764,26 @@ def bundle_build(args, l, rc):
 
     b = using_bundle(args, l)
 
+    args.force = True if args.quick else args.force
+
     if not args.force:
         check_built(b)
 
-    b.clean()
-
-    b.sync_in()
+    if not args.quick:
+        b.clean()
+        b.sync_in()
 
     b = b.cast_to_subclass()
 
-    b.ingest()
-
     if args.table:
-        sources = list(s for s in b.sources if s.dest_table_name in args.tables)
-    else:
+        sources = list(s for s in b.sources if s.dest_table_name in args.table)
+    elif args.source:
         sources = args.source
+    else:
+        sources = None
+
+    if not args.quick:
+        b.ingest(sources=sources)
 
     b.build(sources=sources, force=args.force)
 
@@ -841,13 +862,11 @@ def bundle_run(args, l, rc):
 
     prt("RETURN: ", r)
 
-
 def bundle_checkin(args, l, rc):
 
     ref, frm = get_bundle_ref(args, l)
 
     b = l.bundle(ref, True)
-
 
     remote, path = b.checkin()
 
@@ -1004,10 +1023,17 @@ def bundle_dump(args, l, rc):
     elif args.table == 'ingested':
         terms = args.ref
 
-        headers = 'name path'.split()
+        headers = ('name','hdr','st', 'path','first 3 headers')
         records = []
         for s in b.sources:
-            records.append((s.name, s.datafile.syspath))
+            records.append((s.name,
+                            s.datafile.info['header_rows'],
+                            s.datafile.info['data_start_row'],
+                            s.datafile.syspath.replace(b.build_fs.getsyspath('/'),'.../'),
+                            ','.join(s.datafile.headers[:3])
+                            ))
+
+        records = sorted(records, key=lambda r: (r[4], r[0]) )
 
     if records:
         print(tabulate(records, headers=headers))
@@ -1076,7 +1102,7 @@ def bundle_import(args, l, rc):
     bid = config['identity']['id']
 
     try:
-        b = l.bundle(ref, True)
+        b = l.bundle(bid, True)
     except NotFoundError:
         b = l.new_from_bundle_config(config)
 
@@ -1086,6 +1112,8 @@ def bundle_import(args, l, rc):
 
     prt("Loaded bundle: {}".format(b.identity.fqname))
 
+    b.set_last_access(Bundle.STATES.SYNCED)
+    b.commit()
 
 def bundle_export(args, l, rc):
 
@@ -1278,6 +1306,13 @@ def bundle_ampr(args, l, rc):
             pass
 
     if not path:
+        try:
+            partition = l.partition(arg)
+            path = partition.datafile.syspath
+        except:
+            pass
+
+    if not path:
         fatal("Didn't get a path to an MPR file, nor a reference to a soruce or partition")
 
 
@@ -1299,4 +1334,132 @@ def bundle_cluster(args, l, rc):
 
 
     print yaml.safe_dump({'source_sets': ch.cluster()}, indent=4, default_flow_style=False)
+
+def bundle_colmap(args, l, rc):
+    """
+
+    Generally, colmap editing has these steps:
+
+    - Ingest, to setup the source tables
+    - bambry colmap -c, to create the table colmaps
+    - edit the table colmaps
+    - bambry colmap -b, to create the combined column map
+    - Review the combined column map
+    - bambry colmap -l, to load the combined colman into the source schema.
+    - bambry sync -r, to sync from the source schema records back out to files.
+
+    """
+    from itertools import groupby
+    from operator import attrgetter
+    from collections import OrderedDict
+    import csv
+
+    b = using_bundle(args, l)
+
+    mapfile_name = 'colmap.csv'
+
+    if args.create:
+        # Create the colmap tables, one per destination table
+
+        keyfunc = attrgetter('dest_table')
+        for dest_table, sources in groupby(sorted(b.sources, key=keyfunc), keyfunc):
+
+            sources = list(sources)
+
+            n_sources = len(sources)
+
+            columns = []
+
+            for c in dest_table.columns:
+                if c.name not in columns:
+                    columns.append(c.name)
+
+            for source in sources:
+                for c in source.source_table.columns:
+                    if c.name not in columns:
+                        columns.append(c.name)
+
+            columns = OrderedDict((c, [''] * n_sources) for c in columns)
+
+            for i, source in enumerate(sources):
+                source_cols = [c.name for c in source.source_table.columns]
+
+                for c_name, row in columns.items():
+                    if c_name in source_cols:
+                        row[i] = c_name
+
+            fn = "colmap_{}.csv".format(dest_table.name)
+
+            with b.source_fs.open(fn, 'wb') as f:
+
+                w = csv.writer(f)
+
+                # FIXME This should not produce entries for non-table sources.
+                w.writerow([dest_table.name] +
+                           [s.source_table.name for s in sources if s.dest_table])
+
+                for col_name, cols in columns.items():
+                    w.writerow([col_name] + cols)
+
+                prt("Wrote {}".format(fn))
+
+    elif args.build:
+        # Coalesce the individual table maps into one colmap
+        dest_tables = set([s.dest_table_name for s in b.sources
+                           if s.dest_table])
+
+        with b.source_fs.open(mapfile_name, 'wb') as cmf:
+
+            w = csv.writer(cmf)
+
+            w.writerow(('table', 'source', 'dest'))
+
+            count = 0
+
+            for dest_table_name in dest_tables:
+                fn = "colmap_{}.csv".format(dest_table_name)
+
+                if not b.source_fs.exists(fn):
+                    continue
+
+                with b.source_fs.open(fn, 'rb') as f:
+
+                    r = csv.reader(f)
+
+                    source_tables = next(r)
+                    dtn = source_tables.pop(0)
+                    assert dtn == dest_table_name
+
+                    for row in r:
+                        dest_col = row.pop(0)
+                        for source, source_col in zip(source_tables, row):
+
+                            if source_col and dest_col != source_col:
+                                count += 1
+                                w.writerow((source, source_col, dest_col))
+
+            prt("Wrote {} mappings to {}".format(count, mapfile_name))
+
+    elif args.load:
+        # Load the single colmap into the database.
+        with b.source_fs.open(mapfile_name, 'rb') as cmf:
+            r = csv.DictReader(cmf)
+
+            for row in r:
+
+                st = b.source_table(row['table'])
+
+                c = st.column(row['source'])
+
+                if c.dest_header != row['dest']:
+                    prt("{}: {} -> {}".format(st.name, c.dest_header, row['dest']))
+                    c.dest_header = row['dest']
+
+        b.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()
+        b.sync_out()
+
+        b.commit()
+
+    else:
+        fatal("No option given")
 

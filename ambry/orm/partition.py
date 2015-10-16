@@ -210,12 +210,14 @@ class Partition(Base, DictableMixin):
                 if stats[c.name].is_gvid:
                     scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in stats[c.name].uniques))
                     grains |= set(GVid.parse(gvid).summarize() for gvid in stats[c.name].uniques)
-                elif stats[c.name].is_year:
 
+                elif stats[c.name].is_year:
                     tcov |= set(int(x) for x in stats[c.name].uniques)
+
                 elif stats[c.name].is_date:
                     # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
                     tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, string_types) else x.year for x in stats[c.name].uniques)
+
             except Exception as e:
                 self._bundle.error("Failed to set coverage for column '{}', partition '{}': {}"
                                    .format(c.name, self.identity.vname, e))
@@ -422,10 +424,37 @@ class Partition(Base, DictableMixin):
 
     @property
     def reader(self):
+        """The reader for the datafile"""
         return self.datafile.reader
 
-    def __iter__(self):
+    def select(self, predicate=None, headers=None):
+        """
+        Select rows from the reader using a predicate to select rows and and itemgetter to return a
+        subset of elements
+        :param predicate: If defined, a callable that is called for each rowm and if it returns true, the
+        row is included in the output.
+        :param headers: If defined, a list or tuple of header names to return from each row
+        :return: iterable of results
 
+        WARNING: This routine works from the reader iterator, which returns RowProxy objects. RowProxy objects
+        are reused, so if you construct a list directly from the output from this method, the list will have
+        multiple copies of a single RowProxy, which will have as an inner row the last result row. If you will
+        be directly constructing a list, use a getter that extracts the inner row, or which converted the RowProxy
+        to a dict:
+
+            list(s.datafile.select(lambda r: r.stusab == 'CA', lambda r: r.dict ))
+
+        """
+
+        # FIXME; in Python 3, use yield from
+        with self.reader as r:
+            for row in r.select(predicate, headers):
+                yield row
+
+    def __iter__(self):
+        """ Iterator over the partition, returning RowProxy objects.
+        :return: a generator
+        """
         with self.reader as r:
             for row in r:
                 yield row

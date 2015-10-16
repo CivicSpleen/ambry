@@ -487,7 +487,6 @@ class Database(object):
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
-
     def copy_dataset(self, ds):
         from ..util import toposort
 
@@ -495,11 +494,11 @@ class Database(object):
         ds.tables
         ds.partitions
         ds.files
-        #ds.configs
         ds.stats
         ds.codes
         ds.source_tables
         ds.source_columns
+        # ds.configs # We'll get these later
 
         # Put the partitions in dependency order so the merge won't throw a Foreign key integrity error
         # The non-segment partitions go first, then the segments.
@@ -508,7 +507,7 @@ class Database(object):
         self.session.merge(ds)
 
         # FIXME: Oh, this is horrible. Sqlalchemy inserts all of the configs as a group, but they are self-referential,
-        # so some with a reference to a parent get inserted before their parent. The topo sort solives this,
+        # so some with a reference to a parent get inserted before their parent. The topo sort solves this,
         # but there must be a better way to do it.
 
         dag = {c.id: set([c.parent_id]) for c in ds.configs}
