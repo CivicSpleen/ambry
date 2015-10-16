@@ -9,3 +9,16 @@
 "simple","date","date",
 "simple","codes","integer","remove_codes"
 "simple","keptcodes","integer",
+,,,
+,,,
+"integers","id","int",
+"integers","a","int",
+"integers","b","int","doubleit1"
+"integers","c","int","doubleit2"
+"integers","d","int","doubleit3"
+"integers","e","int","int(row.a)*3"
+"integers","f","int","len(source.name)"
+"integers","g","int",
+"integers","h","int",
+"integers","i","int",
+"integers","j","int",

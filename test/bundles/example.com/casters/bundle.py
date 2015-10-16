@@ -57,3 +57,15 @@ class Bundle(Bundle):
             return int(v)
         except ValueError:
             return -1
+
+    @staticmethod
+    def doubleit1(v):
+        return int(v) * 2
+
+    @staticmethod
+    def doubleit2(pipe, row, v):
+        return int(v) * 2
+
+    def doubleit3(self, row, v):
+        return int(v) * 2
+

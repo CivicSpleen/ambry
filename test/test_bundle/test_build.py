@@ -170,6 +170,9 @@ class Test(TestBase):
         self.assertEqual(600, row['percent'])
 
 
+
+
+
     @pytest.mark.slow
     def test_generators(self):
         """Build the complete-load"""
@@ -227,7 +230,7 @@ class Test(TestBase):
             else:
                 raise
 
-        self.assertEqual(1, len(list(b.partitions)))
+        self.assertEqual(2, len(list(b.partitions)))
 
         mn = mx = 0
         for row in next(iter(b.partitions)):
@@ -239,3 +242,14 @@ class Test(TestBase):
         self.assertEqual(6, mx)
 
         self.assertEqual(0, len(b.dataset.codes))
+
+        # Varitions in the function signatire for casters
+
+        with b.partition(table='integers').datafile.reader as r:
+            for row in r:
+                self.assertEqual(row.id, row.a)
+                self.assertEqual(row.id * 2, row.b)
+                self.assertEqual(row.id * 2, row.c)
+                self.assertEqual(row.id * 2, row.d)
+                self.assertEqual(row.id * 3, row.e)
+                self.assertEqual(8, row.f)

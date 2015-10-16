@@ -1,2 +1,3 @@
-name,title,dest_table_name,time,space,grain,description,generator
-simple,simple,simple,1000,california,numbers,Simple Random Data,ExampleSourcePipe
+"name","title","dest_table_name","time","space","grain","description","reftype","ref"
+"simple","simple","simple",1000,"california","numbers","Simple Random Data","generator","ExampleSourcePipe"
+"integers","Lists of Integers",,,,,,,"http://public.source.civicknowledge.com/example.com/basics/integers.csv"

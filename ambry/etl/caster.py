@@ -179,6 +179,11 @@ class CasterPipe(Pipe):
         self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
 
     def get_caster_f(self, name):
+        """Look in several places for a caster function:
+
+        - The bundle
+        - the ambry.build module, which should be the bundle's module.
+        """
 
         caster_f = None
 
@@ -221,6 +226,8 @@ class CasterPipe(Pipe):
 
         from ambry.etl import RowProxy
         from ambry.valuetype import import_valuetype
+        import inspect
+        from ambry.dbexceptions import ConfigurationError
 
         if self.table:
             table = self.table
@@ -231,6 +238,8 @@ class CasterPipe(Pipe):
         row_parts = []
 
         col_code = [None]*len(self.table.columns)
+
+        lambda_def = "lambda row, v, pipe=self, i=i, header=header, bundle=self.bundle, source=self.source:"
 
         # Create an entry in the row processor function for each output column in the schema.
         for i,c in enumerate(self.table.columns):
@@ -246,20 +255,46 @@ class CasterPipe(Pipe):
                 col_code[i]  = (c.name,"None")
 
             elif c.caster:
+
+                if type_f.__name__ != c.datatype:
+                    raise ConfigurationError("Can't have custom datatype with caster, in table {}.{}"
+                                             .format(c.table.name, c.name))
+
                 # Regular casters, from the "caster" column of the schema
-                caster_f = self.get_caster_f(c.caster)
+                try:
+                    caster_f = self.get_caster_f(c.caster)
+
+                    # The inspection will call the caster_f with the argument list declared in its defintion,
+                    # so the dfinition just has to have the same names are appear in the argument list to the
+                    # lambda
+
+                    args = inspect.getargspec(caster_f).args
+
+                    if len(args) > 1 and args[0] == 'self':
+                        args = args[1:]
+
+                    code = ("{}({})".format(c.caster, ','.join(args)))
+
+                except AttributeError:
+                    # The caster isn't a name of a function on the bundle nor the bundle module,
+                    # so guess that it is code to eval.
+
+                    code = (c.caster)
+
                 self.add_to_env(caster_f)
                 #  (pipe, bundle, source, row) should be a consistent call sig for user provided callbacks
-                env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: {}(caster, row, v )"
-                                   .format(c.caster),
-                                   self.env(i=i, header=c.name))
+
+                # Wrap the code to cast it to the final datatype
+                wrapped_code = lambda_def+"parse_{}(pipe, header, ({}))".format(type_f.__name__,code)
+
+                env[f_name] = eval(wrapped_code,  self.env(i=i, header=c.name) )
 
                 col_code[i] = (c.name,c.caster)
 
             elif type_f.__name__ == c.datatype:
                 # Plain python type, from the "datatype" column
 
-                env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: parse_{}(caster, header, v)"
+                env[f_name] = eval(lambda_def+"parse_{}(pipe, header, v)"
                                    .format(type_f.__name__), self.env(i=i, header=c.name))
 
                 col_code[i] = (c.name, "parse_{}(caster, header, v)".format(type_f.__name__) )
@@ -269,8 +304,8 @@ class CasterPipe(Pipe):
                 # Special valuetype, not a normal python type
                 vt_name = c.datatype.replace('.','_')
                 self.add_to_env(import_valuetype(c.datatype), vt_name)
-                env[f_name] = eval("lambda row, v, caster=self, i=i, header=header: parse_type({},caster, header, v)"
-                        .format(vt_name), self.env(i=i, header=c.name))
+                env[f_name] = eval(lambda_def+" parse_type({},pipe, header, v)"
+                                    .format(vt_name), self.env(i=i, header=c.name))
 
                 col_code[i] = (c.name, "parse_type({},caster, header, v)".format(c.datatype.replace('.','_')))
 
