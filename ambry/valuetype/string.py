@@ -6,9 +6,6 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from math import *
-from random import *
-
 def uuid4():
     """Returns a UUID4 as a string"""
 

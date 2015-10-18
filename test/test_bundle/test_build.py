@@ -170,7 +170,9 @@ class Test(TestBase):
         self.assertEqual(600, row['percent'])
 
 
-
+        with b.partition(table='integers').datafile.reader as r:
+            for row in r:
+                print row.row
 
 
     @pytest.mark.slow
@@ -215,6 +217,12 @@ class Test(TestBase):
         except PhaseError as e:  # Gets cast errors, which are converted to codes
             self.assertEqual(1, len(b.dataset.codes))
 
+        with b.partition(table='simple_stats').datafile.reader as r:
+            for row in r:
+                print row.row
+
+        return
+
         # Updat the schema to fix the problem.
         b.commit()
         b.table('simple').column('keptcodes').caster = 'remove_codes'
@@ -230,7 +238,7 @@ class Test(TestBase):
             else:
                 raise
 
-        self.assertEqual(2, len(list(b.partitions)))
+        self.assertEqual(3, len(list(b.partitions)))
 
         mn = mx = 0
         for row in next(iter(b.partitions)):
@@ -253,3 +261,7 @@ class Test(TestBase):
                 self.assertEqual(row.id * 2, row.d)
                 self.assertEqual(row.id * 3, row.e)
                 self.assertEqual(8, row.f)
+
+        with b.partition(table='simple_stats').datafile.reader as r:
+            for row in r:
+                print row.row

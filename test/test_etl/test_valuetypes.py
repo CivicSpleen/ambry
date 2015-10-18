@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-import os
-import unittest
+
+from test.test_base import TestBase
 
 
-class Test(unittest.TestCase):
+
+class Test(TestBase):
 
 
     def test_basic(self):
@@ -23,11 +24,33 @@ class Test(unittest.TestCase):
         self.assertEqual('Arizona', sa.fips.name)
         self.assertEqual('AZ', sa.fips.usps.fips.usps)
 
-        print
-
         from ambry.valuetype.census import AcsGeoid
 
         g = AcsGeoid('15000US530330018003')
 
         self.assertEqual('Washington', g.state.name)
         self.assertEqual('WA', g.state.usps)
+
+    def test_code_calling_pipe(self):
+
+        from ambry.etl import CastColumns, RowProxy
+
+        b = self.setup_bundle('casters')
+        b.sync_in();  # Required to get bundle for cast_to_subclass to work.
+        b = b.cast_to_subclass()
+
+        pl = b.pipeline(source=b.source('simple_stats'))
+
+        ccp = pl[CastColumns]
+
+        headers = [ c.source_header for c in ccp.source.source_table.columns]
+
+        print ccp.compose_column(1, 'SH', ccp.source.dest_table.column('int_a') )
+
+        print ccp.compose(headers)
+
+        row = [1.0,1.1,1.2,1,2,"one","two"]
+
+        ccp.process_header(headers)
+        ccp.process_body(row)
+

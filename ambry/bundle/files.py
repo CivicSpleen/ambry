@@ -228,6 +228,7 @@ class RowBuildSourceFile(BuildSourceFile):
                     rows.append(row)
 
         try:
+
             fr.update_contents(msgpack.packb(rows))
         except AssertionError:
             raise
@@ -668,7 +669,11 @@ class SchemaFile(RowBuildSourceFile):
                 data=data,
                 keywords=row.get('keywords'),
                 measure=row.get('measure'),
-                caster=row.get('caster'),
+                exception=row.get('exception'),
+                transform=row.get('transform'),
+                typecast=row.get('typecast'),
+                initialize=row.get('initialize'),
+                nullify=row.get('nullify'),
                 units=row.get('units', None),
                 universe=row.get('universe'),
                 update_existing= True)

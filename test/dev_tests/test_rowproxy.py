@@ -123,5 +123,31 @@ class Test(unittest.TestCase):
 
         self.assertEquals(expected_sum, row_sum)
 
+    #@unittest.skip("Development Test")
+    def test_apply(self):
+
+        base_row = [1,2,3,4,5,6,7,8,9, 1,2,3,4,5,6,7,8,9]
+
+        code_row = "lambda row : [{}]".format(','.join([ "row[{}]+2".format(i) for i,_ in enumerate(base_row)]))
+
+        f_row = eval(code_row)
+
+        f = lambda x: x+2
+
+        N = 2000000
+
+        row = list(base_row)
+        with Timer() as t:
+            for i in xrange(N):
+                row =  f_row(row)
+
+        print t.elapsed, row
+
+        row = list(base_row)
+        with Timer() as t:
+            for i in xrange(N):
+                row = map(f, row)
+
+        print t.elapsed, row
 
 

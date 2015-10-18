@@ -57,14 +57,21 @@ class Column(Base):
     summary = SAColumn('c_summary', Text)
     description = SAColumn('c_description', Text)
     keywords = SAColumn('c_keywords', Text)
-    caster = SAColumn('c_caster', Text)
+
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
     lom = SAColumn('c_lom', String(1))
 
-    # A column vid, or possibly an equation, describing how this column was
-    # created from other columns.
-    derivedfrom = SAColumn('c_derivedfrom', Text)
+    # Old column value generators
+    #derivedfrom = SAColumn('c_derivedfrom', Text)
+    #caster = SAColumn('c_caster', Text)
+
+    # New column value casters and generators
+    exception = SAColumn('c_exception', Text)
+    transform = SAColumn('c_transform', Text)
+    typecast = SAColumn('c_typecast', Text)
+    initialize = SAColumn('c_initialize', Text)
+    nullify = SAColumn('c_nullify', Text)
 
     # ids of columns used for computing ratios, rates and densities
     numerator = SAColumn('c_numerator', String(20))
@@ -136,7 +143,12 @@ class Column(Base):
             # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         # Don't allow these values to be the empty string
-        self.derivedfrom = self.derivedfrom or None
+
+        self.exception = self.exception or None
+        self.transform = self.transform or None
+        self.typecast = self.typecast or None
+        self.initialize = self.initialize or None
+        self.nullify = self.nullify or None
 
     def type_is_int(self):
         return self.python_type  == int
@@ -369,7 +381,7 @@ class Column(Base):
         def cast_to_int(s):
             try:
                 return int(s)
-            except ValueError:
+            except (TypeError, ValueError):
                 return None
 
         cd = Code(c_vid=self.vid, t_vid=self.t_vid,

@@ -88,12 +88,8 @@ class Bundle(object):
 
         'build': {
             'first': [],
-            'map': [
-                ambry.etl.MapSourceHeaders
-            ],
-            'cast': [
-                ambry.etl.CasterPipe
-            ],
+            'map': [ ambry.etl.MapSourceHeaders],
+            'cast': [ ambry.etl.CastColumns ],
             'body': [],
             'last': [],
             'select_partition': [ambry.etl.SelectPartition],

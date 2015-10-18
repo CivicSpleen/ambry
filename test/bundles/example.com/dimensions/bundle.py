@@ -16,3 +16,6 @@ class Bundle(Bundle):
 
     def doubleit3(self, row, v):
         return int(v) * 2
+
+    def return1(self,pipe, row):
+        return 1

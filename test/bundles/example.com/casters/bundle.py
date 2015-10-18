@@ -39,6 +39,36 @@ class ExampleSourcePipe(DatafileSourcePipe):
             yield list(row.values())
 
 
+def caster_everything(v, i_s, header_s, i_d, header_d, row, errors, scratch, pipe):
+    return v
+
+def caster_all(v, i, header, row, exceptions, pipe):
+    return v
+
+def caster_v(v):
+    return v
+
+def caster_vih(v, i, header):
+    return v
+
+def caster_vrep(v, row, exceptions, pipe):
+    return v
+
+def cst_nullify(v):
+    return v
+
+def cst_initialize(v):
+    return v
+
+def cst_typecast(v):
+    return v
+
+def cst_transform(v):
+    return v
+
+def cst_exception(v, i, header, row, exceptions, pipe):
+    return v
+
 class Bundle(Bundle):
 
     @staticmethod

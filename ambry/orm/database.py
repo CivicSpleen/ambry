@@ -175,8 +175,11 @@ class Database(object):
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
 
+
             with self._engine.connect() as conn:
                 _validate_version(conn)
+
+
         return self._engine
 
     @property

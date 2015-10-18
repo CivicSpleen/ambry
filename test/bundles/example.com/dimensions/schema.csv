@@ -25,3 +25,5 @@
 "integers","h","int",,
 "integers","i","int",,
 "integers","j","int",,
+"integers","one","int","return1",
+"integers","percent","int","percent(int_n(row.c), int_n(row.e))",

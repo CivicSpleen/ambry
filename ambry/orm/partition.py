@@ -352,7 +352,7 @@ class Partition(Base, DictableMixin):
         with self.datafile.writer as w:
             for i, c in enumerate(self.table.columns,1):
                 wc = w.column(i)
-                assert wc.pos == c.sequence_id
+                assert wc.pos == c.sequence_id, (c.name, wc.pos, c.sequence_id)
                 wc.name = c.name
                 wc.description = c.description
                 wc.type = c.python_type.__name__
