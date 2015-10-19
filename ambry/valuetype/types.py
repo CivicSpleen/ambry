@@ -29,8 +29,12 @@ class CodeValue(object):
         return None
 
 
+def row_number(row_n):
+    return row_n
+
 def nullify(v):
     """Convert empty strings and strings with only spaces to None values. """
+
     if isinstance(v, string_types):
         v = v.strip()
 
@@ -95,105 +99,115 @@ class CasterError(Exception):
 
 class CastingError(TypeError):
 
-    def __init__(self, field_header, value, message, *args, **kwargs):
+    def __init__(self, type_target, field_header, value, message, *args, **kwargs):
+
+        self.type_target = type_target
+        self.field_header = field_header
+        self.value = value
+
+        message = "Failed to cast column '{}' value='{}' to '{}': {} "\
+            .format(field_header, value, type_target, message)
 
         # Call the base class constructor with the parameters it needs
         Exception.__init__(self, textwrap.fill(message, 120), *args, **kwargs)
 
-        self.field_name = field_name
-        self.value = value
 
-
-def parse_int(v, i_d, header_d, errors):
+def parse_int(v, header_d):
     """Parse as an integer, or a subclass of Int."""
 
-    try:
-        return int(round(float(v), 0))
-    except (ValueError, TypeError) as e:
-        errors[i_d] = (i_d, header_d, e)
+    if v is None:
         return None
-    except OverflowError as e:
-        raise OverflowError("Failed to convert int in pipe, for column {}, value '{}' ".format(header, v))
 
+    try:
+        # The converson to float allows converting float strings to ints.
+        # The conversion int('2.134') will fail.
+        return int(round(float(v), 0))
+    except (TypeError, ValueError) as e:
+        raise CastingError(int, header_d, v, str(e))
 
-def parse_float(pipe, header, v, row, scratch):
+def parse_float(v,  header_d):
+
+    if v is None:
+        return None
 
     try:
         return float(v)
     except (TypeError, ValueError) as e:
-        caster.cast_error(errors, float, header, v, e)
-        return None
+        raise CastingError(float, header_d, v, str(e))
 
 
-def parse_str(pipe, header, v, row, scratch):
+def parse_str(v, i_d, header_d, errors):
 
-    # This is often a no-op, but it ocassionally convertes numbers into strings
+    # This is often a no-op, but it ocassionally converts numbers into strings
+
+    if v is None: return None
 
     try:
         return str(v).strip()
     except UnicodeEncodeError:
         return unicode(v).strip()
 
+def parse_unicode(v,  header_d):
 
-def parse_unicode(pipe, header, v, row, scratch):
-    return unicode(v).strip()
+    if v is None: return None
 
+    try:
+        return unicode(v).strip()
+    except Exception as e:
+        raise CastingError(unicode, header_d, v, str(e))
 
-def parse_type(type_, pipe,  header, v, row, scratch):
+def parse_type(type_, v,  header_d):
+
+    if v is None: return None
 
     try:
         return type_(v)
     except (TypeError, ValueError) as e:
-        caster.cast_error(errors, type_, header, v, e)
-        return None
+        raise CastingError(type_, header_d, v, str(e))
 
 
-def parse_date(pipe, header, v, row, scratch):
+def parse_date(v, header_d):
+
+    if v is None: return None
 
     if isinstance(v, string_types):
         try:
             return dp.parse(v).date()
         except (ValueError,  TypeError) as e:
-            caster.cast_error(errors, datetime.date, header, v, e)
-            return None
+            raise CastingError(datetime.date, header_d, v, str(e))
 
     elif isinstance(v, datetime.date):
         return v
     else:
-        caster.cast_error(errors,
-            datetime.date, header, v, "Expected datetime.date or basestring, got '{}'".format(type(v)))
-        return None
+        raise CastingError(int, header_d, v, "Expected datetime.date or basestring, got '{}'".format(type(v)))
 
+def parse_time(v,  header_d):
 
-def parse_time(pipe, header, v, row, scratch):
+    if v is None: return None
 
     if isinstance(v, string_types):
         try:
             return dp.parse(v).time()
         except ValueError as e:
-            caster.cast_error(errors, datetime.date, header, v, e)
-            return None
+            raise CastingError(datetime.time, header_d, v, str(e))
 
     elif isinstance(v, datetime.time):
         return v
     else:
-        caster.cast_error(errors,
-            datetime.date, header, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
-        return None
+        raise CastingError(int, header_d, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
 
+def parse_datetime(v,  header_d):
 
-def parse_datetime(pipe, header, v, row, errors):
+    if v is None: return None
 
     if isinstance(v, string_types):
         try:
             return dp.parse(v)
         except (ValueError, TypeError) as e:
-            caster.cast_error(errors, datetime.date, header, v, e)
-            return None
+            raise CastingError(datetime.datetim, header_d, v, str(e))
 
     elif isinstance(v, datetime.datetime):
         return v
     else:
-        caster.cast_error(errors,
-            datetime.date, header, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
-        return None
+        raise CastingError(int, header_d, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
+

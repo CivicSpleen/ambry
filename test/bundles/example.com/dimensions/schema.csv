@@ -1,4 +1,4 @@
-"table","column","datatype","derivedfrom","caster"
+"table","column","datatype","initialize","transform"
 ,,,,
 "counties","id","int",,
 "counties","state","fips.State",,

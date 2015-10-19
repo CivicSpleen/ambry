@@ -40,34 +40,29 @@ class ExampleSourcePipe(DatafileSourcePipe):
 
 
 def caster_everything(v, i_s, header_s, i_d, header_d, row, errors, scratch, pipe):
-    return v
+    return v+1
 
-def caster_all(v, i, header, row, exceptions, pipe):
-    return v
+def caster_all(v, i_s, header_s, row, errors, pipe):
+    return v+1
 
 def caster_v(v):
-    return v
+    return v+1
 
-def caster_vih(v, i, header):
-    return v
+def caster_vih(v, i_s, header_s):
+    return v+1
 
-def caster_vrep(v, row, exceptions, pipe):
-    return v
+def caster_vrep(v, row, errors, pipe):
+    return v+1
 
-def cst_nullify(v):
-    return v
+def cst_double(v):
+    return v*2
 
-def cst_initialize(v):
-    return v
+def cst_exception(v, i_d, header_d, row, errors, pipe, exception):
+    print "CST_EXCEPTION ",i_d, header_d, exception
+    errors[header_d] = v
+    return None
 
-def cst_typecast(v):
-    return v
 
-def cst_transform(v):
-    return v
-
-def cst_exception(v, i, header, row, exceptions, pipe):
-    return v
 
 class Bundle(Bundle):
 

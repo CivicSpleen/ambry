@@ -20,7 +20,6 @@ class County(IntValue):
         from ambry.library import global_library
         # v is set in __new__
 
-
         self.state = None
         self.library = global_library
 

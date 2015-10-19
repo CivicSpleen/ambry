@@ -19,6 +19,9 @@ def import_valuetype(name):
     return cls
 
 def python_type(name):
+    """Return the python type for a ValueType. This the type that the ValueType will be
+    reduced to before being stored in a partition"""
+
     return import_valuetype(name)._pythontype
 
 class ValueType(object):

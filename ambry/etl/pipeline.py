@@ -18,7 +18,6 @@ from ambry.util import qualified_class_name
 from ambry_sources import RowProxy
 
 
-
 class PipelineError(Exception):
     def __init__(self,  pipe, *args, **kwargs):
 
@@ -47,7 +46,6 @@ Pipeline:
 """.format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline=str(self.pipe.pipeline),
            pipe_class=qualified_class_name(self.pipe), source_name=self.pipe.source.name,
            headers=self.pipe.headers, exc_name = self.exc_name, extra = self.extra, extra_section=self.extra_section)
-
 
 class MissingHeaderError(PipelineError):
     def __init__(self, pipe, header, table, *args, **kwargs):
@@ -83,10 +81,8 @@ Bad/Missing Table:  {source_table}
 """.format(source_table=self.source_table)
         return super(BadSourceTable, self).__str__()
 
-
 class StopPipe(Exception):
     pass
-
 
 class Pipe(object):
     """A step in the pipeline"""
@@ -197,8 +193,6 @@ class RowProxyPipe(Pipe):
 
         self.finish()
 
-
-
 class DatafileSourcePipe(Pipe):
     """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
 
@@ -274,8 +268,6 @@ class GeneratorSourcePipe(Pipe):
 
         return "Generator {}".format(qualified_class_name(self))
 
-
-
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
 
@@ -309,7 +301,6 @@ class Sink(Pipe):
         return (self.i,
                 round(float(self.i) / float(time() - self._start_time), 2))
 
-
 class IterSource(Pipe):
     """Creates a source from an Iterator"""
 
@@ -332,7 +323,6 @@ class IterSource(Pipe):
         for row in itr:
             yield row
 
-
 class OnlySource(Pipe):
     """Only allow iteration on a named source. """
 
@@ -352,7 +342,6 @@ class OnlySource(Pipe):
 
         self.headers = row
         return row
-
 
 class Slice(Pipe):
     """Select a slice of the table, using a set of tuples to represent the start and end positions of each
@@ -457,7 +446,6 @@ class Head(Pipe):
     def __str__(self):
         return "{}; N={}; i={}".format(super(Head, self).__str__(), self.N, self.i )
 
-
 class Sample(Pipe):
     """ Take a sample of rows, skipping rows exponentially to end at the est_length input row, with
     count output rows.
@@ -561,7 +549,6 @@ class MatchPredicate(Pipe):
             self.matches.append(row)
 
         return row
-
 
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one. If no header is specified in the
@@ -689,7 +676,6 @@ class MangleHeader(Pipe):
 
         while True:
             yield next(itr)
-
 
 class MergeHeader(Pipe):
     """Strips out the header comments and combines multiple header lines to emit a
@@ -821,7 +807,6 @@ class MergeHeader(Pipe):
     def __str__(self):
         return qualified_class_name(self) + ': header = {} '\
             .format(','.join(str(e) for e in self.header_lines))
-
 
 class AddDeleteExpand(Pipe):
     """Edit rows as they pass through
@@ -972,7 +957,6 @@ class AddDeleteExpand(Pipe):
                 self.indent + "B:" + str(self.edit_row_code)
                 )
 
-
 class Add(AddDeleteExpand):
     """Add fields to a row"""
     def __init__(self, add):
@@ -984,12 +968,10 @@ class Add(AddDeleteExpand):
         """
         super(Add, self).__init__(add=add)
 
-
 class Expand(AddDeleteExpand):
     """Add columns to the header"""
     def __init__(self,  expand, as_dict=False):
         super(Expand, self).__init__(expand=expand, as_dict=as_dict)
-
 
 class Delete(AddDeleteExpand):
     """Delete columns. """
@@ -999,7 +981,6 @@ class Delete(AddDeleteExpand):
     def __str__(self):
 
         return qualified_class_name(self) + "delete = "+ ', '.join(self.delete)
-
 
 class SelectColumns(AddDeleteExpand):
     """Pass through only the sepcified columns, deleting all others.  """
@@ -1017,12 +998,9 @@ class SelectColumns(AddDeleteExpand):
 
         return qualified_class_name(self) + " keep = "+ ', '.join(self.keep)
 
-
-
 class Edit(AddDeleteExpand):
     def __init__(self,  edit, as_dict=False):
         super(Edit, self).__init__(edit=edit, as_dict=as_dict)
-
 
 class PassOnlyDestColumns(Delete):
     """Delete any columns that are not in the destination table"""
@@ -1038,9 +1016,10 @@ class PassOnlyDestColumns(Delete):
         return super(Delete, self).process_header(row)
 
 class CodeCallingPipe(Pipe):
-    """A Pipe that calls casters or derivedfrom code"""
+    """A Pipe that composes functions to modify a row.
+    """
 
-    const_args = ('row','scratch','errors','pipe','bundle','source')
+    const_args = ('row','row_n','scratch','errors','pipe','bundle','source')
     var_args = ('v','i_s','i_d','header_s', 'header_d')
     all_args = var_args + const_args
 
@@ -1051,11 +1030,33 @@ class CodeCallingPipe(Pipe):
     # that are the same for every column
     code_def = 'lambda {}:'.format(','.join(const_args))
 
+    transform_set_1 = ( 'initialize',  'transform1', 'datatype') # Then, 'exception' added at the end
+
+    transform_set_2 = ( 'transform2', )
+
     def __init__(self):
 
         self.custom_types = {}
         self.base_env = self._base_env()
         self.code = None
+
+        self.routines = {}
+
+    @staticmethod
+    def indent_code(string):
+        """Indent nested functions in the code"""
+        stack = ['']
+        for i, c in enumerate(string):
+            if c == '(':
+                yield '    ' * len(stack) + stack[-1] + '('
+                stack[-1] = ')'
+                stack.append('')
+            elif c == ')':
+                yield '    ' * len(stack) + stack.pop()
+            else:
+                stack[-1] += c
+
+        yield '    ' * len(stack) + stack.pop()
 
     def _base_env(self):
         """Base environment for evals, the stuff that is the same for all evals"""
@@ -1104,19 +1105,102 @@ class CodeCallingPipe(Pipe):
 
         self.custom_types[name] = func_or_type
 
+    def make_row_processor(self, source_header, transform_set, add_exception):
+
+        self.code = self.compose(source_header, transform_set, add_exception)
+
+        try:
+            return eval(self.code, self.env())
+        except:
+            raise
+
+    def compose(self, source_headers, transform_set, add_exception):
+
+        row_f = []
+
+        for i, c in enumerate(self.source.dest_table.columns):
+
+            try:
+                header_index = source_headers.index(c.name)
+                source_header = c.name
+            except ValueError:
+                header_index = None
+                source_header = None
+
+            row_f.append(self.compose_column(header_index, source_header, c, transform_set, add_exception))
+
+        inner_code = ','.join(row_f)
+
+        return self.code_def + '[' + inner_code + ']'
+
+    def compose_column(self, source_pos, source_header, column, transform_set, add_exception):
+        """
+        Combine all of the code for a column into a single evalable string
+
+        :param source_pos: The integer position of the source column in the source row,
+        :param source_header:  The header of the source column.
+        :param column: The destination column column object.
+        :return:
+        """
+
+        code = source_val = "<<<source_val>>>".format(source_pos)
+
+        for field in transform_set:
+            f_name, next_code, imports = self.normalize_code(field, column)
+
+            if f_name:
+
+                for k, v in imports.items():
+                    self.add_to_env(v, k)
+
+                code = next_code.format(v=code)
+
+        if column.exception and add_exception:
+            tc_code = self.try_except_code(column, code)
+
+            func = eval(tc_code, self.env())
+            f_name = 'tc_' + column.name
+            self.routines[f_name] = '\n'.join(self.indent_code(tc_code))
+            self.add_to_env(func, f_name)
+
+            code = '{}({})'.format(f_name, ','.join(
+                ["<<<{}>>>".format(e) for e in self.var_args] +
+                ['{}={}'.format(e, e) for e in self.const_args]
+            ))
+
+        pre_interp = '\n'.join(self.indent_code(code))
+
+        subs = {
+            'v': "row[{}]".format(source_pos) if source_pos is not None else 'None',
+            'source_val': "row[{}]".format(source_pos) if source_pos is not None else 'None',
+            'i_s': source_pos,
+            'i_d': column.sequence_id,
+            'header_s': "'" + source_header + "'" if source_header else 'None',
+            'header_d': "'" + column.name + "'",
+
+        }
+
+        return self.convert_format(pre_interp).format(**subs)
+
     def calling_code(self, f, f_name=None):
         """Return the code string for calling a function. """
         import inspect
+        from ambry.dbexceptions import ConfigurationError
 
         args = inspect.getargspec(f).args
 
         if len(args) > 1 and args[0] == 'self':
             args = args[1:]
 
+        for a in args:
+            if  a not in self.all_args+('exception',): # exception arg is only for exception handlers
+                raise ConfigurationError('Caster code {} has unknown argument '
+                                         'name: \'{}\'. Must be one of: {} '.format(f, a, ','.join(self.all_args)))
+
         arg_map = {e: '<<<' + e + '>>>' for e in self.var_args}
         arg_map['v'] = '{v}'
 
-        args = [ arg_map.get(a,a) for a in args ]
+        args = [arg_map.get(a, a) for a in args]
 
         return "{}({})".format(f_name if f_name else f.__name__, ','.join(args))
 
@@ -1124,6 +1208,7 @@ class CodeCallingPipe(Pipe):
         """Return a string that transforms a string into something that when eval'd, will return a callable
         """
         from ambry.valuetype import import_valuetype
+        from ambry.orm.column import  Column
 
         imports = {}
 
@@ -1131,10 +1216,11 @@ class CodeCallingPipe(Pipe):
 
         raw_code = getattr(column, code_field)
 
-        if not bool(raw_code) and not code_field == 'nullify':
-            return (None, None, None)
-        elif code_field == 'nullify':
-            raw_code = 'nullify'
+        if not bool(raw_code):
+            if code_field == 'initialize':
+                raw_code = 'nullify'
+            else:
+                return (None, None, None)
 
         if code_field == 'datatype':
             #
@@ -1142,22 +1228,23 @@ class CodeCallingPipe(Pipe):
             #
             type_f = column.valuetype_class
 
-            if isinstance(type_f, type):
+            if type_f in Column.python_types():
                 # Normal python types.
                 parse_f_name = 'parse_{}'.format(type_f.__name__)
 
                 func = self.get_caster_f(parse_f_name)
 
-                imports[raw_code] = func
+                imports[parse_f_name] = func
 
                 code = self.calling_code(func, parse_f_name)
             else:
                 # The datatype value is a special, custom type
-                raise NotImplementedError()
+                from ambry.valuetype.types import parse_type
+
                 vt_name = raw_code.replace('.', '_')
                 imports['parse_type'] = import_valuetype('types.parse_type')
                 imports[vt_name] = import_valuetype(raw_code)
-                code = " parse_type({},{{v}}, {{i}}, {{header}}, row, scratch, pipe)".format(vt_name)
+                code = " parse_type({},{{v}}, <<<header_d>>>)".format(vt_name)
 
         else:
             try:
@@ -1171,8 +1258,12 @@ class CodeCallingPipe(Pipe):
             except AttributeError:
 
                 # This branch is for when the raw_code is eval'able python
+                func_code = self.col_code_def+ '({}) '.format(raw_code)
+                func = eval(func_code, self.env())
+                imports[f_name] = func
+                self.routines[f_name] = '\n'.join(self.indent_code(func_code))
 
-                code = '({}) '.format(raw_code)
+                code = self.calling_code(func, f_name)
 
         return f_name, code, imports
 
@@ -1180,23 +1271,23 @@ class CodeCallingPipe(Pipe):
         """Convert the placehold '<<<' back to braces"""
         return s.replace('<<<','{').replace(">>>",'}')
 
-    def try_except_code(self, source_val, column, base_try_code):
+    def try_except_code(self,  column, base_try_code):
+        """Create code for a function to wrap two functions ina try/except block"""
+
         from ambry.valuetype.exceptions import try_except
 
-        outer_vargs = zip(self.var_args, [ '<<<'+e+'>>>' for e in self.var_args])
-        inner_vargs = zip(self.var_args, self.var_args)
         cargs = zip(self.const_args, self.const_args)
 
-        def make_args(vargs):
-            return 'lambda {}:'.format(','.join('{}={}'.format(k,v) for k,v in (vargs+cargs)))
+        inner_vargs = zip(self.var_args, self.var_args)
 
-        outer_lambda_def = make_args(outer_vargs)
-        inner_lambda_def = make_args(inner_vargs)
+        inner_lambda_def = 'lambda {}:'.format(','.join('{}={}'.format(k,v) for k,v in (inner_vargs+cargs)))
+        except_lambda_def = 'lambda exception,{}:'.format(','.join('{}={}'.format(k, v) for k, v in (inner_vargs + cargs)))
+        outer_lambda_def = 'lambda {}:'.format(','.join( self.all_args))
 
         except_f_name, except_code, except_imports = self.normalize_code('exception', column)
 
         try_code = self.convert_format(inner_lambda_def + base_try_code)
-        except_code = self.convert_format(inner_lambda_def + except_code)
+        except_code = self.convert_format(except_lambda_def + except_code)
 
         code = outer_lambda_def+"try_except({}, {})".format(try_code, except_code)
 
@@ -1212,53 +1303,9 @@ class CodeCallingPipe(Pipe):
         subs['source_val'] = 'v'
 
         # Note that this substitution will operate only on the code inside the outer lambda.
-        return code.format(**subs)
+        final_code =  code.format(**subs)
 
-    def compose_column(self, source_pos, source_header, column):
-        """Combine all of the code for a column into a single evalable string"""
-
-        code = source_val = "<<<source_val>>>".format(source_pos)
-
-        for field in ('nullify', 'initialize', 'typecast', 'datatype',  'transform'):
-            f_name, next_code, imports = self.normalize_code(field, column)
-
-            if f_name:
-
-                for k, v in imports.items():
-                    self.add_to_env(v, k)
-
-                code = next_code.format(v = code)
-
-        if column.exception:
-            code = self.try_except_code( source_val, column, code)
-
-        def indent_code(string):
-            """Indent nested functions in the code"""
-            stack = ['']
-            for i, c in enumerate(string):
-                if c == '(':
-                    yield '    '*len(stack) + stack[-1]+'('
-                    stack[-1] = ')'
-                    stack.append('')
-                elif c == ')':
-                    yield '    '*len(stack) + stack.pop()
-                else:
-                    stack[-1] += c
-
-            yield '    ' * len(stack) + stack.pop()
-
-        pre_interp = '\n'.join(indent_code(code))
-
-        subs = {
-            'v': "row[{}]".format(source_pos) if source_pos else 'None',
-            'i_s': source_pos,
-            'i_d': column.sequence_id,
-            'header_s': "'"+source_header+"'",
-            'header_d': "'"+column.name+"'",
-
-        }
-
-        return self.convert_format(pre_interp).format(**subs)
+        return final_code
 
     def get_caster_f(self, name):
         """Look in several places for a caster function:
@@ -1291,37 +1338,14 @@ class CodeCallingPipe(Pipe):
         if not caster_f:
             raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(name))
 
-    def compose(self, source_headers):
-
-        row_f = []
-
-        for i, c in enumerate(self.source.dest_table.columns):
-
-            try:
-                header_index = source_headers.index(c.name)
-                source_header = c.name
-            except ValueError:
-                header_index = None
-                source_header = None
-
-            row_f.append(self.compose_column(header_index, source_header, c))
-
-        inner_code = ','.join(row_f)
-
-        return self.code_def + '[' + inner_code + ']'
-
-    def make_row_processor(self, source_header):
-
-        self.code = self.compose(source_header)
-
-        try:
-            return eval(self.code, self.env())
-        except:
-            raise
-
 class CastColumns(CodeCallingPipe):
-    """Add values for the columns with a 'derivedfrom' entry. This pipe assumes to be be run after
-    the Caster, so the rows are in the same shape as the schema for the destination table
+    """Composes functions to map from the source table, to the destination table, with potentially
+    complex transformations for each column.
+
+    The CastColumns pipe uses the transformation values in the destination schema ,
+    datatype, nullify, initialize, typecast, transform and exception, to transform the source rows to destination
+    rows. The output rows have the lenghts and column types as speciefied in the destination schema.
+
 
     """
 
@@ -1329,38 +1353,84 @@ class CastColumns(CodeCallingPipe):
 
         super(CastColumns, self).__init__()
 
-        self.row_processor = None
+        self.row_processor_1 = None
+        self.row_processor_2 = None
         self.orig_headers = None
         self.new_headers = None
-        self.row_proxy = None
+        self.row_proxy_1 = None
+        self.row_proxy_2 = None
+
+        self.row_n = 0
 
     def process_header(self, headers):
 
-        self.row_processor = self.make_row_processor(headers)
+        self.row_processor_1 = self.make_row_processor(headers, self.transform_set_1, add_exception = True)
+
+        # Non cohesive. Soupld be in super class ..
+        self.routines['processor1'] = self.code
 
         self.orig_headers = headers
+        self.row_proxy_1 = RowProxy(self.orig_headers)
 
         # Return the table header, rather than the original row header.
         self.new_headers = [c.name for c in self.source.dest_table.columns]
 
-        self.row_proxy = RowProxy(self.orig_headers)
+        self.row_processor_2 = self.make_row_processor(self.new_headers, self.transform_set_2, add_exception=False)
+
+        self.routines['processor2'] = self.code
+
+        self.row_proxy_2 = RowProxy(self.new_headers)
 
         return self.new_headers
 
     def process_body(self, row):
 
-        scratch = [None] * len(self.new_headers)
-        errors = [None] * len(self.new_headers)
+        self.row_n += 1
+        scratch = {}
+        errors = {}
 
         try:
-            #  row, exceptions, pipe, bundle, source
-            return self.row_processor(self.row_proxy.set_row(row), scratch, errors, self, self.bundle, self.source)
+
+            # First pass, everything but the 'transform' code
+            row1 =  self.row_processor_1(self.row_proxy_1.set_row(row), self.row_n, scratch, errors,
+                                         self, self.bundle, self.source)
+
         except Exception as e:
 
-            self.error("Exception in CastColumns processor\ncode={}\nexception={}".format(self.code, str(e)))
+            self.error("Exception in CastColumns processor\ncode:\n{}\nexception={}"
+                       .format(self.pretty_code, str(e)))
             raise
 
+        try:
 
+            # Second pass, only 'transform'
+            return self.row_processor_2(self.row_proxy_2.set_row(row1), self.row_n, scratch, errors,
+                                        self, self.bundle, self.source)
+
+        except Exception as e:
+
+            self.error("Exception in CastColumns processor\ncode:\n{}\nexception={}"
+                       .format(self.pretty_code, str(e)))
+            raise
+
+    @property
+    def pretty_code(self):
+        import autopep8
+
+        o = ''
+
+        for k, v in self.routines.items():
+            o += "{}={}\n".format(k, v)
+
+        return autopep8.fix_code(o)
+
+    def __str__(self):
+
+        o = qualified_class_name(self) + '\n'
+
+        o+= self.pretty_code
+
+        return o
 
 
 class Modify(Pipe):
@@ -1381,7 +1451,6 @@ class Modify(Pipe):
 
             if row:
                 yield list(row.values())
-
 
 class RemoveBlankColumns(Pipe):
     """Remove columns that don't have a header"""
@@ -1407,7 +1476,6 @@ class RemoveBlankColumns(Pipe):
 
     def process_body(self, row):
         return self.editor(row)
-
 
 class Skip(Pipe):
     """Skip rows of a table that match a predicate """
@@ -1463,7 +1531,6 @@ class Skip(Pipe):
             self.passed += 1
             return row
 
-
 class Collect(Pipe):
     """Collect rows so they can be viewed or processed after the run. """
 
@@ -1477,8 +1544,6 @@ class Collect(Pipe):
     def process_header(self, row):
         return row
 
-
-
 class LogRate(Pipe):
 
     def __init__(self, output_f, N, message=None):
@@ -1488,7 +1553,6 @@ class LogRate(Pipe):
     def process_body(self, row):
         self.lr()
         return row
-
 
 class PrintRows(Pipe):
     """A Pipe that collects rows that pass through and displays them as a table when the pipeline is printed. """
@@ -1548,7 +1612,6 @@ class PrintRows(Pipe):
         else:
             return qualified_class_name(self) + ' 0 rows'
 
-
 class PrintEvery(Pipe):
     """Print a row every N rows. Always prints the header. """
 
@@ -1565,9 +1628,6 @@ class PrintEvery(Pipe):
             print('Print Row   :', row)
         self.i += 1
         return row
-
-
-
 
 class Reduce(Pipe):
     """Like works like reduce() on the body rows, using the function f(accumulator,row) """
@@ -1597,7 +1657,6 @@ class Reduce(Pipe):
             self.accumulator = self._f(self.accumulator, row)
             yield row
 
-
 def make_table_map(table, headers):
     """"Create a function to map from rows with the structure of the headers to the structure of the table. """
 
@@ -1610,7 +1669,6 @@ def make_table_map(table, headers):
         ','.join(header_parts.get(c.name, "'{}'".format(c.name)) for c in table.columns))
 
     return eval(header_code), eval(body_code)
-
 
 class SelectPartition(Pipe):
     """A Base class for adding a _pname column, which is used by the partition writer to select which
@@ -1672,11 +1730,9 @@ class SelectPartition(Pipe):
 
         return qualified_class_name(self) + " selector = {}".format(self._code)
 
-
 class PartitionWriter(object):
     """Marker class so the partitions can be retrieved after the pipeline finishes
     """
-
 
 class WriteToPartition(Pipe, PartitionWriter):
     """Writes to one of several partitions, depending on the contents of columns that selects a partition"""
@@ -1793,7 +1849,6 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         return qualified_class_name(self) + '\n' + out
 
-
 class PipelineSegment(list):
 
     def __init__(self, pipeline, name, *args):
@@ -1846,7 +1901,6 @@ class PipelineSegment(list):
     @property
     def source(self):
         return self[0].source
-
 
 class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
@@ -2179,7 +2233,6 @@ class Pipeline(OrderedDict):
 
         return tabulate(out)
 
-
 def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
     """
     Augment the pipeline by adding a new pipe section to each stage that has one or more pipes. Can be used for debugging
@@ -2196,7 +2249,6 @@ def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
 
             if tail_pipe:
                 v.append(tail_pipe)
-
 
 def _to_ascii(s):
     """ Converts given string to ascii ignoring non ascii.

@@ -67,11 +67,13 @@ class Column(Base):
     #caster = SAColumn('c_caster', Text)
 
     # New column value casters and generators
-    exception = SAColumn('c_exception', Text)
-    transform = SAColumn('c_transform', Text)
-    typecast = SAColumn('c_typecast', Text)
-    initialize = SAColumn('c_initialize', Text)
     nullify = SAColumn('c_nullify', Text)
+    initialize = SAColumn('c_initialize', Text)
+    transform1 = SAColumn('c_transform1', Text)
+    exception = SAColumn('c_exception', Text)
+    transform2 = SAColumn('c_transform2', Text)
+
+
 
     # ids of columns used for computing ratios, rates and densities
     numerator = SAColumn('c_numerator', String(20))
@@ -143,12 +145,16 @@ class Column(Base):
             # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         # Don't allow these values to be the empty string
-
-        self.exception = self.exception or None
-        self.transform = self.transform or None
-        self.typecast = self.typecast or None
-        self.initialize = self.initialize or None
         self.nullify = self.nullify or None
+        self.initialize = self.initialize or None
+        self.transform1 = self.transform1 or None
+        self.exception = self.exception or None
+        self.transform2 = self.transform2 or None
+
+    @classmethod
+    def python_types(cls):
+        return [e[1] for e in cls.types.values()]
+
 
     def type_is_int(self):
         return self.python_type  == int

@@ -14,3 +14,6 @@ def uuid4():
     return str(uuid4())
 
 
+def upper(v): return v.upper()
+def lower(v): return v.lower()
+def title(v): return v.title()

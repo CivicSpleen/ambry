@@ -45,12 +45,18 @@ class Test(TestBase):
 
         headers = [ c.source_header for c in ccp.source.source_table.columns]
 
-        print ccp.compose_column(1, 'SH', ccp.source.dest_table.column('int_a') )
+        #print ccp.compose_column(1, 'SH', ccp.source.dest_table.column('int_a') )
+        #print ccp.compose(headers)
 
-        print ccp.compose(headers)
-
-        row = [1.0,1.1,1.2,1,2,"one","two"]
+        row = [1.0,1.0,1.0,1,1,"one","two"]
 
         ccp.process_header(headers)
-        ccp.process_body(row)
+        print ccp.process_body(row)
+        print ccp
+
+        row = [1.0, 1.0, 1.0, 1, 'exception', "one", "two"]
+
+        ccp.process_header(headers)
+        print ccp.process_body(row)
+        #print ccp
 
