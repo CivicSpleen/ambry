@@ -17,7 +17,6 @@ from ambry.orm import Column, DictableMixin
 from ambry.orm.exc import NotFoundError
 from . import Base, MutationDict, JSONEncodedObj
 
-
 class Table(Base, DictableMixin):
     __tablename__ = 'tables'
 
@@ -52,32 +51,6 @@ class Table(Base, DictableMixin):
 
     _column_sequence = {}
 
-    def link_columns(self, other):
-        """Return columns that can be used to link another table to this one"""
-
-        def protos(t):
-
-            protos = {}
-
-            protos.update({c.fk_vid: c for c in t.columns if c.fk_vid})
-            protos.update({c.proto_vid: c for c in t.columns if c.proto_vid})
-
-            # HACK: The numbering in the proto dataset changes, so we have to make substitutions
-            if 'c00104002' in protos:
-                protos['c00109003'] = protos['c00104002']
-                del protos['c00104002']
-
-            protos = {str(ObjectNumber.parse(n).rev(None)): c for n, c in list(protos.items())}  # Remove revisions
-
-            return protos
-
-        protos_s = protos(self)
-        protos_o = protos(other)
-
-        inter = set(protos_s.keys()) & set(protos_o.keys())
-
-        return list(set((protos_s[n], protos_o[n]) for n in inter))
-
     @staticmethod
     def mangle_name(name, preserve_case=False):
         import re
@@ -91,11 +64,6 @@ class Table(Base, DictableMixin):
         except TypeError:
             raise TypeError('Not a valid type for name ' + str(type(name)))
 
-    @property
-    def oid(self):
-        return TableNumber(self.d_id, self.sequence_id)
-
-
     def column(self, ref):
         # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
         # so iterating over the collection only involves one SELECT.
@@ -108,7 +76,6 @@ class Table(Base, DictableMixin):
                 return c
 
         raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
-
 
     def add_column(self, name, update_existing = False, **kwargs):
         """
@@ -167,8 +134,6 @@ class Table(Base, DictableMixin):
         if c.name == 'id' and c.is_primary_key and not self.description:
             self.description = c.description
 
-
-
         if not extant:
             self.columns.append(c)
 
@@ -178,25 +143,6 @@ class Table(Base, DictableMixin):
         from . import Column
         self.add_column(name='id', datatype=Column.DATATYPE_INTEGER, is_primary_key=True,
                         description=self.description if not description else description)
-
-
-
-
-    @property
-    def null_dict(self):
-        if self._null_row is None:
-            self._null_row = {}
-            for col in self.columns:
-                if col.is_primary_key:
-                    v = None
-                elif col.default:
-                    v = col.default
-                else:
-                    v = None
-
-                self._null_row[col.name] = v
-
-        return self._null_row
 
     @property
     def header(self):
@@ -208,8 +154,6 @@ class Table(Base, DictableMixin):
         """
 
         return [c.name for c in self.columns]
-
-
 
     @property
     def dict(self):
@@ -236,33 +180,6 @@ class Table(Base, DictableMixin):
 
         return d
 
-    @property
-    def nonull_dict(self):
-        return {k: v for k, v in list(self.dict.items()) if v and k not in 'codes'}
-
-    @property
-    def nonull_col_dict(self):
-
-        tdc = {}
-
-        for c in self.columns:
-            tdc[c.id] = c.nonull_dict
-            tdc[c.id]['codes'] = {cd.key: cd.dict for cd in c.codes}
-
-        td = self.nonull_dict
-        td['columns'] = tdc
-
-        return td
-
-    @property
-    def insertable_dict(self):
-        x = {('t_' + k).strip('_'): v for k, v in list(self.dict.items())}
-
-        if 't_vid' not in x or not x['t_vid']:
-            raise ValueError("Must have vid set: {} ".format(x))
-
-        return x
-
     def update_from_stats(self, stats):
         """Update columns based on partition statistics"""
 
@@ -280,6 +197,23 @@ class Table(Base, DictableMixin):
 
             c.lom = stat.lom
 
+    @property
+    def transforms(self):
+        """Return an array of arrays of column transforms.
+
+        The return value is an list of list, with each list being a segment of column transformations, and
+        each segment having one entry per column.
+
+        """
+        from itertools import izip_longest
+
+        tr = []
+        for c in self.columns:
+            tr.append(c.expanded_transform)
+
+        return izip_longest(*tr)
+
+
     def __str__(self):
         from tabulate import tabulate
 
@@ -287,8 +221,6 @@ class Table(Base, DictableMixin):
         rows = [ (c.sequence_id, c.vid, c.name, c.datatype ) for c in self.columns ]
 
         return ('Dest Table: {}\n'.format(self.name)) + tabulate(rows, headers)
-
-
 
     @staticmethod
     def before_insert(mapper, conn, target):

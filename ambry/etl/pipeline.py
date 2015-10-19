@@ -1030,15 +1030,13 @@ class CodeCallingPipe(Pipe):
     # that are the same for every column
     code_def = 'lambda {}:'.format(','.join(const_args))
 
-    transform_set_1 = ( 'initialize',  'transform1', 'datatype') # Then, 'exception' added at the end
-
-    transform_set_2 = ( 'transform2', )
-
     def __init__(self):
 
         self.custom_types = {}
         self.base_env = self._base_env()
         self.code = None
+
+        self.row_processors = []
 
         self.routines = {}
 
@@ -1105,20 +1103,27 @@ class CodeCallingPipe(Pipe):
 
         self.custom_types[name] = func_or_type
 
-    def make_row_processor(self, source_header, transform_set, add_exception):
+    def make_row_processor(self, source_header, segments):
+        """
+        Make a single row processor for all of the columns in a table.
 
-        self.code = self.compose(source_header, transform_set, add_exception)
+        :param source_header:
+        :param transform_segment: A dict for a gindle transform pipeline segment
+        :return:
+        """
+
+        self.code = self.compose(source_header, segments)
 
         try:
             return eval(self.code, self.env())
         except:
             raise
 
-    def compose(self, source_headers, transform_set, add_exception):
+    def compose(self, source_headers, segments):
 
         row_f = []
 
-        for i, c in enumerate(self.source.dest_table.columns):
+        for i, (c, segment) in enumerate(zip(self.source.dest_table.columns, segments)):
 
             try:
                 header_index = source_headers.index(c.name)
@@ -1127,13 +1132,13 @@ class CodeCallingPipe(Pipe):
                 header_index = None
                 source_header = None
 
-            row_f.append(self.compose_column(header_index, source_header, c, transform_set, add_exception))
+            row_f.append(self.compose_column(header_index, source_header, c, segment))
 
         inner_code = ','.join(row_f)
 
         return self.code_def + '[' + inner_code + ']'
 
-    def compose_column(self, source_pos, source_header, column, transform_set, add_exception):
+    def compose_column(self, pipeline_id, source_pos, source_header, column, segment):
         """
         Combine all of the code for a column into a single evalable string
 
@@ -1145,8 +1150,16 @@ class CodeCallingPipe(Pipe):
 
         code = source_val = "<<<source_val>>>".format(source_pos)
 
-        for field in transform_set:
-            f_name, next_code, imports = self.normalize_code(field, column)
+        transforms = segment['transforms']
+
+        if segment['init']:
+            transforms = [segment['init']] + transforms
+
+        for i, transform in enumerate(transforms):
+
+            f_name = "f_{}_{}_{}".format(pipeline_id, i, column.name)
+
+            next_code, imports = self.normalize_code(f_name, transform)
 
             if f_name:
 
@@ -1155,15 +1168,19 @@ class CodeCallingPipe(Pipe):
 
                 code = next_code.format(v=code)
 
-        if column.exception and add_exception:
-            tc_code = self.try_except_code(column, code)
+        if segment['exception']:
+
+            f_name = 'f_exc_{}_{}'.format(pipeline_id, column.name)
+
+            tc_code = self.try_except_code(f_name, code, segment['exception'])
 
             func = eval(tc_code, self.env())
-            f_name = 'tc_' + column.name
-            self.routines[f_name] = '\n'.join(self.indent_code(tc_code))
-            self.add_to_env(func, f_name)
 
-            code = '{}({})'.format(f_name, ','.join(
+            tc_name = 'tc_exc_{}_{}'.format(pipeline_id, column.name)
+            self.routines[tc_name] = '\n'.join(self.indent_code(tc_code))
+            self.add_to_env(func, tc_name)
+
+            code = '{}({})'.format(tc_name, ','.join(
                 ["<<<{}>>>".format(e) for e in self.var_args] +
                 ['{}={}'.format(e, e) for e in self.const_args]
             ))
@@ -1204,74 +1221,68 @@ class CodeCallingPipe(Pipe):
 
         return "{}({})".format(f_name if f_name else f.__name__, ','.join(args))
 
-    def normalize_code(self, code_field, column):
-        """Return a string that transforms a string into something that when eval'd, will return a callable
-        """
+    def normalize_datatype(self, f_name, raw_code, column):
         from ambry.valuetype import import_valuetype
-        from ambry.orm.column import  Column
+        from ambry.orm.column import Column
 
         imports = {}
 
-        f_name = 'f_{}_{}'.format(code_field, column.name )
+        #
+        # Datatypes are a bit special, since
+        #
+        type_f = column.valuetype_class
 
-        raw_code = getattr(column, code_field)
+        if type_f in Column.python_types():
+            # Normal python types.
+            parse_f_name = 'parse_{}'.format(type_f.__name__)
 
-        if not bool(raw_code):
-            if code_field == 'initialize':
-                raw_code = 'nullify'
-            else:
-                return (None, None, None)
+            func = self.get_caster_f(parse_f_name)
 
-        if code_field == 'datatype':
-            #
-            # Datatypes are a bit special, since
-            #
-            type_f = column.valuetype_class
+            imports[parse_f_name] = func
 
-            if type_f in Column.python_types():
-                # Normal python types.
-                parse_f_name = 'parse_{}'.format(type_f.__name__)
-
-                func = self.get_caster_f(parse_f_name)
-
-                imports[parse_f_name] = func
-
-                code = self.calling_code(func, parse_f_name)
-            else:
-                # The datatype value is a special, custom type
-                from ambry.valuetype.types import parse_type
-
-                vt_name = raw_code.replace('.', '_')
-                imports['parse_type'] = import_valuetype('types.parse_type')
-                imports[vt_name] = import_valuetype(raw_code)
-                code = " parse_type({},{{v}}, <<<header_d>>>)".format(vt_name)
-
+            code = self.calling_code(func, parse_f_name)
         else:
-            try:
-                # The try branch works when the raw_code is the name of a
-                # method in the bundle or bundle's module
-                func = self.get_caster_f(raw_code)
+            # The datatype value is a special, custom type
+            from ambry.valuetype.types import parse_type
 
-                imports[raw_code] = func
+            vt_name = raw_code.replace('.', '_')
+            imports['parse_type'] = import_valuetype('types.parse_type')
+            imports[vt_name] = import_valuetype(raw_code)
+            code = " parse_type({},{{v}}, <<<header_d>>>)".format(vt_name)
 
-                code = self.calling_code(func, raw_code)
-            except AttributeError:
+        return code, imports
 
-                # This branch is for when the raw_code is eval'able python
-                func_code = self.col_code_def+ '({}) '.format(raw_code)
-                func = eval(func_code, self.env())
-                imports[f_name] = func
-                self.routines[f_name] = '\n'.join(self.indent_code(func_code))
+    def normalize_code(self, f_name, raw_code):
+        """Return a string that transforms a string into something that when eval'd, will return a callable
+        """
 
-                code = self.calling_code(func, f_name)
+        imports = {}
 
-        return f_name, code, imports
+        try:
+            # The try branch works when the raw_code is the name of a
+            # method in the bundle or bundle's module
+            func = self.get_caster_f(raw_code)
+
+            imports[raw_code] = func
+
+            code = self.calling_code(func, raw_code)
+        except AttributeError:
+
+            # This branch is for when the raw_code is eval'able python
+            func_code = self.col_code_def+ '({}) '.format(raw_code)
+            func = eval(func_code, self.env())
+            imports[f_name] = func
+            self.routines[f_name] = '\n'.join(self.indent_code(func_code))
+
+            code = self.calling_code(func, f_name)
+
+        return code, imports
 
     def convert_format(self, s):
         """Convert the placehold '<<<' back to braces"""
         return s.replace('<<<','{').replace(">>>",'}')
 
-    def try_except_code(self,  column, base_try_code):
+    def try_except_code(self,  f_name, base_try_code, base_except_code):
         """Create code for a function to wrap two functions ina try/except block"""
 
         from ambry.valuetype.exceptions import try_except
@@ -1284,7 +1295,7 @@ class CodeCallingPipe(Pipe):
         except_lambda_def = 'lambda exception,{}:'.format(','.join('{}={}'.format(k, v) for k, v in (inner_vargs + cargs)))
         outer_lambda_def = 'lambda {}:'.format(','.join( self.all_args))
 
-        except_f_name, except_code, except_imports = self.normalize_code('exception', column)
+        except_code, except_imports = self.normalize_code(f_name, base_except_code)
 
         try_code = self.convert_format(inner_lambda_def + base_try_code)
         except_code = self.convert_format(except_lambda_def + except_code)

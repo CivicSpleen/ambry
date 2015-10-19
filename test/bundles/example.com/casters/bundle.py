@@ -39,6 +39,9 @@ class ExampleSourcePipe(DatafileSourcePipe):
             yield list(row.values())
 
 
+def cst_init(v):
+    return 1
+
 def caster_everything(v, i_s, header_s, i_d, header_d, row, errors, scratch, pipe):
     return v+1
 

@@ -67,13 +67,7 @@ class Column(Base):
     #caster = SAColumn('c_caster', Text)
 
     # New column value casters and generators
-    nullify = SAColumn('c_nullify', Text)
-    initialize = SAColumn('c_initialize', Text)
-    transform1 = SAColumn('c_transform1', Text)
-    exception = SAColumn('c_exception', Text)
-    transform2 = SAColumn('c_transform2', Text)
-
-
+    _transform = SAColumn('c_transform', Text)
 
     # ids of columns used for computing ratios, rates and densities
     numerator = SAColumn('c_numerator', String(20))
@@ -145,11 +139,7 @@ class Column(Base):
             # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         # Don't allow these values to be the empty string
-        self.nullify = self.nullify or None
-        self.initialize = self.initialize or None
-        self.transform1 = self.transform1 or None
-        self.exception = self.exception or None
-        self.transform2 = self.transform2 or None
+        self.transform = self.transform or None
 
     @classmethod
     def python_types(cls):
@@ -401,6 +391,78 @@ class Column(Base):
         self.codes.append(cd)
 
         return cd
+
+    @property
+    def transform(self):
+        return self._transform
+
+    @transform.setter
+    def transform(self, v):
+        self._transform = self.clean_transform(v)
+
+    @property
+    def expanded_transform(self):
+        return self._expand_transform(self.transform)
+
+    @staticmethod
+    def clean_transform(transform):
+        from ambry.dbexceptions import ConfigurationError
+
+        segments = Column._expand_transform(transform)
+
+        def pipeify_seg(seg):
+
+            o = []
+
+            seg['init'] and o.append('^'+seg['init'])
+            o += seg['transforms']
+            seg['exception'] and o.append('!' + seg['exception'])
+
+            return '|'.join(o)
+
+        return '||'.join(pipeify_seg(seg) for seg in segments)
+
+    @staticmethod
+    def _expand_transform(transform):
+        from ambry.dbexceptions import ConfigurationError
+
+        if not bool(transform):
+            return []
+
+        transform = transform.rstrip('|')
+
+        segments = []
+
+        for i, seg_str in enumerate(transform.split('||')):
+            pipes = seg_str.split('|')
+
+            d = {
+                'init':None,
+                'transforms': [],
+                'exception': None
+            }
+
+            for pipe in pipes:
+
+                if not pipe.strip():
+                    continue
+
+                if pipe[0] == '^':  # First, the initializer
+                    if d['init']:
+                        raise ConfigurationError("Can only have one initializer in a pipeline segment")
+                    if i != 0:
+                        raise ConfigurationError("Can only have an initializer in the first pipeline segment")
+                    d['init'] = pipe[1:]
+                elif pipe[0] == '!':  # Exception Handler
+                    if d['exception']:
+                        raise ConfigurationError("Can only have one exception handler in a pipeline segment")
+                    d['exception'] = pipe[1:]
+                else:  # Assume before the datatype
+                    d['transforms'].append(pipe)
+
+            segments.append(d)
+
+        return segments
 
     @property
     def row(self):

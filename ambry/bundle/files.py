@@ -669,11 +669,7 @@ class SchemaFile(RowBuildSourceFile):
                 data=data,
                 keywords=row.get('keywords'),
                 measure=row.get('measure'),
-                exception=row.get('exception'),
-                transform1=row.get('transform1'),
-                transform2=row.get('transform2'),
-                initialize=row.get('initialize'),
-                nullify=row.get('nullify'),
+                transform=row.get('transform'),
                 units=row.get('units', None),
                 universe=row.get('universe'),
                 update_existing= True)
