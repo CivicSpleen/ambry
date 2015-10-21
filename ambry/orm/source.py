@@ -29,8 +29,11 @@ class DataSourceBase(object):
     _bundle = None  # Set externally
     _datafile = None
 
-    # reftypes for sources that should not be downloaded
+    # reftypes for sources that should not be downloaded or injested
     NON_DOWNLOAD_REFTYPES = ('ref', 'template', 'partition')
+
+    # reftypes for sources that should not be built or have schemas create for
+    NON_PROCESS_REFTYPES = ('ref', 'template')
 
     @property
     def dict(self):
@@ -99,14 +102,26 @@ class DataSourceBase(object):
         return self._dest_table
 
     @property
+    def partition(self):
+
+        if self.urltype != 'partition':
+            return None
+
+        p = self._bundle.partition(self.url)
+        if not p:
+            p = self._bundle.library.partition(self.url)
+
+        return p
+
+
+    @property
     def datafile(self):
         """Return an MPR datafile from the /ingest directory of the build filesystem"""
         from ambry_sources import MPRowsFile
 
         if self._datafile is None:
             if self.urltype == 'partition':
-                p = self._bundle.library.partition(self.url)
-                self._datafile = p.datafile
+                self._datafile = self.partition.datafile
             else:
                 self._datafile = MPRowsFile(self._bundle.build_ingest_fs, self.name)
 
@@ -146,20 +161,38 @@ class DataSourceBase(object):
 
         return self.urltype not in self.NON_DOWNLOAD_REFTYPES
 
+    @property
+    def is_processable(self):
+        """Return true if the URL is probably downloadable, and is not a reference or a template"""
+
+        return self.urltype not in self.NON_PROCESS_REFTYPES
+
+    @property
+    def is_reference(self):
+        """Return true if the URL is probably downloadable, and is not a reference or a template"""
+
+        return self.urltype in self.NON_PROCESS_REFTYPES
+
     def update_table(self):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
 
+        st = self.source_table
 
-        if self.datafile.exists:
+        if self.reftype == 'partition':
+
+            for c in self.partition.table.columns:
+                st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name,datatype=c.datatype)
+
+        elif self.datafile.exists:
             with self.datafile.reader as r:
 
-                st = self.source_table
                 for col in r.columns:
 
                     c = st.column(col['name'])
 
                     if c:
+
                         c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
 
                         #self._bundle.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
@@ -230,6 +263,7 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
 
+    order = SAColumn('ds_order', INTEGER, default =0)
     pipeline = SAColumn('ds_pipeline', Text)
 
     filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed, partition

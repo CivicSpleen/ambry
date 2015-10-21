@@ -1,14 +1,16 @@
-"table","seq","column","datatype","size","description"
-"example",1,"id","INTEGER",,"A Pretty Good Table"
-"example",2,"uuid","VARCHAR",36,"A random UUID"
-"example",3,"int","INTEGER",3,"A random integer"
-"example",4,"float","REAL",,"A Random float"
-"example",5,"categorical","VARCHAR",,"A categorical variable"
-"example",6,"ordinal","INTEGER",,"An ordinal variable"
-"example",7,"gaussian","REAL",,"A gaussian distribution"
-"example",8,"triangle","REAL",,"A Triangle distribution"
-"example",9,"exponential","REAL",,"An exponential distribution"
-"example",10,"bg_gvid","VARCHAR",,"A Blockgroup gvid reference"
-"example",11,"year","INTEGER",,"A Year"
-"example",12,"date","DATE",,"A Date"
-"example",13,"time","TIME",,"A Time"
+"table","column","datatype","transform"
+,,,
+"stage1","id","int",
+"stage1","ones","int",
+"stage1","tens","int",
+"stage1","hundreds","int",
+"stage1","thousands","int",
+"stage1","sum","int",
+,,,
+"stage2","id","int",
+"stage2","ones","int",
+"stage2","tens","int",
+"stage2","hundreds","int",
+"stage2","thousands","int",
+"stage2","sum","int",
+"stage2","stage1_id","int","^join('a','b','c')"

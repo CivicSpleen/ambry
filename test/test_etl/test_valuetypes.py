@@ -67,6 +67,15 @@ class Test(TestBase):
         with self.assertRaises(ConfigurationError):  # Two inits in a segment
             print ct('t1|^init|t2|^init|!except|t3|t4')
 
+        from ambry.orm.column import Column
+
+        c = Column(name='column', sequence_id = 1, datatype = 'int')
+
+        c.transform = 't1|^init|t2|!except|t3|t4'
+        self.assertEqual(['init', None], [e['init'] for e in c.expanded_transform])
+        self.assertEqual([[int], ['t1', 't2', 't3', 't4']], [e['transforms'] for e in c.expanded_transform])
+
+
     def test_col_clean_transform(self):
 
         b = self.setup_bundle('casters')
@@ -95,6 +104,9 @@ class Test(TestBase):
         import re
 
         from ambry.etl import CastColumns, RowProxy
+        from collections import namedtuple
+        from ambry.valuetype.exceptions import CastingError
+        from ambry.valuetype.fips import State
 
         b = self.setup_bundle('casters')
         b.sync_in();  # Required to get bundle for cast_to_subclass to work.
@@ -107,34 +119,52 @@ class Test(TestBase):
         source_table = ccp.source.source_table
         dest_table = ccp.source.dest_table
 
-        headers = [ c.source_header for c in ccp.source.source_table.columns]
+        source_headers = [ c.source_header for c in source_table.columns]
 
-        r =  re.sub(r'\s','',ccp.compose_column(1, 1, 'header', dest_table.column('float_a'),
-                                  dict(init='cst_init', transforms=['a', 'b'], exception=None)))
+        # ---
 
-        self.assertEqual("""f_1_2_float_a(f_1_1_float_a(cst_init(row[1]),1,2,'header','float_a',row,row_n,scratch,errors,pipe,bundle,source),1,2,'header','float_a',row,row_n,scratch,errors,pipe,bundle,source)""",
-                         r)
+        def run_col(v, xform, type_=int):
+            import ambry.orm.column
 
-        r = re.sub(r'\s','',ccp.compose_column( 1, 1, 'header', dest_table.column('float_a'),
-                                  dict(init='cst_init',transforms=['a','b'], exception = 'cst_exception')))
-        self.assertEqual("""tc_exc_1_float_a(row[1],1,2,'header','float_a',row=row,row_n=row_n,scratch=scratch,errors=errors,pipe=pipe,bundle=bundle,source=source)""",
-                         r)
+            row = [v]
 
+            Column = namedtuple('Column','name, sequence_id, valuetype_class')
 
-        return
+            for segment in ambry.orm.column.Column._expand_transform(xform):
 
-        #print ccp.compose_column(1, 'SH', ccp.source.dest_table.column('int_a') )
-        #print ccp.compose(headers)
+                code =  ccp.compose_column('pl0',0,'header',
+                                         Column._make(['column','0',type_]),
+                                         segment)
 
-        row = [1.0,1.0,1.0,1,1,"one","two"]
+                #print ccp.pretty_code
+                #print code
 
-        ccp.process_header(headers)
-        print ccp.process_body(row)
-        print ccp
+                func = eval('lambda row,row_n=11,scratch=[],errors=[],pipe=None, source=None, bundle=None:'
+                                +code, ccp.env())
 
-        row = [1.0, 1.0, 1.0, 1, 'exception', "one", "two"]
+                row = [func(row)]
 
-        ccp.process_header(headers)
-        print ccp.process_body(row)
-        #print ccp
+            return row[0]
+
+        self.assertEqual(8, run_col(2,'cst_double|cst_double'))
+        self.assertEqual(16, run_col(2,'cst_double|cst_double|cst_double'))
+        self.assertEqual(8, run_col(2,'^cst_init|cst_double|cst_double|cst_double'))
+
+        with self.assertRaises(CastingError):
+            self.assertEqual(8, run_col(2,'^"foo"|cst_double'))
+
+        with self.assertRaises(ValueError):
+            self.assertEqual(8, run_col(2,'^"foo"|cst_double|!cst_reraise_value'))
+
+        self.assertEqual(32, run_col(2, 'cst_double|cst_double||cst_double|cst_double'))
+
+        self.assertEqual('California', run_col(6, 'v.name', State ))
+
+        ccp.process_header(source_headers)
+
+        self.assertEquals([1, 2.0, 4.0, 16.0, 1, 1, None, 'ONE', 'TXo', 1, 'Alabama'],
+                          ccp.process_body([1.0,1.0,1.0,1,1,"one","two"]))
+
+        self.assertEqual([2, 2.0, 4.0, 16.0, 1, None, 'exception', 'ONE', 'TXo', 1, 'Alabama'],
+                         ccp.process_body([1.0, 1.0, 1.0, 1, 'exception', "one", "two"]))
 

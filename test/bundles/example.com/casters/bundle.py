@@ -18,7 +18,7 @@ class ExampleSourcePipe(DatafileSourcePipe):
 
         cat_cycle = cycle(['red', 'blue', 'green', 'yellow', 'black'])
 
-        num_cycle = cycle([1, 2, 3, 4, 5, 6, '*'])
+        num_cycle = cycle([1, 2, 3, 4, '*'])
 
         for i in range(6000):
             row = OrderedDict()
@@ -29,8 +29,8 @@ class ExampleSourcePipe(DatafileSourcePipe):
             row['numcom'] = locale.format("%d", i, grouping=True)
             row['indexd3'] = float(i) / 3.0
             row['categorical'] = next(cat_cycle)
-            row['codes'] = next(num_cycle)
-            row['keptcodes'] = next(num_cycle)
+            row['removecodes'] = next(num_cycle)
+            row['keepcodes'] = row['removecodes']
             row['date'] = date(2000, i % 12 + 1, i % 28 + 1)
 
             if i == 0:
@@ -58,13 +58,16 @@ def caster_vrep(v, row, errors, pipe):
     return v+1
 
 def cst_double(v):
-    return v*2
+    return v*2 if v is not None  else None
 
 def cst_exception(v, i_d, header_d, row, errors, pipe, exception):
     print "CST_EXCEPTION ",i_d, header_d, exception
     errors[header_d] = v
     return None
 
+
+def cst_reraise_value(exception):
+    raise ValueError(exception.value)
 
 
 class Bundle(Bundle):
@@ -83,8 +86,10 @@ class Bundle(Bundle):
     def remove_codes(self, v):
         try:
             return int(v)
-        except ValueError:
+        except:
             return -1
+
+
 
     @staticmethod
     def doubleit1(v):
@@ -97,3 +102,10 @@ class Bundle(Bundle):
     def doubleit3(self, row, v):
         return int(v) * 2
 
+    def recode(self, v):
+        from ambry.valuetype.types import IntOrCode
+
+        try:
+            return int(v)
+        except:
+            return None

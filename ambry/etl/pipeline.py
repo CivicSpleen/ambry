@@ -17,6 +17,8 @@ from ambry.util import qualified_class_name
 
 from ambry_sources import RowProxy
 
+from ambry.dbexceptions import ConfigurationError
+
 
 class PipelineError(Exception):
     def __init__(self,  pipe, *args, **kwargs):
@@ -146,7 +148,7 @@ class Pipe(object):
 
             row = self.process_body(row)
 
-            if row:
+            if row: # Check that the rows have the same length as the header
                 assert len(row) == header_len, (header_len, self.headers, len(row), row, type(self))
                 yield row
 
@@ -612,23 +614,31 @@ class MapSourceHeaders(Pipe):
         self.error_on_fail = error_on_fail
         self.map = {}
 
-    def process_header(self, row):
+    def process_header(self, headers):
+
+        if len(list(self.source.source_table.columns)) == 0:
+            raise ConfigurationError("Source table '{}' has no columns".format(self.source.source_table.name))
 
         self.map = {c.source_header: c.dest_header for c in self.source.source_table.columns
              if c.dest_header and c.source_header != c.dest_header}
 
+        if len(headers) == 0:
+            print '!!!', [c.dest_header for c in self.source.source_table.columns]
+            raise ConfigurationError("Didn't get any source headers from source table '{}' "
+                                     .format(self.source.source_table.name))
+
         if self.error_on_fail:
             try:
-                headers =  list([self.map[h] for h in row])
+                headers =  list([self.map[h] for h in headers])
             except KeyError:
-                for h in row:
+                for h in headers:
                     if not h in self.map:
                         # pipe, header, table,
                         raise MissingHeaderError( self, h, self.source.source_table,
                                                   "Failed to find header in source_table ")
 
         else:
-            headers = list([self.map.get(h, h) for h in row])
+            headers = list([self.map.get(h, h) for h in headers])
 
         return headers
 
@@ -1039,6 +1049,7 @@ class CodeCallingPipe(Pipe):
         self.row_processors = []
 
         self.routines = {}
+        self.pipelines = []
 
     @staticmethod
     def indent_code(string):
@@ -1103,27 +1114,57 @@ class CodeCallingPipe(Pipe):
 
         self.custom_types[name] = func_or_type
 
-    def make_row_processor(self, source_header, segments):
-        """
-        Make a single row processor for all of the columns in a table.
+    def translate_transforms(self, transforms):
 
-        :param source_header:
-        :param transform_segment: A dict for a gindle transform pipeline segment
+        return transforms
+
+    def make_row_processors(self, source_headers):
+        """
+        Make multiple row processors for all of the columns in a table.
+
+        :param source_headers:
+
         :return:
         """
 
-        self.code = self.compose(source_header, segments)
+        dest_table = self.source.dest_table
+        dest_headers = [ c.name for c in dest_table.columns ]
 
-        try:
-            return eval(self.code, self.env())
-        except:
-            raise
+        pipelines = []
 
-    def compose(self, source_headers, segments):
+        for i, segments in enumerate(dest_table.transforms):
 
+            pipeline_id = "pl{}".format(i)
+
+            code = self.routines[pipeline_id] = self.compose(pipeline_id,source_headers, segments)
+
+            pipelines.append(( pipeline_id,eval(code, self.env())))
+
+            source_headers = dest_headers
+
+        if not pipelines:
+            from ambry.dbexceptions import ConfigurationError
+
+            raise ConfigurationError("Didn't get a column pipeline for table='{}', source = '{}'"
+                                     .format(self.source.dest_table.name, self.source.name))
+            #pipelines = [('pl0', eval(self.default_pipeline('pl0'), self.env()))]
+
+        self.pipelines = pipelines
+
+        return pipelines
+
+    def compose(self, pipeline_id, source_headers, segments):
+        """Compose a pipeline for a table"""
         row_f = []
 
         for i, (c, segment) in enumerate(zip(self.source.dest_table.columns, segments)):
+
+            if not segment:
+                segment =  {
+                    'init': None,
+                    'transforms': [],
+                    'exception': None
+                }
 
             try:
                 header_index = source_headers.index(c.name)
@@ -1132,7 +1173,7 @@ class CodeCallingPipe(Pipe):
                 header_index = None
                 source_header = None
 
-            row_f.append(self.compose_column(header_index, source_header, c, segment))
+            row_f.append(self.compose_column(pipeline_id, header_index, source_header, c, segment))
 
         inner_code = ','.join(row_f)
 
@@ -1150,10 +1191,17 @@ class CodeCallingPipe(Pipe):
 
         code = source_val = "<<<source_val>>>".format(source_pos)
 
-        transforms = segment['transforms']
+        # Init is always first, datatype is always next, then the rest of the
+        # transforms, but only for the first pipeline.
 
-        if segment['init']:
-            transforms = [segment['init']] + transforms
+        if pipeline_id == 'pl0':
+            transforms = ([segment['init']] if segment['init'] else ['nullify']) + [column.valuetype_class]
+        else:
+            transforms = []
+
+        transforms += segment['transforms']
+
+        #print pipeline_id, transforms
 
         for i, transform in enumerate(transforms):
 
@@ -1221,22 +1269,53 @@ class CodeCallingPipe(Pipe):
 
         return "{}({})".format(f_name if f_name else f.__name__, ','.join(args))
 
-    def normalize_datatype(self, f_name, raw_code, column):
-        from ambry.valuetype import import_valuetype
+    def normalize_code(self, f_name, raw_code):
+        """Return a string that transforms a string into something that when eval'd, will return a callable
+        """
+
+        if isinstance(raw_code, type):
+            return self.normalize_datatype(raw_code)
+
+        imports = {}
+
+        try:
+            # The try branch works when the raw_code is the name of a
+            # method in the bundle or bundle's module
+            func = self.find_function(raw_code)
+
+            imports[raw_code] = func
+
+            code = self.calling_code(func, raw_code)
+        except AttributeError:
+            # This branch is for when find_function didn't find the function, so it must be evalable
+            # code or a transform generator
+
+            # If this succeeds, it will re-write the raw_code to be the name of the newly generated transform
+            raw_code = self.process_transform_generator(raw_code, 'tg_'+f_name)
+
+            func_code = self.col_code_def+ '({}) '.format(raw_code)
+            func = eval(func_code, self.env())
+            imports[f_name] = func
+            self.routines[f_name] = '\n'.join(self.indent_code(func_code))
+
+            code = self.calling_code(func, f_name)
+
+        return code, imports
+
+    def normalize_datatype(self, type_f):
         from ambry.orm.column import Column
 
         imports = {}
 
         #
-        # Datatypes are a bit special, since
+        # Datatypes are a bit special
         #
-        type_f = column.valuetype_class
 
         if type_f in Column.python_types():
             # Normal python types.
             parse_f_name = 'parse_{}'.format(type_f.__name__)
 
-            func = self.get_caster_f(parse_f_name)
+            func = self.find_function(parse_f_name)
 
             imports[parse_f_name] = func
 
@@ -1244,37 +1323,12 @@ class CodeCallingPipe(Pipe):
         else:
             # The datatype value is a special, custom type
             from ambry.valuetype.types import parse_type
+            from ambry.util import qualified_name
 
-            vt_name = raw_code.replace('.', '_')
-            imports['parse_type'] = import_valuetype('types.parse_type')
-            imports[vt_name] = import_valuetype(raw_code)
+            vt_name = qualified_name(type_f).replace('.', '_')
+            imports['parse_type'] = parse_type
+            imports[vt_name] = type_f
             code = " parse_type({},{{v}}, <<<header_d>>>)".format(vt_name)
-
-        return code, imports
-
-    def normalize_code(self, f_name, raw_code):
-        """Return a string that transforms a string into something that when eval'd, will return a callable
-        """
-
-        imports = {}
-
-        try:
-            # The try branch works when the raw_code is the name of a
-            # method in the bundle or bundle's module
-            func = self.get_caster_f(raw_code)
-
-            imports[raw_code] = func
-
-            code = self.calling_code(func, raw_code)
-        except AttributeError:
-
-            # This branch is for when the raw_code is eval'able python
-            func_code = self.col_code_def+ '({}) '.format(raw_code)
-            func = eval(func_code, self.env())
-            imports[f_name] = func
-            self.routines[f_name] = '\n'.join(self.indent_code(func_code))
-
-            code = self.calling_code(func, f_name)
 
         return code, imports
 
@@ -1318,7 +1372,37 @@ class CodeCallingPipe(Pipe):
 
         return final_code
 
-    def get_caster_f(self, name):
+    def process_transform_generator(self, code, tg_name):
+        """Transform generators are called to generate a transform function"""
+
+        from ambry.valuetype.types import is_transform_generator
+
+        if not '(' in code:
+            return code
+
+        parts = code.split('(')
+
+        if parts:
+            func_name = parts.pop(0)
+
+            try:
+                f = self.find_function(func_name)
+
+                if not is_transform_generator(f):
+                    return code
+
+                fn = eval(func_name + '(' + parts.pop(), self.env())
+
+                self.add_to_env(fn, tg_name)
+
+                return tg_name
+
+            except AttributeError:
+                pass
+
+        return code
+
+    def find_function(self, code):
         """Look in several places for a caster function:
 
         - The bundle
@@ -1326,28 +1410,31 @@ class CodeCallingPipe(Pipe):
         """
         import sys
 
-        caster_f = None
-
         try:
-            return getattr(self.bundle, name)
+            return getattr(self.bundle, code)
 
         except AttributeError:
             pass
 
         try:
-            return getattr(sys.modules['ambry.build'], name)
+            return getattr(sys.modules['ambry.build'], code)
 
         except AttributeError:
             pass
 
         try:
-            return self.base_env[name]
+            return self.base_env[code]
 
         except KeyError:
             pass
 
-        if not caster_f:
-            raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(name))
+        raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(code))
+
+    def default_pipeline(self, pipeline_id):
+
+        code = self.routines[pipeline_id]  =  self.code_def + 'row'
+
+        return code
 
 class CastColumns(CodeCallingPipe):
     """Composes functions to map from the source table, to the destination table, with potentially
@@ -1375,22 +1462,15 @@ class CastColumns(CodeCallingPipe):
 
     def process_header(self, headers):
 
-        self.row_processor_1 = self.make_row_processor(headers, self.transform_set_1, add_exception = True)
-
-        # Non cohesive. Soupld be in super class ..
-        self.routines['processor1'] = self.code
-
         self.orig_headers = headers
         self.row_proxy_1 = RowProxy(self.orig_headers)
 
         # Return the table header, rather than the original row header.
         self.new_headers = [c.name for c in self.source.dest_table.columns]
 
-        self.row_processor_2 = self.make_row_processor(self.new_headers, self.transform_set_2, add_exception=False)
-
-        self.routines['processor2'] = self.code
-
         self.row_proxy_2 = RowProxy(self.new_headers)
+
+        self.make_row_processors(self.orig_headers)
 
         return self.new_headers
 
@@ -1400,29 +1480,21 @@ class CastColumns(CodeCallingPipe):
         scratch = {}
         errors = {}
 
-        try:
+        rp = self.row_proxy_1
 
-            # First pass, everything but the 'transform' code
-            row1 =  self.row_processor_1(self.row_proxy_1.set_row(row), self.row_n, scratch, errors,
-                                         self, self.bundle, self.source)
+        for pipeline_id, pipeline in self.pipelines:
 
-        except Exception as e:
+            try:
+                row = pipeline(rp.set_row(row), self.row_n, scratch, errors, self, self.bundle, self.source)
+            except Exception as e:
 
-            self.error("Exception in CastColumns processor\ncode:\n{}\nexception={}"
-                       .format(self.pretty_code, str(e)))
-            raise
+                self.error("Exception in CastColumns pipeline '{}'\nexception={}"
+                           .format(pipeline_id,  str(e)))
+                raise
 
-        try:
+            rp = self.row_proxy_2
 
-            # Second pass, only 'transform'
-            return self.row_processor_2(self.row_proxy_2.set_row(row1), self.row_n, scratch, errors,
-                                        self, self.bundle, self.source)
-
-        except Exception as e:
-
-            self.error("Exception in CastColumns processor\ncode:\n{}\nexception={}"
-                       .format(self.pretty_code, str(e)))
-            raise
+        return row
 
     @property
     def pretty_code(self):
@@ -1437,12 +1509,9 @@ class CastColumns(CodeCallingPipe):
 
     def __str__(self):
 
-        o = qualified_class_name(self) + '\n'
-
-        o+= self.pretty_code
+        o = qualified_class_name(self) + '{} pipelines, {} routines\n'.format(len(self.pipelines), len(self.routines))
 
         return o
-
 
 class Modify(Pipe):
     """Base class to modify a whole row, as a dict. Does not modify the header. Uses a slower method

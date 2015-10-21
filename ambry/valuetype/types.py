@@ -11,22 +11,36 @@ class NullValue(Exception):
 
 import dateutil.parser as dp
 import datetime
-import textwrap
+from . import IntValue, FloatValue
+from exceptions import CastingError
 
 from six import string_types, iteritems
 
-class CodeValue(object):
 
-    def __init__(self, code):
-        self.code = code
+def transform_generator(fn):
+    """A decorator that marks transform pipes that should be called to create the real transform"""
+    fn.func_dict['is_transform_generator'] = True
+    return fn
 
-    code = None
+def is_transform_generator(fn):
+    """Return true of the function has been marked with @transform_generator"""
+    return fn.func_dict.get('is_transform_generator', False)
 
-    def __str__(self):
-        return None
+@transform_generator
+def join(local_col, source_name, foreign_column):
+    """Join the local table to a foreign partition.
 
-    def __unicode__(self):
-        return None
+    :param local_col: Name of the column in the local table that should be matched to the foreign key
+    :param source_name: Source name for a reference or partition to the foreign data
+    :param foreign_column: Column name in the foreign table to use as a key.
+    :return:
+    """
+
+    def _join(v):
+        return v
+
+    return _join
+
 
 
 def row_number(row_n):
@@ -93,24 +107,6 @@ def int_e(v):
         raise NullValue(v)
 
 
-class CasterError(Exception):
-    pass
-
-
-class CastingError(TypeError):
-
-    def __init__(self, type_target, field_header, value, message, *args, **kwargs):
-
-        self.type_target = type_target
-        self.field_header = field_header
-        self.value = value
-
-        message = "Failed to cast column '{}' value='{}' to '{}': {} "\
-            .format(field_header, value, type_target, message)
-
-        # Call the base class constructor with the parameters it needs
-        Exception.__init__(self, textwrap.fill(message, 120), *args, **kwargs)
-
 
 def parse_int(v, header_d):
     """Parse as an integer, or a subclass of Int."""
@@ -123,7 +119,7 @@ def parse_int(v, header_d):
         # The conversion int('2.134') will fail.
         return int(round(float(v), 0))
     except (TypeError, ValueError) as e:
-        raise CastingError(int, header_d, v, str(e))
+        raise CastingError(int, header_d, v, 'Failed to cast to integer')
 
 def parse_float(v,  header_d):
 
@@ -211,3 +207,41 @@ def parse_datetime(v,  header_d):
     else:
         raise CastingError(int, header_d, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
 
+
+class IntOrCode(IntValue):
+    "An Integer value that stores values that fail to convert in the 'code' property"
+    _pythontype = int
+
+    code = None
+
+    def __new__(cls, v):
+        try:
+            o = super(IntOrCode, cls).__new__(cls, v)
+        except Exception as e:
+
+            o = super(IntOrCode, cls).__new__(cls, 0)
+            o.code = v
+
+        return o
+
+    def __init__(self, v):
+        super(IntOrCode, self).__init__(v)
+
+class FloatOrCode(FloatValue):
+    "An Float value that stores values that fail to convert in the 'code' property"
+    _pythontype = int
+
+    code = None
+
+    def __new__(cls, v):
+        try:
+            o = super(FloatOrCode, cls).__new__(cls, v)
+        except Exception as e:
+
+            o = super(FloatOrCode, cls).__new__(cls, float('nan'))
+            o.code = v
+
+        return o
+
+    def __init__(self, v):
+        super(FloatOrCode, self).__init__(v)

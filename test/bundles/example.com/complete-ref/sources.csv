@@ -1,2 +1,3 @@
-"name","title","table","segment","time","space","grain","start_line","end_line","comment_lines","header_lines","description","url"
-"simple","simple","simple",,1000,"california","numbers",,,,,"Simple Random Data","http://public.source.civicknowledge.com.s3.amazonaws.com/example.com/sources/random.csv"
+"name","order","description","ref","reftype"
+"stage1",1,"Staggered Integers","http://public.source.civicknowledge.com/example.com/basics/staggered_integers.csv",
+"stage2",2,,"example.com-complete-ref-stage1","partition"

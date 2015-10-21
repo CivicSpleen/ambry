@@ -14,6 +14,12 @@ def uuid4():
     return str(uuid4())
 
 
-def upper(v): return v.upper()
-def lower(v): return v.lower()
-def title(v): return v.title()
+def upper(v):
+
+    return v.upper() if v else None
+
+def lower(v):
+    return v.lower() if v else None
+
+def title(v):
+    return v.title() if v else None

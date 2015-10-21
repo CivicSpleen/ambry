@@ -86,7 +86,7 @@ class CasterPipe(CodeCallingPipe):
 
                 # Regular casters, from the "caster" column of the schema
                 try:
-                    caster_f = self.get_caster_f(c.caster)
+                    caster_f = self.find_function(c.caster)
 
                     # The inspection will call the caster_f with the argument list declared in its defintion,
                     # so the dfinition just has to have the same names are appear in the argument list to the

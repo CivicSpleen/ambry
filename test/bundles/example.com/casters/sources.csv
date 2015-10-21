@@ -1,4 +1,4 @@
-name,title,dest_table_name,time,space,grain,start_line,end_line,header_lines,description,reftype,ref
-simple,simple,simple,1000,california,numbers,1,6001,0,Simple Random Data,generator,ExampleSourcePipe
-integers,Lists of Integers,,,,,1,21,0,,,http://public.source.civicknowledge.com/example.com/basics/integers.csv
-simple_stats,,,,,,1,31,0,,,http://public.source.civicknowledge.com.s3.amazonaws.com/example.com/stats/simple_stats.csv
+"name","order","title","dest_table_name","time","space","grain","start_line","end_line","header_lines","description","reftype","ref"
+"simple",3,"simple","simple",1000,"california","numbers",1,6001,0,"Simple Random Data","generator","ExampleSourcePipe"
+"integers",2,"Lists of Integers",,,,,1,21,0,,,"http://public.source.civicknowledge.com/example.com/basics/integers.csv"
+"simple_stats",1,,,,,,1,31,0,,,"http://public.source.civicknowledge.com/example.com/stats/simple_stats.csv"

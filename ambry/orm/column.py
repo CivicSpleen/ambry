@@ -62,9 +62,7 @@ class Column(Base):
     universe = SAColumn('c_universe', Text)
     lom = SAColumn('c_lom', String(1))
 
-    # Old column value generators
-    #derivedfrom = SAColumn('c_derivedfrom', Text)
-    #caster = SAColumn('c_caster', Text)
+    derivedfrom = SAColumn('c_derivedfrom', Text)
 
     # New column value casters and generators
     _transform = SAColumn('c_transform', Text)
@@ -184,6 +182,8 @@ class Column(Base):
     def valuetype_class(self):
         """Return the valuetype class, if one is defined, or a built-in type if it isn't"""
         from ambry.valuetype import import_valuetype
+
+        assert self.datatype, 'No datatype value for column {}.{}'.format(self.table.name, self.name)
 
         try:
             return import_valuetype(self.datatype)
@@ -400,9 +400,26 @@ class Column(Base):
     def transform(self, v):
         self._transform = self.clean_transform(v)
 
+    @staticmethod
+    def make_xform_seg(init_=None, transforms = None, exception = None):
+        return {
+            'init': init_,
+            'transforms': transforms if transforms else [],
+            'exception': exception
+        }
+
     @property
     def expanded_transform(self):
-        return self._expand_transform(self.transform)
+        """Expands the transform string into segments """
+
+        segments =  self._expand_transform(self.transform)
+
+        if not segments:
+            return [self.make_xform_seg(transforms=[self.valuetype_class])]
+
+        segments[0]['transforms'] = [self.valuetype_class] + segments[0]['transforms']
+
+        return  segments
 
     @staticmethod
     def clean_transform(transform):
@@ -436,11 +453,7 @@ class Column(Base):
         for i, seg_str in enumerate(transform.split('||')):
             pipes = seg_str.split('|')
 
-            d = {
-                'init':None,
-                'transforms': [],
-                'exception': None
-            }
+            d = Column.make_xform_seg()
 
             for pipe in pipes:
 

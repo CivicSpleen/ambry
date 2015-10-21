@@ -64,6 +64,8 @@ class IntValue(int,ValueType):
         o = super(IntValue, cls).__new__(cls, cls.parse(v))
         return o
 
+
+
 class FloatValue(float,ValueType):
     _pythontype = float
 
