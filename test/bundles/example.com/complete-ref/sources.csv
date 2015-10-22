@@ -1,3 +1,4 @@
 "name","order","description","ref","reftype"
 "stage1",1,"Staggered Integers","http://public.source.civicknowledge.com/example.com/basics/staggered_integers.csv",
+"stage1p",2,,"example.com-complete-ref-stage1","ref"
 "stage2",2,,"example.com-complete-ref-stage1","partition"

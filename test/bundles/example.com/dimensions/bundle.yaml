@@ -29,7 +29,4 @@ names:
   name: example.com-dimension
   vid: ddimension001
   vname: example.com-dimension-0.1.1
-pipelines:
-  build:
-    cast:
-    - +AddDerived
+

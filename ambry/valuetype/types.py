@@ -27,21 +27,42 @@ def is_transform_generator(fn):
     return fn.func_dict.get('is_transform_generator', False)
 
 @transform_generator
-def join(local_col, source_name, foreign_column):
-    """Join the local table to a foreign partition.
+def join( source_name, foreign_column, join_key, bundle):
+    """
+    Join the local table to a foreign partition.
 
-    :param local_col: Name of the column in the local table that should be matched to the foreign key
-    :param source_name: Source name for a reference or partition to the foreign data
-    :param foreign_column: Column name in the foreign table to use as a key.
+    This transform generator produces a transform function that will join foreign rows on the current column
+    value and store the row in the scratch. The value passes through unchanged.
+
+    :param source_name:
+    :param foreign_column:
+    :param bundle:
+    :param f_name: Name of the transform function, for use as a scratch array key
     :return:
     """
+    from operator import itemgetter
 
-    def _join(v):
+    fig = itemgetter(foreign_column)
+
+    with bundle.dep(source_name).datafile.reader as r:
+        id_map = { fig(row) : row.copy() for row in r }
+
+    def _joins(v, scratch):
+
+        scratch[join_key] = id_map.get(v)
+
         return v
 
-    return _join
+    return _joins
 
+@transform_generator
+def joined(join_key, foreign_col):
 
+    def _joined(scratch):
+
+        return scratch[join_key][foreign_col]
+
+    return _joined
 
 def row_number(row_n):
     return row_n
@@ -245,3 +266,20 @@ class FloatOrCode(FloatValue):
 
     def __init__(self, v):
         super(FloatOrCode, self).__init__(v)
+
+
+class ForeignKey(IntValue):
+    """An Integer value represents a foreign key on another table.  The value can hold a linked row for access from other
+    columns. """
+
+    _pythontype = int
+
+    row = None
+
+    def __new__(cls, v):
+        o = super(ForeignKey, cls).__new__(cls, v)
+        return o
+
+    def __init__(self, v):
+        super(ForeignKey, self).__init__(v)
+        self.row = None

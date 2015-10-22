@@ -203,6 +203,11 @@ class Test(TestBase):
 
         b.run_stages()
 
+
+        with b.partition('example.com-complete-ref-stage2').datafile.reader as r:
+            for row in r:
+                self.assertEqual(row.tens, row.stage1_tens_a)
+
     @pytest.mark.slow
     def test_casters(self):
         """Build the complete-load"""
@@ -229,7 +234,7 @@ class Test(TestBase):
             mn, mx = min(mn, row['codes']), max(mx, row['codes'])
 
         self.assertEqual(None, mn)  # The '*' should have been turned into a -1
-        self.assertEqual('*', mx)
+        self.assertEqual(0, mx)
 
         self.assertEqual(0, len(b.dataset.codes))
 

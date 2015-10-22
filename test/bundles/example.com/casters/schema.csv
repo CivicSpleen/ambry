@@ -33,7 +33,7 @@
 "simple_stats","float_c","float","!ignore_exception||cst_double|cst_double||cst_double|cst_double"
 "simple_stats","int_a","int",
 "simple_stats","int_b","int","!capture_error"
-"simple_stats","int_b_codes","str","^errors.get('int_b')"
+"simple_stats","int_b_codes","str","^error_from('int_b')"
 "simple_stats","str_a","str","upper"
 "simple_stats","str_b","str","title|v.replace('w','X')"
 "simple_stats","state","fips.State","^row.int_a|!ignore_exception"

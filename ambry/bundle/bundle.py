@@ -1664,9 +1664,10 @@ Caster Code
                         w.insert_row((i,) + row[1:])
                         i += 1
 
-            self.debug(indent + "Coalesced {} rows ".format(i))
+            self.debug(indent + "Coalesced {} rows into ".format(i))
 
         parent.finalize()
+        self.log("Coalesced {}".format(parent.name))
         self.commit()
 
         for s in segments:
@@ -1680,7 +1681,7 @@ Caster Code
 
         try:
             for p in pl[ambry.etl.PartitionWriter].partitions:
-                self.log(indent + indent + 'Finalizing {}'.format(p.identity.name))
+                #self.log(indent + indent + 'Finalizing {}'.format(p.identity.name))
                 # We're passing the datafile path into filanize b/c finalize is on the ORM object,
                 # and datafile is on the proxy.
                 p.finalize()

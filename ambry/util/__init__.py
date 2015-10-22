@@ -1174,6 +1174,16 @@ def drop_empty(rows):
     the header is the first row. """
     return zip(*[col for col in zip(*rows) if bool(filter(bool, col[1:]))])
 
+#http://stackoverflow.com/a/20577580
+def dequote(s):
+    """
+    If a string has single or double quotes around it, remove them.
+    Make sure the pair of quotes match.
+    If a matching pair of quotes is not found, return the string unchanged.
+    """
+    if (s[0] == s[-1]) and s.startswith(("'", '"')):
+        return s[1:-1]
+    return s
 
 def pretty_time(s, granularity=3):
     """Pretty print time in seconds. COnverts the input time in seconds into a string with

@@ -1247,7 +1247,7 @@ class CodeCallingPipe(Pipe):
 
         return self.convert_format(pre_interp).format(**subs)
 
-    def calling_code(self, f, f_name=None):
+    def calling_code(self, f, f_name=None, raise_for_missing = True):
         """Return the code string for calling a function. """
         import inspect
         from ambry.dbexceptions import ConfigurationError
@@ -1259,7 +1259,8 @@ class CodeCallingPipe(Pipe):
 
         for a in args:
             if  a not in self.all_args+('exception',): # exception arg is only for exception handlers
-                raise ConfigurationError('Caster code {} has unknown argument '
+                if raise_for_missing:
+                    raise ConfigurationError('Caster code {} has unknown argument '
                                          'name: \'{}\'. Must be one of: {} '.format(f, a, ','.join(self.all_args)))
 
         arg_map = {e: '<<<' + e + '>>>' for e in self.var_args}
@@ -1277,6 +1278,7 @@ class CodeCallingPipe(Pipe):
             return self.normalize_datatype(raw_code)
 
         imports = {}
+        code = None
 
         try:
             # The try branch works when the raw_code is the name of a
@@ -1291,14 +1293,21 @@ class CodeCallingPipe(Pipe):
             # code or a transform generator
 
             # If this succeeds, it will re-write the raw_code to be the name of the newly generated transform
-            raw_code = self.process_transform_generator(raw_code, 'tg_'+f_name)
+            tg_calling_code, tg_imports = self.process_transform_generator(raw_code, 'tg_'+f_name)
 
-            func_code = self.col_code_def+ '({}) '.format(raw_code)
-            func = eval(func_code, self.env())
-            imports[f_name] = func
-            self.routines[f_name] = '\n'.join(self.indent_code(func_code))
+            if tg_calling_code:
+                if tg_imports:
+                    code, imports = tg_calling_code, tg_imports
+                else:
+                    raw_code = code
 
-            code = self.calling_code(func, f_name)
+            if not code:
+                func_code = self.col_code_def+ '({}) '.format(raw_code)
+                func = eval(func_code, self.env())
+                imports[f_name] = func
+                self.routines[f_name] = '\n'.join(self.indent_code(func_code))
+
+                code = self.calling_code(func, f_name)
 
         return code, imports
 
@@ -1376,9 +1385,12 @@ class CodeCallingPipe(Pipe):
         """Transform generators are called to generate a transform function"""
 
         from ambry.valuetype.types import is_transform_generator
+        import inspect
+        from itertools import tee, ifilterfalse, ifilter
+        from ambry.util import dequote
 
         if not '(' in code:
-            return code
+            return None, None
 
         parts = code.split('(')
 
@@ -1386,21 +1398,39 @@ class CodeCallingPipe(Pipe):
             func_name = parts.pop(0)
 
             try:
-                f = self.find_function(func_name)
-
-                if not is_transform_generator(f):
-                    return code
-
-                fn = eval(func_name + '(' + parts.pop(), self.env())
-
-                self.add_to_env(fn, tg_name)
-
-                return tg_name
-
+                tg_func = self.find_function(func_name)
             except AttributeError:
-                pass
+                return code, None
 
-        return code
+
+            if not is_transform_generator(tg_func):
+                return code, None
+
+            # Setup an args list to call the transform generator
+            args = inspect.getargspec(tg_func).args
+            call_args = parts.pop().strip(')').split(',')
+
+            if len(args) > 1 and args[0] == 'self':
+                args = args[1:]
+
+            t1, t2 = tee(args)
+            pred = lambda arg: arg in self.const_args
+            var_args, const_args =  ifilterfalse(pred, t1), ifilter(pred, t2)
+
+            const_arg_vals = dict(pipe = self, source = self.source, bundle = self.bundle)
+
+            # Combine the args given in the transform code with the const args from the function signature
+            kw_args = dict([ (a,dequote(b.strip())) for a, b in zip(var_args, call_args) ] +
+                        [ (a,const_arg_vals.get(a)) for a in const_args])
+
+            transform_func = tg_func(**kw_args)
+
+            if not transform_func:
+                raise Exception("Didn't get function from call to transform generator: '{}'".format(tg_func))
+
+            return self.calling_code(transform_func, tg_name), { tg_name : transform_func}
+        else:
+            return None, None
 
     def find_function(self, code):
         """Look in several places for a caster function:
@@ -1418,6 +1448,7 @@ class CodeCallingPipe(Pipe):
 
         try:
             return getattr(sys.modules['ambry.build'], code)
+
 
         except AttributeError:
             pass
