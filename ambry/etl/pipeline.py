@@ -19,7 +19,6 @@ from ambry_sources import RowProxy
 
 from ambry.dbexceptions import ConfigurationError
 
-
 class PipelineError(Exception):
     def __init__(self,  pipe, *args, **kwargs):
 
@@ -1025,449 +1024,10 @@ class PassOnlyDestColumns(Delete):
 
         return super(Delete, self).process_header(row)
 
-class CodeCallingPipe(Pipe):
-    """A Pipe that composes functions to modify a row.
-    """
 
-    const_args = ('row','row_n','scratch','errors','pipe','bundle','source')
-    var_args = ('v','i_s','i_d','header_s', 'header_d')
-    all_args = var_args + const_args
 
-    # Full lambda definition for a column, including variable parts
-    col_code_def = 'lambda {}:'.format(','.join(all_args))
 
-    # lambda definition for the who;e row. Includes only the arguments
-    # that are the same for every column
-    code_def = 'lambda {}:'.format(','.join(const_args))
-
-    def __init__(self):
-
-        self.custom_types = {}
-        self.base_env = self._base_env()
-        self.code = None
-
-        self.row_processors = []
-
-        self.routines = {}
-        self.pipelines = []
-
-    @staticmethod
-    def indent_code(string):
-        """Indent nested functions in the code"""
-        stack = ['']
-        for i, c in enumerate(string):
-            if c == '(':
-                yield '    ' * len(stack) + stack[-1] + '('
-                stack[-1] = ')'
-                stack.append('')
-            elif c == ')':
-                yield '    ' * len(stack) + stack.pop()
-            else:
-                stack[-1] += c
-
-        yield '    ' * len(stack) + stack.pop()
-
-    def _base_env(self):
-        """Base environment for evals, the stuff that is the same for all evals"""
-        import dateutil.parser
-        import datetime
-        from functools import partial
-        from ambry.valuetype.types import parse_date, parse_time, parse_datetime
-        import ambry.valuetype.types
-        import ambry.valuetype.math
-        import ambry.valuetype.string
-        import ambry.valuetype.exceptions
-
-        localvars = dict(
-            self=self,
-            parse_date=parse_date,
-            parse_time=parse_time,
-            parse_datetime=parse_datetime,
-            partial=partial,
-        )
-
-        localvars.update(dateutil.parser.__dict__)
-        localvars.update(datetime.__dict__)
-        localvars.update(ambry.valuetype.math.__dict__)
-        localvars.update(ambry.valuetype.string.__dict__)
-        localvars.update(ambry.valuetype.types.__dict__)
-        localvars.update(ambry.valuetype.exceptions.__dict__)
-
-        return localvars
-
-    def env(self, **kwargs):
-
-        localvars = self.base_env.copy()
-
-        for k, v in iteritems(self.custom_types):
-            if k not in localvars:  # Custom types don't override the base
-                localvars[k] = v
-
-        for k, v in kwargs.items():  # Args do override the base
-            localvars[k] = v
-
-        return localvars
-
-    def add_to_env(self, func_or_type, name=None):
-        if not name:
-            name = func_or_type.__name__
-
-        self.custom_types[name] = func_or_type
-
-    def translate_transforms(self, transforms):
-
-        return transforms
-
-    def make_row_processors(self, source_headers):
-        """
-        Make multiple row processors for all of the columns in a table.
-
-        :param source_headers:
-
-        :return:
-        """
-
-        dest_table = self.source.dest_table
-        dest_headers = [ c.name for c in dest_table.columns ]
-
-        pipelines = []
-
-        for i, segments in enumerate(dest_table.transforms):
-
-            pipeline_id = "pl{}".format(i)
-
-            code = self.routines[pipeline_id] = self.compose(pipeline_id,source_headers, segments)
-
-            pipelines.append(( pipeline_id,eval(code, self.env())))
-
-            source_headers = dest_headers
-
-        if not pipelines:
-            from ambry.dbexceptions import ConfigurationError
-
-            raise ConfigurationError("Didn't get a column pipeline for table='{}', source = '{}'"
-                                     .format(self.source.dest_table.name, self.source.name))
-            #pipelines = [('pl0', eval(self.default_pipeline('pl0'), self.env()))]
-
-        self.pipelines = pipelines
-
-        return pipelines
-
-    def compose(self, pipeline_id, source_headers, segments):
-        """Compose a pipeline for a table"""
-        row_f = []
-
-        for i, (c, segment) in enumerate(zip(self.source.dest_table.columns, segments)):
-
-            if not segment:
-                segment =  {
-                    'init': None,
-                    'transforms': [],
-                    'exception': None
-                }
-
-            try:
-                header_index = source_headers.index(c.name)
-                source_header = c.name
-            except ValueError:
-                header_index = None
-                source_header = None
-
-            row_f.append(self.compose_column(pipeline_id, header_index, source_header, c, segment))
-
-        inner_code = ','.join(row_f)
-
-        return self.code_def + '[' + inner_code + ']'
-
-    def compose_column(self, pipeline_id, source_pos, source_header, column, segment):
-        """
-        Combine all of the code for a column into a single evalable string
-
-        :param source_pos: The integer position of the source column in the source row,
-        :param source_header:  The header of the source column.
-        :param column: The destination column column object.
-        :return:
-        """
-
-        code = source_val = "<<<source_val>>>".format(source_pos)
-
-        # Init is always first, datatype is always next, then the rest of the
-        # transforms, but only for the first pipeline.
-
-        if pipeline_id == 'pl0':
-            transforms = ([segment['init']] if segment['init'] else ['nullify']) + [column.valuetype_class]
-        else:
-            transforms = []
-
-        transforms += segment['transforms']
-
-        #print pipeline_id, transforms
-
-        for i, transform in enumerate(transforms):
-
-            f_name = "f_{}_{}_{}".format(pipeline_id, i, column.name)
-
-            next_code, imports = self.normalize_code(f_name, transform)
-
-            if f_name:
-
-                for k, v in imports.items():
-                    self.add_to_env(v, k)
-
-                code = next_code.format(v=code)
-
-        if segment['exception']:
-
-            f_name = 'f_exc_{}_{}'.format(pipeline_id, column.name)
-
-            tc_code = self.try_except_code(f_name, code, segment['exception'])
-
-            func = eval(tc_code, self.env())
-
-            tc_name = 'tc_exc_{}_{}'.format(pipeline_id, column.name)
-            self.routines[tc_name] = '\n'.join(self.indent_code(tc_code))
-            self.add_to_env(func, tc_name)
-
-            code = '{}({})'.format(tc_name, ','.join(
-                ["<<<{}>>>".format(e) for e in self.var_args] +
-                ['{}={}'.format(e, e) for e in self.const_args]
-            ))
-
-        pre_interp = '\n'.join(self.indent_code(code))
-
-        subs = {
-            'v': "row[{}]".format(source_pos) if source_pos is not None else 'None',
-            'source_val': "row[{}]".format(source_pos) if source_pos is not None else 'None',
-            'i_s': source_pos,
-            'i_d': column.sequence_id,
-            'header_s': "'" + source_header + "'" if source_header else 'None',
-            'header_d': "'" + column.name + "'",
-
-        }
-
-        return self.convert_format(pre_interp).format(**subs)
-
-    def calling_code(self, f, f_name=None, raise_for_missing = True):
-        """Return the code string for calling a function. """
-        import inspect
-        from ambry.dbexceptions import ConfigurationError
-
-        args = inspect.getargspec(f).args
-
-        if len(args) > 1 and args[0] == 'self':
-            args = args[1:]
-
-        for a in args:
-            if  a not in self.all_args+('exception',): # exception arg is only for exception handlers
-                if raise_for_missing:
-                    raise ConfigurationError('Caster code {} has unknown argument '
-                                         'name: \'{}\'. Must be one of: {} '.format(f, a, ','.join(self.all_args)))
-
-        arg_map = {e: '<<<' + e + '>>>' for e in self.var_args}
-        arg_map['v'] = '{v}'
-
-        args = [arg_map.get(a, a) for a in args]
-
-        return "{}({})".format(f_name if f_name else f.__name__, ','.join(args))
-
-    def normalize_code(self, f_name, raw_code):
-        """Return a string that transforms a string into something that when eval'd, will return a callable
-        """
-
-        if isinstance(raw_code, type):
-            return self.normalize_datatype(raw_code)
-
-        imports = {}
-        code = None
-
-        try:
-            # The try branch works when the raw_code is the name of a
-            # method in the bundle or bundle's module
-            func = self.find_function(raw_code)
-
-            imports[raw_code] = func
-
-            code = self.calling_code(func, raw_code)
-        except AttributeError:
-            # This branch is for when find_function didn't find the function, so it must be evalable
-            # code or a transform generator
-
-            # If this succeeds, it will re-write the raw_code to be the name of the newly generated transform
-            tg_calling_code, tg_imports = self.process_transform_generator(raw_code, 'tg_'+f_name)
-
-            if tg_calling_code:
-                if tg_imports:
-                    code, imports = tg_calling_code, tg_imports
-                else:
-                    raw_code = code
-
-            if not code:
-                func_code = self.col_code_def+ '({}) '.format(raw_code)
-                func = eval(func_code, self.env())
-                imports[f_name] = func
-                self.routines[f_name] = '\n'.join(self.indent_code(func_code))
-
-                code = self.calling_code(func, f_name)
-
-        return code, imports
-
-    def normalize_datatype(self, type_f):
-        from ambry.orm.column import Column
-
-        imports = {}
-
-        #
-        # Datatypes are a bit special
-        #
-
-        if type_f in Column.python_types():
-            # Normal python types.
-            parse_f_name = 'parse_{}'.format(type_f.__name__)
-
-            func = self.find_function(parse_f_name)
-
-            imports[parse_f_name] = func
-
-            code = self.calling_code(func, parse_f_name)
-        else:
-            # The datatype value is a special, custom type
-            from ambry.valuetype.types import parse_type
-            from ambry.util import qualified_name
-
-            vt_name = qualified_name(type_f).replace('.', '_')
-            imports['parse_type'] = parse_type
-            imports[vt_name] = type_f
-            code = " parse_type({},{{v}}, <<<header_d>>>)".format(vt_name)
-
-        return code, imports
-
-    def convert_format(self, s):
-        """Convert the placehold '<<<' back to braces"""
-        return s.replace('<<<','{').replace(">>>",'}')
-
-    def try_except_code(self,  f_name, base_try_code, base_except_code):
-        """Create code for a function to wrap two functions ina try/except block"""
-
-        from ambry.valuetype.exceptions import try_except
-
-        cargs = zip(self.const_args, self.const_args)
-
-        inner_vargs = zip(self.var_args, self.var_args)
-
-        inner_lambda_def = 'lambda {}:'.format(','.join('{}={}'.format(k,v) for k,v in (inner_vargs+cargs)))
-        except_lambda_def = 'lambda exception,{}:'.format(','.join('{}={}'.format(k, v) for k, v in (inner_vargs + cargs)))
-        outer_lambda_def = 'lambda {}:'.format(','.join( self.all_args))
-
-        except_code, except_imports = self.normalize_code(f_name, base_except_code)
-
-        try_code = self.convert_format(inner_lambda_def + base_try_code)
-        except_code = self.convert_format(except_lambda_def + except_code)
-
-        code = outer_lambda_def+"try_except({}, {})".format(try_code, except_code)
-
-        self.add_to_env(try_except, 'try_except')
-        for k, v in except_imports.items():
-            self.add_to_env(v, k)
-
-        # Since the inner substitutions are for only one colum, and all of the
-        # values are defined by the outer lambda ( outer_lambda_def), the placeholders get replaced
-        # by variables.
-
-        subs = dict(inner_vargs)
-        subs['source_val'] = 'v'
-
-        # Note that this substitution will operate only on the code inside the outer lambda.
-        final_code =  code.format(**subs)
-
-        return final_code
-
-    def process_transform_generator(self, code, tg_name):
-        """Transform generators are called to generate a transform function"""
-
-        from ambry.valuetype.types import is_transform_generator
-        import inspect
-        from itertools import tee, ifilterfalse, ifilter
-        from ambry.util import dequote
-
-        if not '(' in code:
-            return None, None
-
-        parts = code.split('(')
-
-        if parts:
-            func_name = parts.pop(0)
-
-            try:
-                tg_func = self.find_function(func_name)
-            except AttributeError:
-                return code, None
-
-
-            if not is_transform_generator(tg_func):
-                return code, None
-
-            # Setup an args list to call the transform generator
-            args = inspect.getargspec(tg_func).args
-            call_args = parts.pop().strip(')').split(',')
-
-            if len(args) > 1 and args[0] == 'self':
-                args = args[1:]
-
-            t1, t2 = tee(args)
-            pred = lambda arg: arg in self.const_args
-            var_args, const_args =  ifilterfalse(pred, t1), ifilter(pred, t2)
-
-            const_arg_vals = dict(pipe = self, source = self.source, bundle = self.bundle)
-
-            # Combine the args given in the transform code with the const args from the function signature
-            kw_args = dict([ (a,dequote(b.strip())) for a, b in zip(var_args, call_args) ] +
-                        [ (a,const_arg_vals.get(a)) for a in const_args])
-
-            transform_func = tg_func(**kw_args)
-
-            if not transform_func:
-                raise Exception("Didn't get function from call to transform generator: '{}'".format(tg_func))
-
-            return self.calling_code(transform_func, tg_name), { tg_name : transform_func}
-        else:
-            return None, None
-
-    def find_function(self, code):
-        """Look in several places for a caster function:
-
-        - The bundle
-        - the ambry.build module, which should be the bundle's module.
-        """
-        import sys
-
-        try:
-            return getattr(self.bundle, code)
-
-        except AttributeError:
-            pass
-
-        try:
-            return getattr(sys.modules['ambry.build'], code)
-
-
-        except AttributeError:
-            pass
-
-        try:
-            return self.base_env[code]
-
-        except KeyError:
-            pass
-
-        raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(code))
-
-    def default_pipeline(self, pipeline_id):
-
-        code = self.routines[pipeline_id]  =  self.code_def + 'row'
-
-        return code
-
-class CastColumns(CodeCallingPipe):
+class CastColumns(Pipe):
     """Composes functions to map from the source table, to the destination table, with potentially
     complex transformations for each column.
 
@@ -1475,19 +1035,19 @@ class CastColumns(CodeCallingPipe):
     datatype, nullify, initialize, typecast, transform and exception, to transform the source rows to destination
     rows. The output rows have the lenghts and column types as speciefied in the destination schema.
 
-
     """
 
     def __init__(self):
 
         super(CastColumns, self).__init__()
 
-        self.row_processor_1 = None
-        self.row_processor_2 = None
+        self.row_processors = None
         self.orig_headers = None
         self.new_headers = None
         self.row_proxy_1 = None
         self.row_proxy_2 = None
+
+        self.accumulator = {}
 
         self.row_n = 0
 
@@ -1501,7 +1061,7 @@ class CastColumns(CodeCallingPipe):
 
         self.row_proxy_2 = RowProxy(self.new_headers)
 
-        self.make_row_processors(self.orig_headers)
+        self.row_processors = self.bundle.build_caster_code(self.source)
 
         return self.new_headers
 
@@ -1513,30 +1073,12 @@ class CastColumns(CodeCallingPipe):
 
         rp = self.row_proxy_1
 
-        for pipeline_id, pipeline in self.pipelines:
-
-            try:
-                row = pipeline(rp.set_row(row), self.row_n, scratch, errors, self, self.bundle, self.source)
-            except Exception as e:
-
-                self.error("Exception in CastColumns pipeline '{}'\nexception={}"
-                           .format(pipeline_id,  str(e)))
-                raise
-
+        for proc in self.row_processors:
+            row = proc(rp.set_row(row), 0, errors, scratch, self.accumulator, self, self.bundle, self.source)
             rp = self.row_proxy_2
 
         return row
 
-    @property
-    def pretty_code(self):
-        import autopep8
-
-        o = ''
-
-        for k, v in self.routines.items():
-            o += "{}={}\n".format(k, v)
-
-        return autopep8.fix_code(o)
 
     def __str__(self):
 

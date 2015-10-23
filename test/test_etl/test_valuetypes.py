@@ -1,10 +1,24 @@
 # -*- coding: utf-8 -*-
 
 from test.test_base import TestBase
-
+import shutil
+import os
 
 
 class Test(TestBase):
+
+    def setup_temp_dir(self):
+        build_url = '/tmp/ambry-build-test'
+
+        try:
+            shutil.rmtree(build_url)
+        except OSError:
+
+            pass
+
+        os.makedirs(build_url)
+
+        return build_url
 
 
     def test_basic(self):
@@ -75,7 +89,6 @@ class Test(TestBase):
         self.assertEqual(['init', None], [e['init'] for e in c.expanded_transform])
         self.assertEqual([[int], ['t1', 't2', 't3', 't4']], [e['transforms'] for e in c.expanded_transform])
 
-
     def test_col_clean_transform(self):
 
         b = self.setup_bundle('casters')
@@ -88,27 +101,33 @@ class Test(TestBase):
 
     def test_table_transforms(self):
 
-        b = self.setup_bundle('casters')
+        d = self.setup_temp_dir()
+
+        b = self.setup_bundle('casters', build_url=d, source_url=d)
+
         b.sync_in();  # Required to get bundle for cast_to_subclass to work.
         b = b.cast_to_subclass()
-
+        b.ingest()
+        b.schema()
         t = b.table('simple_stats')
 
-        self.assertEqual(3, len(list(t.transforms)))
+        row_processors =  b.build_caster_code(b.source('simple_stats'))
 
-        for tr in t.transforms:
-            print tr
+        rp = row_processors[0]
 
+        #rp(row, row_n, scratch, accumulator, pipe, bundle, source):
+
+        row = [1.0,1.0,1.0,1,1,"one","two"]
+
+        print rp(row, 0, {}, {}, {}, None, b, b.source('simple_stats'))
 
     def test_code_calling_pipe(self):
         import re
 
-        from ambry.etl import CastColumns, RowProxy
-        from collections import namedtuple
-        from ambry.valuetype.exceptions import CastingError
-        from ambry.valuetype.fips import State
+        from ambry.etl import CastColumns
 
-        b = self.setup_bundle('casters')
+        d = self.setup_temp_dir()
+        b = self.setup_bundle('casters', build_url=d, source_url=d)
         b.sync_in();  # Required to get bundle for cast_to_subclass to work.
         b = b.cast_to_subclass()
 
@@ -120,45 +139,6 @@ class Test(TestBase):
         dest_table = ccp.source.dest_table
 
         source_headers = [ c.source_header for c in source_table.columns]
-
-        # ---
-
-        def run_col(v, xform, type_=int):
-            import ambry.orm.column
-
-            row = [v]
-
-            Column = namedtuple('Column','name, sequence_id, valuetype_class')
-
-            for segment in ambry.orm.column.Column._expand_transform(xform):
-
-                code =  ccp.compose_column('pl0',0,'header',
-                                         Column._make(['column','0',type_]),
-                                         segment)
-
-                #print ccp.pretty_code
-                #print code
-
-                func = eval('lambda row,row_n=11,scratch=[],errors=[],pipe=None, source=None, bundle=None:'
-                                +code, ccp.env())
-
-                row = [func(row)]
-
-            return row[0]
-
-        self.assertEqual(8, run_col(2,'cst_double|cst_double'))
-        self.assertEqual(16, run_col(2,'cst_double|cst_double|cst_double'))
-        self.assertEqual(8, run_col(2,'^cst_init|cst_double|cst_double|cst_double'))
-
-        with self.assertRaises(CastingError):
-            self.assertEqual(8, run_col(2,'^"foo"|cst_double'))
-
-        with self.assertRaises(ValueError):
-            self.assertEqual(8, run_col(2,'^"foo"|cst_double|!cst_reraise_value'))
-
-        self.assertEqual(32, run_col(2, 'cst_double|cst_double||cst_double|cst_double'))
-
-        self.assertEqual('California', run_col(6, 'v.name', State ))
 
         ccp.process_header(source_headers)
 

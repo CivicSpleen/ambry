@@ -401,11 +401,13 @@ class Column(Base):
         self._transform = self.clean_transform(v)
 
     @staticmethod
-    def make_xform_seg(init_=None, transforms = None, exception = None):
+    def make_xform_seg(init_=None, datatype = None, transforms = None, exception = None):
         return {
             'init': init_,
             'transforms': transforms if transforms else [],
-            'exception': exception
+            'exception': exception,
+            'datatype': datatype,
+            'column': None
         }
 
     @property
@@ -415,9 +417,12 @@ class Column(Base):
         segments =  self._expand_transform(self.transform)
 
         if not segments:
-            return [self.make_xform_seg(transforms=[self.valuetype_class])]
+            return [self.make_xform_seg(datatype=self.valuetype_class)]
 
-        segments[0]['transforms'] = [self.valuetype_class] + segments[0]['transforms']
+        segments[0]['datatype'] = self.valuetype_class
+
+        for s in segments:
+            s['column'] = self
 
         return  segments
 

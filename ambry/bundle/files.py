@@ -452,6 +452,7 @@ class PythonSourceFile(StringSourceFile):
     def import_bundle(self):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
+        import os
 
         try:
             import ambry.build
@@ -466,10 +467,9 @@ class PythonSourceFile(StringSourceFile):
             from ambry.bundle import Bundle
             return Bundle
 
-        exec(bf.contents, module.__dict__)
+        abs_path = self._fs.getsyspath(file_name(self._file_const))
 
-        #print self._file_const, bundle.__dict__.keys()
-        #print bf.contents
+        exec compile(bf.contents, abs_path, 'exec') in module.__dict__
 
         return module.Bundle
 

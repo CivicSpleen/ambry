@@ -176,6 +176,7 @@ class Bundle(object):
             return b
 
         except Exception as e:
+            raise
             raise BundleError('Failed to load bundle code file, skipping : {}'.format(e))
 
     def import_lib(self):
@@ -1588,6 +1589,35 @@ Caster Code
         self.log("---- Finished phase {} ---- ".format(phase))
 
         return True
+
+    def build_caster_code(self, source, pipe = None):
+
+        from ambry.etl.codegen import make_row_processors,make_env, base_env
+
+        env_dict = base_env()
+        env = make_env(self, env_dict)
+
+        code = make_row_processors(b, source.source_table, source.dest_table, env=env)
+
+        path = '/code/casters/{}.py'.format(source.name)
+
+        self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
+        self.build_fs.setcontents(path, code, encoding='utf8')
+
+        try:
+            abs_path = self.build_fs.getsyspath(path)
+        except:
+            raise
+
+        env_dict['bundle'] = self
+        env_dict['source'] = source
+        env_dict['pipe'] = pipe
+
+        assert not pipe or (pipe.source is source and pipe.bundle is self)
+
+        exec compile(code, abs_path, 'exec') in env_dict
+
+        return env_dict['row_processors']
 
     def build_post_cast_error_codes(self):
         """If there are casting errors, final_cast_errors will generate codes for the values. This rounte
