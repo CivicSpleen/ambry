@@ -1597,7 +1597,7 @@ Caster Code
         env_dict = base_env()
         env = make_env(self, env_dict)
 
-        code = make_row_processors(b, source.source_table, source.dest_table, env=env)
+        code = make_row_processors(pipe.bundle, source.source_table, source.dest_table, env=env)
 
         path = '/code/casters/{}.py'.format(source.name)
 

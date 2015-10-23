@@ -453,6 +453,7 @@ class PythonSourceFile(StringSourceFile):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
         import os
+        from fs.errors import NoSysPathError
 
         try:
             import ambry.build
@@ -467,7 +468,10 @@ class PythonSourceFile(StringSourceFile):
             from ambry.bundle import Bundle
             return Bundle
 
-        abs_path = self._fs.getsyspath(file_name(self._file_const))
+        try:
+            abs_path = self._fs.getsyspath(file_name(self._file_const))
+        except NoSysPathError:
+            abs_path = '<string>'
 
         exec compile(bf.contents, abs_path, 'exec') in module.__dict__
 

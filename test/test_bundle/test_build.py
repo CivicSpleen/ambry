@@ -142,7 +142,7 @@ class Test(TestBase):
     @pytest.mark.slow
     def test_dimensions(self):
         """Test a simple bundle which has  custom datatypes and derivations in the schema. """
-        from ambry.etl import PrintEvery, Head, CasterPipe
+
         from itertools import islice
 
         build_url = '/tmp/ambry-build-test'
@@ -171,7 +171,7 @@ class Test(TestBase):
         self.assertEqual(600, row['percent'])
 
 
-        with b.partition(table='integers').datafile.reader as r:
+        with b.partition(table='counties').datafile.reader as r:
             for row in r:
                 print row.row
 
@@ -203,7 +203,6 @@ class Test(TestBase):
 
         b.run_stages()
 
-
         with b.partition('example.com-complete-ref-stage2').datafile.reader as r:
             for row in r:
                 self.assertEqual(row.tens, row.stage1_tens_a)
@@ -223,17 +222,18 @@ class Test(TestBase):
         except PhaseError as e:  # Gets cast errors, which are converted to codes
             self.assertEqual(1, len(b.dataset.codes))
 
-
         self.assertEqual(3, len(list(b.partitions)))
 
+        p = b.partition(table='simple')
+
         mn = mx = 0
-        for row in next(iter(b.partitions)):
+        for row in p:
             self.assertEqual(row['index'], row['index2'])
             int(row['numcom'])  # Check that the comma was removed
-            mn, mx = min(mn, row['codes']), max(mx, row['codes'])
+            mn, mx = min(mn, row['removecodes']), max(mx, row['removecodes'])
 
-        self.assertEqual(None, mn)  # The '*' should have been turned into a -1
-        self.assertEqual(0, mx)
+        self.assertEqual(-1, mn)  # The '*' should have been turned into a -1
+        self.assertEqual(4, mx)
 
         self.assertEqual(0, len(b.dataset.codes))
 
@@ -241,10 +241,10 @@ class Test(TestBase):
 
         with b.partition(table='integers').datafile.reader as r:
             for row in r:
-                print row
+
                 self.assertEqual(row.id, row.a)
                 self.assertEqual(row.id * 2, row.b)
                 self.assertEqual(row.id * 2, row.c)
                 self.assertEqual(row.id * 2, row.d)
-                #self.assertEqual(row.id * 3, row.e)
-                #self.assertEqual(8, row.f)
+                self.assertEqual(row.id * 3, row.e)
+                self.assertEqual(8, row.f)

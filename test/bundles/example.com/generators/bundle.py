@@ -35,17 +35,7 @@ class Bundle(Bundle):
     def check_subclass(self):
         return True
 
-    def build(self, stage='main', sources=None, force = False):
 
-        self.pre_build()
-
-        self.phase_main('build', sources=sources, stage='main')
-
-        self.phase_main('build', sources=sources, stage='build2')
-
-        self.post_build()
-
-        return True
 
 
 

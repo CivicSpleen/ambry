@@ -37,4 +37,4 @@
 "simple_stats","str_a","str","upper"
 "simple_stats","str_b","str","title|v.replace('w','X')|!ignore_exception"
 "simple_stats","state","fips.State","^row.int_a|!ignore_exception"
-"simple_stats","state_name","str","||row.state.name"
+"simple_stats","state_name","str","||row.state.name|!ignore_exception"

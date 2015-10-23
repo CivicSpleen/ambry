@@ -1041,7 +1041,7 @@ class CastColumns(Pipe):
 
         super(CastColumns, self).__init__()
 
-        self.row_processors = None
+        self.row_processors = []
         self.orig_headers = None
         self.new_headers = None
         self.row_proxy_1 = None
@@ -1061,7 +1061,7 @@ class CastColumns(Pipe):
 
         self.row_proxy_2 = RowProxy(self.new_headers)
 
-        self.row_processors = self.bundle.build_caster_code(self.source)
+        self.row_processors = self.bundle.build_caster_code(self.source, self)
 
         return self.new_headers
 
@@ -1082,7 +1082,7 @@ class CastColumns(Pipe):
 
     def __str__(self):
 
-        o = qualified_class_name(self) + '{} pipelines, {} routines\n'.format(len(self.pipelines), len(self.routines))
+        o = qualified_class_name(self) + '{} pipelines\n'.format(len(self.row_processors))
 
         return o
 

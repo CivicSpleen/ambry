@@ -263,7 +263,7 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
 
-    order = SAColumn('ds_order', INTEGER, default =0)
+    order = SAColumn('ds_order', INTEGER, default =0) # Order inwhich to process sources.
     pipeline = SAColumn('ds_pipeline', Text)
 
     filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed, partition

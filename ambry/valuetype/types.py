@@ -24,7 +24,10 @@ def transform_generator(fn):
 
 def is_transform_generator(fn):
     """Return true of the function has been marked with @transform_generator"""
-    return fn.func_dict.get('is_transform_generator', False)
+    try:
+        return fn.func_dict.get('is_transform_generator', False)
+    except AttributeError:
+        return False
 
 @transform_generator
 def join( source_name, foreign_column, join_key, bundle):
@@ -47,7 +50,8 @@ def join( source_name, foreign_column, join_key, bundle):
     with bundle.dep(source_name).datafile.reader as r:
         id_map = { fig(row) : row.copy() for row in r }
 
-    def _joins(v, scratch):
+    def _joins(v, scratch, **kwargs):  # kwargs needed to suck up superflous args in call.
+
 
         scratch[join_key] = id_map.get(v)
 
@@ -58,7 +62,7 @@ def join( source_name, foreign_column, join_key, bundle):
 @transform_generator
 def joined(join_key, foreign_col):
 
-    def _joined(scratch):
+    def _joined(scratch, **kwargs): # kwargs needed to suck up superflous args in call.
 
         return scratch[join_key][foreign_col]
 
@@ -132,6 +136,8 @@ def int_e(v):
 def parse_int(v, header_d):
     """Parse as an integer, or a subclass of Int."""
 
+    v = nullify(v)
+
     if v is None:
         return None
 
@@ -143,6 +149,7 @@ def parse_int(v, header_d):
         raise CastingError(int, header_d, v, 'Failed to cast to integer')
 
 def parse_float(v,  header_d):
+    v = nullify(v)
 
     if v is None:
         return None
@@ -153,9 +160,11 @@ def parse_float(v,  header_d):
         raise CastingError(float, header_d, v, str(e))
 
 
-def parse_str(v, i_d, header_d, errors):
+def parse_str(v,  header_d):
 
     # This is often a no-op, but it ocassionally converts numbers into strings
+
+    v = nullify(v)
 
     if v is None: return None
 
@@ -166,6 +175,8 @@ def parse_str(v, i_d, header_d, errors):
 
 def parse_unicode(v,  header_d):
 
+    v = nullify(v)
+
     if v is None: return None
 
     try:
@@ -174,6 +185,8 @@ def parse_unicode(v,  header_d):
         raise CastingError(unicode, header_d, v, str(e))
 
 def parse_type(type_, v,  header_d):
+
+    v = nullify(v)
 
     if v is None: return None
 
@@ -184,6 +197,8 @@ def parse_type(type_, v,  header_d):
 
 
 def parse_date(v, header_d):
+
+    v = nullify(v)
 
     if v is None: return None
 
@@ -200,6 +215,8 @@ def parse_date(v, header_d):
 
 def parse_time(v,  header_d):
 
+    v = nullify(v)
+
     if v is None: return None
 
     if isinstance(v, string_types):
@@ -214,6 +231,8 @@ def parse_time(v,  header_d):
         raise CastingError(int, header_d, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
 
 def parse_datetime(v,  header_d):
+
+    v = nullify(v)
 
     if v is None: return None
 

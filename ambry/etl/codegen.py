@@ -8,6 +8,18 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 import ast
 import meta
 
+def file_loc():
+    """Return file and line number"""
+    import sys
+    import inspect
+    try:
+        raise Exception
+    except:
+        file_ =  '.../'+'/'.join((inspect.currentframe().f_code.co_filename.split('/'))[-3:])
+        line_  = sys.exc_info()[2].tb_frame.f_back.f_lineno
+        return "{}:{}".format(file_, line_)
+
+
 const_args = ('row', 'row_n', 'scratch', 'errors', 'pipe', 'bundle', 'source')
 var_args = ('v', 'i_s', 'i_d', 'header_s', 'header_d')
 all_args = var_args + const_args
@@ -19,10 +31,18 @@ col_code_def = 'lambda {}:'.format(','.join(all_args))
 # that are the same for every column
 code_def = 'lambda {}:'.format(','.join(const_args))
 
+file_header = """
+import math
+
+"""
+
 column_template="""
 def {f_name}(v, i_s, i_d, header_s, header_d, row, row_n, errors, scratch, accumulator, pipe, bundle, source):
 
-    col_args = dict(v=v, i_s=i_s, i_d=i_d, header_s=header_s, header_d=header_d, row=row, row_n=row_n)
+    # funcs created by transform generators must be called with kwargs because their signatures aren't
+    # known when the code is generated.
+    col_args = dict(v=v, i_s=i_s, i_d=i_d, header_s=header_s, header_d=header_d,
+                    scratch=scratch, errors=errors, accumulator = accumulator, row=row, row_n=row_n)
 
     try:
 {stack}
@@ -55,6 +75,7 @@ def base_env():
     import ambry.valuetype.string
     import ambry.valuetype.exceptions
     import ambry.valuetype.test
+    import math
 
     localvars = dict(
 
@@ -86,18 +107,27 @@ def find_function(bundle, base_env, code):
     """
     import sys
 
+    if code == 'doubleit3':
+        pass
+
     if bundle:
         try:
             f = getattr(bundle, code)
-            f.ambry_from = '{} = bundle.{}'.format(code, code)
+            try:
+                f.ambry_preamble = '{} = bundle.{}'.format(code, code)
+                f.ambry_from = 'bundle'
+            except AttributeError: # for instance methods
+                f.im_func.ambry_preamble = '{} = bundle.{}'.format(code, code)
+                f.im_func.ambry_from = 'bundle'
             return f
 
-        except AttributeError:
+        except AttributeError as e:
             pass
 
         try:
             f = getattr(sys.modules['ambry.build'], code)
-            f.ambry_from = 'from ambry.build import {}'.format(code)
+            f.ambry_preamble = 'from ambry.build import {}'.format(code)
+            f.ambry_from = 'module'
             return f
 
         except AttributeError:
@@ -105,9 +135,10 @@ def find_function(bundle, base_env, code):
 
     try:
         f = base_env[code]
+        f.ambry_from = 'env'
         return f
 
-    except KeyError:
+    except KeyError as e:
         pass
 
     raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(code))
@@ -143,7 +174,7 @@ def make_row_processors(bundle, source_table, dest_table, env = None):
     if not env:
         env = make_env(bundle, base_env())
 
-    out = []
+    out = [file_header]
 
     for  i, segments in enumerate(dest_table.transforms):
 
@@ -256,28 +287,32 @@ def make_stack(env, stage, segment):
     def make_line(column, t):
         preamble = []
 
+        if t == 'doubleit3':
+            pass
+
         if isinstance(t, type) and issubclass(t, ValueType):  # A valuetype class, from the datatype column.
             tn = qualified_name(t)
-            line = "v = {}(v) if v is not None else None".format(tn)
+            line = "v = {}(v) if v is not None else None # {}".format(tn, file_loc())
             preamble.append('import ambry.valuetype')
+
         elif isinstance(t, type):  # A python type, from the datatype columns.
-            line = "v = {}(v) if v is not None else None".format(t.__name__)
+            line = "v = parse_{}(v, header_d) # {}".format(t.__name__, file_loc())
 
         elif callable(env(t)):
             fn = env(t)
 
             try:
-                frm = fn.ambry_from
-            except AttributeError:
+                frm = fn.ambry_preamble
+            except AttributeError as e:
                 frm = None
 
             if frm and 'import' in frm:
                 preamble.append(frm)
-                line = 'v = {}'.format(calling_code(fn, t))
+                line = 'v = {} # {}'.format(calling_code(fn, t), file_loc())
             elif not frm:
-                line = 'v = {}'.format(calling_code(fn, t))
+                line = 'v = {} # {}'.format(calling_code(fn, t), file_loc())
             elif 'bundle' in frm:
-                line = 'v = bundle.{}'.format(calling_code(fn, t))
+                line = 'v = bundle.{} # {}'.format(calling_code(fn, t), file_loc())
             else:
                 raise Exception(frm)
 
@@ -286,11 +321,16 @@ def make_stack(env, stage, segment):
             rnd = (''.join(random.choice(string.ascii_lowercase) for _ in range(6)))
 
             name = 'tg_{}_{}_{}'.format(column.name, stage, rnd)
+            try:
+                a, b, loc = rewrite_tg(env, name, t)
+            except CodeGenError as e:
+                raise CodeGenError("Failed to re-write pipe code '{}' in column '{}.{}': {} "
+                                    .format(t, column.table.name, column.name, e ))
 
-            a, b = rewrite_tg(env, name, t)
-            line = 'v = {}'.format(a)
+            line = 'v = {} # {}'.format(a, loc)
+
             if b:
-                preamble.append("{} = {}".format(name, b))
+                preamble.append("{} = {} # {}".format(name, b, loc))
 
         return line, preamble
 
@@ -342,6 +382,7 @@ class ReplaceTG(ast.NodeTransformer):
         self.tg_name = tg_name
         self.trans_gen = None
         self.env = env
+        self.loc = ''
 
     def missing_args(self):
         pass
@@ -350,72 +391,103 @@ class ReplaceTG(ast.NodeTransformer):
 
         import inspect
         from ambry.valuetype.types import is_transform_generator
+        import types
 
-        if isinstance(node.func, ast.Name):
-            fn = self.env(node.func.id)
-
-            if not fn:
-                raise CodeGenError("Failed to get function named '{}' from the environment".format(node.func.id))
-
-            fn_args = inspect.getargspec(fn).args
-
-            # Create a dict of the arguments that have been specified
-            used_args = dict(tuple(zip(fn_args, node.args))
-                            +tuple( (kw.arg, kw.value) for kw in node.keywords)
-            )
-
-
-            # Add in the arguments that were not.
-            for arg in fn_args:
-                if arg not in used_args:
-                    used_args[arg] = ast.Name(id=arg, ctx=ast.Load())
-
-            # Now, all of the args are in a dict, so we'll re-build them as
-            # as if they were all kwargs. Any arguments that were not provided by the
-            # signature in the input are added as keywords, with the value being
-            # a variable of the same name as the argument: ie. if 'bundle' was defined
-            # but not provided, the signature has an added 'bundle=bundle' kwarg
-
-            keywords = [ast.keyword(arg=k, value=v) for k, v in used_args.items()]
-
-            tg_ast = ast.copy_location(
-                ast.Call(
-                    func=ast.Name(id=node.func.id, ctx=ast.Load()),
-                    args=[],
-                    keywords=keywords,
-                    starargs=[],
-                    kwargs=[]
-                ), node)
-
-            if is_transform_generator(fn):
-                self.trans_gen = tg_ast
-                replace_node = ast.copy_location(
-                    ast.Call(
-                        func=ast.Name(id=self.tg_name, ctx=ast.Load()),
-                        args=[],
-                        keywords=[],
-                        kwargs=ast.Name(id='col_args', ctx=ast.Load()),
-                        starargs=[]
-                    ), node)
-
-            else:
-                replace_node = tg_ast
-
-            return replace_node
-
-        else:
+        if not isinstance(node.func, ast.Name):
             self.generic_visit(node)
             return node
+
+        fn_name = node.func.id
+        fn_args = None
+        use_kw_args = True
+
+        fn = self.env(node.func.id)
+        self.loc = file_loc() # Not a builtin, not a type, not a transform generator
+
+        # In this case, the code line is a type that has a parse function, so rename it.
+        if not fn:
+            t_fn_name = 'parse_'+fn_name
+            t_fn = self.env(t_fn_name)
+            if t_fn:
+                self.loc = file_loc() # The function is a type
+                fn, fn_name = t_fn, t_fn_name
+
+        # Ok, maybe it is a builtin
+        if not fn:
+            o = eval(fn_name)
+            if isinstance(o, types.BuiltinFunctionType):
+                self.loc = file_loc() # The function is a builtin
+                fn = o
+                fn_args = ['v']
+                use_kw_args = False
+
+        if not fn:
+            raise CodeGenError("Failed to get function named '{}' from the environment".format(node.func.id))
+
+        if not fn_args:
+            fn_args = inspect.getargspec(fn).args
+
+        # Create a dict of the arguments that have been specified
+        used_args = dict(tuple(zip(fn_args, node.args))
+                        +tuple( (kw.arg, kw.value) for kw in node.keywords)
+        )
+
+        # Add in the arguments that were not, but only for args that are specified to be
+        # part of the local environment
+        for arg in fn_args:
+            if arg not in used_args and arg in all_args:
+                used_args[arg] = ast.Name(id=arg, ctx=ast.Load())
+
+        # Now, all of the args are in a dict, so we'll re-build them as
+        # as if they were all kwargs. Any arguments that were not provided by the
+        # signature in the input are added as keywords, with the value being
+        # a variable of the same name as the argument: ie. if 'bundle' was defined
+        # but not provided, the signature has an added 'bundle=bundle' kwarg
+
+        keywords = [ast.keyword(arg=k, value=v) for k, v in used_args.items()]
+
+        tg_ast = ast.copy_location(
+            ast.Call(
+                func=ast.Name(id=fn_name, ctx=ast.Load()),
+                args=[e.value for e in keywords] if not use_kw_args else [], # For builtins, which only take one arg
+                keywords=keywords if use_kw_args else [],
+                starargs=[],
+                kwargs=[]
+            ), node)
+
+        if is_transform_generator(fn):
+            self.loc = file_loc() # The function is a transform generator.
+            self.trans_gen = tg_ast
+            replace_node = ast.copy_location(
+                ast.Call(
+                    func=ast.Name(id=self.tg_name, ctx=ast.Load()),
+                    args=[],
+                    keywords=[],
+                    kwargs=ast.Name(id='col_args', ctx=ast.Load()),
+                    starargs=[]
+                ), node)
+
+        else:
+            replace_node = tg_ast
+
+        return replace_node
+
 
 def rewrite_tg(env, tg_name, code):
 
     visitor = ReplaceTG(env, tg_name)
     assert visitor.tg_name
+
     tree = visitor.visit(ast.parse(code))
+
+    if visitor.loc:
+        loc = ' #'+visitor.loc
+    else:
+        loc = file_loc() # The AST visitor didn't match a call node
 
     if visitor.trans_gen:
         tg = meta.dump_python_source(visitor.trans_gen).strip()
     else:
         tg = None
 
-    return meta.dump_python_source(tree).strip(), tg
+    return meta.dump_python_source(tree).strip(), tg, loc

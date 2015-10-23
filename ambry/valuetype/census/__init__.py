@@ -7,12 +7,12 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from .. import TextValue
+from .. import TextValue, ValueType
 
 import geoid.census, geoid.acs, geoid.civick, geoid.tiger
 import re
 
-class Geoid(object):
+class Geoid(ValueType):
     """Two letter state Abbreviation. May be uppercase or lower case. """
 
     _pythontype = str
