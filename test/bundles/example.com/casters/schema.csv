@@ -31,7 +31,7 @@
 "simple_stats","float_a","float","cst_double"
 "simple_stats","float_b","float","cst_double|cst_double"
 "simple_stats","float_c","float","!ignore_exception||cst_double|cst_double||cst_double|cst_double"
-"simple_stats","int_a","int","test_tg(1,2,3)"
+"simple_stats","int_a","int",
 "simple_stats","int_b","int","!capture_error"
 "simple_stats","int_b_codes","str","^error_from('int_b')"
 "simple_stats","str_a","str","upper"

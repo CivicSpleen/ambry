@@ -155,6 +155,7 @@ def make_row_processors(bundle, source_table, dest_table, env = None):
                 seg_funcs.append('row[{}], # {}'.format(col_num-1, column.name))
                 continue
 
+            assert column
             assert column.name == segment['column'].name
             col_name = column.name
             preamble, try_lines, exception = make_stack(env, i, segment)
