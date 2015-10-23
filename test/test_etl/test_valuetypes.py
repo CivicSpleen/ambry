@@ -131,6 +131,9 @@ class Test(TestBase):
         b.sync_in();  # Required to get bundle for cast_to_subclass to work.
         b = b.cast_to_subclass()
 
+        b.ingest()
+        b.schema()
+
         pl = b.pipeline(source=b.source('simple_stats'))
 
         ccp = pl[CastColumns]

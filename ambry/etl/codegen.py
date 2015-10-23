@@ -136,6 +136,8 @@ def make_row_processors(bundle, source_table, dest_table, env = None):
     dest_headers = [c.name for c in dest_table.columns]
     source_headers = [c.dest_header for c in source_table.columns]
 
+    assert len(source_headers) > 0
+
     row_processors = []
 
     if not env:
@@ -245,17 +247,21 @@ def make_stack(env, stage, segment):
     import collections
     import string
     import random
-    from ambry.util import qualified_class_name
+    from ambry.util import qualified_name
+    from ambry.valuetype import ValueType
 
     column = segment['column']
 
     def make_line(column, t):
         preamble = []
 
-        if isinstance(t, type):
-            line = "v = {}(v) if v else None".format(t.__name__)
-        elif isinstance(object, types.ClassType):
-            line = "v = {}(v) if v else None".format(qualified_class_name(t.__name__))
+        if isinstance(t, type) and issubclass(t, ValueType):  # A valuetype class, from the datatype column.
+            tn = qualified_name(t)
+            line = "v = {}(v) if v is not None else None".format(tn)
+            preamble.append('import ambry.valuetype')
+        elif isinstance(t, type):  # A python type, from the datatype columns.
+            line = "v = {}(v) if v is not None else None".format(t.__name__)
+
         elif callable(env(t)):
             fn = env(t)
 

@@ -1074,7 +1074,7 @@ class CastColumns(Pipe):
         rp = self.row_proxy_1
 
         for proc in self.row_processors:
-            row = proc(rp.set_row(row), 0, errors, scratch, self.accumulator, self, self.bundle, self.source)
+            row = proc(rp.set_row(row), self.row_n, errors, scratch, self.accumulator, self, self.bundle, self.source)
             rp = self.row_proxy_2
 
         return row
