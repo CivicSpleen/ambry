@@ -20,7 +20,7 @@ from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_N
 from ambry.run import get_runconfig
 
 
-MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql-test '\
+MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgres-test '\
     'to the database config of the ambry config.'
 SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
 
@@ -175,15 +175,15 @@ class PostgreSQLTestBase(TestBase):
     @classmethod
     def _create_postgres_test_db(cls, conf=None):
         if not conf:
-            conf = TestBase.get_rc() # get_runconfig()
+            conf = TestBase.get_rc()  # get_runconfig()
 
         # we need valid postgres dsn.
-        if not ('database' in conf.dict and 'postgresql-test' in conf.dict['database']):
+        if not ('database' in conf.dict and 'postgres-test' in conf.dict['database']):
             # example of the config
             # database:
-            #     postgresql-test: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
+            #     postgres-test: postgresql+psycopg2://user:pass@127.0.0.1/ambry
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-        dsn = conf.dict['database']['postgresql-test']
+        dsn = conf.dict['database']['postgres-test']
         parsed_url = urlparse(dsn)
         postgres_user = parsed_url.username
         db_name = parsed_url.path.replace('/', '')
