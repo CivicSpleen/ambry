@@ -96,12 +96,13 @@ CKAN export
 1. Add CKAN credentials to ~/.ambry-accounts.yaml:
 
 .. code-block:: yaml
+
 ckan:
     host: http://demo.ckan.org
-    organization: org1
+    organization: <your organization>
     apikey: <your API key>
 
-2. Run
+2. Run:
 
 .. code-block:: bash
 ambry ckan_export <dataset_vid>
