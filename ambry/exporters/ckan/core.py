@@ -119,7 +119,11 @@ def _convert_partition(partition):
 def _convert_schema(dataset):
     """ Converts schema of the dataset to resource dict ready to save to CKAN. """
     # http://docs.ckan.org/en/latest/api/#ckan.logic.action.create.resource_create
-    schema_csv = _get_schema_file(dataset)
+    schema_csv = ''
+    for f in dataset.files:
+        if f.path.endswith('schema.csv'):
+            schema_csv = f.unpacked_contents
+
     ret = {
         'package_id': dataset.vid,
         'url': 'http://example.com',
@@ -138,23 +142,7 @@ def _convert_schema(dataset):
         'last_modified': '',
         'cache_last_updated': '',
         'webstore_last_updated': '',
-        'upload': schema_csv.read(),
+        'upload': schema_csv,
     }
 
     return ret
-
-
-def _get_schema_file(dataset):
-    """ Converts tables of the dataset to csv. Returns file-like. """
-    # FIXME: Find better way to get schema.
-    import unicodecsv
-    from StringIO import StringIO
-    csv_content = StringIO()
-    writer = unicodecsv.writer(csv_content)
-    writer.writerow(['table', 'datatype', 'size', 'column', 'description'])
-    for table in dataset.tables:
-        for column in table.columns:
-            writer.writerow([table.name, column.datatype, column.size, column.name, column.description])
-        writer.writerow(['', '', '', '', ''])
-    csv_content.seek(0)
-    return csv_content

@@ -7,7 +7,7 @@ from ambry.orm.database import Database
 from ambry.run import get_runconfig
 from ambry.exporters.ckan.core import export, MISSING_CREDENTIALS_MSG
 
-from test.test_orm.factories import DatasetFactory, PartitionFactory
+from test.test_orm.factories import DatasetFactory, PartitionFactory, FileFactory
 
 # CKAN is mocked by default. If you really want to hit CKAN instance set MOCK_CKAN to False.
 MOCK_CKAN = True
@@ -26,6 +26,7 @@ class Test(unittest.TestCase):
     def test_dataset_export(self):
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
         PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        FileFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
         ds1 = DatasetFactory(vid='dds0011')
         ds1.config.metadata.contacts.creator.name = 'creator'
@@ -33,8 +34,10 @@ class Test(unittest.TestCase):
         ds1.config.metadata.contacts.maintainer.name = 'maintainer'
         ds1.config.metadata.contacts.maintainer.email = 'maintainer@example.com'
 
-        partition1 = PartitionFactory(dataset=ds1)
-        # FIXME: Add table and columns and check their existance in the schema.
+        PartitionFactory(dataset=ds1)
+        FileFactory(id=20, dataset=ds1, path='schema.csv', contents='table,datatype,size,column,description')
+        FileFactory(id=21, dataset=ds1, path='documentation.md', contents='### Documentation')
+
         self.sqlite_db.commit()
 
         if MOCK_CKAN:
@@ -72,7 +75,7 @@ class Test(unittest.TestCase):
             assert dataset_package
 
         self.assertEqual(dataset_package['name'], dataset.vid)
-        # test documentation # FIXME:
+        self.assertIn('### Documentation', dataset_package['notes'])
 
         # test contacts.
         contacts = dataset.config.metadata.contacts
@@ -90,14 +93,15 @@ class Test(unittest.TestCase):
             schema_resource = [x for x in self._requests['resource_create'] if x['name'] == 'schema']
             assert schema_resource
             schema_resource = schema_resource[0]
+            self.assertEqual(schema_resource['upload'], 'table,datatype,size,column,description')
         else:
             assert dataset_package
             schema_resources = [x for x in dataset_package['resources'] if x['name'] == 'schema']
             assert len(schema_resources) == 1
             schema_resource = schema_resources[0]
+            # FIXME: Read content of the file.
 
         # self.assertEqual(schema_resource['package_id'], dataset.vid)
-        # FIXME: Read content of the file.
 
     def _assert_partitions_published(self, dataset, dataset_package=None):
         # check first partition only.
