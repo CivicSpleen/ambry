@@ -95,12 +95,12 @@ CKAN export
 ===========
 1. Add CKAN credentials to ~/.ambry-accounts.yaml:
 
-.. code-block:: yaml
-
+```
 ckan:
     host: http://demo.ckan.org
     organization: <your organization>
     apikey: <your API key>
+```
 
 2. Run:
 
