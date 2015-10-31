@@ -75,9 +75,10 @@ def _convert_dataset(dataset):
     meta = dataset.config.metadata
 
     notes = ''
+
     for f in dataset.files:
         if f.path.endswith('documentation.md'):
-            notes = f.unpacked_contents
+            notes = f.contents
             break
 
     ret = {
@@ -130,7 +131,7 @@ def _convert_schema(dataset):
     schema_csv = ''
     for f in dataset.files:
         if f.path.endswith('schema.csv'):
-            schema_csv = f.unpacked_contents
+            schema_csv = f.contents
 
     ret = {
         'package_id': dataset.vid.lower(),
