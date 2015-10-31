@@ -40,6 +40,12 @@ def export(dataset):
     if not ckan:
         raise EnvironmentError(MISSING_CREDENTIALS_MSG)
 
+    if dataset.config.metadata.about.access in ('internal', 'test', 'controlled', 'restricted', 'census'):
+        # Never publish dataset with such access.
+        raise Exception(
+            '{} dataset can not be published because of {} access'
+            .format(dataset.vid, dataset.config.metadata.about.access))
+
     # publish dataset
     ckan.action.package_create(**_convert_dataset(dataset))
 
