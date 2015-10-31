@@ -80,7 +80,7 @@ class ExportTest(unittest.TestCase):
         export(ds1)
 
         # assert call to service was valid.
-        self.assertEqual(len(fake_call.mock_calls), 1)
+        self.assertEqual(len(fake_call.mock_calls), 2)
         _, args, kwargs = fake_call.mock_calls[0]
         self.assertEqual(args[0], 'package_create')
         self.assertEqual(kwargs['data_dict']['name'], ds1.vid)
