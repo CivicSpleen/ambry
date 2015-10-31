@@ -31,7 +31,12 @@ else:
 
 
 def export(dataset):
-    """ FIXME: """
+    """ Exports dataset to ckan instance.
+
+    Args:
+        dataset (ambry.orm.Dataset):
+
+    """
     if not ckan:
         raise EnvironmentError(MISSING_CREDENTIALS_MSG)
 
@@ -50,7 +55,7 @@ def is_exported(dataset):
     """ Returns True if dataset is already exported to CKAN. Otherwise returns False. """
     if not ckan:
         raise EnvironmentError(MISSING_CREDENTIALS_MSG)
-    params = {'q': 'name:{}'.format(dataset.vid)}
+    params = {'q': 'name:{}'.format(dataset.vid.lower())}
     resp = ckan.action.package_search(**params)
     return len(resp['results']) > 0
 
@@ -76,7 +81,7 @@ def _convert_dataset(dataset):
             break
 
     ret = {
-        'name': dataset.vid,
+        'name': dataset.vid.lower(),
         'title': meta.about.title,
         'author': meta.contacts.creator.name,
         'author_email': meta.contacts.creator.email,
@@ -96,7 +101,7 @@ def _convert_partition(partition):
     """ Converts partition to resource dict ready to save to CKAN. """
     # http://docs.ckan.org/en/latest/api/#ckan.logic.action.create.resource_create
     ret = {
-        'package_id': partition.dataset.vid,
+        'package_id': partition.dataset.vid.lower(),
         'url': 'http://example.com',
         'revision_id': '',
         'description': '',
@@ -128,7 +133,7 @@ def _convert_schema(dataset):
             schema_csv = f.unpacked_contents
 
     ret = {
-        'package_id': dataset.vid,
+        'package_id': dataset.vid.lower(),
         'url': 'http://example.com',
         'revision_id': '',
         'description': 'Schema of the dataset tables.',

@@ -278,7 +278,7 @@ def root_doc(args, l, rc):
         # application reload
         webbrowser.open(url)
     else:
-        print("Running at: {}".format(url))
+        print('Running at: {}'.format(url))
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
 
@@ -291,7 +291,7 @@ def root_remove(args, l, rc):
 
     l.remove(b)
 
-    prt("Removed {}".format(fqname))
+    prt('Removed {}'.format(fqname))
 
 
 def root_import(args, l, rc):
@@ -316,7 +316,7 @@ def root_import(args, l, rc):
             b = l.bundle(bid)
 
             if not args.force:
-                prt("Skipping existing  bundle: {}".format(b.identity.fqname))
+                prt('Skipping existing  bundle: {}'.format(b.identity.fqname))
                 continue
 
         except NotFoundError:
@@ -324,9 +324,9 @@ def root_import(args, l, rc):
 
         if not b:
             b = l.new_from_bundle_config(config)
-            prt("Loading bundle: {}".format(b.identity.fqname))
+            prt('Loading bundle: {}'.format(b.identity.fqname))
         else:
-            prt("Loading existing bundle: {}".format(b.identity.fqname))
+            prt('Loading existing bundle: {}'.format(b.identity.fqname))
 
         b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
 
