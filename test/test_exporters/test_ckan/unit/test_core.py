@@ -7,7 +7,7 @@ from ambry.exporters.ckan.core import _convert_dataset, _convert_partition, expo
 from ambry.orm.database import Database
 from ambry.run import get_runconfig
 
-from test.test_orm.factories import DatasetFactory, PartitionFactory, TableFactory
+from test.test_orm.factories import DatasetFactory, PartitionFactory, TableFactory, FileFactory
 
 
 class ConvertDatasetTest(unittest.TestCase):
@@ -33,6 +33,16 @@ class ConvertDatasetTest(unittest.TestCase):
         self.assertIn('author_email', ret)
         self.assertIn('maintainer', ret)
         self.assertIn('maintainer_email', ret)
+
+    def test_extends_notes_with_dataset_documentation(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        FileFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        ds1 = DatasetFactory()
+        FileFactory(dataset=ds1, path='documentation.md', contents='### Dataset documentation.')
+        ret = _convert_dataset(ds1)
+
+        self.assertIn('### Dataset documentation.', ret['notes'])
 
 
 class ConvertPartitionTest(unittest.TestCase):
@@ -77,7 +87,6 @@ class ExportTest(unittest.TestCase):
 
     @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
     def test_creates_resources_for_each_partition_of_the_dataset(self, fake_call):
-        # first assert signatures of the functions we are going to mock did not change.
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
         PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
@@ -93,7 +102,6 @@ class ExportTest(unittest.TestCase):
 
     @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
     def test_creates_resource_for_schema(self, fake_call):
-        # first assert signatures of the functions we are going to mock did not change.
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
         TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
 

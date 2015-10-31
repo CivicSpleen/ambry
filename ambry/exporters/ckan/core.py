@@ -19,7 +19,6 @@ ckan:
 
 rc = get_runconfig()
 
-# find ckan config.
 CKAN_CONFIG = rc.accounts.get('ckan')
 
 if CKAN_CONFIG and set(['host', 'organization', 'apikey']).issubset(CKAN_CONFIG.keys()):
@@ -67,6 +66,12 @@ def _convert_dataset(dataset):
     # shortcut for metadata
     meta = dataset.config.metadata
 
+    notes = ''
+    for f in dataset.files:
+        if f.path.endswith('documentation.md'):
+            notes = f.unpacked_contents
+            break
+
     ret = {
         'name': dataset.vid,
         'title': meta.about.title,
@@ -75,10 +80,11 @@ def _convert_dataset(dataset):
         'maintainer': meta.contacts.maintainer.name,
         'maintainer_email': meta.contacts.maintainer.email,
         'license_id': '',
-        'notes': meta.about.summary,
+        'notes': notes,
         'url': meta.identity.source,
         'version': dataset.version,
         'state': 'active',
+        'owner_org': CKAN_CONFIG['organization'],
     }
     return ret
 
