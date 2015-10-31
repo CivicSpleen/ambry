@@ -4,9 +4,10 @@ import unittest
 from mock import patch
 
 from ambry.orm.database import Database
-from ambry.exporters.ckan.core import _convert_dataset, _convert_partition, export
+from ambry.run import get_runconfig
+from ambry.exporters.ckan.core import export, MISSING_CREDENTIALS_MSG
 
-from test.test_orm.factories import DatasetFactory, PartitionFactory, TableFactory
+from test.test_orm.factories import DatasetFactory, PartitionFactory
 
 # CKAN is mocked by default. If you really want to hit CKAN instance set MOCK_CKAN to False.
 MOCK_CKAN = True
@@ -15,6 +16,9 @@ MOCK_CKAN = True
 class Test(unittest.TestCase):
 
     def setUp(self):
+        rc = get_runconfig()
+        if 'ckan' not in rc.accounts:
+            raise EnvironmentError(MISSING_CREDENTIALS_MSG)
         self.sqlite_db = Database('sqlite://')
         self.sqlite_db.create()
         self._requests = {}  # calls to CKAN mock.

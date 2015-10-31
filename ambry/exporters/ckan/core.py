@@ -4,14 +4,37 @@
 
 import ckanapi
 
-ckan = ckanapi.RemoteCKAN(
-    'http://demo.ckan.org',
-    apikey='FIXME:',  # FIXME: Read API key from config.
-    user_agent='ambry/1.0 (+http://ambry.io)')
+from ambry.run import get_runconfig
+
+
+MISSING_CREDENTIALS_MSG = '''Missing CKAN credentials.
+HINT:
+Add `ckan` section to the ~/.ambry_accounts.yaml. Example:
+
+ckan:
+    host: http://demo.ckan.org  # host with the ckan instance
+    organization: org1  # default organization
+    apikey: <apikey>  # your api key
+'''
+
+rc = get_runconfig()
+
+# find ckan config.
+CKAN_CONFIG = rc.accounts.get('ckan')
+
+if CKAN_CONFIG and set(['host', 'organization', 'apikey']).issubset(CKAN_CONFIG.keys()):
+    ckan = ckanapi.RemoteCKAN(
+        CKAN_CONFIG.host,
+        apikey=CKAN_CONFIG.apikey,
+        user_agent='ambry/1.0 (+http://ambry.io)')
+else:
+    ckan = None
 
 
 def export(dataset):
     """ FIXME: """
+    if not ckan:
+        raise EnvironmentError(MISSING_CREDENTIALS_MSG)
 
     # publish dataset
     ckan.action.package_create(**_convert_dataset(dataset))

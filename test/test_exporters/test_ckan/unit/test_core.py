@@ -3,8 +3,9 @@ import unittest
 
 from mock import patch
 
+from ambry.exporters.ckan.core import _convert_dataset, _convert_partition, export, MISSING_CREDENTIALS_MSG
 from ambry.orm.database import Database
-from ambry.exporters.ckan.core import _convert_dataset, _convert_partition, export
+from ambry.run import get_runconfig
 
 from test.test_orm.factories import DatasetFactory, PartitionFactory, TableFactory
 
@@ -56,14 +57,14 @@ class ExportTest(unittest.TestCase):
     """ Tests export(dataset) function. """
 
     def setUp(self):
+        rc = get_runconfig()
+        if 'ckan' not in rc.accounts:
+            raise EnvironmentError(MISSING_CREDENTIALS_MSG)
         self.sqlite_db = Database('sqlite://')
         self.sqlite_db.create()
-        # fudge.clear_expectations()
-        # fudge.clear_calls()
 
     @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
     def test_creates_package_for_given_dataset(self, fake_call):
-        # first assert signatures of the functions we are going to mock did not change.
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
         ds1 = DatasetFactory()
         export(ds1)
