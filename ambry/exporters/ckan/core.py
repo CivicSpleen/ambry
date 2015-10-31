@@ -43,13 +43,16 @@ def export(dataset):
         ckan.action.resource_create(**_convert_partition(partition))
 
     # publish schema.csv
-    if dataset.tables:
-        ckan.action.resource_create(**_convert_schema(dataset))
+    ckan.action.resource_create(**_convert_schema(dataset))
 
 
 def is_exported(dataset):
     """ Returns True if dataset is already exported to CKAN. Otherwise returns False. """
-    pass
+    if not ckan:
+        raise EnvironmentError(MISSING_CREDENTIALS_MSG)
+    params = {'q': 'name:{}'.format(dataset.vid)}
+    resp = ckan.action.package_search(**params)
+    return len(resp['results']) > 0
 
 
 def _convert_dataset(dataset):

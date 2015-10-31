@@ -19,9 +19,10 @@ def root_parser(cmd):
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
     sp.add_argument('-s', '--sort', help='Sort outputs on a field')
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-t', '--tab', action='store_true', help='Print field tab seperated, without pretty table and header')
+    group.add_argument('-t', '--tab', action='store_true',
+                       help='Print field tab seperated, without pretty table and header')
     group.add_argument('-j', '--json', action='store_true',
-                    help='Output as a list of JSON dicts')
+                       help='Output as a list of JSON dicts')
     sp.add_argument('term', nargs='?', type=str,
                     help='Name or ID of the bundle or partition')
 
@@ -29,6 +30,11 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='makemigration')
     sp.add_argument('migration_name', type=str, help='Name of the migration')
+
+    sp = cmd.add_parser('ckan_export', help='Export dataset to CKAN.')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='ckan_export')
+    sp.add_argument('dvid', type=str, help='Dataset vid')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
@@ -121,12 +127,27 @@ def root_makemigration(args, l, rc):
     file_name = create_migration_template(args.migration_name)
     print('New empty migration created. Now populate {} with appropriate sql.'.format(file_name))
 
+
+def root_ckan_export(args, library, run_config):
+    from ambry.orm.exc import NotFoundError
+    from ambry.exporters.ckan import export, is_exported
+    try:
+        dataset = library.dataset(args.dvid)
+        if is_exported(dataset):
+            print('{} dataset is already exported. Update is not implemented!'.format(args.dvid))
+        else:
+            export(dataset)
+            print('{} dataset successfully exported to CKAN.'.format(args.dvid))
+    except NotFoundError:
+        print('Dataset with {} vid not found.'.format(args.dvid))
+
+
 def root_list(args, l, rc):
     from tabulate import tabulate
     import json
 
     if args.fields:
-        header = list( str(e).strip() for e in args.fields.split(','))
+        header = list(str(e).strip() for e in args.fields.split(','))
 
         display_header = len(args.fields) > 1
 
@@ -148,7 +169,7 @@ def root_list(args, l, rc):
         matched_records = []
 
         for r in records:
-            if args.term in ' '.join( str(e) for e in r):
+            if args.term in ' '.join(str(e) for e in r):
                 matched_records.append(r)
 
         records = matched_records
@@ -194,6 +215,7 @@ def root_info(args, l, rc):
     else:
         prt('No library defined!')
 
+
 def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
@@ -228,6 +250,7 @@ def root_search(args, l, rc):
         for p in r.partition_records:
             if p:
                 print('    ', p.vid, p.vname)
+
 
 def root_doc(args, l, rc):
 
