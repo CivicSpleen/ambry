@@ -13,7 +13,8 @@ Setup with Miniconda on Mac
 You can setup Ambry as a normal package, but the geographic library, GDAL, is really difficult to install, so your
 Ambry installation won't produce geo databases. The best way to get GDAL installed is with Anaconda.
 
-First, install miniconda, ( python 2.7 )
+First, install miniconda, (python 2.7)
+
 .. code-block:: bash
 
     $ wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
