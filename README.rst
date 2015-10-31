@@ -90,3 +90,18 @@ Foreign Data Wrapper (need to query partition files packed with psgpack.)
 2. Install ambryfdw:
 .. code-block:: bash
     pip install ambryfdw
+
+CKAN export
+===========
+1. Add CKAN credentials to ~/.ambry-accounts.yaml:
+
+.. code-block:: yaml
+ckan:
+    host: http://demo.ckan.org
+    organization: org1
+    apikey: <your API key>
+
+2. Run
+
+.. code-block:: bash
+ambry ckan_export <dataset_vid>
