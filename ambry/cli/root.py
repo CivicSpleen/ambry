@@ -5,7 +5,7 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..cli import warn, fatal
+from ..cli import warn
 from . import prt
 
 
@@ -49,7 +49,6 @@ def root_parser(cmd):
     sp.add_argument('term', type=str, nargs='?',
                     help='Name or ID of the bundle or partition')
 
-
     sp = cmd.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='doc')
@@ -86,7 +85,7 @@ def root_parser(cmd):
                     help="Detach the imported source. Don't set the location of the imported source as the"
                     " source directory for the bundle ")
     sp.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Force importing an already imported bundle')
+                    help='Force importing an already imported bundle')
     sp.add_argument('term', nargs=1, type=str, help='Base directory')
 
     #
@@ -97,7 +96,7 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='search')
     sp.add_argument('-r', '--reindex', default=False, action='store_true',
-                           help='Reindex the bundles')
+                    help='Reindex the bundles')
     sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
 
 
@@ -223,7 +222,7 @@ def root_sync(args, l, config):
     l.logger.info('args: %s' % args)
 
     for r in l.remotes:
-        prt("Sync with remote {}", r)
+        prt('Sync with remote {}', r)
         l.sync_remote(r)
 
 

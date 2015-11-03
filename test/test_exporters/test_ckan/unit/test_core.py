@@ -3,7 +3,8 @@ import unittest
 
 from mock import patch
 
-from ambry.exporters.ckan.core import _convert_dataset, _convert_partition, export, MISSING_CREDENTIALS_MSG
+from ambry.exporters.ckan.core import _convert_dataset, _convert_partition, export, MISSING_CREDENTIALS_MSG,\
+    UnpublishedAccessError
 from ambry.orm.database import Database
 from ambry.run import get_runconfig
 
@@ -77,10 +78,11 @@ class ExportTest(unittest.TestCase):
     def test_creates_package_for_given_dataset(self, fake_call):
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
         ds1 = DatasetFactory()
+        ds1.config.metadata.about.access = 'public'
         export(ds1)
 
         # assert call to service was valid.
-        self.assertEqual(len(fake_call.mock_calls), 2)
+        self.assertTrue(len(fake_call.mock_calls) > 0)
         _, args, kwargs = fake_call.mock_calls[0]
         self.assertEqual(args[0], 'package_create')
         self.assertEqual(kwargs['data_dict']['name'], ds1.vid)
@@ -91,12 +93,13 @@ class ExportTest(unittest.TestCase):
         PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
         ds1 = DatasetFactory()
+        ds1.config.metadata.about.access = 'public'
         PartitionFactory(dataset=ds1)
         export(ds1)
 
         # assert call to service was valid.
-        self.assertEqual(len(fake_call.mock_calls), 3)
-        _, args, kwargs = fake_call.mock_calls[1]
+        self.assertTrue(len(fake_call.mock_calls) > 4)
+        _, args, kwargs = fake_call.mock_calls[3]
         self.assertEqual(args[0], 'resource_create')
         self.assertEqual(kwargs['data_dict']['package_id'], ds1.vid)
 
@@ -106,12 +109,23 @@ class ExportTest(unittest.TestCase):
         TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
         ds1 = DatasetFactory()
+        ds1.config.metadata.about.access = 'public'
         TableFactory(dataset=ds1)
         export(ds1)
 
         # assert call to service was valid.
-        self.assertEqual(len(fake_call.mock_calls), 2)
-        _, args, kwargs = fake_call.mock_calls[1]
+        self.assertTrue(len(fake_call.mock_calls) > 3)
+        _, args, kwargs = fake_call.mock_calls[3]
         self.assertEqual(args[0], 'resource_create')
         self.assertEqual(kwargs['data_dict']['package_id'], ds1.vid)
         self.assertEqual(kwargs['data_dict']['name'], 'schema')
+
+    @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
+    def test_raises_UnpublishedAccessError_error(self, fake_call):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        ds1 = DatasetFactory()
+        ds1.config.metadata.about.access = 'restricted'
+        with self.assertRaises(UnpublishedAccessError):
+            export(ds1)

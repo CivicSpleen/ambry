@@ -2,6 +2,9 @@
 
 """ Export datasets and partitions to CKAN. """
 
+# http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_update - set roles on dataset.
+# http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_bulk_update - the same
+
 import ckanapi
 
 from ambry.run import get_runconfig
@@ -16,6 +19,11 @@ ckan:
     organization: org1  # default organization
     apikey: <apikey>  # your api key
 '''
+
+
+class UnpublishedAccessError(Exception):
+    pass
+
 
 rc = get_runconfig()
 
@@ -36,18 +44,58 @@ def export(dataset):
     Args:
         dataset (ambry.orm.Dataset):
 
+    Raises:
+        EnvironmentError: if ckan credentials are missing or invalid.
+        UnpublishedAccessError: if dataset has unpublished access - one from ('internal', 'test',
+            'controlled', 'restricted', 'census').
+
     """
     if not ckan:
         raise EnvironmentError(MISSING_CREDENTIALS_MSG)
 
-    if dataset.config.metadata.about.access in ('internal', 'test', 'controlled', 'restricted', 'census'):
-        # Never publish dataset with such access.
-        raise Exception(
-            '{} dataset can not be published because of {} access'
-            .format(dataset.vid, dataset.config.metadata.about.access))
-
-    # publish dataset
+    # publish dataset.
     ckan.action.package_create(**_convert_dataset(dataset))
+
+    # set permissions.
+    access = dataset.config.metadata.about.access
+
+    if access in ('internal', 'test', 'controlled', 'restricted', 'census'):
+        # Never publish dataset with such access.
+        raise UnpublishedAccessError(
+            '{} dataset can not be published because of {} access.'
+            .format(dataset.vid, dataset.config.metadata.about.access))
+    elif access == 'public':
+        # The default permission of the CKAN allows to edit and create dataset without logging in. But
+        # admin of the certain CKAN instance can change default permissions.
+        # http://docs.ckan.org/en/ckan-1.7/authorization.html#anonymous-edit-mode
+        user_roles = [
+            {'user': 'visitor', 'domain_object': dataset.vid.lower(), 'roles': ['editor']},
+            {'user': 'logged_in', 'domain_object': dataset.vid.lower(), 'roles': ['editor']},
+        ]
+
+    elif access == 'registered':
+        # Anonymous has no access, logged in users can read/edit.
+        # http://docs.ckan.org/en/ckan-1.7/authorization.html#logged-in-edit-mode
+        user_roles = [
+            {'user': 'visitor', 'domain_object': dataset.vid.lower(), 'roles': []},
+            {'user': 'logged_in', 'domain_object': dataset.vid.lower(), 'roles': ['editor']}
+        ]
+    elif access in ('private', 'licensed'):
+        # Organization users can read/edit
+        # http://docs.ckan.org/en/ckan-1.7/authorization.html#publisher-mode
+        # disable access for anonymous and logged_in
+        user_roles = [
+            {'user': 'visitor', 'domain_object': dataset.vid.lower(), 'roles': []},
+            {'user': 'logged_in', 'domain_object': dataset.vid.lower(), 'roles': []}
+        ]
+
+        # FIXME: add edit access to organization members.
+
+    for role in user_roles:
+        ckan.action.user_role_update(**role)
+
+    # FIXME: Using bulk update gives http500 error. Find the way and use bulk update instead of many requests.
+    # ckan.action.user_role_bulk_update(user_roles=user_roles)
 
     # publish partitions
     for partition in dataset.partitions:

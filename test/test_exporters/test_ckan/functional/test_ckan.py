@@ -29,6 +29,8 @@ class Test(unittest.TestCase):
         FileFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
         ds1 = DatasetFactory(vid='dds0011')
+        ds1.config.metadata.about.access = 'public'
+        ds1.config.metadata.contacts.creator.name = 'creator'
         ds1.config.metadata.contacts.creator.name = 'creator'
         ds1.config.metadata.contacts.creator.email = 'creator@example.com'
         ds1.config.metadata.contacts.maintainer.name = 'maintainer'
