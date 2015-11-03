@@ -7,6 +7,7 @@ import json
 import ckanapi
 
 from ambry.run import get_runconfig
+from ambry.util import get_logger
 
 
 MISSING_CREDENTIALS_MSG = '''Missing CKAN credentials.
@@ -23,6 +24,7 @@ ckan:
 class UnpublishedAccessError(Exception):
     pass
 
+logger = get_logger(__name__)
 
 rc = get_runconfig()
 
@@ -37,11 +39,14 @@ else:
     ckan = None
 
 
-def export(dataset):
+def export(dataset, force=False, force_restricted=False):
     """ Exports dataset to ckan instance.
 
     Args:
         dataset (ambry.orm.Dataset):
+        force (bool, optional): if True, ignore existance error and continue to export.
+        force_restricted (bool, optional): if True, then export restricted datasets as private (for debugging
+            purposes).
 
     Raises:
         EnvironmentError: if ckan credentials are missing or invalid.
@@ -53,10 +58,22 @@ def export(dataset):
         raise EnvironmentError(MISSING_CREDENTIALS_MSG)
 
     # publish dataset.
-    ckan.action.package_create(**_convert_dataset(dataset))
+    try:
+        ckan.action.package_create(**_convert_dataset(dataset))
+    except ckanapi.ValidationError:
+        if force:
+            logger.warning(
+                '{} dataset already exported, but new export forced. Continue to export dataset stuff.'
+                .format(dataset))
+        else:
+            raise
 
     # set permissions.
     access = dataset.config.metadata.about.access
+
+    if access == 'restricted' and force_restricted:
+        access = 'private'
+
     assert access, 'CKAN publishing requires access level.'
 
     if access in ('internal', 'test', 'controlled', 'restricted', 'census'):
@@ -163,6 +180,12 @@ def _convert_dataset(dataset):
 def _convert_partition(partition):
     """ Converts partition to resource dict ready to save to CKAN. """
     # http://docs.ckan.org/en/latest/api/#ckan.logic.action.create.resource_create
+    upload = None
+    rows = []
+    for row in partition:
+        # FIXME: Convert to csv.
+        rows.append(row)
+
     ret = {
         'package_id': partition.dataset.vid.lower(),
         'url': 'http://example.com',
@@ -181,7 +204,7 @@ def _convert_partition(partition):
         'last_modified': '',
         'cache_last_updated': '',
         'webstore_last_updated': '',
-        'upload': '',  # FIXME: Convert to CSV/KML or other.
+        'upload': upload
     }
 
     return ret

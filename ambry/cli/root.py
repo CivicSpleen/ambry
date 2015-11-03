@@ -35,6 +35,10 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='ckan_export')
     sp.add_argument('dvid', type=str, help='Dataset vid')
+    sp.add_argument('-f', '--force', action='store_true',
+                    help='Ignore existance error and continue to publish.')
+    sp.add_argument('-fr', '--debug-force-restricted', action='store_true',
+                    help='Export restricted datasets. For debugging only.')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
@@ -132,12 +136,12 @@ def root_ckan_export(args, library, run_config):
     from ambry.exporters.ckan import export, is_exported, UnpublishedAccessError
     try:
         dataset = library.dataset(args.dvid)
-        if is_exported(dataset):
+        if not args.force and is_exported(dataset):
             print('{} dataset is already exported. Update is not implemented!'.format(args.dvid))
             exit(1)
         else:
             try:
-                export(dataset)
+                export(dataset, force=args.force, force_restricted=args.debug_force_restricted)
             except UnpublishedAccessError:
                 print('Did not publish because dataset access ({}) restricts publishing.'
                       .format(dataset.config.metadata.about.access))

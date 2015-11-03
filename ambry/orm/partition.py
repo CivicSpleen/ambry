@@ -61,9 +61,9 @@ class Partition(Base, DictableMixin):
     cache_key = SAColumn('p_cache_key', String(200), unique=True, nullable=False, index=True)
     parent_vid = SAColumn('p_p_vid', String(16), ForeignKey('partitions.p_vid'), nullable=True, index=True)
     ref = SAColumn('p_ref', String(16), index=True,
-        doc='VID reference to an eariler version to use instead of this one.')
+                   doc='VID reference to an eariler version to use instead of this one.')
     type = SAColumn('p_type', String(20), default=TYPE.UNION,
-        doc='u - normal partition, s - segment')
+                    doc='u - normal partition, s - segment')
     table_name = SAColumn('p_table_name', String(50))
     time = SAColumn('p_time', String(20))  # FIXME: add helptext
     space = SAColumn('p_space', String(50))
@@ -71,7 +71,7 @@ class Partition(Base, DictableMixin):
     variant = SAColumn('p_variant', String(50))
     format = SAColumn('p_format', String(50))
     segment = SAColumn('p_segment', Integer,
-        doc='Part of a larger partition. segment_id is usually also a source ds_id')
+                       doc='Part of a larger partition. segment_id is usually also a source ds_id')
     min_id = SAColumn('p_min_id', BigIntegerType)
     max_id = SAColumn('p_max_id', BigIntegerType)
     count = SAColumn('p_count', Integer)
@@ -98,7 +98,7 @@ class Partition(Base, DictableMixin):
 
     children = relationship('Partition', backref=backref('parent', remote_side=[vid]), cascade='all')
 
-    _bundle  = None # Set when returned from a bundle.
+    _bundle = None  # Set when returned from a bundle.
     _datafile = None
     _datafile_writer = None
     _stats_dict = None
@@ -133,7 +133,6 @@ class Partition(Base, DictableMixin):
 
     @property
     def is_segment(self):
-
         return self.type == self.TYPE.SEGMENT
 
     @property
@@ -142,7 +141,7 @@ class Partition(Base, DictableMixin):
 
     @property
     def headers(self):
-        return [ c.name for c in self.table.columns ]
+        return [c.name for c in self.table.columns]
 
     def __repr__(self):
         return '<{} partition: {}>'.format(self.format, self.vname)
@@ -163,7 +162,7 @@ class Partition(Base, DictableMixin):
 
     def set_stats(self, stats):
 
-        self.stats[:] = [] # Delete existing stats
+        self.stats[:] = []  # Delete existing stats
 
         for c in self.table.columns:
 
@@ -231,7 +230,8 @@ class Partition(Base, DictableMixin):
         if self.identity.space:  # And from the partition name
             scov.add(self.parse_gvid_or_place(self.identity.space))
 
-        # For geo_coverage, only includes the higher level summary levels, counties, states, places and urban areas
+        # For geo_coverage, only includes the higher level summary levels, counties, states,
+        # places and urban areas.
         self.space_coverage = sorted([str(x) for x in scov if bool(x) and x.sl
                                       in (10, 40, 50, 60, 160, 400)])
 
@@ -286,7 +286,6 @@ class Partition(Base, DictableMixin):
 
             def __getitem__(self, k):
                 return self.__dict__[k]
-
 
         if not self._stats_dict:
             cols = {s.column.name: Bunch(s.dict) for s in self.stats}
@@ -343,14 +342,14 @@ class Partition(Base, DictableMixin):
             if hasattr(self, k):
                 setattr(self, k, v)
 
-    def finalize(self, stats = None):
+    def finalize(self, stats=None):
 
         self.state = self.STATES.BUILT
 
         # Write the stats for this partition back into the partition
 
         with self.datafile.writer as w:
-            for i, c in enumerate(self.table.columns,1):
+            for i, c in enumerate(self.table.columns, 1):
                 wc = w.column(i)
                 assert wc.pos == c.sequence_id, (c.name, wc.pos, c.sequence_id)
                 wc.name = c.name
@@ -460,7 +459,6 @@ class Partition(Base, DictableMixin):
                 yield row
 
     # ============================
-
 
     def _set_ids(self):
         if not self.sequence_id:
