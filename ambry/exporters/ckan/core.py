@@ -2,8 +2,7 @@
 
 """ Export datasets and partitions to CKAN. """
 
-# http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_update - set roles on dataset.
-# http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_bulk_update - the same
+import json
 
 import ckanapi
 
@@ -95,9 +94,11 @@ def export(dataset):
                 'user': user['id'], 'domain_object': dataset.vid.lower(), 'roles': ['editor']}),
 
     for role in user_roles:
+        # http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_update
         ckan.action.user_role_update(**role)
 
     # FIXME: Using bulk update gives http500 error. Find the way and use bulk update instead of many requests.
+    # http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_bulk_update - the same
     # ckan.action.user_role_bulk_update(user_roles=user_roles)
 
     # publish partitions
@@ -106,6 +107,10 @@ def export(dataset):
 
     # publish schema.csv
     ckan.action.resource_create(**_convert_schema(dataset))
+
+    # publish external documentation
+    for name, external in dataset.config.metadata.external_documentation.items():
+        ckan.action.resource_create(**_convert_external(dataset, name, external))
 
 
 def is_exported(dataset):
@@ -135,7 +140,7 @@ def _convert_dataset(dataset):
 
     for f in dataset.files:
         if f.path.endswith('documentation.md'):
-            notes = f.contents
+            notes = json.dumps(f.unpacked_contents)
             break
 
     ret = {
@@ -188,7 +193,8 @@ def _convert_schema(dataset):
     schema_csv = ''
     for f in dataset.files:
         if f.path.endswith('schema.csv'):
-            schema_csv = f.contents
+            schema_csv = json.dumps(f.unpacked_contents)
+            break
 
     ret = {
         'package_id': dataset.vid.lower(),
@@ -198,17 +204,20 @@ def _convert_schema(dataset):
         'format': 'text/csv',
         'hash': '',
         'name': 'schema',
-        'resource_type': '',
-        'mimetype': '',
-        'mimetype_inner': '',
-        'webstore_url': '',
-        'cache_url': '',
-        'size': '',
-        'created': '',
-        'last_modified': '',
-        'cache_last_updated': '',
-        'webstore_last_updated': '',
         'upload': schema_csv,
+    }
+
+    return ret
+
+
+def _convert_external(dataset, name, external):
+    """ Converts external documentation to resource dict ready to save to CKAN. """
+    # http://docs.ckan.org/en/latest/api/#ckan.logic.action.create.resource_create
+    ret = {
+        'package_id': dataset.vid.lower(),
+        'url': external.url,
+        'description': external.description,
+        'name': name,
     }
 
     return ret

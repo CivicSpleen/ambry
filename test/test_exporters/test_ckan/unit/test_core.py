@@ -131,9 +131,44 @@ class ExportTest(unittest.TestCase):
         self.assertTrue(called)
 
     @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
+    def test_creates_resource_for_each_external_documentation(self, fake_call):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        ds1 = DatasetFactory()
+        ds1.config.metadata.about.access = 'public'
+
+        # create two external documentations.
+        #
+        site1_descr = 'Descr1'
+        site1_url = 'http://example.com/1'
+        site2_descr = 'Descr2'
+        site2_url = 'http://example.com/2'
+
+        ds1.config.metadata.external_documentation.site1.description = site1_descr
+        ds1.config.metadata.external_documentation.site1.url = site1_url
+
+        ds1.config.metadata.external_documentation.site2.description = site2_descr
+        ds1.config.metadata.external_documentation.site2.url = site2_url
+
+        export(ds1)
+
+        # assert call was valid
+        resource_create_calls = {}
+        for call in fake_call.mock_calls:
+            _, args, kwargs = call
+            if args[0] == 'resource_create':
+                resource_create_calls[kwargs['data_dict']['name']] = kwargs['data_dict']
+        self.assertIn('site1', resource_create_calls)
+        self.assertEqual(resource_create_calls['site1']['url'], site1_url)
+        self.assertEqual(resource_create_calls['site1']['description'], site1_descr)
+
+        self.assertIn('site2', resource_create_calls)
+        self.assertEqual(resource_create_calls['site2']['url'], site2_url)
+        self.assertEqual(resource_create_calls['site2']['description'], site2_descr)
+
+    @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
     def test_raises_UnpublishedAccessError_error(self, fake_call):
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
         ds1 = DatasetFactory()
         ds1.config.metadata.about.access = 'restricted'
