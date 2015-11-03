@@ -129,16 +129,23 @@ def root_makemigration(args, l, rc):
 
 def root_ckan_export(args, library, run_config):
     from ambry.orm.exc import NotFoundError
-    from ambry.exporters.ckan import export, is_exported
+    from ambry.exporters.ckan import export, is_exported, UnpublishedAccessError
     try:
         dataset = library.dataset(args.dvid)
         if is_exported(dataset):
             print('{} dataset is already exported. Update is not implemented!'.format(args.dvid))
+            exit(1)
         else:
-            export(dataset)
+            try:
+                export(dataset)
+            except UnpublishedAccessError:
+                print('Did not publish because dataset access ({}) restricts publishing.'
+                      .format(dataset.config.metadata.about.access))
+                exit(1)
             print('{} dataset successfully exported to CKAN.'.format(args.dvid))
     except NotFoundError:
         print('Dataset with {} vid not found.'.format(args.dvid))
+        exit(1)
 
 
 def root_list(args, l, rc):
