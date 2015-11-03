@@ -82,10 +82,13 @@ class ExportTest(unittest.TestCase):
         export(ds1)
 
         # assert call to service was valid.
-        self.assertTrue(len(fake_call.mock_calls) > 0)
-        _, args, kwargs = fake_call.mock_calls[0]
-        self.assertEqual(args[0], 'package_create')
-        self.assertEqual(kwargs['data_dict']['name'], ds1.vid)
+        called = False
+        for call in fake_call.mock_calls:
+            _, args, kwargs = call
+            if (args[0] == 'package_create'
+                    and kwargs['data_dict'].get('name') == ds1.vid):
+                called = True
+        self.assertTrue(called)
 
     @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
     def test_creates_resources_for_each_partition_of_the_dataset(self, fake_call):
@@ -94,14 +97,18 @@ class ExportTest(unittest.TestCase):
 
         ds1 = DatasetFactory()
         ds1.config.metadata.about.access = 'public'
-        PartitionFactory(dataset=ds1)
+        p1 = PartitionFactory(dataset=ds1)
         export(ds1)
 
         # assert call to service was valid.
-        self.assertTrue(len(fake_call.mock_calls) > 4)
-        _, args, kwargs = fake_call.mock_calls[3]
-        self.assertEqual(args[0], 'resource_create')
-        self.assertEqual(kwargs['data_dict']['package_id'], ds1.vid)
+        called = False
+        for call in fake_call.mock_calls:
+            _, args, kwargs = call
+            if (args[0] == 'resource_create'
+                    and kwargs['data_dict'].get('name') == p1.name
+                    and kwargs['data_dict'].get('package_id') == ds1.vid):
+                called = True
+        self.assertTrue(called)
 
     @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
     def test_creates_resource_for_schema(self, fake_call):
@@ -114,11 +121,14 @@ class ExportTest(unittest.TestCase):
         export(ds1)
 
         # assert call to service was valid.
-        self.assertTrue(len(fake_call.mock_calls) > 3)
-        _, args, kwargs = fake_call.mock_calls[3]
-        self.assertEqual(args[0], 'resource_create')
-        self.assertEqual(kwargs['data_dict']['package_id'], ds1.vid)
-        self.assertEqual(kwargs['data_dict']['name'], 'schema')
+        called = False
+        for call in fake_call.mock_calls:
+            _, args, kwargs = call
+            if (args[0] == 'resource_create'
+                    and kwargs['data_dict'].get('name') == 'schema'
+                    and kwargs['data_dict'].get('package_id') == ds1.vid):
+                called = True
+        self.assertTrue(called)
 
     @patch('ambry.exporters.ckan.core.ckanapi.RemoteCKAN.call_action')
     def test_raises_UnpublishedAccessError_error(self, fake_call):

@@ -58,6 +58,7 @@ def export(dataset):
 
     # set permissions.
     access = dataset.config.metadata.about.access
+    assert access, 'CKAN publishing requires access level.'
 
     if access in ('internal', 'test', 'controlled', 'restricted', 'census'):
         # Never publish dataset with such access.
@@ -88,8 +89,10 @@ def export(dataset):
             {'user': 'visitor', 'domain_object': dataset.vid.lower(), 'roles': []},
             {'user': 'logged_in', 'domain_object': dataset.vid.lower(), 'roles': []}
         ]
-
-        # FIXME: add edit access to organization members.
+        organization_users = ckan.action.organization_show(id=CKAN_CONFIG.organization)['users']
+        for user in organization_users:
+            user_roles.append({
+                'user': user['id'], 'domain_object': dataset.vid.lower(), 'roles': ['editor']}),
 
     for role in user_roles:
         ckan.action.user_role_update(**role)
