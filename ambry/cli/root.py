@@ -135,16 +135,16 @@ def root_ckan_export(args, library, run_config):
     from ambry.orm.exc import NotFoundError
     from ambry.exporters.ckan import export, is_exported, UnpublishedAccessError
     try:
-        dataset = library.dataset(args.dvid)
-        if not args.force and is_exported(dataset):
+        bundle = library.bundle(args.dvid)
+        if not args.force and is_exported(bundle):
             print('{} dataset is already exported. Update is not implemented!'.format(args.dvid))
             exit(1)
         else:
             try:
-                export(dataset, force=args.force, force_restricted=args.debug_force_restricted)
+                export(bundle, force=args.force, force_restricted=args.debug_force_restricted)
             except UnpublishedAccessError:
                 print('Did not publish because dataset access ({}) restricts publishing.'
-                      .format(dataset.config.metadata.about.access))
+                      .format(bundle.config.metadata.about.access))
                 exit(1)
             print('{} dataset successfully exported to CKAN.'.format(args.dvid))
     except NotFoundError:

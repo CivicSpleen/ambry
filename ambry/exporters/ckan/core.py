@@ -3,6 +3,9 @@
 """ Export datasets and partitions to CKAN. """
 
 import json
+from StringIO import StringIO
+
+import unicodecsv
 
 import ckanapi
 
@@ -30,6 +33,7 @@ rc = get_runconfig()
 
 CKAN_CONFIG = rc.accounts.get('ckan')
 
+
 if CKAN_CONFIG and set(['host', 'organization', 'apikey']).issubset(CKAN_CONFIG.keys()):
     ckan = ckanapi.RemoteCKAN(
         CKAN_CONFIG.host,
@@ -39,13 +43,13 @@ else:
     ckan = None
 
 
-def export(dataset, force=False, force_restricted=False):
-    """ Exports dataset to ckan instance.
+def export(bundle, force=False, force_restricted=False):
+    """ Exports bundle to ckan instance.
 
     Args:
-        dataset (ambry.orm.Dataset):
+        bundle (ambry.bundle.Bundle):
         force (bool, optional): if True, ignore existance error and continue to export.
-        force_restricted (bool, optional): if True, then export restricted datasets as private (for debugging
+        force_restricted (bool, optional): if True, then export restricted bundles as private (for debugging
             purposes).
 
     Raises:
@@ -59,17 +63,17 @@ def export(dataset, force=False, force_restricted=False):
 
     # publish dataset.
     try:
-        ckan.action.package_create(**_convert_dataset(dataset))
+        ckan.action.package_create(**_convert_bundle(bundle))
     except ckanapi.ValidationError:
         if force:
             logger.warning(
                 '{} dataset already exported, but new export forced. Continue to export dataset stuff.'
-                .format(dataset))
+                .format(bundle.dataset))
         else:
             raise
 
     # set permissions.
-    access = dataset.config.metadata.about.access
+    access = bundle.dataset.config.metadata.about.access
 
     if access == 'restricted' and force_restricted:
         access = 'private'
@@ -80,35 +84,35 @@ def export(dataset, force=False, force_restricted=False):
         # Never publish dataset with such access.
         raise UnpublishedAccessError(
             '{} dataset can not be published because of {} access.'
-            .format(dataset.vid, dataset.config.metadata.about.access))
+            .format(bundle.dataset.vid, bundle.dataset.config.metadata.about.access))
     elif access == 'public':
         # The default permission of the CKAN allows to edit and create dataset without logging in. But
         # admin of the certain CKAN instance can change default permissions.
         # http://docs.ckan.org/en/ckan-1.7/authorization.html#anonymous-edit-mode
         user_roles = [
-            {'user': 'visitor', 'domain_object': dataset.vid.lower(), 'roles': ['editor']},
-            {'user': 'logged_in', 'domain_object': dataset.vid.lower(), 'roles': ['editor']},
+            {'user': 'visitor', 'domain_object': bundle.dataset.vid.lower(), 'roles': ['editor']},
+            {'user': 'logged_in', 'domain_object': bundle.dataset.vid.lower(), 'roles': ['editor']},
         ]
 
     elif access == 'registered':
         # Anonymous has no access, logged in users can read/edit.
         # http://docs.ckan.org/en/ckan-1.7/authorization.html#logged-in-edit-mode
         user_roles = [
-            {'user': 'visitor', 'domain_object': dataset.vid.lower(), 'roles': []},
-            {'user': 'logged_in', 'domain_object': dataset.vid.lower(), 'roles': ['editor']}
+            {'user': 'visitor', 'domain_object': bundle.dataset.vid.lower(), 'roles': []},
+            {'user': 'logged_in', 'domain_object': bundle.dataset.vid.lower(), 'roles': ['editor']}
         ]
     elif access in ('private', 'licensed'):
         # Organization users can read/edit
         # http://docs.ckan.org/en/ckan-1.7/authorization.html#publisher-mode
         # disable access for anonymous and logged_in
         user_roles = [
-            {'user': 'visitor', 'domain_object': dataset.vid.lower(), 'roles': []},
-            {'user': 'logged_in', 'domain_object': dataset.vid.lower(), 'roles': []}
+            {'user': 'visitor', 'domain_object': bundle.dataset.vid.lower(), 'roles': []},
+            {'user': 'logged_in', 'domain_object': bundle.dataset.vid.lower(), 'roles': []}
         ]
         organization_users = ckan.action.organization_show(id=CKAN_CONFIG.organization)['users']
         for user in organization_users:
             user_roles.append({
-                'user': user['id'], 'domain_object': dataset.vid.lower(), 'roles': ['editor']}),
+                'user': user['id'], 'domain_object': bundle.dataset.vid.lower(), 'roles': ['editor']}),
 
     for role in user_roles:
         # http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_update
@@ -119,31 +123,31 @@ def export(dataset, force=False, force_restricted=False):
     # ckan.action.user_role_bulk_update(user_roles=user_roles)
 
     # publish partitions
-    for partition in dataset.partitions:
+    for partition in bundle.partitions:
         ckan.action.resource_create(**_convert_partition(partition))
 
     # publish schema.csv
-    ckan.action.resource_create(**_convert_schema(dataset))
+    ckan.action.resource_create(**_convert_schema(bundle))
 
     # publish external documentation
-    for name, external in dataset.config.metadata.external_documentation.items():
-        ckan.action.resource_create(**_convert_external(dataset, name, external))
+    for name, external in bundle.dataset.config.metadata.external_documentation.items():
+        ckan.action.resource_create(**_convert_external(bundle, name, external))
 
 
-def is_exported(dataset):
+def is_exported(bundle):
     """ Returns True if dataset is already exported to CKAN. Otherwise returns False. """
     if not ckan:
         raise EnvironmentError(MISSING_CREDENTIALS_MSG)
-    params = {'q': 'name:{}'.format(dataset.vid.lower())}
+    params = {'q': 'name:{}'.format(bundle.dataset.vid.lower())}
     resp = ckan.action.package_search(**params)
     return len(resp['results']) > 0
 
 
-def _convert_dataset(dataset):
-    """ Converts ambry dataset to dict ready to send to CKAN API.
+def _convert_bundle(bundle):
+    """ Converts ambry bundle to dict ready to send to CKAN API.
 
     Args:
-        dataset (orm.Dataset): dataset to convert.
+        bundle (ambry.bundle.Bundle): bundle to convert.
 
     Returns:
         dict: dict to send to CKAN to create dataset.
@@ -151,17 +155,17 @@ def _convert_dataset(dataset):
 
     """
     # shortcut for metadata
-    meta = dataset.config.metadata
+    meta = bundle.dataset.config.metadata
 
     notes = ''
 
-    for f in dataset.files:
+    for f in bundle.dataset.files:
         if f.path.endswith('documentation.md'):
             notes = json.dumps(f.unpacked_contents)
             break
 
     ret = {
-        'name': dataset.vid.lower(),
+        'name': bundle.dataset.vid.lower(),
         'title': meta.about.title,
         'author': meta.contacts.creator.name,
         'author_email': meta.contacts.creator.email,
@@ -170,7 +174,7 @@ def _convert_dataset(dataset):
         'license_id': '',
         'notes': notes,
         'url': meta.identity.source,
-        'version': dataset.version,
+        'version': bundle.dataset.version,
         'state': 'active',
         'owner_org': CKAN_CONFIG['organization'],
     }
@@ -180,47 +184,51 @@ def _convert_dataset(dataset):
 def _convert_partition(partition):
     """ Converts partition to resource dict ready to save to CKAN. """
     # http://docs.ckan.org/en/latest/api/#ckan.logic.action.create.resource_create
-    upload = None
-    rows = []
-    for row in partition:
-        # FIXME: Convert to csv.
-        rows.append(row)
 
+    # convert bundle to csv.
+    csvfile = StringIO()
+    writer = unicodecsv.writer(csvfile)
+    headers = partition.datafile.headers
+    writer.writerow(headers)
+    for row in partition:
+        writer.writerow([row[h] for h in headers])
+    csvfile.seek(0)
+
+    # prepare dict.
     ret = {
         'package_id': partition.dataset.vid.lower(),
         'url': 'http://example.com',
         'revision_id': '',
-        'description': '',
+        'description': partition.description or '',
         'format': 'text/csv',
         'hash': '',
         'name': partition.name,
         'resource_type': '',
-        'mimetype': '',
+        'mimetype': 'text/csv',
         'mimetype_inner': '',
         'webstore_url': '',
         'cache_url': '',
-        'size': '',
-        'created': '',
-        'last_modified': '',
-        'cache_last_updated': '',
-        'webstore_last_updated': '',
-        'upload': upload
+        'upload': csvfile
     }
 
     return ret
 
 
-def _convert_schema(dataset):
+def _convert_schema(bundle):
     """ Converts schema of the dataset to resource dict ready to save to CKAN. """
     # http://docs.ckan.org/en/latest/api/#ckan.logic.action.create.resource_create
-    schema_csv = ''
-    for f in dataset.files:
+    schema_csv = None
+    for f in bundle.dataset.files:
         if f.path.endswith('schema.csv'):
-            schema_csv = json.dumps(f.unpacked_contents)
+            schema_csv = StringIO()
+            writer = unicodecsv.writer(schema_csv)
+            for row in f.unpacked_contents:
+                writer.writerow(row)
+            schema_csv.seek(0)
             break
 
     ret = {
-        'package_id': dataset.vid.lower(),
+        'package_id': bundle.dataset.vid.lower(),
         'url': 'http://example.com',
         'revision_id': '',
         'description': 'Schema of the dataset tables.',
@@ -233,11 +241,11 @@ def _convert_schema(dataset):
     return ret
 
 
-def _convert_external(dataset, name, external):
+def _convert_external(bundle, name, external):
     """ Converts external documentation to resource dict ready to save to CKAN. """
     # http://docs.ckan.org/en/latest/api/#ckan.logic.action.create.resource_create
     ret = {
-        'package_id': dataset.vid.lower(),
+        'package_id': bundle.dataset.vid.lower(),
         'url': external.url,
         'description': external.description,
         'name': name,

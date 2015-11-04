@@ -88,8 +88,8 @@ class Bundle(object):
 
         'build': {
             'first': [],
-            'map': [ ambry.etl.MapSourceHeaders],
-            'cast': [ ambry.etl.CastColumns ],
+            'map': [ambry.etl.MapSourceHeaders],
+            'cast': [ambry.etl.CastColumns],
             'body': [],
             'last': [],
             'select_partition': [ambry.etl.SelectPartition],
@@ -131,7 +131,7 @@ class Bundle(object):
 
         self.test = test  # Set to true to trigger test behavior
 
-        self.capture_exceptions = False #  If set to true ( in CLI ), will catch and log exceptions internally.
+        self.capture_exceptions = False  # If set to true (in CLI), will catch and log exceptions internally.
         self.exit_on_fatal = True
 
         self.init()
@@ -171,7 +171,7 @@ class Bundle(object):
         try:
             clz = bsf.import_bundle()
 
-            b =  clz(self._dataset, self._library, self._source_url, self._build_url, self.test)
+            b = clz(self._dataset, self._library, self._source_url, self._build_url, self.test)
             b.capture_exceptions = self.capture_exceptions
             return b
 
@@ -269,7 +269,7 @@ class Bundle(object):
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
 
-            p =   self.partitions._find_orm(pnq).one()
+            p = self.partitions._find_orm(pnq).one()
             if p:
                 p._bundle = self
                 return p
@@ -1519,8 +1519,8 @@ Caster Code
 ===========
 {}
 
-""".format(str(datetime.now()),  pl.phase, pl.source_name, pl.source_table,
-           pl.dest_table, unicode(pl),pl.headers_report(), caster_code))
+""".format(str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
+           pl.dest_table, unicode(pl), pl.headers_report(), caster_code))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
@@ -1561,7 +1561,7 @@ Caster Code
 
         return True
 
-    def build(self,  sources=None, tables = None, stage=1, force=False):
+    def build(self,  sources=None, tables=None, stage=1, force=False):
 
         sources = self._resolve_sources(sources, tables)
 
@@ -1590,9 +1590,9 @@ Caster Code
 
         return True
 
-    def build_caster_code(self, source, pipe = None):
+    def build_caster_code(self, source, pipe=None):
 
-        from ambry.etl.codegen import make_row_processors,make_env, base_env
+        from ambry.etl.codegen import make_row_processors, make_env, base_env
 
         env_dict = base_env()
         env = make_env(self, env_dict)
@@ -1630,7 +1630,7 @@ Caster Code
                 if c.source == 'cast_error':
                     self.error(
                         text_type(indent) +
-                        text_type("Casting Errors {}.{} {}").format(c.column.table.name, c.column.name, c.key))
+                        text_type('Casting Errors {}.{} {}').format(c.column.table.name, c.column.name, c.key))
                     cast_errors += 1
 
             if cast_errors > 0:
@@ -1704,14 +1704,13 @@ Caster Code
             self.wrap_partition(s).datafile.remove()
             self.session.delete(s)
 
-
     def final_finalize_segments(self, pl):
 
         self.commit()
 
         try:
             for p in pl[ambry.etl.PartitionWriter].partitions:
-                #self.log(indent + indent + 'Finalizing {}'.format(p.identity.name))
+                # self.log(indent + indent + 'Finalizing {}'.format(p.identity.name))
                 # We're passing the datafile path into filanize b/c finalize is on the ORM object,
                 # and datafile is on the proxy.
                 p.finalize()
@@ -1728,7 +1727,7 @@ Caster Code
 
     def final_cast_errors(self, pl):
 
-        return # Implementation needs to be adjusted for the new CastColumns
+        return  # Implementation needs to be adjusted for the new CastColumns
 
         cp = pl[ambry.etl.CasterPipe]
 
@@ -1919,7 +1918,6 @@ Caster Code
                 _, key = f.split('.')
                 row[i] = self.dataset.config.build.state[key]
 
-
         return row
 
     def clear_states(self):
@@ -1952,7 +1950,6 @@ Caster Code
     def set_error_state(self):
         self.dataset.config.build.state.error = time()
         self.state = self.state + ('_error' if not self.state.endswith('_error') else '')
-
 
     def set_last_access(self, tag):
         """Mark the time that this bundle was last accessed"""
