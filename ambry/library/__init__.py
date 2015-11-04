@@ -14,7 +14,6 @@ from fs.osfs import OSFS
 from fs.opener import fsopendir
 
 from sqlalchemy import or_
-from sqlalchemy.orm import object_session, lazyload
 
 from requests.exceptions import HTTPError
 
@@ -35,6 +34,7 @@ from .filesystem import LibraryFilesystem
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 global_library = None
+
 
 def new_library(config=None):
 
@@ -59,7 +59,7 @@ def new_library(config=None):
                 database=db,
                 filesystem=lfs,
                 warehouse=warehouse,
-                search = search_backend)
+                search=search_backend)
 
     global global_library
 
@@ -78,7 +78,7 @@ class Library(object):
         self._fs = filesystem
         self._warehouse = warehouse
         if search:
-            self._search = Search(self,search)
+            self._search = Search(self, search)
         else:
             self._search = None
         self.logger = logger
@@ -163,7 +163,7 @@ class Library(object):
 
     def dataset(self, ref, load_all=False, exception=True):
         """Return all datasets"""
-        return self.database.dataset(ref, load_all=load_all, exception = exception)
+        return self.database.dataset(ref, load_all=load_all, exception=exception)
 
     def new_bundle(self, assignment_class=None, **kwargs):
         """
@@ -201,10 +201,10 @@ class Library(object):
         """
         identity = Identity.from_dict(config['identity'])
 
-        ds = self._db.dataset(identity.vid, exception = False)
+        ds = self._db.dataset(identity.vid, exception=False)
 
         if not ds:
-            ds = self._db.dataset(identity.name, exception = False)
+            ds = self._db.dataset(identity.name, exception=False)
 
         if not ds:
             ds = self._db.new_dataset(**identity.dict)
@@ -214,15 +214,13 @@ class Library(object):
         b.state = Bundle.STATES.NEW
         b.set_last_access(Bundle.STATES.NEW)
 
-        #b.set_file_system(source_url=self._fs.source(ds.name),
-        #                  build_url=self._fs.build(ds.name))
+        # b.set_file_system(source_url=self._fs.source(ds.name),
+        #                   build_url=self._fs.build(ds.name))
 
         return b
 
-    def bundle(self, ref, capture_exceptions = False):
+    def bundle(self, ref, capture_exceptions=False):
         """Return a bundle build on a dataset, with the given vid or id reference"""
-        from ..identity import NotObjectNumberError
-        from ..orm.exc import NotFoundError
 
         if isinstance(ref, Dataset):
             ds = ref
@@ -242,7 +240,7 @@ class Library(object):
         if not ds:
             raise NotFoundError('Failed to find dataset for ref: {}'.format(ref))
 
-        b =  Bundle(ds, self)
+        b = Bundle(ds, self)
         b.capture_exceptions = capture_exceptions
 
         return b
@@ -375,7 +373,7 @@ class Library(object):
         db_ck = b.identity.cache_key + '.db'
 
         with open(db_path) as f:
-            remote.makedir(os.path.dirname(db_ck), recursive = True, allow_recreate= True)
+            remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
             remote.setcontents(db_ck, f)
 
         os.remove(db_path)
@@ -386,6 +384,7 @@ class Library(object):
                 self.logger.info('Checking in {}'.format(p.identity.vname))
 
                 calls = [0]
+
                 def progress(bytes):
                     calls[0] += 1
                     if calls[0] % 4 == 0:
@@ -400,7 +399,6 @@ class Library(object):
         return remote_name, db_ck
 
     def sync_remote(self, remote_name):
-        from ambry.orm.exc import NotFoundError
         remote = self.remote(remote_name)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
@@ -429,7 +427,8 @@ class Library(object):
 
                 self.logger.info('Synced {}'.format(ds.vname))
             except Exception as e:
-                self.logger.error('Failed to sync {} from {}, {}: {}'.format(fn, remote_name, temp.getsyspath(fn), e))
+                self.logger.error('Failed to sync {} from {}, {}: {}'
+                                  .format(fn, remote_name, temp.getsyspath(fn), e))
                 raise
 
         self.database.commit()
@@ -502,8 +501,9 @@ class Library(object):
 
         except HTTPError as e:
             self.logger.error('Failed to get number from number server for key: {}'.format(key, e.message))
-            self.logger.error('Using self-generated number. '
-                 'There is no problem with this, but they are longer than centrally generated numbers.')
+            self.logger.error(
+                'Using self-generated number. '
+                'There is no problem with this, but they are longer than centrally generated numbers.')
             n = str(DatasetNumber())
 
         return n
@@ -546,6 +546,3 @@ class Library(object):
         except ImportError:
             self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
             install(python_dir, module_name, pip_name)
-
-
-
