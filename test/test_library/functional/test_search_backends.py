@@ -309,7 +309,8 @@ class AmbryReadyMixin(object):
         self.assertListEqual(['id1', 'id2'], [x.vid for x in ret])
 
 
-class WhooshBackendTest(TestBase, AmbryReadyMixin):
+class WhooshTest(TestBase, AmbryReadyMixin):
+    """ Library database is sqlite, search backend is whoosh. """
 
     def setUp(self):
         super(self.__class__, self).setUp()
@@ -323,22 +324,47 @@ class WhooshBackendTest(TestBase, AmbryReadyMixin):
         assert isinstance(self.library.search.backend, WhooshSearchBackend)
 
 
-class SQLiteBackendTest(TestBase, AmbryReadyMixin):
+class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
+    """ Library database is in-memory sqlite, search backend is in-memory sqlite. """
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        rc = self.get_rc()
+        self.rc = self.get_rc()
+
+        # switch to in-memory database.
+        self._CONFIG_TEST_DATABASE = self.rc.config.database['test-database']
+        self.rc.config.database['test-database'] = 'sqlite://'
 
         # force to use library database for search.
-        rc.config.services.search = None
-        self.library = new_library(rc)
+        self.rc.config.services.search = None
+        self.library = new_library(self.rc)
         assert isinstance(self.library.search.backend, SQLiteSearchBackend)
+        self.assertEquals(self.library.database.dsn, 'sqlite://')
+
+    def tearDown(self):
+        super(self.__class__, self).tearDown()
+        self.rc.config.database['test-database'] = self._CONFIG_TEST_DATABASE
 
 
-class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
+class FileSQLiteTest(TestBase, AmbryReadyMixin):
+    """ Library database is file-based sqlite, search backend is file-based sqlite. """
 
     def setUp(self):
-        super(PostgreSQLBackendTest, self).setUp()
+        super(self.__class__, self).setUp()
+        self.rc = self.get_rc()
+
+        # force to use library database for search.
+        self.rc.config.services.search = None
+        self.library = new_library(self.rc)
+        assert isinstance(self.library.search.backend, SQLiteSearchBackend)
+        self.assertIn('.db', self.library.database.dsn)
+
+
+class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
+    """ Library database is postgres, search backend is postgres. """
+
+    def setUp(self):
+        super(PostgreSQLTest, self).setUp()
 
         # create test database
         rc = self.get_rc()
@@ -351,7 +377,7 @@ class PostgreSQLBackendTest(PostgreSQLTestBase, AmbryReadyMixin):
         assert isinstance(self.library.search.backend, PostgreSQLSearchBackend)
 
     def tearDown(self):
-        super(PostgreSQLBackendTest, self).tearDown()
+        super(PostgreSQLTest, self).tearDown()
 
         # restore database config
         rc = self.get_rc()
