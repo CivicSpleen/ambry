@@ -2,18 +2,20 @@
 import logging
 from ambry.util import get_logger
 
-from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend
+from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend, PostgreSQLSearchBackend
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 # All backends.
 BACKENDS = {
     'whoosh': WhooshSearchBackend,
-    'sqlite': SQLiteSearchBackend
+    'sqlite': SQLiteSearchBackend,
+    'postgresql+psycopg2': PostgreSQLSearchBackend
 }
 
 
 class Search(object):
+
     def __init__(self, library, backend=None):
 
         if not backend:
@@ -28,6 +30,7 @@ class Search(object):
                         'Missing backend: search section of the config contains unknown backend {}'
                         .format(backend_name))
             except KeyError:
+                # config does not contain search backend. Try to find backend by database driver.
                 backend_name = library.database.driver
 
             if backend_name not in BACKENDS:

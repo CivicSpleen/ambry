@@ -20,7 +20,7 @@ from requests.exceptions import HTTPError
 from ambry.bundle import Bundle
 from ambry.dbexceptions import ConfigurationError
 from ambry.identity import Identity, ObjectNumber, NotObjectNumberError, NumberServer, DatasetNumber
-from ambry.library.search import Search, BACKENDS as SEARCH_BACKENDS
+from ambry.library.search import Search
 from ambry.orm import Partition, File, Config
 from ambry.orm.database import Database
 from ambry.orm.dataset import Dataset
@@ -50,16 +50,10 @@ def new_library(config=None):
     db = Database(db_config)
     warehouse = None
 
-    if 'search' in library_config:
-        search_backend = SEARCH_BACKENDS[library_config['search']]
-    else:
-        search_backend = None
-
     l = Library(config=config,
                 database=db,
                 filesystem=lfs,
-                warehouse=warehouse,
-                search=search_backend)
+                warehouse=warehouse)
 
     global global_library
 
