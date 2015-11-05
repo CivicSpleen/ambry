@@ -25,6 +25,7 @@ class File(Base, DictableMixin):
     BSFILE = Constant
     BSFILE.BUILD = 'build_bundle'
     BSFILE.LIB = 'lib'
+    BSFILE.TEST = 'test'
     BSFILE.META = 'bundle_meta'
     BSFILE.SOURCESCHEMA = 'sourceschema'
     BSFILE.SCHEMA = 'schema'
@@ -36,6 +37,7 @@ class File(Base, DictableMixin):
     path_map = {
         BSFILE.BUILD: 'bundle.py',
         BSFILE.LIB: 'lib.py',
+        BSFILE.TEST: 'test.py',
         BSFILE.DOC: 'documentation.md',
         BSFILE.META: 'bundle.yaml',
         BSFILE.SCHEMA: 'schema.csv',

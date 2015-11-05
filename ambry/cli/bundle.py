@@ -326,20 +326,7 @@ def bundle_parser(cmd):
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-    #
-    # Phase Command
-    #
-    command_p = sub_cmd.add_parser('phase', help='Run a phase')
-    command_p.set_defaults(subcommand='phase')
 
-    command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
-    command_p.add_argument('-s', '--sync', default=False, action='store_true',
-                           help='Synchronize before and after')
-    command_p.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Build even built or finalized bundles')
-
-    command_p.add_argument('phase', nargs='?', type=str, help='Name of phase')
-    command_p.add_argument('sources', nargs='*', type=str, help='Sources to run, instead of running all sources')
 
     #
     # Finalize Command
@@ -466,6 +453,12 @@ def bundle_parser(cmd):
     group.add_argument('-l', '--load', default=False, action='store_true',
                        help='Load the combined map into the source tables')
 
+    #
+    # Test Command
+    #
+    command_p = sub_cmd.add_parser('test', help='Run the bundle test code')
+    command_p.set_defaults(subcommand='test')
+    command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -781,32 +774,6 @@ def bundle_build(args, l, rc):
     b.set_last_access(Bundle.STATES.BUILT)
 
 
-def bundle_phase(args, l, rc):
-
-    b = using_bundle(args, l).cast_to_subclass()
-
-    if not args.force:
-        check_built(b)
-
-    if args.clean:
-        if not b.clean():
-            b.error("Clean failed, not building")
-            return False
-        b.set_last_access(Bundle.STATES.META)
-        b.commit()
-
-    if args.sync:
-        b.sync_in()
-    else:
-        b.sync_code()
-
-    b.run_phase(args.phase, sources = args.sources)
-
-    if args.sync:
-        b.sync_out()
-
-    b.set_last_access(Bundle.STATES.META)
-    b.commit()
 
 
 def bundle_install(args, l, rc):
@@ -1102,6 +1069,7 @@ def bundle_new(args, l, rc):
 
     try:
         b = l.new_bundle(assignment_class=args.key, **d)
+        b.metadata.contacts.creator.email = 'eric@busboom.org'
 
     except ConflictError:
         fatal("Can't create dataset; one with a conflicting name already exists")
@@ -1152,12 +1120,14 @@ def bundle_export(args, l, rc):
 
         if args.append:
             source_dir = os.path.join(source_dir, b.identity.source_path)
+            if not os.path.exists(source_dir):
+                os.makedirs(source_dir)
 
         b.set_file_system(source_url=source_dir)
 
     b.sync(force='rtf', defaults=args.defaults)
 
-    b.sync() # FIXME The fist sync doesn't set the identity properly.
+    b.sync_out()
 
     prt("Exported bundle: {}".format(b.source_fs))
 
@@ -1488,3 +1458,8 @@ def bundle_colmap(args, l, rc):
     else:
         fatal("No option given")
 
+
+def bundle_test(args, l, rc):
+    b = using_bundle(args, l).cast_to_subclass()
+
+    b.run_tests(args.tests)

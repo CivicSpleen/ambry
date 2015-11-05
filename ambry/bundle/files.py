@@ -426,6 +426,8 @@ class MetadataFile(DictBuildSourceFile):
 
         fr.update_contents(msgpack.packb(o), 'application/msgpack')
 
+
+
 class PythonSourceFile(StringSourceFile):
 
     def clean_objects(self):
@@ -444,6 +446,37 @@ class PythonSourceFile(StringSourceFile):
 
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
+
+    def import_module(self, **kwargs):
+        """
+        Import the contents of the file into the ambry.build module
+
+        :param kwargs: items to add to the module globals
+        :return:
+        """
+        import os
+        from fs.errors import NoSysPathError
+
+        try:
+            import ambry.build
+
+            module = sys.modules['ambry.build']
+        except ImportError:
+            module = imp.new_module('ambry.build')
+            sys.modules['ambry.build'] = module
+
+        bf = self._dataset.bsfile(self._file_const)
+
+        module.__dict__.update(**kwargs)
+
+        try:
+            abs_path = self._fs.getsyspath(file_name(self._file_const))
+        except NoSysPathError:
+            abs_path = '<string>'
+
+        exec compile(bf.contents, abs_path, 'exec') in module.__dict__
+
+        return module
 
     def import_bundle(self):
         """Add the filesystem to the Python sys path with an import hook, then import
@@ -472,6 +505,7 @@ class PythonSourceFile(StringSourceFile):
         exec compile(bf.contents, abs_path, 'exec') in module.__dict__
 
         return module.Bundle
+
 
     def import_lib(self):
         """Import the lib.py file into the bundle module"""
@@ -815,6 +849,7 @@ class SourceSchemaFile(RowBuildSourceFile):
 file_info_map = {
     File.BSFILE.BUILD: (File.path_map[File.BSFILE.BUILD], PythonSourceFile),
     File.BSFILE.LIB: (File.path_map[File.BSFILE.LIB], PythonSourceFile),
+    File.BSFILE.TEST: (File.path_map[File.BSFILE.TEST], PythonSourceFile),
     File.BSFILE.DOC: (File.path_map[File.BSFILE.DOC], StringSourceFile),
     File.BSFILE.META: (File.path_map[File.BSFILE.META], MetadataFile),
     File.BSFILE.SCHEMA: (File.path_map[File.BSFILE.SCHEMA], SchemaFile),

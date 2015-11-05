@@ -373,6 +373,7 @@ class Test(TestBase):
             from shutil import rmtree
             rmtree(td)
 
+
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
 

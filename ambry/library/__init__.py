@@ -189,6 +189,10 @@ class Library(object):
         b.set_file_system(source_url=self._fs.source(b.identity.source_path),
                           build_url=self._fs.build(b.identity.source_path))
 
+        bs_meta = b.build_source_files.file(File.BSFILE.META)
+        bs_meta.objects_to_record()
+        bs_meta.record_to_objects()
+
         self._db.commit()
         return b
 

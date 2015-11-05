@@ -10,7 +10,6 @@ import os
 import sys
 from time import time
 import traceback
-from functools import partial
 from decorator import decorator
 
 from six import string_types, iteritems, u, b
@@ -465,6 +464,7 @@ class Bundle(object):
                 source_url = self.library.filesystem.source(self.identity.cache_key)
 
             try:
+
                 self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
                 self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
@@ -1098,7 +1098,7 @@ Caster Code
         from ambry.bundle.files import BuildSourceFile
 
         self.log("---- Sync Code ----")
-        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB]:
+        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
             self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
 
     #
@@ -1198,6 +1198,9 @@ Caster Code
             df = s.datafile
             if df.exists:
                 df.remove()
+                s.state = s.STATES.NEW
+
+        self.commit()
 
     def clean_all(self):
         """Like clean, but also clears out files. """
@@ -1782,7 +1785,9 @@ Caster Code
 
         localvars = {}
 
-        return # Implementation needs to be adjusted for the new CastColumns
+        for f_name, func in test_env.items():
+            if not isinstance(func, (str, tuple) ):
+                localvars[f_name] = set_from(func, 'env')
 
         # The 'b' parameter of randint is assumed to be a bundle, but
         # replacing it with a lambda prevents the param assignment
@@ -1951,6 +1956,26 @@ Caster Code
         self.commit()
         self.finalize_write_bundle_file()
         return True
+
+    def run_tests(self, tests=None):
+        """Run the unit tests in the test.py file"""
+        bsf = self.build_source_files.file(File.BSFILE.TEST)
+        module = bsf.import_module(library=self.library, bundle=self)
+
+        test_class = module.Test
+
+        import unittest
+
+        if tests:
+            print '!!!!', tests
+            suite = unittest.TestSuite()
+            for test in tests:
+                suite.addTest(test_class(test))
+
+            unittest.TextTestRunner(verbosity=2).run(suite)
+        else:
+            suite = unittest.TestLoader().loadTestsFromTestCase(test_class)
+            unittest.TextTestRunner(verbosity=2).run(suite)
 
     #
     # Check in to remote

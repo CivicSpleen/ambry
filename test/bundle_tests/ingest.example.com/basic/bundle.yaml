@@ -1,0 +1,46 @@
+about:
+  access: restricted
+  footnote: nll
+  grain: null
+  groups: null
+  license: ckdbl
+  processed: null
+  rights: public
+  source: null
+  space: null
+  subject: null
+  summary: Ingest a single simple file.
+  tags: []
+  time: null
+  title: Simple ingest
+contacts:
+  creator:
+    email: eric@civicknowledge.com
+    name: Eric Busboom
+    org: Civic Knowledge
+    url: http://civicknowledge.com
+dependencies: {}
+external_documentation:
+  dataset:
+    description: Web page the links to the dataset description
+    source: null
+    title: Dataset Page
+    url: http://example.com
+  download:
+    description: Web page that links to the source files.
+    source: null
+    title: Download Page
+    url: http://example.com
+identity:
+  dataset: basic
+  id: dLMQfCPN4s
+  revision: 1
+  source: ingest.example.com
+  version: 0.0.1
+names:
+  fqname: ingest.example.com-basic-0.0.1~dLMQfCPN4s001
+  name: ingest.example.com-basic
+  vid: dLMQfCPN4s001
+  vname: ingest.example.com-basic-0.0.1
+requirements: {}
+versions: {}
