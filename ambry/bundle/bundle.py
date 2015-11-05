@@ -8,6 +8,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 import os
 import sys
+import shutil
 from time import time
 import traceback
 from functools import partial
@@ -20,8 +21,10 @@ from fs.errors import NoSysPathError
 from geoid.civick import GVid
 from geoid import NotASummaryName
 
+from ambry.bundle.files import BuildSourceFile
 from ambry.dbexceptions import PhaseError, BuildError, BundleError, FatalError
-from ambry.orm import File
+from ambry.orm import ColumnStat, File
+from ambry.orm.exc import NotFoundError
 import ambry.etl
 from ..util import get_logger, Constant
 
@@ -230,7 +233,6 @@ class Bundle(object):
         :param source_name: Source name. The URL field must be a bundle or partition reference
         :return:
         """
-        from ambry.orm.exc import NotFoundError
 
         source = self.source(source_name)
 
@@ -356,7 +358,7 @@ class Bundle(object):
             s._bundle = self
             return s
 
-        return list(set_bundle(s) for s in self.dataset.sources )
+        return list(set_bundle(s) for s in self.dataset.sources)
 
     @property
     def refs(self):
@@ -372,11 +374,8 @@ class Bundle(object):
     def source_tables(self):
         return self.dataset.source_tables
 
-
     def source_table(self, ref):
         return self.dataset.source_table(ref)
-
-
 
     @property
     def config(self):
@@ -426,7 +425,7 @@ class Bundle(object):
             try:
                 self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
-                self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
+                self.logger.warn('Failed to locate source dir {}; using default'.format(source_url))
                 source_url = self.library.filesystem.source(self.identity.cache_key)
                 self._source_fs = fsopendir(source_url)
 
@@ -435,7 +434,6 @@ class Bundle(object):
     @property
     def build_fs(self):
         from fs.opener import fsopendir
-        from fs.errors import ParentDirectoryMissingError
 
         if not self._build_fs:
             build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
@@ -684,7 +682,7 @@ class Bundle(object):
         syncs = self.build_source_files.sync(force, defaults)
 
         self.state = self.STATES.SYNCED
-        self.log("---- Synchronized ----")
+        self.log('---- Synchronized ----')
         self.dataset.commit()
 
         self.library.search.index_bundle(self, force=True)
@@ -693,10 +691,9 @@ class Bundle(object):
 
     def sync_in(self):
         """Synchronize from files to records, and records to objects"""
-        from ambry.bundle.files import BuildSourceFile
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
-        self.log("---- Sync In ----")
+        self.log('---- Sync In ----')
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
@@ -705,7 +702,6 @@ class Bundle(object):
         self.build_source_files.record_to_objects()
 
     def sync_out(self):
-        from ambry.bundle.files import BuildSourceFile
         """Synchronize from objects to records"""
         self.build_source_files.objects_to_record()
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
@@ -721,8 +717,6 @@ class Bundle(object):
 
     def sync_code(self):
         """Sync in code files and the meta file, avoiding syncing the larger files"""
-        from ambry.orm.file import File
-        from ambry.bundle.files import BuildSourceFile
 
         for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB]:
             self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
@@ -730,7 +724,7 @@ class Bundle(object):
     #
     # Do All; Run the full process
 
-    def run(self, sources=None, tables = None, stage = 1, force=False, clean=False, sync = True, finalize = True):
+    def run(self, sources=None, tables=None, stage=1, force=False, clean=False, sync=True, finalize=True):
 
         if self.is_finalized:
             self.error("Can't run; bundle is finalized")
@@ -741,15 +735,15 @@ class Bundle(object):
         if sync:
             self.sync_in()
 
-        if not self.ingest(sources=sources, stage = stage, clean_files=clean):
+        if not self.ingest(sources=sources, stage=stage, clean_files=clean):
             self.error('Run: failed to ingest')
             return False
 
-        if not self.schema(sources=sources, stage = stage):
+        if not self.schema(sources=sources, stage=stage):
             self.error('Run: failed to build schema')
             return False
 
-        if not self.build(sources=sources, stage = stage, force=force):
+        if not self.build(sources=sources, stage=stage, force=force):
             self.error('Run: failed to build')
             return False
 
@@ -761,7 +755,7 @@ class Bundle(object):
 
         return True
 
-    def run_stages(self, sources=None, tables = None, force=False, clean=False):
+    def run_stages(self, sources=None, tables=None, force=False, clean=False):
         """Like run, but runs stages in order, rather than each phase in order. So, run() will ingest all sources,
         then build all sources, while run_stages() will ingest then build all order=1 sources, then ingest and
         build all order=2 sources.
@@ -778,9 +772,11 @@ class Bundle(object):
 
         keyfunc = attrgetter('order')
         for stage, stage_sources in groupby(sorted(sources, key=keyfunc), keyfunc):
-            stage_sources = list(stage_sources) # Stage_sources is an iterator, can only be traversed once
-            self.log("Running stage {} with sources: {}".format(stage, ','.join(s.name for s in stage_sources)))
-            if not self.run(sources=stage_sources, stage = stage, force=force, clean=clean, sync = False, finalize = False):
+            stage_sources = list(stage_sources)  # Stage_sources is an iterator, can only be traversed once
+            self.log('Running stage {} with sources: {}'
+                     .format(stage, ','.join(s.name for s in stage_sources)))
+            if not self.run(sources=stage_sources, stage=stage, force=force,
+                            clean=clean, sync=False, finalize=False):
                 self.error('Failed to run stage {}'.format(stage))
 
         self.sync_out()
@@ -798,7 +794,6 @@ class Bundle(object):
 
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
-        from ambry.orm import ColumnStat, File
 
         if self.is_finalized and not force:
             self.warn("Can't clean; bundle is finalized")
@@ -842,15 +837,13 @@ class Bundle(object):
         self.dataset.sources[:] = []
         self.dataset.source_tables[:] = []
 
-
     def clean_tables(self, force=False):
-        """Like clean, but also clears out schema tables and the partitions that depend on them. . """
+        """Like clean, but also clears out schema tables and the partitions that depend on them. """
 
         self.dataset.delete_tables_partitions()
 
     def clean_partitions(self, force=False):
         """Delete partition records and any built partition files.  """
-        import shutil
 
         self.dataset.delete_partitions()
 
@@ -858,11 +851,10 @@ class Bundle(object):
             try:
                 shutil.rmtree(self.build_partition_fs.getsyspath('/'))
             except NoSysPathError:
-                pass # If there isn't a syspath, probably don't need to delete.
+                pass  # If there isn't a syspath, probably don't need to delete.
 
     def clean_build(self, force=False):
         """Delete the build directory and all ingested files """
-        import shutil
 
         self.clean_files()
 
@@ -870,7 +862,7 @@ class Bundle(object):
             try:
                 shutil.rmtree(self.build_fs.getsyspath('/'))
             except NoSysPathError:
-                pass # If there isn't a syspath, probably don't need to delete.
+                pass  # If there isn't a syspath, probably don't need to delete.
 
     def clean_files(self, force=False):
         """ Delete all ingested file records, but leave the ingested files in the build directory """
@@ -963,15 +955,15 @@ class Bundle(object):
     #
 
     @CaptureException
-    def ingest(self, sources=None, tables=None, stage = 1, clean_files=False):
+    def ingest(self, sources=None, tables=None, stage=1, clean_files=False):
         try:
             self.state = self.STATES.INGESTING
-            return self._ingest(sources,tables,  clean_files)
+            return self._ingest(sources, tables,  clean_files)
         except Exception as e:
             self.commit()
             raise
 
-    def _resolve_sources(self, sources, tables, predicate = None):
+    def _resolve_sources(self, sources, tables, predicate=None):
         """Determine what sources to run from an input of sources and tables"""
 
         assert sources is None or tables is None
@@ -987,9 +979,9 @@ class Bundle(object):
         if not predicate:
             return sources
         else:
-            return [ s for s in sources if predicate(s)]
+            return [s for s in sources if predicate(s)]
 
-    def _ingest(self, sources=None, tables=None,  stage = 1, clean_files=False):
+    def _ingest(self, sources=None, tables=None,  stage=1, clean_files=False):
         """
         Load sources files into MPR files, attached to the source record
         :param source: Sources or destination table name. If tables, the parameter
@@ -1035,7 +1027,6 @@ class Bundle(object):
             self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
 
             if source.reftype == 'generator':
-                import sys
 
                 if hasattr(self, source.generator):
                     gen_cls = getattr(self, source.generator)
@@ -1071,10 +1062,10 @@ class Bundle(object):
                 if isinstance(s, FixedSource):
                     from ambry_sources.sources.spec import ColumnSpec
 
-                    s.spec.columns = [ ColumnSpec(c.name, c.position, c.start, c.width)
-                                       for c in source.source_table.columns ]
+                    s.spec.columns = [ColumnSpec(c.name, c.position, c.start, c.width)
+                                      for c in source.source_table.columns]
 
-                    s.spec.start_line = 0 # Turns off intuiting as well
+                    s.spec.start_line = 0  # Turns off intuiting as well
 
             with self.progress_logging(lambda: ('Ingesting {}: {} {} of {}, rate: {}',
                                                (source.spec.name,) + source.datafile.report_progress()), 10):
@@ -1100,11 +1091,10 @@ class Bundle(object):
 
         return True
 
-    def schema(self, sources = None, tables=None, stage = 1, clean=False):
+    def schema(self, sources=None, tables=None, stage=1, clean=False):
         """Generate destination schemas"""
         from itertools import groupby
         from operator import attrgetter
-        from ambry.orm.exc import NotFoundError
 
         sources = self._resolve_sources(sources, tables, lambda s: s.is_processable)
 
@@ -1127,7 +1117,7 @@ class Bundle(object):
                              for i, col in enumerate(source.source_table.columns)]))
 
             for pos, name, datatype, desc in columns:
-                t.add_column(name=name, datatype=datatype, description=desc, update_existing = True)
+                t.add_column(name=name, datatype=datatype, description=desc, update_existing=True)
 
             self.log("Populated destination table '{}' from source table '{}' with {} columns"
                      .format(t.name, source.source_table.name, len(columns)))
@@ -1137,12 +1127,12 @@ class Bundle(object):
                 source.update_table()  # Generate the source tables.
             except NotFoundError:
                 # Ignore not found errors here, because the ref may be to a partition that has not been built yet.
-                self.log("Skipping {}".format(source.name))
+                self.log('Skipping {}'.format(source.name))
 
         self.commit()
         return True
 
-    def build_schema(self, sources = None, tables=None, stage = 1, clean=False):
+    def build_schema(self, sources=None, tables=None, stage=1, clean=False):
         """Update or generate destination schemas by running a bit of the build process.
 
         Runs the first 10 rows of each source, then extracts the schema from the end of the pipeline.
@@ -1152,8 +1142,8 @@ class Bundle(object):
         from operator import attrgetter
         from ambry.etl import Collect, Head
 
-        self.load_requirements() # Required to load bundle
-        self.import_lib() # Load bundle, pissibly get generators, pipelines, etc.
+        self.load_requirements()  # Required to load bundle
+        self.import_lib()  # Load bundle, pissibly get generators, pipelines, etc.
 
         sources = self._resolve_sources(sources, tables)
 
@@ -1168,10 +1158,10 @@ class Bundle(object):
             if tables and t.name not in tables:
                 continue
 
-            self.log("Populating table: {}".format(t.name))
+            self.log('Populating table: {}'.format(t.name))
 
             for source in grouped_sources:
-                pl = self.pipeline('build',source)
+                pl = self.pipeline('build', source)
 
                 pl.cast = []
                 pl.select_partition = []
@@ -1187,7 +1177,7 @@ class Bundle(object):
                 for h, c in zip(pl.write[Collect].headers,  pl.write[Collect].rows[0]):
 
                     t.add_column(name=h, datatype=type(c).__name__ if c is not None else 'str',
-                                 update_existing = True)
+                                 update_existing=True)
 
         self.commit()
         return True
@@ -1208,7 +1198,7 @@ class Bundle(object):
         else:
             source = None
 
-        #phase = source.pipeline if source.pipeline and hasattr(source,'pipeline') else phase
+        # phase = source.pipeline if source.pipeline and hasattr(source,'pipeline') else phase
 
         pl = Pipeline(self, source=self.source_pipe(source) if source else None)
 
@@ -1321,10 +1311,8 @@ class Bundle(object):
 
         from operator import attrgetter
         from itertools import groupby
-        from ambry.orm.exc import NotFoundError
 
         sources = self._resolve_sources(sources, None)
-
 
         if self.is_finalized:
             self.error("Can't run phase {}; bundle is finalized".format(phase))
@@ -1406,7 +1394,8 @@ class Bundle(object):
                 pl = self.pipeline(phase, source)
 
                 self.logger.info(
-                    'Running phase {}, group {} for source {} with pipeline {}'.format(phase, order, source.name, pl.name))
+                    'Running phase {}, group {} for source {} with pipeline {}'
+                    .format(phase, order, source.name, pl.name))
 
                 # Doing this before hand to get at least some information about the pipline,
                 # in case there is an error during the run. It will get overwritten with more information
@@ -1465,10 +1454,10 @@ class Bundle(object):
         try:
             step_name = 'Pre-{}'.format(phase)
             if not phase_pre(force=force):
-                self.log("---- Skipping {} ---- ".format(phase))
+                self.log('---- Skipping {} ---- '.format(phase))
                 return False
 
-            self.log("---- Phase: {} Stage: {}---".format(phase, stage))
+            self.log('---- Phase: {} Stage: {}---'.format(phase, stage))
             step_name = phase.title()
             self.phase_main(phase, stage=stage, sources=sources)
 
@@ -1586,7 +1575,7 @@ Caster Code
 
         self.state = phase + '_done'
 
-        self.log("---- Finished phase {} ---- ".format(phase))
+        self.log('---- Finished phase {} ---- '.format(phase))
 
         return True
 
@@ -1911,8 +1900,8 @@ Caster Code
                 row[i] = self.state
             elif f == 'source_fs':
                 row[i] = self.source_fs
-            elif f.startswith('about'): # all metadata in the about section, ie: about.title
-                _,key = f.split('.')
+            elif f.startswith('about'):  # all metadata in the about section, ie: about.title
+                _, key = f.split('.')
                 row[i] = self.metadata.about[key]
             elif f.startswith('state'):
                 _, key = f.split('.')
