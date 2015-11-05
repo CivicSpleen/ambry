@@ -3,7 +3,7 @@
 import factory
 from factory.alchemy import SQLAlchemyModelFactory
 
-from ambry.orm import Dataset, Config, Table, Column, Partition, Code, ColumnStat
+from ambry.orm import Dataset, Config, Table, Column, Partition, Code, ColumnStat, File
 
 
 def _drop_entity(vid):
@@ -387,3 +387,30 @@ class ColumnStatFactory(SQLAlchemyModelFactory):
         assert partition.d_vid == dataset.vid
 
         return True
+
+
+class FileFactory(SQLAlchemyModelFactory):
+    class Meta:
+        model = File
+        sqlalchemy_session = None  # Set that just before TableFactory using.
+
+    id = factory.Sequence(lambda n: n)
+    d_vid = ''  # populates in the _prepare method.
+
+    path = factory.Sequence(lambda n: 'path-%03d' % n)
+    major_type = factory.Sequence(lambda n: 'major_type-%03d' % n)
+    minor_type = factory.Sequence(lambda n: 'minor_type-%03d' % n)
+    source = factory.Sequence(lambda n: 'source-%03d' % n)
+
+    @classmethod
+    def _prepare(cls, create, **kwargs):
+        dataset = kwargs.get('dataset')
+        if not dataset:
+            DatasetFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
+            dataset = DatasetFactory()
+
+        kwargs['dataset'] = dataset
+        kwargs['d_vid'] = dataset.vid
+        instance = super(FileFactory, cls)._prepare(create, **kwargs)
+        instance.set_attributes(**kwargs)
+        return instance

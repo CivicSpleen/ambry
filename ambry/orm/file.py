@@ -8,12 +8,13 @@ __docformat__ = 'restructuredtext en'
 
 
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
-from sqlalchemy import  Text, Binary, String, ForeignKey, Float
+from sqlalchemy import Text, Binary, String, ForeignKey, Float
 
 from ..util import Constant
 from sqlalchemy import event
 
 from . import Base, MutationDict, JSONEncodedObj, BigIntegerType, DictableMixin
+
 
 class File(Base, DictableMixin):
     __tablename__ = 'files'
@@ -52,7 +53,8 @@ class File(Base, DictableMixin):
     PREFERENCE.MERGE = 'M'
 
     id = SAColumn('f_id', Integer, primary_key=True)
-    d_vid = SAColumn('f_d_vid', String(16), ForeignKey('datasets.d_vid'), primary_key=True, nullable=False, index=True)
+    d_vid = SAColumn('f_d_vid', String(16), ForeignKey('datasets.d_vid'),
+                     primary_key=True, nullable=False, index=True)
 
     path = SAColumn('f_path', Text, nullable=False)
     major_type = SAColumn('f_major_type', Text, nullable=False, index=True)
@@ -63,7 +65,7 @@ class File(Base, DictableMixin):
     mime_type = SAColumn('f_mime_type', Text)
     preference = SAColumn('f_preference', String(1), default=PREFERENCE.MERGE) # 'F' for filesystem, 'O' for objects, "M" for merge
     state = SAColumn('f_state', Text)
-    hash = SAColumn('f_hash', Text) # Hash of the contents
+    hash = SAColumn('f_hash', Text)  # Hash of the contents
     modified = SAColumn('f_modified', Float)
     size = SAColumn('f_size', BigIntegerType)
     contents = SAColumn('f_contents', Binary)
@@ -79,8 +81,8 @@ class File(Base, DictableMixin):
     def update(self, of):
         """Update a file from another file, for copying"""
 
-        # The other values hsould be set when the file object is created with dataset.bsfile()
-        for p in ('mime_type', 'preference','state','hash','modified','size','contents','source_hash','data'):
+        # The other values should be set when the file object is created with dataset.bsfile()
+        for p in ('mime_type', 'preference', 'state', 'hash', 'modified', 'size', 'contents', 'source_hash', 'data'):
             setattr(self, p, getattr(of, p))
 
         return self
@@ -102,7 +104,7 @@ class File(Base, DictableMixin):
 
     @property
     def dict_row_reader(self):
-        """Unpacks message pack rows into a srtream of dicts"""
+        """ Unpacks message pack rows into a stream of dicts. """
 
         rows = self.unpacked_contents
 
@@ -119,7 +121,6 @@ class File(Base, DictableMixin):
         import hashlib
         import time
 
-        old_size = self.size
         new_size = len(contents)
 
         self.mime_type = mime_type
@@ -156,6 +157,7 @@ class File(Base, DictableMixin):
             return datetime.fromtimestamp(self.modified)
         except TypeError:
             return None
+
     @property
     def modified_ago(self):
         from ambry.util import pretty_time
@@ -166,14 +168,14 @@ class File(Base, DictableMixin):
             return None
 
     def __init__(self,  **kwargs):
-        super(File, self).__init__( **kwargs)
+        super(File, self).__init__(**kwargs)
 
     def __repr__(self):
-        return "<file: {}; {}/{}>".format(self.path, self.major_type, self.minor_type)
+        return '<file: {}; {}/{}>'.format(self.path, self.major_type, self.minor_type)
 
     @staticmethod
     def validate_path(target, value, oldvalue, initiator):
-        "Strip non-numeric characters from a phone number"
+        """ Strip non-numeric characters from a phone number. """
         pass
 
     @staticmethod
@@ -194,11 +196,9 @@ class File(Base, DictableMixin):
 
     @staticmethod
     def before_update(mapper, conn, target):
-        """"""
         pass
 
 event.listen(File, 'before_insert', File.before_insert)
 event.listen(File, 'before_update', File.before_update)
-
 
 event.listen(File.path, 'set', File.validate_path)

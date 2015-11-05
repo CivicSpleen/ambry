@@ -270,10 +270,10 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
         query_params = {
             'part': '*{}*'.format(search_phrase)}
 
+        query_parts.append('ORDER BY name')
         if limit:
             query_parts.append('LIMIT :limit')
             query_params['limit'] = limit
-        query_parts.append('ORDER BY name')
         query_parts.append(';')
         query = text('\n'.join(query_parts))
 

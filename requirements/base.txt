@@ -3,6 +3,7 @@
 address-parser==0.0.1
 boto>=2.38.0
 beautifulsoup4==4.3.2
+ckanapi==3.5
 ckcache>=0.1.6
 decorator>=4
 Flask-Compress==1.2.1
@@ -16,6 +17,7 @@ Jinja2==2.8
 lockfile==0.10.2
 Markdown==2.6.2
 MarkupSafe==0.23
+meta==0.2.4
 nltk==3.0.2
 numpy==1.9.2
 oauth2client==1.4.12

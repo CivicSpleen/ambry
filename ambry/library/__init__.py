@@ -20,7 +20,7 @@ from requests.exceptions import HTTPError
 from ambry.bundle import Bundle
 from ambry.dbexceptions import ConfigurationError
 from ambry.identity import Identity, ObjectNumber, NotObjectNumberError, NumberServer, DatasetNumber
-from ambry.library.search import Search, BACKENDS as SEARCH_BACKENDS
+from ambry.library.search import Search
 from ambry.orm import Partition, File, Config
 from ambry.orm.database import Database
 from ambry.orm.dataset import Dataset
@@ -55,16 +55,10 @@ def new_library(config=None, database_name=None):
     db = Database(db_config, echo = False)
     warehouse = None
 
-    if 'search' in library_config:
-        search_backend = SEARCH_BACKENDS[library_config['search']]
-    else:
-        search_backend = None
-
     l = Library(config=config,
                 database=db,
                 filesystem=lfs,
-                warehouse=warehouse,
-                search = search_backend)
+                warehouse=warehouse)
 
     global global_library
 
@@ -84,7 +78,7 @@ class Library(object):
         self._warehouse = warehouse
         self.processes = None # Number of multiprocessing proccors. Default to all of them
         if search:
-            self._search = Search(self,search)
+            self._search = Search(self, search)
         else:
             self._search = None
         self.logger = logger
@@ -169,7 +163,7 @@ class Library(object):
 
     def dataset(self, ref, load_all=False, exception=True):
         """Return all datasets"""
-        return self.database.dataset(ref, load_all=load_all, exception = exception)
+        return self.database.dataset(ref, load_all=load_all, exception=exception)
 
     def new_bundle(self, assignment_class=None, **kwargs):
         """
@@ -207,10 +201,10 @@ class Library(object):
         """
         identity = Identity.from_dict(config['identity'])
 
-        ds = self._db.dataset(identity.vid, exception = False)
+        ds = self._db.dataset(identity.vid, exception=False)
 
         if not ds:
-            ds = self._db.dataset(identity.name, exception = False)
+            ds = self._db.dataset(identity.name, exception=False)
 
         if not ds:
             ds = self._db.new_dataset(**identity.dict)
@@ -220,14 +214,14 @@ class Library(object):
         b.state = Bundle.STATES.NEW
         b.set_last_access(Bundle.STATES.NEW)
 
-        #b.set_file_system(source_url=self._fs.source(ds.name),
-        #                  build_url=self._fs.build(ds.name))
+        # b.set_file_system(source_url=self._fs.source(ds.name),
+        #                   build_url=self._fs.build(ds.name))
 
         return b
 
-    def bundle(self, ref, capture_exceptions = False):
+    def bundle(self, ref, capture_exceptions=False):
         """Return a bundle build on a dataset, with the given vid or id reference"""
-
+        from ..identity import NotObjectNumberError
         from ..orm.exc import NotFoundError
 
         if isinstance(ref, Dataset):
@@ -248,7 +242,7 @@ class Library(object):
         if not ds:
             raise NotFoundError('Failed to find dataset for ref: {}'.format(ref))
 
-        b =  Bundle(ds, self)
+        b = Bundle(ds, self)
         b.capture_exceptions = capture_exceptions
 
         return b
@@ -381,7 +375,7 @@ class Library(object):
         db_ck = b.identity.cache_key + '.db'
 
         with open(db_path) as f:
-            remote.makedir(os.path.dirname(db_ck), recursive = True, allow_recreate= True)
+            remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
             remote.setcontents(db_ck, f)
 
         os.remove(db_path)
@@ -392,6 +386,7 @@ class Library(object):
                 self.logger.info('Checking in {}'.format(p.identity.vname))
 
                 calls = [0]
+
                 def progress(bytes):
                     calls[0] += 1
                     if calls[0] % 4 == 0:
@@ -406,7 +401,6 @@ class Library(object):
         return remote_name, db_ck
 
     def sync_remote(self, remote_name):
-        from ambry.orm.exc import NotFoundError
         remote = self.remote(remote_name)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
@@ -435,7 +429,8 @@ class Library(object):
 
                 self.logger.info('Synced {}'.format(ds.vname))
             except Exception as e:
-                self.logger.error('Failed to sync {} from {}, {}: {}'.format(fn, remote_name, temp.getsyspath(fn), e))
+                self.logger.error('Failed to sync {} from {}, {}: {}'
+                                  .format(fn, remote_name, temp.getsyspath(fn), e))
                 raise
 
         self.database.commit()
@@ -553,19 +548,5 @@ class Library(object):
             self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
             install(python_dir, module_name, pip_name)
 
-    @property
-    def process_pool(self):
-        """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
-
-        import multiprocessing
-        from ambry.bundle.concurrent import init_library
-
-        if self.processes:
-            cpus = self.processes
-        else:
-            cpus = multiprocessing.cpu_count()
-
-        self.logger.info("Starting MP pool with {} processors".format(cpus))
-        return multiprocessing.Pool(processes=cpus, initializer=init_library, initargs=[self.config.path, self.database.dsn])
 
 

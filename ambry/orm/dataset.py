@@ -10,7 +10,7 @@ from sqlalchemy import Column as SAColumn, Integer
 from sqlalchemy import String
 from sqlalchemy.orm import relationship, object_session
 
-from six import string_types, iteritems, u, b
+from six import string_types
 
 from . import Base, MutationDict, JSONEncodedObj, MutationList
 from .config import ConfigGroupAccessor
@@ -24,7 +24,7 @@ class Dataset(Base):
     __tablename__ = 'datasets'
 
     vid = SAColumn('d_vid', String(13), primary_key=True)
-    id = SAColumn('d_id', String(10), )
+    id = SAColumn('d_id', String(10))
     name = SAColumn('d_name', String(200), nullable=False, index=True)
     vname = SAColumn('d_vname', String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('d_fqname', String(200), unique=True, nullable=False)
@@ -46,21 +46,21 @@ class Dataset(Base):
 
     path = None  # Set by the Library and other queries.
 
-    tables = relationship("Table", backref='dataset', cascade="all, delete-orphan")
+    tables = relationship('Table', backref='dataset', cascade='all, delete-orphan')
 
-    partitions = relationship("Partition", backref='dataset', cascade="all, delete-orphan")
+    partitions = relationship('Partition', backref='dataset', cascade='all, delete-orphan')
 
-    configs = relationship('Config', backref='dataset', cascade="all, delete-orphan")
+    configs = relationship('Config', backref='dataset', cascade='all, delete-orphan')
 
-    files = relationship('File', backref='dataset', cascade="all, delete-orphan")
+    files = relationship('File', backref='dataset', cascade='all, delete-orphan')
 
-    source_tables = relationship('SourceTable', backref='dataset', cascade="all, delete-orphan")
+    source_tables = relationship('SourceTable', backref='dataset', cascade='all, delete-orphan')
 
-    source_columns = relationship('SourceColumn', backref='dataset', cascade="all, delete-orphan")
+    source_columns = relationship('SourceColumn', backref='dataset', cascade='all, delete-orphan')
 
-    sources = relationship('DataSource', backref='dataset', cascade="all, delete-orphan")
+    sources = relationship('DataSource', backref='dataset', cascade='all, delete-orphan')
 
-    codes = relationship('Code', backref='dataset', cascade="all, delete-orphan")
+    codes = relationship('Code', backref='dataset', cascade='all, delete-orphan')
 
     _database = None  # Reference to the database, when dataset is retrieved from a database object
 
@@ -258,7 +258,7 @@ class Dataset(Base):
         return p
 
     def partition(self, ref=None, **kwargs):
-        """Return the Schema acessor"""
+        """ Returns partition by ref. """
         from .exc import NotFoundError
 
         if ref:

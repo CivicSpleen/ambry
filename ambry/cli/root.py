@@ -5,7 +5,7 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..cli import warn, fatal
+from ..cli import warn
 from . import prt
 
 
@@ -19,9 +19,10 @@ def root_parser(cmd):
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
     sp.add_argument('-s', '--sort', help='Sort outputs on a field')
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-t', '--tab', action='store_true', help='Print field tab seperated, without pretty table and header')
+    group.add_argument('-t', '--tab', action='store_true',
+                       help='Print field tab seperated, without pretty table and header')
     group.add_argument('-j', '--json', action='store_true',
-                    help='Output as a list of JSON dicts')
+                       help='Output as a list of JSON dicts')
     sp.add_argument('term', nargs='?', type=str,
                     help='Name or ID of the bundle or partition')
 
@@ -29,6 +30,15 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='makemigration')
     sp.add_argument('migration_name', type=str, help='Name of the migration')
+
+    sp = cmd.add_parser('ckan_export', help='Export dataset to CKAN.')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='ckan_export')
+    sp.add_argument('dvid', type=str, help='Dataset vid')
+    sp.add_argument('-f', '--force', action='store_true',
+                    help='Ignore existance error and continue to publish.')
+    sp.add_argument('-fr', '--debug-force-restricted', action='store_true',
+                    help='Export restricted datasets. For debugging only.')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
@@ -42,7 +52,6 @@ def root_parser(cmd):
                        help='Information about a bundle')
     sp.add_argument('term', type=str, nargs='?',
                     help='Name or ID of the bundle or partition')
-
 
     sp = cmd.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(command='root')
@@ -80,7 +89,7 @@ def root_parser(cmd):
                     help="Detach the imported source. Don't set the location of the imported source as the"
                     " source directory for the bundle ")
     sp.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Force importing an already imported bundle')
+                    help='Force importing an already imported bundle')
     sp.add_argument('term', nargs=1, type=str, help='Base directory')
 
     #
@@ -91,7 +100,7 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='search')
     sp.add_argument('-r', '--reindex', default=False, action='store_true',
-                           help='Reindex the bundles')
+                    help='Reindex the bundles')
     sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
 
 
@@ -121,12 +130,34 @@ def root_makemigration(args, l, rc):
     file_name = create_migration_template(args.migration_name)
     print('New empty migration created. Now populate {} with appropriate sql.'.format(file_name))
 
+
+def root_ckan_export(args, library, run_config):
+    from ambry.orm.exc import NotFoundError
+    from ambry.exporters.ckan import export, is_exported, UnpublishedAccessError
+    try:
+        bundle = library.bundle(args.dvid)
+        if not args.force and is_exported(bundle):
+            print('{} dataset is already exported. Update is not implemented!'.format(args.dvid))
+            exit(1)
+        else:
+            try:
+                export(bundle, force=args.force, force_restricted=args.debug_force_restricted)
+            except UnpublishedAccessError:
+                print('Did not publish because dataset access ({}) restricts publishing.'
+                      .format(bundle.config.metadata.about.access))
+                exit(1)
+            print('{} dataset successfully exported to CKAN.'.format(args.dvid))
+    except NotFoundError:
+        print('Dataset with {} vid not found.'.format(args.dvid))
+        exit(1)
+
+
 def root_list(args, l, rc):
     from tabulate import tabulate
     import json
 
     if args.fields:
-        header = list( str(e).strip() for e in args.fields.split(','))
+        header = list(str(e).strip() for e in args.fields.split(','))
 
         display_header = len(args.fields) > 1
 
@@ -148,7 +179,7 @@ def root_list(args, l, rc):
         matched_records = []
 
         for r in records:
-            if args.term in ' '.join( str(e) for e in r):
+            if args.term in ' '.join(str(e) for e in r):
                 matched_records.append(r)
 
         records = matched_records
@@ -194,6 +225,7 @@ def root_info(args, l, rc):
     else:
         prt('No library defined!')
 
+
 def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
@@ -201,7 +233,7 @@ def root_sync(args, l, config):
     l.logger.info('args: %s' % args)
 
     for r in l.remotes:
-        prt("Sync with remote {}", r)
+        prt('Sync with remote {}', r)
         l.sync_remote(r)
 
 
@@ -229,6 +261,7 @@ def root_search(args, l, rc):
             if p:
                 print('    ', p.vid, p.vname)
 
+
 def root_doc(args, l, rc):
 
     from ambry.ui import app, app_config
@@ -255,7 +288,7 @@ def root_doc(args, l, rc):
         # application reload
         webbrowser.open(url)
     else:
-        print("Running at: {}".format(url))
+        print('Running at: {}'.format(url))
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
 
@@ -268,7 +301,7 @@ def root_remove(args, l, rc):
 
     l.remove(b)
 
-    prt("Removed {}".format(fqname))
+    prt('Removed {}'.format(fqname))
 
 
 def root_import(args, l, rc):
@@ -294,7 +327,7 @@ def root_import(args, l, rc):
             b = l.bundle(bid)
 
             if not args.force:
-                prt("Skipping existing  bundle: {}".format(b.identity.fqname))
+                prt('Skipping existing  bundle: {}'.format(b.identity.fqname))
                 continue
 
         except NotFoundError:
@@ -302,9 +335,9 @@ def root_import(args, l, rc):
 
         if not b:
             b = l.new_from_bundle_config(config)
-            prt("Loading bundle: {}".format(b.identity.fqname))
+            prt('Loading bundle: {}'.format(b.identity.fqname))
         else:
-            prt("Loading existing bundle: {}".format(b.identity.fqname))
+            prt('Loading existing bundle: {}'.format(b.identity.fqname))
 
         b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
 

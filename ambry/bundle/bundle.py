@@ -85,8 +85,8 @@ class Bundle(object):
 
         'build': {
             'first': [],
-            'map': [ ambry.etl.MapSourceHeaders],
-            'cast': [ ambry.etl.CastColumns ],
+            'map': [ambry.etl.MapSourceHeaders],
+            'cast': [ambry.etl.CastColumns],
             'body': [],
             'last': [],
             'select_partition': [ambry.etl.SelectPartition],
@@ -127,7 +127,7 @@ class Bundle(object):
 
         self.test = test  # Set to true to trigger test behavior
 
-        self.capture_exceptions = False #  If set to true ( in CLI ), will catch and log exceptions internally.
+        self.capture_exceptions = False  # If set to true (in CLI), will catch and log exceptions internally.
         self.exit_on_fatal = True
 
         self.init()
@@ -296,7 +296,7 @@ class Bundle(object):
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
 
-            p =   self.partitions._find_orm(pnq).one()
+            p = self.partitions._find_orm(pnq).one()
             if p:
                 p._bundle = self
                 return p
@@ -1782,9 +1782,7 @@ Caster Code
 
         localvars = {}
 
-        for f_name, func in test_env.items():
-            if not isinstance(func, (str, tuple) ):
-                localvars[f_name] = set_from(func, 'env')
+        return # Implementation needs to be adjusted for the new CastColumns
 
         # The 'b' parameter of randint is assumed to be a bundle, but
         # replacing it with a lambda prevents the param assignment
