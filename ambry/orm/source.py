@@ -21,7 +21,7 @@ from .table import Table
 
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
-
+from ..util import  Constant
 
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
@@ -34,6 +34,39 @@ class DataSourceBase(object):
 
     # reftypes for sources that should not be built or have schemas create for
     NON_PROCESS_REFTYPES = ('ref', 'template')
+
+    STATES = Constant()
+    STATES.NEW = 'new'
+    STATES.INGESTING = 'ingest'
+    STATES.INGESTED = 'ingest_done'
+    STATES.NOTINGESTABLE = 'not_ingestable'
+    STATES.BUILDING = 'build'
+    STATES.BUILT = 'build_done'
+
+    @property
+    def urltype(self):
+        return self.reftype
+
+    @urltype.setter
+    def urltype(self, v):
+        self.reftype = v
+
+    @property
+    def url(self):
+        return self.ref
+
+    @url.setter
+    def url(self, v):
+        self.ref = v
+
+    @property
+    def generator(self):
+        return self.ref
+
+    @generator.setter
+    def generator(self, v):
+        self.reftype = 'generator'
+        self.ref = v
 
     @property
     def dict(self):
@@ -64,7 +97,6 @@ class DataSourceBase(object):
 
             if hasattr(self, k):
                 setattr(self, k, v)
-
 
     @property
     def source_table(self):
@@ -103,11 +135,13 @@ class DataSourceBase(object):
 
     @property
     def partition(self):
-
+        """For partition urltypes, return the partition specified by the ref """
+        from ambry.orm.exc import NotFoundError
         if self.urltype != 'partition':
             return None
 
         p = self._bundle.partition(self.url)
+
         if not p:
             p = self._bundle.library.partition(self.url)
 
@@ -172,6 +206,30 @@ class DataSourceBase(object):
         """Return true if the URL is probably downloadable, and is not a reference or a template"""
 
         return self.urltype in self.NON_PROCESS_REFTYPES
+
+    @property
+    def is_partition(self):
+        """Return true if the reference is to a partition"""
+
+        return self.reftype == 'partition'
+
+    @property
+    def is_finalized(self):
+
+        if not self.datafile.exists:
+            return False
+
+        return self.datafile.is_finalized
+
+    @property
+    def is_ingested(self):
+        return self.state == self.STATES.INGESTED
+
+    @property
+    def is_built(self):
+        return self.state == self.STATES.BUILT
+
+
 
     def update_table(self):
         """Update the source table from the datafile"""
@@ -251,7 +309,9 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     dest_table_name = SAColumn('ds_dt_name', Text)
     _dest_table = relationship(Table, backref='sources')
 
-    stage = SAColumn('ds_stage', Text)
+    stage = SAColumn('ds_stage', INTEGER, default=0)  # Order in which to process sources.
+    pipeline = SAColumn('ds_pipeline', Text)
+
     time = SAColumn('ds_time', Text)
     space = SAColumn('ds_space', Text)
     grain = SAColumn('ds_grain', Text)
@@ -263,9 +323,6 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
 
-    order = SAColumn('ds_order', INTEGER, default =0) # Order inwhich to process sources.
-    pipeline = SAColumn('ds_pipeline', Text)
-
     filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed, partition
     encoding = SAColumn('ds_encoding', Text)
 
@@ -274,38 +331,13 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     reftype = SAColumn('ds_reftype', Text)  # null, zip, ref, template
     ref = SAColumn('ds_ref', Text)
 
+    state = SAColumn('ds_state', Text)
+
     account_acessor = None
 
     __table_args__ = (
         UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_ds_d_vid'),
     )
-
-    @property
-    def urltype(self):
-        return self.reftype
-
-
-    @urltype.setter
-    def urltype(self, v):
-        self.reftype = v
-
-    @property
-    def url(self):
-        return self.ref
-
-    @url.setter
-    def url(self, v):
-        self.ref = v
-
-    @property
-    def generator(self):
-        return self.ref
-
-    @generator.setter
-    def generator(self, v):
-        self.reftype = 'generator'
-        self.ref = v
-
 
 
 class TransientDataSource(DataSourceBase):
@@ -317,10 +349,34 @@ class TransientDataSource(DataSourceBase):
         import inspect
         from sqlalchemy.orm.attributes import InstrumentedAttribute
 
+        self.properties = []
+
         # Make sure we have all of the attributes of the DataSource class
         for name, o in inspect.getmembers(DataSource):
             if isinstance(o, InstrumentedAttribute):
+                self.properties.append(name)
                 setattr(self, name, None)
 
         for k, v in iteritems(kwargs):
             setattr(self, k, v)
+
+    @property
+    def row(self):
+        import inspect
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+        SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
+                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
+
+        return OrderedDict( [(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+
+    @property
+    def dict(self):
+        """A dict that holds key/values for all of the properties in the
+        object.
+
+        :return:
+
+        """
+        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
+        return OrderedDict([(k, getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])

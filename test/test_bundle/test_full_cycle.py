@@ -43,6 +43,8 @@ class Test(TestBase):
             source_dir.makedir(os.path.dirname(f), recursive=True, allow_recreate=True)
             source_dir.setcontents(f, base_dir.getcontents(f))
 
+        do_bundle = False
+
         for f in source_dir.walkfiles(wildcard='bundle.yaml'):
 
             config = yaml.load(base_dir.getcontents(f))
@@ -75,6 +77,6 @@ class Test(TestBase):
             b = l.bundle(bi.identity.vid)
             b.sync_in()
             b = b.cast_to_subclass()
-            b.run()
+            b.run_stages()
             b.metadata.about.remote = 'test'
             b.checkin()

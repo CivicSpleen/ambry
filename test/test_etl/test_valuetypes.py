@@ -86,8 +86,9 @@ class Test(TestBase):
         c = Column(name='column', sequence_id = 1, datatype = 'int')
 
         c.transform = 't1|^init|t2|!except|t3|t4'
-        self.assertEqual(['init', None], [e['init'] for e in c.expanded_transform])
-        self.assertEqual([[int], ['t1', 't2', 't3', 't4']], [e['transforms'] for e in c.expanded_transform])
+
+        self.assertEqual(['init'], [e['init'] for e in c.expanded_transform])
+        self.assertEqual([ ['t1', 't2', 't3', 't4']], [e['transforms'] for e in c.expanded_transform])
 
     def test_col_clean_transform(self):
 
@@ -99,27 +100,7 @@ class Test(TestBase):
             for c in t.columns:
                 print c.name, c.transform, c.expanded_transform
 
-    def test_table_transforms(self):
 
-        d = self.setup_temp_dir()
-
-        b = self.setup_bundle('casters', build_url=d, source_url=d)
-
-        b.sync_in();  # Required to get bundle for cast_to_subclass to work.
-        b = b.cast_to_subclass()
-        b.ingest()
-        b.schema()
-        t = b.table('simple_stats')
-
-        row_processors =  b.build_caster_code(b.source('simple_stats'))
-
-        rp = row_processors[0]
-
-        #rp(row, row_n, scratch, accumulator, pipe, bundle, source):
-
-        row = [1.0,1.0,1.0,1,1,"one","two"]
-
-        print rp(row, 0, {}, {}, {}, None, b, b.source('simple_stats'))
 
     def test_code_calling_pipe(self):
         import re

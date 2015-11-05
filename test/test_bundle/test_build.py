@@ -38,8 +38,8 @@ class Test(TestBase):
         self.assertEqual(1, len(b.source_tables))
         self.assertEqual(0, len(b.tables))
 
-        b.schema()
-        #b.build_schema()
+        #b.schema()
+        b.build_schema()
 
         for t in b.tables:
             for c in t.columns:
@@ -57,10 +57,10 @@ class Test(TestBase):
 
         print sd['id']['count']
         print sd['float']['lom'], sd['float']['min']
-        self.assertEqual(0, round(sd['float']['min']))
-        self.assertEqual(100, round(sd['float']['max']))
-        self.assertEqual(50, round(sd['float']['mean']))
-        self.assertEqual(50, round(sd['float']['p50']))
+        self.assertEqual(0, round(float(sd['float']['min'])))
+        self.assertEqual(100, round(float(sd['float']['max'])))
+        self.assertEqual(50, round(float(sd['float']['mean'])))
+        self.assertEqual(50, round(float(sd['float']['p50'])))
 
         with p.datafile.reader as r:
             self.assertEqual(50, round(sum(row.float for row in p.datafile.reader) / float(r.n_rows)))
@@ -96,21 +96,23 @@ class Test(TestBase):
 
         self.assertEqual(1, len(b.source_tables))
 
-        self.assertTrue(b.build())
+        #self.assertTrue(b.build())
+
+        b.run()
+
+        self.assertEqual(4, len(b.dataset.partitions))
 
         for p in b.partitions:
-
             self.assertIn(int(p.identity.time), p.time_coverage)
 
         self.assertEqual([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
                          b.dataset.partitions[0].space_coverage)
-        self.assertEqual(u'2qZZZZZZZZZZ', b.dataset.partitions[0].grain_coverage[0])
+        self.assertEqual(u'2qZZZZZZZZZ', b.dataset.partitions[0].grain_coverage[0])
 
         self.assertEqual([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
                          b.dataset.partitions[2].space_coverage)
-        self.assertEqual([u'2qZZZZZZZZZZ'], b.dataset.partitions[2].grain_coverage)
+        self.assertEqual([u'2qZZZZZZZZZ'], b.dataset.partitions[2].grain_coverage)
 
-        self.assertEqual(4, len(b.dataset.partitions))
         self.assertEqual(2, len(b.dataset.tables))
 
         print 'Build, testing reads'
@@ -123,18 +125,12 @@ class Test(TestBase):
 
         self.assertEqual('build_done', b.state)
 
-    @pytest.mark.slow
-    def test_complete_build_run(self):
-        """Build the complete-load"""
-        b = self.setup_bundle('complete-build', build_url=self.setup_temp_dir())
-        b.sync_in()
-        b = b.cast_to_subclass()
-        b.run()
+
 
     @pytest.mark.slow
     def test_complete_load(self):
         """Build the complete-load"""
-        b = self.setup_bundle('complete-load', build_url=self.setup_temp_dir())
+        b = self.setup_bundle('complete-load')
         b.sync_in()
         b = b.cast_to_subclass()
         b.run()
@@ -144,12 +140,6 @@ class Test(TestBase):
         """Test a simple bundle which has  custom datatypes and derivations in the schema. """
 
         from itertools import islice
-
-        build_url = '/tmp/ambry-build-test'
-        if not os.path.exists(build_url):
-            os.makedirs(build_url)
-        shutil.rmtree(build_url)
-        os.makedirs(build_url)
 
         b = self.setup_bundle('dimensions', build_url=self.setup_temp_dir())
         b.sync_in()
@@ -170,11 +160,9 @@ class Test(TestBase):
         self.assertEqual('05000US06001', row['geoid3'])
         self.assertEqual(600, row['percent'])
 
-
         with b.partition(table='counties').datafile.reader as r:
             for row in r:
                 print row.row
-
 
     @pytest.mark.slow
     def test_generators(self):
@@ -197,6 +185,7 @@ class Test(TestBase):
 
         d = self.setup_temp_dir()
 
+        # Need to set the source_url because this one creates a source schema
         b = self.setup_bundle('complete-ref', build_url=d, source_url=d)
         b.sync_in()
         b = b.cast_to_subclass()

@@ -107,6 +107,9 @@ class Dataset(Base):
     def commit(self):
         self._database.commit()
 
+    def rollback(self):
+        self._database.rollback()
+
     @property
     def session(self):
         return self._database.session
@@ -120,7 +123,7 @@ class Dataset(Base):
     def config(self):
         return ConfigAccessor(self)
 
-    def next_sequence_id(self, table_class):
+    def next_sequence_id(self, table_class, force_query= False):
         """Return the next sequence id for a object, identified by the vid of the parent object, and the database prefix
         for the child object. On the first call, will load the max sequence number
         from the database, but subsequence calls will run in process, so this isn't suitable for
@@ -133,7 +136,53 @@ class Dataset(Base):
         from . import next_sequence_id
         from sqlalchemy.orm import object_session
 
-        return next_sequence_id(object_session(self), self._sequence_ids, self.vid, table_class)
+        return next_sequence_id(object_session(self), self._sequence_ids, self.vid, table_class, force_query=force_query)
+
+    def new_unique_object(self, table_class, sequence_id=None, **kwargs):
+        """Use next_sequence_id to create a new child of the dataset, with a unique id"""
+        from sqlalchemy.exc import IntegrityError
+        from sqlalchemy.orm.exc import FlushError
+
+        # If a sequence ID was specified, the caller is certan  that there is no potential for conflicts,
+        # so there is no need to commit here.
+        if not sequence_id:
+            commit = True
+            sequence_id = self.next_sequence_id(table_class)
+        else:
+            commit = False
+
+        o = table_class(
+            d_vid=self.vid,
+            **kwargs
+        )
+        o.update_id(sequence_id)
+        o.dataset = self
+
+        if commit == False:
+            return o
+
+        # This is horrible, but it's the only thing that has worked for both
+        # Sqlite and Postgres in both single processes and multiprocesses.
+        while True:
+            try:
+                self.session.add(o)
+                self.commit()
+                return o
+
+            except (IntegrityError, FlushError) as e:
+                self.rollback()
+                sequence_id = self.next_sequence_id(table_class, force_query=True)
+                o.update_id(sequence_id)
+
+            except Exception:
+                self.rollback()
+                import traceback
+
+                # This bit is helpful in a multiprocessing run.
+                tb = traceback.format_exc()
+                print 'Really Bad Error!', tb
+
+                raise
 
     def table(self, ref):
         from .exc import NotFoundError
@@ -154,7 +203,6 @@ class Dataset(Base):
         '''
         from . import Table
         from .exc import NotFoundError
-        from ..identity import TableNumber, ObjectNumber
 
         try:
             table = self.table(name)
@@ -163,18 +211,7 @@ class Dataset(Base):
 
             extant = False
 
-            if 'sequence_id' in kwargs:
-                sequence_id = kwargs['sequence_id']
-                del kwargs['sequence_id']
-            else:
-
-                sequence_id =  self.next_sequence_id( Table)
-
-            table = Table(d_id = self.id,
-                          d_vid = self.vid,
-                          vid=str(TableNumber(ObjectNumber.parse(self.vid), sequence_id)),
-                          name = name,
-                          sequence_id = sequence_id, **kwargs)
+            table = self.new_unique_object(Table,name=name,**kwargs)
 
         # Update possibly extant data
         table.data = dict( (list(table.data.items()) if table.data else []) + list(kwargs.get('data', {}).items()) )
@@ -198,6 +235,8 @@ class Dataset(Base):
         '''
         '''
         from . import Partition
+        from sqlalchemy.exc import IntegrityError
+        from sqlalchemy.orm.exc import FlushError
 
         # Create the basic partition record, with a sequence ID.
 
@@ -205,21 +244,16 @@ class Dataset(Base):
             table = self.table(table)
 
         if 'sequence_id' in kwargs:
-            sequence_id = kwargs['sequence_id']
+            sequence_id  = kwargs['sequence_id']
             del kwargs['sequence_id']
         else:
-            sequence_id = self.next_sequence_id(Partition)
+            sequence_id = self.next_sequence_id(Partition, force_query = True)
 
-        p = Partition(
-            sequence_id=sequence_id,
+        p = self.new_unique_object(Partition,
             t_vid=table.vid,
-            d_vid=self.vid,
             table_name=table.name,
             **kwargs
         )
-
-        self.partitions.append(p)
-
 
         return p
 
@@ -344,30 +378,32 @@ class Dataset(Base):
             .filter(DataSource.d_vid == self.vid)\
             .first()
 
+        if not source: # Try as a source vid
+            source = object_session(self) \
+                .query(DataSource) \
+                .filter(DataSource.vid == name) \
+                .filter(DataSource.d_vid == self.vid) \
+                .first()
+
         if not source:
             from exc import NotFoundError
             raise NotFoundError("Failed to find source for name : '{}' ".format(name))
 
         return source
 
-    def new_source_table(self, name):
+    def new_source_table(self, name, sequence_id = None):
         from .source_table import SourceTable
-        from ..identity import GeneralNumber1
 
         extant = next(iter(e for e in self.source_tables if e.name == name), None)
 
         if extant:
             return extant
 
-        sequence_id = self.next_sequence_id( SourceTable)
+        table = self.new_unique_object(SourceTable, sequence_id = sequence_id, name=name)
 
-        vid = str(GeneralNumber1('T', self.vid, sequence_id))
+        self.source_tables.append(table)
 
-        st = SourceTable(name=name, vid=vid, sequence_id = sequence_id, d_vid=self.vid)
-
-        self.source_tables.append(st)
-
-        return st
+        return table
 
     def source_table(self, name):
 

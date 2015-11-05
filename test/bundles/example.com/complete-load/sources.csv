@@ -11,6 +11,6 @@
 "renttab","rent","rent",,,,,,,"Renter cost, Tab format",,,,,"http://public.source.civicknowledge.com/example.com/sources/renter_cost.tsv","2f8d8590f1156803c8ac45bba84b5f4d"
 "rpeople",,"rpeople",,,,,,,"People's names and a random number",,,,,"http://public.source.civicknowledge.com/example.com/sources/random-names.csv","b8dbba8243d03d58b1862f1bac6d2756"
 "sf_zip","simple2","simple",,,,,,,"Single-file zipfile",,,,,"http://public.source.civicknowledge.com/example.com/sources/simple-example.csv.zip","e4732aa75d0e3f712653e718851f64b8"
-"simple","simple2","simple",1000,"california","numbers",,,,"Simple Random Data",,,,,"http://public.source.civicknowledge.com/example.com/sources/simple-example.csv","e4732aa75d0e3f712653e718851f64b8"
-"simple_fixed","simple2","simple",,,,,,,"Simple Random Data, fixed width format",,,,,"http://public.source.civicknowledge.com/example.com/sources/simple-example.txt","e3a6062a0c8888287a448eaa01aa36ad"
+"simple","simple2","simple",1000,"california","numbers",,0,1,"Simple Random Data",,,,,"http://public.source.civicknowledge.com/example.com/sources/simple-example.csv","e4732aa75d0e3f712653e718851f64b8"
+"simple_fixed","simple2","simple",,,,,0,1,"Simple Random Data, fixed width format",,,,,"http://public.source.civicknowledge.com/example.com/sources/simple-example.txt","e3a6062a0c8888287a448eaa01aa36ad"
 "mz_no_zip","simple1","simple",,,,,,,"Multi-file Zipfile without zip extension",,"zip",,,"http://public.source.civicknowledge.com/example.com/sources/test_data.foo#simple-example.csv","e4732aa75d0e3f712653e718851f64b8"

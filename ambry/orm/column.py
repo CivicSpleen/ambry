@@ -316,14 +316,7 @@ class Column(Base):
         """
         return {k: v for k, v in six.iteritems(self.dict) if v and k != '_codes'}
 
-    @property
-    def insertable_dict(self):
-        """Like dict, but properties have the table prefix, so it can be
-        inserted into a row."""
-        SKIP_KEYS = ('table', 'stats', '_codes')
-        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS}
-        x = {('c_' + k).strip('_'): v for k, v in six.iteritems(d)}
-        return x
+
 
     @staticmethod
     def mangle_name(name):
@@ -495,7 +488,10 @@ class Column(Base):
         d = OrderedDict([('table', self.table.name)] +
                         [( name_map.get(p.key, p.key), getattr(self, p.key)) for p in self.__mapper__.attrs
                          if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
-                                          'sequence_id', 'id', 'is_primary_key']])
+                                          'sequence_id', 'id', 'is_primary_key','data']])
+
+        d['transform'] = d['_transform']
+        del d['_transform']
 
         if self.name == 'id':
             t = self.table
@@ -505,7 +501,9 @@ class Column(Base):
             data = self.data
 
         for k, v in six.iteritems(data):
-            d[k] = v
+            d['d_'+k] = v
+
+        assert 'data' not in d
 
         return d
 

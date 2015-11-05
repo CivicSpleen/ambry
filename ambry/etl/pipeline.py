@@ -20,7 +20,7 @@ from ambry_sources import RowProxy
 from ambry.dbexceptions import ConfigurationError
 
 class PipelineError(Exception):
-    def __init__(self,  pipe, *args, **kwargs):
+    def __init__(self,  pipe,  *args, **kwargs):
 
         super(PipelineError, self).__init__(*args, **kwargs)
         self.pipe = pipe
@@ -48,10 +48,22 @@ Pipeline:
            pipe_class=qualified_class_name(self.pipe), source_name=self.pipe.source.name,
            headers=self.pipe.headers, exc_name = self.exc_name, extra = self.extra, extra_section=self.extra_section)
 
+class BadRowError(PipelineError):
+    def __init__(self, pipe, row, *args, **kwargs):
+        super(BadRowError, self).__init__(pipe, *args, **kwargs)
+
+        self.row = row
+
+    def __str__(self):
+        self.extra = "Last Row       : {}".format(self.row)
+
+        return super(BadRowError, self).__str__()
+
 class MissingHeaderError(PipelineError):
-    def __init__(self, pipe, header, table, *args, **kwargs):
+    def __init__(self, pipe, table_headers, header, table, *args, **kwargs):
         super(MissingHeaderError, self).__init__(pipe, *args, **kwargs)
 
+        self.table_headers = table_headers
         self.header = header
         self.table = table
 
@@ -59,7 +71,8 @@ class MissingHeaderError(PipelineError):
         self.extra = \
 """
 Missing Header:  {header}
-""".format(header=self.header)
+Table headers :  {table_headers}
+""".format(header=self.header, table_headers=self.table_headers)
 
         self.extra_section = \
 """
@@ -143,13 +156,25 @@ class Pipe(object):
 
         header_len = len(self.headers)
 
-        for row in rg:
+        try:
+            for row in rg:
+                row = self.process_body(row)
 
-            row = self.process_body(row)
+                if row: # Check that the rows have the same length as the header
+                    if len(row) != header_len:
+                        m = "Header width mismatch. Row width = {}, header width = {}".format(len(row), header_len)
 
-            if row: # Check that the rows have the same length as the header
-                assert len(row) == header_len, (header_len, self.headers, len(row), row, type(self))
-                yield row
+                        self.bundle.error(m)
+                        raise BadRowError(self, row, m)
+
+                    yield row
+        except StopIteration:
+            raise
+        except Exception as e:
+            if self.bundle:
+                self.bundle.error("Exception during pipeline processing, in pipe {}: {} "
+                                  .format(qualified_class_name(self),e))
+            raise
 
         self.finish()
 
@@ -214,9 +239,21 @@ class DatafileSourcePipe(Pipe):
 
         self.start()
 
-        yield self._source.headers
-
         with self._datafile.reader as r:
+
+            if r.n_rows == 0:
+                return
+
+            # Gets the headers from the source table, which assumes that the source table was created in ingestion.
+            self.headers = self._source.headers
+
+            # No? then get the headers from the datafile
+            if not self.headers:
+
+                self.headers = r.headers
+
+            yield self.headers
+
             for row in r.rows:
                 yield row
 
@@ -344,6 +381,41 @@ class OnlySource(Pipe):
         self.headers = row
         return row
 
+class Nullify(Pipe):
+    """Turn all column values that don't represent a real value, such as SPACE, empty string, or None,
+    into a real None value"""
+    def __init__(self):
+        """
+        Construct with one or more 2-element tuple or a string, in a similar format to what
+        __getitem__ accepts
+
+        >>> s = Slice((2,3), (6,8))
+        >>> s = Slice("2:3,6:8")
+
+        :param args: One or more slice objects
+        :return:
+        """
+
+        self.row_processor = None
+
+    def process_header(self, row):
+
+        code = ','.join([ 'nullify(row[{}])'.format(i) for i, _ in enumerate(row)])
+
+        self.row_processor = eval('lambda row: [{}]'.format(code), self.bundle.exec_context())
+
+        return row
+
+    def process_body(self, row):
+
+        return self.row_processor(row)
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return "{} ".format(qualified_class_name(self))
+
+
 class Slice(Pipe):
     """Select a slice of the table, using a set of tuples to represent the start and end positions of each
     part of the slice."""
@@ -360,6 +432,7 @@ class Slice(Pipe):
         """
 
         self._args = args
+        self.code = None
 
     @staticmethod
     def parse(v):
@@ -413,19 +486,27 @@ class Slice(Pipe):
             args = self.source.segment
 
         try:
-            self.slicer, code = Slice.make_slicer(args)
+            self.slicer, self.code = Slice.make_slicer(args)
         except Exception as e:
             raise PipelineError(self, "Failed to eval slicer for parts: {} for source {} "
                                 .format(args, self.source.name))
 
         try:
-            return self.slicer(row)
+            self.headers =  self.slicer(row)
+            return self.headers
         except Exception as e:
-            raise PipelineError(self, "Failed to run slicer: '{}' : {}".format(code, e))
+
+            raise PipelineError(self, "Failed to run slicer: '{}' : {}".format(self.code, e))
 
     def process_body(self, row):
 
         return self.slicer(row)
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return "{}; Slice Args = {}".format(qualified_class_name(self), self.code)
+
 
 class Head(Pipe):
     """ Pass-through only the first N rows
@@ -579,13 +660,28 @@ class AddDestHeader(Pipe):
 
     def __iter__(self):
 
+        rg = iter(self._source_pipe)
+
         if not self._added_headers:
             self._added_headers = [c.name for c in self.source.dest_table.columns][1:]
 
+        self.headers = self._added_headers
         yield self._added_headers
 
-        for row in self._source_pipe:
+        for row in rg:
             yield row
+
+class ReplaceWithDestHeader(Pipe):
+    """Replace the incomming header with the destination header, excluding the destination tables
+     first column, which should be the id"""
+
+    def __init__(self):
+        pass
+
+    def process_header(self, headers):
+        """Ignore the incomming header and replace it with the destination header"""
+
+        return [c.name for c in self.source.dest_table.columns][1:]
 
 class MapHeader(Pipe):
     """Alter the header using a map"""
@@ -602,6 +698,33 @@ class MapHeader(Pipe):
 
         for row in rg:
             yield row
+
+class CastSourceColumns(Pipe):
+    """Cast a row from the source to the types described in the source  """
+
+    def __init__(self, error_on_fail=False):
+
+        self.processor = None
+
+    def process_header(self, headers):
+        st = self.source.source_table
+
+        def cast_maybe(type_,v):
+            try:
+                return type_(v)
+            except:
+                return v
+
+        inner_code =  ','.join([ "cast_maybe({},row[{}])".format(c.datatype,i) for i,c in enumerate(st.columns) ])
+        self.processor = eval('lambda row: [{}]'.format(inner_code), locals())
+
+        return headers
+
+    def process_body(self, row):
+        return self.processor(row)
+
+    def __str__(self):
+        return qualified_class_name(self)
 
 class MapSourceHeaders(Pipe):
     """Alter the header using the source_header and dest_header in the source table. The primary
@@ -622,7 +745,6 @@ class MapSourceHeaders(Pipe):
              if c.dest_header and c.source_header != c.dest_header}
 
         if len(headers) == 0:
-            print '!!!', [c.dest_header for c in self.source.source_table.columns]
             raise ConfigurationError("Didn't get any source headers from source table '{}' "
                                      .format(self.source.source_table.name))
 
@@ -633,7 +755,7 @@ class MapSourceHeaders(Pipe):
                 for h in headers:
                     if not h in self.map:
                         # pipe, header, table,
-                        raise MissingHeaderError( self, h, self.source.source_table,
+                        raise MissingHeaderError( self, headers, h, self.source.source_table,
                                                   "Failed to find header in source_table ")
 
         else:
@@ -643,6 +765,11 @@ class MapSourceHeaders(Pipe):
 
     def __str__(self):
         return qualified_class_name(self) + ': map = {} '.format(self.map)
+
+
+class NoOp(Pipe):
+    """Do Nothing. Mostly for replacing other pipes to remove them from the pipeline"""
+
 
 class MangleHeader(Pipe):
     """"Alter the header so the values are well-formed, converting to alphanumerics and underscores"""
@@ -1061,7 +1188,7 @@ class CastColumns(Pipe):
 
         self.row_proxy_2 = RowProxy(self.new_headers)
 
-        self.row_processors = self.bundle.build_caster_code(self.source, self)
+        self.row_processors = self.bundle.build_caster_code(self.source, headers, pipe=self)
 
         return self.new_headers
 
@@ -1110,7 +1237,6 @@ class RemoveBlankColumns(Pipe):
 
     def __init__(self):
         self.editor = None
-        self.process_body = None
 
     def process_header(self, row):
 
@@ -1124,6 +1250,7 @@ class RemoveBlankColumns(Pipe):
             self.editor = eval("lambda r: [{}]".format(','.join(header_parts)))
             return self.editor(row)
         else:
+            # If there are no header parts, replace the process_body() method with a passthrough.
             self.process_body = lambda self, row: row
             return row
 
@@ -1156,8 +1283,25 @@ class Skip(Pipe):
         self.skipped = 0
         self.passed = 0
         self.ignored = 0
+        self.env = None
+        self.code = None
 
-    def process_header(self, row):
+    def process_header(self, headers):
+        from .codegen import calling_code
+
+        self.env = self.bundle.exec_context(source = self.source, pipe = self)
+
+        if self.pred in self.env:
+            self.code = 'lambda row: {}'.format(calling_code(self.env[self.pred], self.pred))
+            self.pred = eval(self.code, self.env)
+
+        elif not callable(self.pred):
+            self.code = 'lambda row: {}'.format(self.pred)
+            self.pred = eval(self.code, self.env)
+
+        else:
+            self.code = self.pred
+            pass # The predicate is a callable but not in the environment.
 
         # If there is no table specified, always run the predicate, but if the table
         # is specified, only run the predicate for that table.
@@ -1166,23 +1310,28 @@ class Skip(Pipe):
         else:
             self._check = self.table == self.source.dest_table.name
 
-        return row
+        self.row_proxy = RowProxy(headers)
+
+        return headers
 
     def __str__(self):
-
         return 'Skip. {} skipped, {} passed, {} ignored'.format(self.skipped, self.passed, self.ignored)
 
     def process_body(self, row):
 
-        if not self._check:
-            self.ignored += 1
-            return row
-        elif self.pred(dict(list(zip(self.headers, row))) if self._use_dict else row):
-            self.skipped += 1
-            return None
-        else:
-            self.passed += 1
-            return row
+        try:
+            if not self._check:
+                self.ignored += 1
+                return row
+            elif self.pred(self.row_proxy.set_row(row)):
+                self.skipped += 1
+                return None
+            else:
+                self.passed += 1
+                return row
+        except Exception as e:
+            self.bundle.error("Failed to process predicate in Skip pipe: '{}' ".format(self.code))
+            raise
 
 class Collect(Pipe):
     """Collect rows so they can be viewed or processed after the run. """
@@ -1332,6 +1481,7 @@ class SelectPartition(Pipe):
 
         self._default = None
         self._code = 'default'
+
         # Under the theory that removing an if is faster.
         if select_f:
 
@@ -1350,7 +1500,14 @@ class SelectPartition(Pipe):
 
     def process_header(self, row):
         from ambry_sources.sources.util import RowProxy
-        self._default = PartialPartitionName(table=self.source.dest_table.name, segment=self.source.sequence_id)
+        assert self.source.sequence_id != None
+        # The segment value make this a segment partition. Segment partitions are coalesced at
+        # the end of the build
+        self._default = PartialPartitionName(table=self.source.dest_table.name,
+                                             #time=self.source.time,
+                                             #space=self.source.space,
+                                             #grain=self.source.grain,
+                                             segment=self.source.sequence_id)
         self._orig_headers = row
         self._row_proxy = RowProxy(row)
         return row + ['_pname']
@@ -1377,6 +1534,34 @@ class SelectPartition(Pipe):
 
     def process_body_default(self, row):
 
+        return list(row) + [self._default]
+
+    def __str__(self):
+
+        return qualified_class_name(self) + " selector = {}".format(self._code)
+
+class SelectPartitionFromSource(Pipe):
+    """Set the name of the partition to write rows to from the  table, time, space and grain of the source"""
+
+    def __init__(self):
+
+        self._default = None
+        self._code = 'default'
+        self._row_proxy = None
+
+    def process_header(self, row):
+        from ambry_sources.sources.util import RowProxy
+
+        self._default = PartialPartitionName(table=self.source.dest_table.name,
+                                             time=str(self.source.time) if self.source.time is not None else None,
+                                             space=str(self.source.space) if self.source.space is not None else None,
+                                             grain=str(self.source.grain) if self.source.grain is not None else None,
+                                             segment=self.source.sequence_id)
+        self._orig_headers = row
+        self._row_proxy = RowProxy(row)
+        return row + ['_pname']
+
+    def process_body(self, row):
         return list(row) + [self._default]
 
     def __str__(self):
@@ -1438,37 +1623,40 @@ class WriteToPartition(Pipe, PartitionWriter):
         if not pname.segment:
             pname.segment = self._source_id
 
-        df_key = (self.source.name, pname)
+        df_key = (str(self.source.name), str(pname))
 
         try:
-            (p,  header_mapper, body_mapper) = self._datafiles[df_key]
+            (p,  header_mapper, body_mapper, writer) = self._datafiles[df_key]
         except KeyError:  # Failed to find the datafile, so make a new one
             try:
-                p = self._partitions[pname]
+                p = self._partitions[str(pname)]
             except KeyError:
                 p = self.bundle.partitions.partition(pname)
                 if not p:
                     from ..orm.partition import Partition
+                    import os
 
                     p = self.bundle.partitions.new_partition(pname, type=Partition.TYPE.SEGMENT)
-                    #self.bundle.commit()
                     p.clean()
 
-                self._partitions[pname] = p
+                    self.bundle.commit()
 
-            table = self.bundle.table(p.table_name)
-            assert bool(table)
-            header_mapper, body_mapper = make_table_map(table, self._headers[self.source.name])
+                assert p.table
+                self._partitions[str(pname)] = p
 
-            self._datafiles[df_key] = (p, header_mapper, body_mapper)
+            header_mapper, body_mapper = make_table_map(p.table, self._headers[self.source.name])
+
+            writer = p.datafile.writer
+
+            self._datafiles[df_key] = (p, header_mapper, body_mapper, writer)
 
             # It is a new datafile, so it needs a header.
-            p.datafile.writer.headers = header_mapper(self.headers)
+            writer.headers = header_mapper(self.headers)
 
         try:
-            p.datafile.writer.insert_row(body_mapper(row))
+            writer.insert_row(body_mapper(row))
         except Exception as e:
-            self.bundle.logger.error("Insert failed: {}\n{}".format(row, e))
+            self.bundle.logger.error("Insert failed to {}: {}\n{}".format(p.datafile.path, row, e))
             raise
 
         return row
@@ -1477,8 +1665,13 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         self._end_time = time.time()
 
-        for key, (p, header_mapper, body_mapper) in iteritems(self._datafiles):
-            p.datafile.writer.close()
+        for key, (p, header_mapper, body_mapper, writer) in iteritems(self._datafiles):
+            try:
+                writer.close()
+            except Exception as e:
+                self.bundle.logger.error("Failed to close {}: {}".format(p.datafile.path, e))
+                raise
+
 
     @property
     def rate(self):
@@ -1864,16 +2057,17 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
         for pipe in chain:
 
+            seg_name = pipe.segment.name if hasattr(pipe, 'segment') else '?'
+
             if not hasattr(pipe, 'headers') or not pipe.headers:
-                continue
+                out.append([seg_name, qualified_class_name(pipe)])
+            else:
+                try:
+                    v = [seg_name, qualified_class_name(pipe), len(pipe.headers)]+[str(e) for e in pipe.headers if e]
+                    out.append(v)
 
-            try:
-                seg_name = pipe.segment.name if hasattr(pipe, 'segment') else '?'
-                v = [seg_name, qualified_class_name(pipe)]+[str(e) for e in pipe.headers if e]
-                out.append(v)
-
-            except AttributeError:
-                pass
+                except AttributeError:
+                    pass
 
         if not out:
             return None

@@ -115,6 +115,7 @@ class RunConfig(object):
 
         object.__setattr__(self, 'config', config)
         object.__setattr__(self, 'files', files)
+        object.__setattr__(self, 'path', path)
 
     def __getattr__(self, group):
         """Fetch a configuration group and return the contents as an

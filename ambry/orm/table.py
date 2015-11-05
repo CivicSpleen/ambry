@@ -54,6 +54,9 @@ class Table(Base, DictableMixin):
     @staticmethod
     def mangle_name(name, preserve_case=False):
         import re
+
+        assert name
+
         try:
             r = re.sub('[^\w_]', '_', name.strip())
 
@@ -118,6 +121,10 @@ class Table(Base, DictableMixin):
 
                 # Don't update the type if the user has specfied a custom type
                 if key == 'datatype' and not c.type_is_builtin():
+                    continue
+
+                # Don't change a datatype if the value is set and the new value is unknown
+                if key == 'datatype' and value == 'unknown' and c.datatype:
                     continue
 
                 try:
@@ -197,6 +204,25 @@ class Table(Base, DictableMixin):
 
             c.lom = stat.lom
 
+    def update_id(self, sequence_id, force=True):
+        """Alter the sequence id, and all of the names and ids derived from it. This
+        often needs to be don after an IntegrityError in a multiprocessing run"""
+        from ..identity import ObjectNumber
+
+        self.sequence_id = sequence_id
+
+        assert self.d_vid
+
+        if self.id is None or force:
+            dataset_id = ObjectNumber.parse(self.d_vid).rev(None)
+            self.d_id = str(dataset_id)
+            self.id = str(TableNumber(dataset_id, self.sequence_id))
+
+        if self.vid is None or force:
+            dataset_vid = ObjectNumber.parse(self.d_vid)
+            self.vid = str(TableNumber(dataset_vid, self.sequence_id))
+
+
     @property
     def transforms(self):
         """Return an array of arrays of column transforms.
@@ -213,6 +239,20 @@ class Table(Base, DictableMixin):
 
         return izip_longest(*tr)
 
+    @property
+    def row(self):
+        from collections import OrderedDict
+        import six
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+
+        d = OrderedDict([( p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in ['id','d_id','d_vid','dataset','columns','data', 'partitions', 'sources']])
+
+        for k, v in six.iteritems(self.data):
+            d['d_' + k] = v
+
+        return d
 
     def __str__(self):
         from tabulate import tabulate
@@ -242,13 +282,7 @@ class Table(Base, DictableMixin):
         if isinstance(target, Column):
             raise TypeError('Got a column instead of a table')
 
-        if target.id is None:
-            dataset_id = ObjectNumber.parse(target.d_id)
-            target.id = str(TableNumber(dataset_id, target.sequence_id))
-
-        if target.vid is None:
-            dataset_id = ObjectNumber.parse(target.d_vid)
-            target.vid = str(TableNumber(dataset_id, target.sequence_id))
+        target.update_id(target.sequence_id, False)
 
 
 event.listen(Table, 'before_insert', Table.before_insert)

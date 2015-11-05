@@ -74,6 +74,8 @@ class File(Base, DictableMixin):
         UniqueConstraint('f_d_vid', 'f_path', 'f_major_type', 'f_minor_type',  name='u_ref_path'),
     )
 
+
+
     def update(self, of):
         """Update a file from another file, for copying"""
 
@@ -92,9 +94,9 @@ class File(Base, DictableMixin):
         import msgpack
 
         if self.mime_type == 'text/plain':
-            return self.contents
+            return self.contents.decode('utf-8')
         elif self.mime_type == 'application/msgpack':
-            return msgpack.unpackb(self.contents)
+            return msgpack.unpackb(self.contents, encoding='utf-8')
         else:
             return self.contents
 
@@ -112,7 +114,7 @@ class File(Base, DictableMixin):
         for row in rows:
             yield dict(list(zip(header, row)))
 
-    def update_contents(self, contents):
+    def update_contents(self, contents, mime_type):
         """Update the contents and set the hash and modification time"""
         import hashlib
         import time
@@ -120,12 +122,15 @@ class File(Base, DictableMixin):
         old_size = self.size
         new_size = len(contents)
 
-        # TODO remove this, debugging only.
-        #assert not old_size or  new_size > .5*old_size, "new={} old={}".format(new_size, old_size)
+        self.mime_type = mime_type
 
-        self.contents = contents
+        if mime_type == 'text/plain':
+            self.contents = contents.encode('utf-8')
+        else:
+            self.contents = contents
 
-        self.hash = hashlib.md5(contents).hexdigest()
+        self.hash = hashlib.md5(self.contents).hexdigest()
+
 
         self.modified = time.time()
         self.size = new_size

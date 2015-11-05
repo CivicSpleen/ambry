@@ -14,7 +14,6 @@ from fs.osfs import OSFS
 from fs.opener import fsopendir
 
 from sqlalchemy import or_
-from sqlalchemy.orm import object_session, lazyload
 
 from requests.exceptions import HTTPError
 
@@ -36,7 +35,7 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 global_library = None
 
-def new_library(config=None):
+def new_library(config=None, database_name=None):
 
     if config is None:
         config = get_runconfig()
@@ -45,9 +44,15 @@ def new_library(config=None):
 
     library_config = config.library()
 
-    db_config = library_config['database']
+    if database_name is not None:
+        try:
+            db_config = config.database(database_name, return_dsn = True)
+        except ConfigurationError: # Assume it is a DSN
+            db_config = database_name
+    else:
+        db_config = library_config['database']
 
-    db = Database(db_config)
+    db = Database(db_config, echo = False)
     warehouse = None
 
     if 'search' in library_config:
@@ -77,6 +82,7 @@ class Library(object):
         self._db.open()
         self._fs = filesystem
         self._warehouse = warehouse
+        self.processes = None # Number of multiprocessing proccors. Default to all of them
         if search:
             self._search = Search(self,search)
         else:
@@ -221,7 +227,7 @@ class Library(object):
 
     def bundle(self, ref, capture_exceptions = False):
         """Return a bundle build on a dataset, with the given vid or id reference"""
-        from ..identity import NotObjectNumberError
+
         from ..orm.exc import NotFoundError
 
         if isinstance(ref, Dataset):
@@ -502,8 +508,8 @@ class Library(object):
 
         except HTTPError as e:
             self.logger.error('Failed to get number from number server for key: {}'.format(key, e.message))
-            self.logger.error('Using self-generated number. '
-                 'There is no problem with this, but they are longer than centrally generated numbers.')
+            self.logger.error('Using self-generated number. There is no problem with this, '
+                              'but they are longer than centrally generated numbers.')
             n = str(DatasetNumber())
 
         return n
@@ -547,5 +553,19 @@ class Library(object):
             self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
             install(python_dir, module_name, pip_name)
 
+    @property
+    def process_pool(self):
+        """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
+
+        import multiprocessing
+        from ambry.bundle.concurrent import init_library
+
+        if self.processes:
+            cpus = self.processes
+        else:
+            cpus = multiprocessing.cpu_count()
+
+        self.logger.info("Starting MP pool with {} processors".format(cpus))
+        return multiprocessing.Pool(processes=cpus, initializer=init_library, initargs=[self.config.path, self.database.dsn])
 
 

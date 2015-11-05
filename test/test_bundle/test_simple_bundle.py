@@ -22,32 +22,6 @@ class Test(TestBase):
         self.assertIn('bundle.yaml', dir_list)
         self.assertIn('documentation.md', dir_list)
 
-    def test_phases(self):
-        """Test copying a bundle to a remote, then streaming it back"""
-
-        from ambry.etl import IterSource, MatchPredicate, Reduce
-        from itertools import cycle
-
-        b = self.setup_bundle('simple')
-        b.sync_in()
-        b.prepare()
-
-        # Text a pipeline run outside of the bundle.
-        pl = b.pipeline('test')
-        source = lambda: IterSource(six_izip(list(range(100)), list(range(100, 200)), cycle('abcdefg'), cycle([1.1, 2.1, 3.2, 4.3])))
-        pl.source = source()
-        pl.last = [MatchPredicate(lambda r: r[2] == 'g'),
-                   Reduce(lambda a, r: (a[0] + r[0], a[1] + r[1]) if a else (r[0], r[1]))]
-        pl.run()
-        self.assertEqual((4950, 14950), pl[Reduce].accumulator)
-        self.assertEqual(14, len(pl[MatchPredicate].matches))
-
-        # Same pipeline, but with the match and reduce in the configuration.
-        pl = b.pipeline('test2')
-        pl.source = source()
-        pl.run()
-        self.assertEqual((4950, 14950), pl[Reduce].accumulator)
-        self.assertEqual(14, len(pl[MatchPredicate].matches))
 
     def test_simple_process(self):
         """Build the simple bundle"""
@@ -71,7 +45,7 @@ class Test(TestBase):
 
         self.assertEqual(14, len(b.dataset.configs))
 
-        self.assertFalse(b.is_prepared)
+
         self.assertFalse(b.is_built)
 
         #
@@ -352,7 +326,7 @@ class Test(TestBase):
 
         self.assertEqual(4, len(b.dataset.source_columns))
 
-        self.assertEquals('finalize_done', b.state)
+        self.assertEquals('build_done', b.state)
 
         # Already built can't build again
         self.assertFalse(b.build())
@@ -406,7 +380,8 @@ class Test(TestBase):
         l = b._library
 
         b.sync_in()
-
+        b.ingest()
+        b.build_schema()
         b.run()
 
         self.assertEqual(1, len(list(l.bundles)))
@@ -414,7 +389,6 @@ class Test(TestBase):
         p = list(b.partitions)[0]
         p_vid = p.vid
 
-        print p.datafile.reader.info
 
         self.assertEqual(497054, int(sum(row[3] for row in iter(p))))
 

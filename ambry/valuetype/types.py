@@ -110,7 +110,7 @@ def int_n(v):
     """Cast to int, or on failure, return a default Value"""
 
     try:
-        return int(v) # Just to be sure the code property exists
+        return int(float(v))
     except:
         return None
 

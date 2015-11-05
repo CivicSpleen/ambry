@@ -12,7 +12,7 @@
 "counties","name2","str","||row.county.set_state(row.state).name[0]"
 "counties","percent","float","||percent(row.state,row.county)"
 "counties","rate","float","||rate(row.state,row.county)"
-"counties","rand","int","math.randint(0,1000)"
+"counties","rand","int","randint(0,1000)"
 ,,,
 "integers","id","int",
 "integers","a","int",

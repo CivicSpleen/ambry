@@ -90,7 +90,6 @@ class Bundle(Bundle):
             return -1
 
 
-
     @staticmethod
     def doubleit1(v):
         return int(v) * 2
@@ -109,3 +108,11 @@ class Bundle(Bundle):
             return int(v)
         except:
             return None
+
+    @staticmethod
+    def skip_even(row):
+        return row.a % 2 == 0
+
+
+    def skip_even_meth(self, row):
+        return row.a % 2 == 0

@@ -166,6 +166,7 @@ class Partitions(object):
     def new_partition(self, name=None, data=None, **kwargs):
 
         from ambry.identity import PartialPartitionName
+        import os
 
         if name:
             name_parts = [e[0] for e in PartialPartitionName._name_parts]
@@ -176,7 +177,7 @@ class Partitions(object):
 
         # These are called from before_insert and before_update,
         # but calling them here can avoid some requirements for early commits()
-        p._set_ids()
+
         p._update_names()
 
         return self.bundle.wrap_partition(p)

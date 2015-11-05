@@ -11,6 +11,7 @@ import os
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy import create_engine, event, DDL
+from sqlalchemy.engine import Engine
 from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, ConflictError
 
 from ambry.util import get_logger, parse_url_to_dict
@@ -20,7 +21,7 @@ from . import Column, Partition, Table, Dataset, Config, File,\
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 111
+SCHEMA_VERSION = 115
 
 POSTGRES_SCHEMA_NAME = 'ambrylib'
 POSTGRES_PARTITION_SCHEMA_NAME = 'partitions'
@@ -156,15 +157,6 @@ class Database(object):
 
         if not self._engine:
 
-            # There appears to be a problem related to connection pooling on Linux + Postgres, where
-            # multiprocess runs will throw exceptions when the Datasets table record can't be
-            # found. It looks like connections are losing the setting for the search path to the
-            # library schema.  Disabling connection pooling solves the problem.
-            # from sqlalchemy.pool import NullPool
-            # self._engine = create_engine(self.dsn, poolclass=NullPool, echo=False)
-            # Easier than constructing the pool
-            # self._engine.pool._use_threadlocal = True
-
             if 'postgresql' in self.driver:
                 from sqlalchemy.pool import NullPool
                 # FIXME: Find another way to initiate postgres with NullPool (it is usefull for tests only.)
@@ -172,13 +164,35 @@ class Database(object):
             else:
                 self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
 
+            #
+            # Disconnect connections that have a different PID from the one they were created in.
+            # THis protects against re-use in multi-processing.
+            #
+            @event.listens_for(self._engine, "connect")
+            def connect(dbapi_connection, connection_record):
+
+                connection_record.info['pid'] = os.getpid()
+
+            @event.listens_for(self._engine, "checkout")
+            def checkout(dbapi_connection, connection_record, connection_proxy):
+
+                from sqlalchemy.exc import DisconnectionError
+
+                pid = os.getpid()
+                if connection_record.info['pid'] != pid:
+
+                    connection_record.connection = connection_proxy.connection = None
+                    raise DisconnectionError(
+                        "Connection record belongs to pid %s, "
+                        "attempting to check out in pid %s" %
+                        (connection_record.info['pid'], pid)
+                    )
+
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
 
-
             with self._engine.connect() as conn:
                 _validate_version(conn)
-
 
         return self._engine
 
@@ -222,11 +236,12 @@ class Database(object):
 
     def close(self):
 
+
         self.close_session()
         self.close_connection()
-
         if self._engine:
             self._engine.dispose()
+
 
     def close_session(self):
 
@@ -237,12 +252,14 @@ class Database(object):
 
     def close_connection(self):
 
+
         if self._connection:
             self._connection.close()
             self._connection = None
 
     def commit(self):
         self.session.commit()
+        #self.close_session()
 
     def rollback(self):
         self.session.rollback()
@@ -787,3 +804,5 @@ def _get_all_migrations():
 
     all_migrations = sorted(all_migrations, key=lambda x: x[0])
     return all_migrations
+
+

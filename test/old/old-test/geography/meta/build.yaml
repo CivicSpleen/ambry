@@ -1,8 +1,0 @@
-build: {}
-dependencies: {}
-extract: {}
-sources:
-    municipal:
-        description: null
-        url: http://ds.civicknowledge.org/sangis.org/Community/Neighborhoods_SD.zip
-views: {}

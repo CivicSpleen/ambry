@@ -9,7 +9,7 @@ about:
     rights: null
     source: '{{contact_source.creator.org}}'
     space: California
-    subject: demo
+    subject: demo, Zażółć gęślą jaźń Съешь же ещё этих мягких французских
     summary: This is a short summary of the data bundle, from {{contact_source.creator.org}}
     tags:
     - example

@@ -345,8 +345,8 @@ class BaseDatasetIndex(BaseIndex):
             FROM columns
             JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = :dataset_vid;""")
 
-        columns = '\n'.join(
-            [' '.join(list(str(e) for e in t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
+        columns = u'\n'.join(
+            [u' '.join(list(unicode(e) for e in t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
 
         doc = '\n'.join([u('{}').format(x) for x in [dataset.config.metadata.about.title,
                                                      dataset.config.metadata.about.summary,

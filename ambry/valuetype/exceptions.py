@@ -40,7 +40,7 @@ def capture_error(v,  header_d,  errors):
 def error_from(header, errors):
     return errors.get(header)
 
-def ignore_exception(v):
+def ignore(v):
     return None
 
 def log_exception(exception, bundle):

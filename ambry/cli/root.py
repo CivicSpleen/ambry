@@ -282,6 +282,7 @@ def root_import(args, l, rc):
 
     for f in fs.walkfiles(wildcard='bundle.yaml'):
 
+        prt("Visiting {}".format(f))
         config = yaml.load(fs.getcontents(f))
 
         if not config:

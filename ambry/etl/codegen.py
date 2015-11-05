@@ -20,7 +20,7 @@ def file_loc():
         return "{}:{}".format(file_, line_)
 
 
-const_args = ('row', 'row_n', 'scratch', 'errors', 'pipe', 'bundle', 'source')
+const_args = ('row', 'row_n', 'scratch', 'errors', 'accumulator', 'pipe', 'bundle', 'source')
 var_args = ('v', 'i_s', 'i_d', 'header_s', 'header_d')
 all_args = var_args + const_args
 
@@ -32,17 +32,17 @@ col_code_def = 'lambda {}:'.format(','.join(all_args))
 code_def = 'lambda {}:'.format(','.join(const_args))
 
 file_header = """
-import math
 
 """
 
 column_template="""
 def {f_name}(v, i_s, i_d, header_s, header_d, row, row_n, errors, scratch, accumulator, pipe, bundle, source):
 
-    # funcs created by transform generators must be called with kwargs because their signatures aren't
-    # known when the code is generated.
+    # funcs created by transform generators must be called with kwargs
+    # because their signatures aren't known when the code is generated.
     col_args = dict(v=v, i_s=i_s, i_d=i_d, header_s=header_s, header_d=header_d,
-                    scratch=scratch, errors=errors, accumulator = accumulator, row=row, row_n=row_n)
+                    scratch=scratch, errors=errors, accumulator = accumulator,
+                    row=row, row_n=row_n)
 
     try:
 {stack}
@@ -64,90 +64,17 @@ def row_{table}_{stage}(row, row_n, errors, scratch, accumulator, pipe, bundle, 
 """
 
 
-def base_env():
-    """Base environment for evals, the stuff that is the same for all evals"""
-    import dateutil.parser
-    import datetime
-    from functools import partial
-    from ambry.valuetype.types import parse_date, parse_time, parse_datetime
-    import ambry.valuetype.types
-    import ambry.valuetype.math
-    import ambry.valuetype.string
-    import ambry.valuetype.exceptions
-    import ambry.valuetype.test
-    import math
-
-    localvars = dict(
-
-        parse_date=parse_date,
-        parse_time=parse_time,
-        parse_datetime=parse_datetime,
-        partial=partial,
-    )
-
-    localvars.update(dateutil.parser.__dict__)
-    localvars.update(datetime.__dict__)
-    localvars.update(ambry.valuetype.math.__dict__)
-    localvars.update(ambry.valuetype.string.__dict__)
-    localvars.update(ambry.valuetype.types.__dict__)
-    localvars.update(ambry.valuetype.exceptions.__dict__)
-    localvars.update(ambry.valuetype.test.__dict__)
-
-    return localvars
 
 def column_processor_code():
     pass
 
 
-def find_function(bundle, base_env, code):
-    """Look in several places for a caster function:
-
-    - The bundle
-    - the ambry.build module, which should be the bundle's module.
-    """
-    import sys
-
-    if code == 'doubleit3':
-        pass
-
-    if bundle:
-        try:
-            f = getattr(bundle, code)
-            try:
-                f.ambry_preamble = '{} = bundle.{}'.format(code, code)
-                f.ambry_from = 'bundle'
-            except AttributeError: # for instance methods
-                f.im_func.ambry_preamble = '{} = bundle.{}'.format(code, code)
-                f.im_func.ambry_from = 'bundle'
-            return f
-
-        except AttributeError as e:
-            pass
-
-        try:
-            f = getattr(sys.modules['ambry.build'], code)
-            f.ambry_preamble = 'from ambry.build import {}'.format(code)
-            f.ambry_from = 'module'
-            return f
-
-        except AttributeError:
-            pass
-
-    try:
-        f = base_env[code]
-        f.ambry_from = 'env'
-        return f
-
-    except KeyError as e:
-        pass
-
-    raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(code))
 
 def make_env(bundle, base_env):
 
     def _ff(code):
         try:
-            return find_function(bundle, base_env, code)
+            return base_env.get(code, None)
         except (AttributeError, KeyError):
             return None
 
@@ -155,7 +82,7 @@ def make_env(bundle, base_env):
 
 
 
-def make_row_processors(bundle, source_table, dest_table, env = None):
+def make_row_processors(bundle, source_headers, dest_table, env):
     """
     Make multiple row processors for all of the columns in a table.
 
@@ -165,14 +92,8 @@ def make_row_processors(bundle, source_table, dest_table, env = None):
     """
 
     dest_headers = [c.name for c in dest_table.columns]
-    source_headers = [c.dest_header for c in source_table.columns]
-
-    assert len(source_headers) > 0
 
     row_processors = []
-
-    if not env:
-        env = make_env(bundle, base_env())
 
     out = [file_header]
 
@@ -230,8 +151,8 @@ def make_row_processors(bundle, source_table, dest_table, env = None):
             seg_funcs.append(f_name
                     +('({v}, {i_s}, {i_d}, {header_s}, \'{header_d}\', '
                       'row, row_n, errors, scratch, accumulator, pipe, bundle, source)')
-                    .format(v=v, i_s=i_s, i_d=i_d, header_s="'"+header_s+"'" if header_s else 'None'
-                            , header_d=header_d))
+                    .format(v=v, i_s=i_s, i_d=i_d, header_s="'"+header_s+"'" if header_s else 'None',
+                            header_d=header_d))
 
             out.append('\n'.join(preamble))
 
@@ -275,8 +196,6 @@ def calling_code(f, f_name=None, raise_for_missing=True):
     return "{}({})".format(f_name if f_name else f.__name__, ','.join(args))
 
 def make_stack(env, stage, segment):
-    import types
-    import collections
     import string
     import random
     from ambry.util import qualified_name
@@ -287,9 +206,6 @@ def make_stack(env, stage, segment):
     def make_line(column, t):
         preamble = []
 
-        if t == 'doubleit3':
-            pass
-
         if isinstance(t, type) and issubclass(t, ValueType):  # A valuetype class, from the datatype column.
             tn = qualified_name(t)
             line = "v = {}(v) if v is not None else None # {}".format(tn, file_loc())
@@ -298,23 +214,8 @@ def make_stack(env, stage, segment):
         elif isinstance(t, type):  # A python type, from the datatype columns.
             line = "v = parse_{}(v, header_d) # {}".format(t.__name__, file_loc())
 
-        elif callable(env(t)):
-            fn = env(t)
-
-            try:
-                frm = fn.ambry_preamble
-            except AttributeError as e:
-                frm = None
-
-            if frm and 'import' in frm:
-                preamble.append(frm)
-                line = 'v = {} # {}'.format(calling_code(fn, t), file_loc())
-            elif not frm:
-                line = 'v = {} # {}'.format(calling_code(fn, t), file_loc())
-            elif 'bundle' in frm:
-                line = 'v = bundle.{} # {}'.format(calling_code(fn, t), file_loc())
-            else:
-                raise Exception(frm)
+        elif callable(env.get(t)):
+            line = 'v = {} # {}'.format(calling_code(env.get(t), t), file_loc())
 
         else:
 
@@ -338,7 +239,8 @@ def make_stack(env, stage, segment):
 
     try_lines = []
 
-    for t in  [segment['init'], segment['datatype'] ] + segment['transforms']:
+    for t in [segment['init'], segment['datatype'] ] + segment['transforms']:
+
         if not t:
             continue
 
@@ -401,13 +303,13 @@ class ReplaceTG(ast.NodeTransformer):
         fn_args = None
         use_kw_args = True
 
-        fn = self.env(node.func.id)
+        fn = self.env.get(node.func.id)
         self.loc = file_loc() # Not a builtin, not a type, not a transform generator
 
         # In this case, the code line is a type that has a parse function, so rename it.
         if not fn:
             t_fn_name = 'parse_'+fn_name
-            t_fn = self.env(t_fn_name)
+            t_fn = self.env.get(t_fn_name)
             if t_fn:
                 self.loc = file_loc() # The function is a type
                 fn, fn_name = t_fn, t_fn_name
@@ -474,6 +376,18 @@ class ReplaceTG(ast.NodeTransformer):
 
 
 def rewrite_tg(env, tg_name, code):
+    """Re-write a transform generating function pipe specification by extracting the tranform generating part,
+    and replacing it with the generated transform. so:
+
+       tgen(a,b,c).foo.bar
+
+    becomes:
+
+        tg = tgen(a,b,c)
+
+        tg.foo.bar
+
+    """
 
     visitor = ReplaceTG(env, tg_name)
     assert visitor.tg_name

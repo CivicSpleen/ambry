@@ -154,6 +154,7 @@ class SourceColumn(Base):
 
 
 
+
 class SourceTable(Base):
     __tablename__ = 'sourcetables'
 
@@ -270,6 +271,15 @@ class SourceTable(Base):
         widths = [int(w) for w in widths]
 
         return widths
+
+    def update_id(self, sequence_id):
+        """Alter the sequence id, and all of the names and ids derived from it. This
+        often needs to be don after an IntegrityError in a multiprocessing run"""
+        from ..identity import GeneralNumber1
+
+        self.sequence_id = sequence_id
+        self.vid = str(GeneralNumber1('T', self.d_vid, sequence_id))
+
 
     def __str__(self):
         from tabulate import tabulate

@@ -347,7 +347,7 @@ def _clean_flag(in_flag):
     return bool(in_flag)
 
 
-def next_sequence_id(session, sequence_ids, parent_vid, table_class):
+def next_sequence_id(session, sequence_ids, parent_vid, table_class, force_query = False):
     """
     Return the next sequence id for a object, identified by the vid of the parent object, and the database prefix
     for the child object. On the first call, will load the max sequence number
@@ -378,7 +378,7 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class):
 
     number = sequence_ids.get(key, None)
 
-    if not number and session:
+    if (not number and session) or force_query:
 
         sql = text("SELECT max({seq_col})+1 FROM {table} WHERE {dvid_col} = '{vid}'"
                    .format(table=table_class.__tablename__, dvid_col=parent_col,
@@ -387,9 +387,9 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class):
         max_id, = session.execute(sql).fetchone()
 
         if not max_id:
-            max_id = 0
+            max_id = 1
 
-        sequence_ids[key] = int(max_id) + 1
+        sequence_ids[key] = int(max_id)
 
     elif not session:
         # There was no session set. This should only happen when the parent object is new, and therefore,
@@ -401,6 +401,7 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class):
     else:
         # There were no previous numbers, so start with 1
         sequence_ids[key] += 1
+
 
     return sequence_ids[key]
 
