@@ -1,4 +1,5 @@
 import unittest
+import yaml
 
 from test.test_base import TestBase
 
@@ -14,14 +15,13 @@ def cast_int(v):
 def cast_float(v):
     return float(v)
 
+
 class Test(TestBase):
 
     def setUp(self):
         from fs.opener import fsopendir
 
         self.fs = fsopendir('mem://test')
-
-
 
     @unittest.skip('Timing test')
     def test_csv_time(self):
@@ -51,7 +51,7 @@ class Test(TestBase):
             for name, t in schema:
                 funcs.append('cast_{}(row[{}])'.format(t.__name__, name))
 
-            return eval("lambda row: [{}]".format(','.join(funcs)))
+            return eval('lambda row: [{}]'.format(','.join(funcs)))
 
         row_munger1 = munger1(schema)
 
@@ -87,11 +87,11 @@ class Test(TestBase):
         n = 30000
         s = time.time()
         for i in range(n):
-            row = data[i%100]
+            row = data[i % 100]
             row = row_munger1(row)
             cdf.insert(row)
 
-        print "Munger 1", round(float(n)/(time.time() - s),3), 'rows/s'
+        print 'Munger 1', round(float(n)/(time.time() - s), 3), 'rows/s'
 
         s = time.time()
         for i in range(n):
@@ -99,7 +99,7 @@ class Test(TestBase):
             row = row_munger2(row)
             cdf.insert(row)
 
-        print "Munger 2", round(float(n) / (time.time() - s), 3), 'rows/s'
+        print 'Munger 2', round(float(n) / (time.time() - s), 3), 'rows/s'
 
     @unittest.skip('Save for later')
     def test_dict_caster(self):
@@ -193,13 +193,15 @@ class Test(TestBase):
 
     def alt_bundle_dirs(self, root):
 
-        import glob, os
+        import glob
+        import os
+        from os.path import join as pjoin
 
-        build_url = os.path.join(root,'build')
-        source_url = os.path.join(root,'source')
+        build_url = pjoin(root, 'build')
+        source_url = pjoin(root, 'source')
 
-        for base in (source_url, os.path.join(build_url, 'pipeline'), build_url):
-            for f in glob.glob(os.path.join(base, '*')):
+        for base in (source_url, pjoin(build_url, 'pipeline'), build_url):
+            for f in glob.glob(pjoin(base, '*')):
                 if os.path.isfile(f):
                     os.remove(f)
                 else:
@@ -210,20 +212,17 @@ class Test(TestBase):
     def test_pipe_config(self):
 
         b = self.setup_bundle('simple')
-        l = b._library
-
-        import yaml
 
         b.sync_in()
 
         # Re-write the metadata to include a pipeline
         with b.source_fs.open('bundle.yaml') as f:
-            config =  yaml.load(f)
+            config = yaml.load(f)
 
         config['pipelines']['build'] = dict(
             body=["Add({'a': lambda e,r,v: 1 }) "],
             last=["PrintRows(print_at='end')"],
-            store=['SelectPartition','WriteToPartition']
+            store=['SelectPartition', 'WriteToPartition']
         )
 
         config['pipelines']['source'] = [
@@ -239,11 +238,11 @@ class Test(TestBase):
         with b.source_fs.open('bundle.yaml', 'wb') as f:
             yaml.dump(config, f)
 
-        b.sync_in() # force b/c not enough time for modtime to change
+        b.sync_in()  # force b/c not enough time for modtime to change
         b.ingest()
         b.schema()
 
-        list(b.tables)[0].add_column('a',datatype = 'int')
+        list(b.tables)[0].add_column('a', datatype='int')
 
         b.run()
         print list(b.build_fs.walkfiles())
@@ -265,10 +264,6 @@ class Test(TestBase):
     def test_pipe_config_2(self):
         """Test that the = and - location specifiers work """
         b = self.setup_bundle('simple')
-        l = b._library
-
-        import yaml
-
         b.sync_in()
         b.ingest()
 
@@ -282,7 +277,7 @@ class Test(TestBase):
         )
 
         config['pipelines']['source'] = dict(
-            intuit =["-Add({'a': lambda e,r,v: 1 })"]
+            intuit=["-Add({'a': lambda e,r,v: 1 })"]
         )
 
         config['pipelines']['schema'] = dict(
@@ -317,8 +312,7 @@ class Test(TestBase):
 
     def test_edit(self):
         """Test the Edit pipe, for altering the structure of data"""
-        from dateutil.parser import parse
-        from ambry.etl.pipeline import PrintRows, AddDeleteExpand, Delete
+        from ambry.etl.pipeline import PrintRows, AddDeleteExpand
         from collections import OrderedDict
 
         b = self.setup_bundle('complete-ref')
@@ -327,13 +321,13 @@ class Test(TestBase):
         b.schema()
         b.pre_build()
 
-        pl = b.pipeline('build','simple')
+        pl = b.pipeline('build', 'simple')
 
         pl.last.append(AddDeleteExpand(
-            delete = ['ordinal'],
-            add={ "a": lambda e,r,v: r.int, "b": lambda e,r,v: r['float']},
-            edit = {'categorical': lambda e,r,v: v.upper(), 'int' : lambda e,r,v: int(r.float) },
-            expand = { ('x','y') : lambda e, r, v: [ 1, 2] } ) ) #  [ parse(r.time).hour, parse(r.time).minute ] } ))
+            delete=['ordinal'],
+            add={'a': lambda e, r, v: r.int, 'b': lambda e, r, v: r['float']},
+            edit={'categorical': lambda e, r, v: v.upper(), 'int': lambda e, r, v: int(r.float)},
+            expand={('x', 'y'): lambda e, r, v: [1, 2]}))  # [parse(r.time).hour, parse(r.time).minute]}))
         pl.last.append(PrintRows)
         pl.last.prepend(PrintRows)
 
@@ -344,7 +338,7 @@ class Test(TestBase):
 
         print pl
 
-        for row in  pl.last[-1].rows:
+        for row in pl.last[-1].rows:
             d = OrderedDict(zip(pl.last[-1].headers, row))
 
             self.assertEquals(d['categorical'], d['categorical'].upper())
@@ -352,8 +346,7 @@ class Test(TestBase):
             self.assertNotEquals(d['a'], d['int'])
             self.assertEquals(d['int'], int(d['float']))
             self.assertEquals(d['b'], d['float'])
-            self.assertNotIn('ordinal',d)
-
+            self.assertNotIn('ordinal', d)
 
     def test_sample_head(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head
@@ -362,22 +355,22 @@ class Test(TestBase):
 
             def __iter__(self):
 
-                yield ['int','int']
+                yield ['int', 'int']
 
                 for i in range(10000):
-                    yield([i,i])
+                    yield([i, i])
 
         # Sample
         pl = Pipeline(
             source=Source(),
-            first = Sample(est_length=10000),
-            last = PrintRows(count=50)
+            first=Sample(est_length=10000),
+            last=PrintRows(count=50)
         )
 
         pl.run()
 
         # head
-        self.assertIn([7, 7],pl[PrintRows].rows)
+        self.assertIn([7, 7], pl[PrintRows].rows)
         self.assertIn([2018, 2018], pl[PrintRows].rows)
         self.assertIn([9999, 9999], pl[PrintRows].rows)
 
@@ -404,7 +397,7 @@ class Test(TestBase):
         # Sample
         pl = Pipeline(
             source=Source(),
-            first= SelectRows("row.a == 100 or row.b == 1000"),
+            first=SelectRows('row.a == 100 or row.b == 1000'),
             last=PrintRows(count=50)
         )
 
@@ -420,7 +413,7 @@ class Test(TestBase):
         from ambry.etl.pipeline import Pipeline, Pipe, Slice, PrintRows
 
         self.assertEquals('lambda row: tuple(row[0:3])+tuple(row[10:13])+(row[9],)+(row[-1],)',
-                          Slice.make_slicer((0,3),(10,13),9,-1)[1])
+                          Slice.make_slicer((0, 3), (10, 13), 9, -1)[1])
 
         self.assertEquals('lambda row: tuple(row[0:3])+tuple(row[10:13])+(row[9],)+(row[-1],)',
                           Slice.make_slicer("0:3,10:13,9,-1")[1])
@@ -430,23 +423,29 @@ class Test(TestBase):
         class Source(Pipe):
             def __iter__(self):
 
-                yield [ 'col'+str(j) for j in range(20)]
+                yield ['col'+str(j) for j in range(20)]
 
                 for i in range(10000):
-                    yield [ j for j in range(20) ]
+                    yield [j for j in range(20)]
 
         # Sample
         pl = Pipeline(
-            source=[Source(), Slice((0,3),(10,13),9,-1) ],
+            source=[Source(), Slice((0, 3), (10, 13), 9, -1)],
             last=PrintRows(count=50)
         )
 
         pl.run()
 
-        self.assertEquals([1, 0, 1, 2, 10, 11, 12, 9, 19], pl[PrintRows].rows[0])
-        self.assertEquals(['col0', 'col1', 'col2', 'col10', 'col11', 'col12', 'col9', 'col19'], pl[PrintRows].headers)
+        self.assertEquals(
+            [1, 0, 1, 2, 10, 11, 12, 9, 19],
+            pl[PrintRows].rows[0])
+        self.assertEquals(
+            ['col0', 'col1', 'col2', 'col10', 'col11', 'col12', 'col9', 'col19'],
+            pl[PrintRows].headers)
 
-        self.assertEqual([('0', '3'), ('10', '13'), 9, -1], Slice.parse("0:3,10:13,9,-1"))
+        self.assertEqual(
+            [('0', '3'), ('10', '13'), 9, -1],
+            Slice.parse("0:3,10:13,9,-1"))
 
         pl = Pipeline(
             source=[Source(), Slice("0:3,10:13,9,-1")],
@@ -472,7 +471,7 @@ class Test(TestBase):
 
                 for i in range(self.start, self.start+10):
                     if i == self.start:
-                        yield ['int', 'int'] # header
+                        yield ['int', 'int']  # header
 
                     yield ([self.start, i])
 
@@ -492,11 +491,9 @@ class Test(TestBase):
         self.assertIn([10, 18], pl[PrintRows].rows)
         self.assertIn([20, 21], pl[PrintRows].rows)
 
-
     def test_valuetypes(self):
 
         b = self.setup_bundle('dimensions')
-        l = b._library
 
         b.sync_in()
         b.run()
