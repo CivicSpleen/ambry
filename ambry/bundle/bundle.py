@@ -1592,11 +1592,10 @@ Caster Code
 
         self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
         self.build_fs.setcontents(path, code, encoding='utf8')
-
-        try:
+        if self.build_fs.hassyspath(path):
             abs_path = self.build_fs.getsyspath(path)
-        except:
-            raise
+        else:
+            abs_path = os.path.join(':mem:', path)
 
         env_dict['bundle'] = self
         env_dict['source'] = source
