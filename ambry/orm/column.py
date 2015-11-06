@@ -141,14 +141,13 @@ class Column(Base):
 
     @classmethod
     def python_types(cls):
-        return [e[1] for e in cls.types.values()]
-
+        return [e[1] for e in six.itervalues(cls.types)]
 
     def type_is_int(self):
-        return self.python_type  == int
+        return self.python_type == int
 
     def type_is_real(self):
-        return self.python_type  == float
+        return self.python_type == float
 
     def type_is_number(self):
         return self.type_is_real or self.type_is_int
@@ -172,7 +171,7 @@ class Column(Base):
 
     def type_is_builtin(self):
         """Return False if the datatype is not one of the builtin type"""
-        return self.datatype in self.types.keys()
+        return self.datatype in self.types
 
     @property
     def sqlalchemy_type(self):
@@ -191,8 +190,8 @@ class Column(Base):
             try:
                 return self.types[self.datatype][1]
             except KeyError:
-                raise KeyError("Failed to find type {} in column {}.{}".format(self.datatype, self.table.name, self.name))
-
+                raise KeyError('Failed to find type {} in column {}.{}'
+                               .format(self.datatype, self.table.name, self.name))
 
     @property
     def python_type(self):
@@ -219,7 +218,7 @@ class Column(Base):
             if self.datatype == Column.DATATYPE_TIME:
                 dt = dt.time()
             if not isinstance(dt, self.python_type):
-                raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt),self.python_type))
+                raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt), self.python_type))
 
             return dt
         else:
