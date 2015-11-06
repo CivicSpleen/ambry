@@ -473,7 +473,7 @@ class PythonSourceFile(StringSourceFile):
         except NoSysPathError:
             abs_path = '<string>'
 
-        exec compile(bf.contents, abs_path, 'exec') in module.__dict__
+        exec(compile(bf.contents, abs_path, 'exec'), module.__dict__)
 
         return module.Bundle
 
@@ -852,15 +852,14 @@ class BuildSourceFileAccessor(object):
 
         """
 
-        if item not in file_info_map.keys():
+        if item not in file_info_map:
             return super(BuildSourceFileAccessor, self).__getattr__(item)
-
         else:
             return self.file(item)
 
     def __iter__(self):
 
-        for key in file_info_map.keys():
+        for key in iterkeys(file_info_map):
             yield(self.file(key))
 
     @property
