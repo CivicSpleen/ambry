@@ -224,10 +224,10 @@ def _convert_schema(bundle):
     schema_csv = None
     for f in bundle.dataset.files:
         if f.path.endswith('schema.csv'):
-            schema_csv = six.StringIO()
-            writer = unicodecsv.writer(schema_csv)
-            for row in f.unpacked_contents:
-                writer.writerow(row)
+            contents = f.unpacked_contents
+            if isinstance(contents, six.binary_type):
+                contents = contents.decode('utf-8')
+            schema_csv = six.StringIO(contents)
             schema_csv.seek(0)
             break
 
