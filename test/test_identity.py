@@ -101,20 +101,23 @@ class Test(TestBase):
                                   grain='grain',
                                   format='format',
                                   segment=101,
-                                  **name.dict
-                                  )
+                                  **name.dict)
 
-        self.assertEqual('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101',
-                          str(part_name))
-        self.assertEqual('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101-0.0.1',
-                          part_name.vname)
+        self.assertEqual(
+            'source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101',
+            str(part_name))
+        self.assertEqual(
+            'source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101-0.0.1',
+            part_name.vname)
 
         part_name = part_name.clone()
 
-        self.assertEqual('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101',
-                          str(part_name))
-        self.assertEqual('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101-0.0.1',
-                          part_name.vname)
+        self.assertEqual(
+            'source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101',
+            str(part_name))
+        self.assertEqual(
+            'source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101-0.0.1',
+            part_name.vname)
 
         # Name Query
 
@@ -167,17 +170,17 @@ class Test(TestBase):
                                   grain='grain',
                                   format='format',
                                   segment='segment',
-                                  **name.dict
-                                  )
+                                  **name.dict)
 
-        self.assertEqual('source.com/dataset-variation-0.0.1/format/table/time-space/grain-segment', part_name.path)
+        self.assertEqual(
+            'source.com/dataset-variation-0.0.1/format/table/time-space/grain-segment',
+            part_name.path)
 
         part_name = PartitionName(time='time',
                                   space='space',
                                   table='table',
                                   format='db',
-                                  **name.dict
-                                  )
+                                  **name.dict)
 
         self.assertEqual('source.com-dataset-variation-table-time-space', part_name.name)
         self.assertEqual('source.com-dataset-variation-table-time-space-0.0.1', part_name.vname)
@@ -186,8 +189,7 @@ class Test(TestBase):
         part_name = PartitionName(time='time',
                                   space='space',
                                   format='format',
-                                  **name.dict
-                                  )
+                                  **name.dict)
 
         self.assertEqual('source.com/dataset-variation-0.0.1/format/time-space', part_name.path)
 
@@ -219,8 +221,8 @@ class Test(TestBase):
         self.assertEqual('source.com-foobar-orig-0.0.1', ident.name.dict['vname'])
 
         self.assertEqual({'id', 'vid', 'revision', 'name', 'vname', 'cache_key',
-                           'variation', 'dataset', 'source', 'version'},
-                          set(ident.dict.keys()))
+                          'variation', 'dataset', 'source', 'version'},
+                         set(ident.dict.keys()))
 
         self.assertIn('fqname', ident.names_dict)
         self.assertIn('vname', ident.names_dict)
@@ -276,7 +278,6 @@ class Test(TestBase):
         iid = pi.as_dataset()
 
         self.assertEqual(ident.fqname, iid.fqname)
-
 
     def test_identity_from_dict(self):
 
@@ -447,31 +448,23 @@ class Test(TestBase):
             self.assertNotEqual(p, p3)
 
     def test_parse_other(self):
-
         dn = DatasetNumber(100, 5, 'authoritative')
-
         self.assertEqual('d01C005', str(dn))
-
-        self.assertEqual('G01C001Z005', str(GeneralNumber1('G',dn, 123)))
-
-        self.assertEqual('G01C001Z005', ObjectNumber.parse(str(GeneralNumber1('G',dn, 123)), 'other1'))
+        self.assertEqual('G01C001Z005', str(GeneralNumber1('G', dn, 123)))
+        self.assertEqual('G01C001Z005', ObjectNumber.parse(str(GeneralNumber1('G', dn, 123)), 'other1'))
 
     def test_format_partition_names(self):
         from ambry.identity import PartialPartitionName
 
         ds_name = Name(source='source', dataset='dataset')
 
-        p = PartialPartitionName(time=10, space="CA", table='table')
+        p = PartialPartitionName(time=10, space='CA', table='table')
 
-        self.assertEqual('source/dataset-0.0.0/table/10-ca',p.promote(ds_name).cache_key)
+        self.assertEqual(
+            'source/dataset-0.0.0/table/10-ca',
+            p.promote(ds_name).cache_key)
 
         p = PartialPartitionName(time=10, space="CA", table='table', format='format')
 
-        print p.promote(ds_name).cache_key
-        #self.assertEquals('', p.promote(ds_name).cache_key)
-
-
-def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
+        print(p.promote(ds_name).cache_key)
+        # self.assertEquals('', p.promote(ds_name).cache_key)

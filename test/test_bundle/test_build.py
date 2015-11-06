@@ -15,7 +15,6 @@ class Test(TestBase):
         try:
             shutil.rmtree(build_url)
         except OSError:
-
             pass
 
         os.makedirs(build_url)
@@ -33,17 +32,17 @@ class Test(TestBase):
 
         for t in b.source_tables:
             for c in t.columns:
-                print 'ST', t.name, c.name, c.datatype
+                print('ST', t.name, c.name, c.datatype)
 
         self.assertEqual(1, len(b.source_tables))
         self.assertEqual(0, len(b.tables))
 
         b.schema()
-        #b.build_schema()
+        # b.build_schema()
 
         for t in b.tables:
             for c in t.columns:
-                print "SB", t.name, c.name, c.datatype
+                print('SB', t.name, c.name, c.datatype)
 
         b.commit()
 
@@ -55,8 +54,8 @@ class Test(TestBase):
 
         sd = p.stats_dict
 
-        print sd['id']['count']
-        print sd['float']['lom'], sd['float']['min']
+        print(sd['id']['count'])
+        print(sd['float']['lom'], sd['float']['min'])
         self.assertEqual(0, round(sd['float']['min']))
         self.assertEqual(100, round(sd['float']['max']))
         self.assertEqual(50, round(sd['float']['mean']))
@@ -113,7 +112,7 @@ class Test(TestBase):
         self.assertEqual(4, len(b.dataset.partitions))
         self.assertEqual(2, len(b.dataset.tables))
 
-        print 'Build, testing reads'
+        print('Build, testing reads')
 
         p = list(b.partitions)[0]
 
@@ -162,7 +161,7 @@ class Test(TestBase):
         p = next(iter(b.partitions))
 
         with p.datafile.reader as r:
-            row =  next(islice(r.select(lambda r: r.state == 6), None, 1))
+            row = next(islice(r.select(lambda r: r.state == 6), None, 1))
 
         self.assertEqual('Alameda County, California', row['name'])
         self.assertEqual('05000US06001', row['geoid'])
@@ -170,11 +169,9 @@ class Test(TestBase):
         self.assertEqual('05000US06001', row['geoid3'])
         self.assertEqual(600, row['percent'])
 
-
         with b.partition(table='counties').datafile.reader as r:
             for row in r:
-                print row.row
-
+                print(row.row)
 
     @pytest.mark.slow
     def test_generators(self):
@@ -214,7 +211,7 @@ class Test(TestBase):
 
         d = self.setup_temp_dir()
         b = self.setup_bundle('casters', build_url=d, source_url=d)
-        b.sync_in(); # Required to get bundle for cast_to_subclass to work.
+        b.sync_in()  # Required to get bundle for cast_to_subclass to work.
         b = b.cast_to_subclass()
 
         try:
@@ -241,7 +238,6 @@ class Test(TestBase):
 
         with b.partition(table='integers').datafile.reader as r:
             for row in r:
-
                 self.assertEqual(row.id, row.a)
                 self.assertEqual(row.id * 2, row.b)
                 self.assertEqual(row.id * 2, row.c)

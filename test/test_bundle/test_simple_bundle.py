@@ -6,8 +6,7 @@ import pytest
 
 from boto.exception import S3ResponseError
 
-from six.moves import zip as six_izip
-from six import u
+import six
 
 from test.test_base import TestBase
 
@@ -34,7 +33,7 @@ class Test(TestBase):
 
         # Text a pipeline run outside of the bundle.
         pl = b.pipeline('test')
-        source = lambda: IterSource(six_izip(list(range(100)), list(range(100, 200)), cycle('abcdefg'), cycle([1.1, 2.1, 3.2, 4.3])))
+        source = lambda: IterSource(six.moves.zip(list(range(100)), list(range(100, 200)), cycle('abcdefg'), cycle([1.1, 2.1, 3.2, 4.3])))
         pl.source = source()
         pl.last = [MatchPredicate(lambda r: r[2] == 'g'),
                    Reduce(lambda a, r: (a[0] + r[0], a[1] + r[1]) if a else (r[0], r[1]))]
@@ -65,8 +64,8 @@ class Test(TestBase):
         print(file_names)
 
         expected_names = [
-            u('bundle.py'), u('lib.py'), u('documentation.md'), u('source_schema.csv'),
-            u('sources.csv'), u('bundle.yaml'), u('schema.csv')]
+            six.u('bundle.py'), six.u('lib.py'), six.u('documentation.md'), six.u('source_schema.csv'),
+            six.u('sources.csv'), six.u('bundle.yaml'), six.u('schema.csv')]
         self.assertEqual(file_names, expected_names)
 
         self.assertEqual(14, len(b.dataset.configs))
@@ -414,7 +413,7 @@ class Test(TestBase):
         p = list(b.partitions)[0]
         p_vid = p.vid
 
-        print p.datafile.reader.info
+        print(p.datafile.reader.info)
 
         self.assertEqual(497054, int(sum(row[3] for row in iter(p))))
 

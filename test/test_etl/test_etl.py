@@ -91,7 +91,7 @@ class Test(TestBase):
             row = row_munger1(row)
             cdf.insert(row)
 
-        print 'Munger 1', round(float(n)/(time.time() - s), 3), 'rows/s'
+        print('Munger 1', round(float(n)/(time.time() - s), 3), 'rows/s')
 
         s = time.time()
         for i in range(n):
@@ -99,7 +99,7 @@ class Test(TestBase):
             row = row_munger2(row)
             cdf.insert(row)
 
-        print 'Munger 2', round(float(n) / (time.time() - s), 3), 'rows/s'
+        print('Munger 2', round(float(n) / (time.time() - s), 3), 'rows/s')
 
     @unittest.skip('Save for later')
     def test_dict_caster(self):
@@ -245,14 +245,14 @@ class Test(TestBase):
         list(b.tables)[0].add_column('a', datatype='int')
 
         b.run()
-        print list(b.build_fs.walkfiles())
+        print(list(b.build_fs.walkfiles()))
 
         self.assertTrue(b.build_fs.exists('/example.com/simple-0.1.3/simple.mpr'))
 
         p = list(b.partitions)[0]
         self.assertEquals(10000, sum(1 for e in iter(p)))
 
-        print b.build_fs.getcontents('/pipeline/build-simple.txt')
+        print(b.build_fs.getcontents('/pipeline/build-simple.txt'))
 
         for i, row in enumerate(p):
 
@@ -294,14 +294,14 @@ class Test(TestBase):
 
         b.run()
 
-        print list(b.build_fs.walkfiles())
+        print(list(b.build_fs.walkfiles()))
 
         self.assertTrue(b.build_fs.exists('/example.com/simple-0.1.3/simple.mpr'))
 
         p = list(b.partitions)[0]
         self.assertEquals(10000, len(list(iter(p))))
 
-        print b.build_fs.getcontents('/pipeline/build-simple.txt')
+        print(b.build_fs.getcontents('/pipeline/build-simple.txt'))
 
         for i, row in enumerate(iter(p)):
 
@@ -336,7 +336,7 @@ class Test(TestBase):
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
 
-        print pl
+        print(pl)
 
         for row in pl.last[-1].rows:
             d = OrderedDict(zip(pl.last[-1].headers, row))
@@ -483,7 +483,7 @@ class Test(TestBase):
             last=PrintRows(count=50)
         )
 
-        print pl
+        print(pl)
 
         pl.run(source_pipes=[Source(0), Source(10), Source(20)])
 
@@ -504,4 +504,4 @@ class Test(TestBase):
             if i > 5:
                 break
 
-            print i, row
+            print(i, row)

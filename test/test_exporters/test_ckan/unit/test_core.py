@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
-from StringIO import StringIO
 import unittest
 
 import unicodecsv
 
-from mock import patch, MagicMock
+try:
+    # py2, mock is external lib.
+    from mock import patch, MagicMock
+except ImportError:
+    # py3, mock is included
+    from unittest.mock import patch, MagicMock
+
+import six
 
 from ambry.exporters.ckan.core import _convert_bundle, _convert_partition, export, MISSING_CREDENTIALS_MSG,\
     UnpublishedAccessError
@@ -89,7 +95,7 @@ class ConvertPartitionTest(unittest.TestCase):
         self.assertIn('package_id', ret)
         self.assertEqual(ret['package_id'], ds1.vid)
         self.assertIn('upload', ret)
-        self.assertTrue(isinstance(ret['upload'], StringIO))
+        self.assertTrue(isinstance(ret['upload'], six.StringIO))
         rows = []
         reader = unicodecsv.reader(ret['upload'])
         for row in reader:
@@ -257,7 +263,7 @@ class ConvertSchemaTest(unittest.TestCase):
         self.assertIn('package_id', ret)
         self.assertEqual(ret['package_id'], ds1.vid)
         self.assertIn('upload', ret)
-        self.assertTrue(isinstance(ret['upload'], StringIO))
+        self.assertTrue(isinstance(ret['upload'], six.StringIO))
         rows = []
         reader = unicodecsv.reader(ret['upload'])
         for row in reader:

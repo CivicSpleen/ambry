@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-import os
 import unittest
 
 from contexttimer import Timer
 
 
 class Test(unittest.TestCase):
-    @unittest.skip("Development Test")
+
+    @unittest.skip('Development Test')
     def test_pytables(self):
         import tables
         import datetime
@@ -36,28 +36,28 @@ class Test(unittest.TestCase):
             e = tables.Time32Col()
             f = tables.Time32Col()
 
-        h5file = tables.open_file("/tmp/hdf5/tutorial1.h5", mode="w", title="Test file")
+        h5file = tables.open_file('/tmp/hdf5/tutorial1.h5', mode='w', title='Test file')
 
-        group = h5file.create_group("/", 'detector', 'Detector information')
+        group = h5file.create_group('/', 'detector', 'Detector information')
 
-        table = h5file.create_table(group, 'readout', PYT, "Readout example",
-                                    filters = tables.Filters(complevel=9, complib='zlib'))
+        table = h5file.create_table(group, 'readout', PYT, 'Readout example',
+                                    filters=tables.Filters(complevel=9, complib='zlib'))
 
         tr = table.row
 
         with Timer() as t:
             cache = []
-            for i, row in enumerate(rows,1):
-                for i,h in enumerate(headers):
+            for i, row in enumerate(rows, 1):
+                for i, h in enumerate(headers):
                     tr[h] = row[i]
 
                 tr.append()
             table.flush()
             h5file.close()
 
-        print "PyTables write ", float(N) / t.elapsed, N
+        print('PyTables write ', float(N) / t.elapsed, N)
 
-        h5file = tables.open_file("/tmp/hdf5/tutorial1.h5", mode="r", title="Test file")
+        h5file = tables.open_file('/tmp/hdf5/tutorial1.h5', mode='r', title='Test file')
 
         table = h5file.root.detector.readout
 
@@ -66,11 +66,11 @@ class Test(unittest.TestCase):
             for row in table:
                 count += row['c']
 
-        print "PyTables read  ", float(N) / t.elapsed, N
+        print('PyTables read  ', float(N) / t.elapsed, N)
 
         h5file.close()
 
-    @unittest.skip("Development Test")
+    @unittest.skip('Development Test')
     def test_datafile_read_write(self):
         from ambry_sources.mpf import MPRowsFile
         from fs.opener import fsopendir
@@ -78,7 +78,7 @@ class Test(unittest.TestCase):
         from random import randint, random
         from uuid import uuid4
 
-        fs = fsopendir('temp://') # fs = fsopendir('/tmp/hdf5/')
+        fs = fsopendir('temp://')  # fs = fsopendir('/tmp/hdf5/')
 
         # fs = fsopendir('/tmp/pmpf')
 
@@ -106,7 +106,7 @@ class Test(unittest.TestCase):
 
             w.close()
 
-        print "MSGPack write ", float(N) / t.elapsed, w.n_rows
+        print('MSGPack write ', float(N) / t.elapsed, w.n_rows)
 
         with Timer() as t:
             count = 0
@@ -120,7 +120,7 @@ class Test(unittest.TestCase):
 
             r.close()
 
-        print "MSGPack read  ", float(N) / t.elapsed, i, count, s
+        print('MSGPack read  ', float(N) / t.elapsed, i, count, s)
 
         with Timer() as t:
             count = 0
@@ -132,7 +132,7 @@ class Test(unittest.TestCase):
 
             r.close()
 
-        print "MSGPack rows  ", float(N) / t.elapsed
+        print('MSGPack rows  ', float(N) / t.elapsed)
 
         with Timer() as t:
             count = 0
@@ -144,7 +144,7 @@ class Test(unittest.TestCase):
 
             r.close()
 
-        print "MSGPack raw   ", float(N) / t.elapsed
+        print('MSGPack raw   ', float(N) / t.elapsed)
 
 
 
