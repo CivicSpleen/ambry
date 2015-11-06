@@ -6,11 +6,17 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
+import re
+
+import geoid.census
+import geoid.acs
+import geoid.civick
+import geoid.tiger
+
+import six
 
 from .. import TextValue, ValueType
 
-import geoid.census, geoid.acs, geoid.civick, geoid.tiger
-import re
 
 class Geoid(ValueType):
     """Two letter state Abbreviation. May be uppercase or lower case. """
@@ -27,8 +33,8 @@ class Geoid(ValueType):
     def parse(cls,  v):
         """Parse a value of this type and return a list of parsed values"""
 
-        if not isinstance(v, basestring):
-            raise ValueError("Value must be a string")
+        if not isinstance(v, six.string_types):
+            raise ValueError('Value must be a string')
 
         return
 
@@ -76,11 +82,14 @@ class Geoid(ValueType):
 class AcsGeoid(Geoid):
     parser = geoid.acs.AcsGeoid.parse
 
+
 class CensusGeoid(Geoid):
     parser = geoid.census.CensusGeoid.parse
 
+
 class TigerGeoid(Geoid):
     parser = geoid.tiger.TigerGeoid.parse
+
 
 class GVid(Geoid):
     parser = geoid.civick.GVid.parse
@@ -115,13 +124,14 @@ class CountyName(TextValue):
             # The search will fail for 'District of Columbia'
             return ''
 
-
     @property
     def medium_name(self):
         """The census name without the state"""
-        return self.state_name_re.sub('',self.name)
+        return self.state_name_re.sub('', self.name)
 
-    type_names = ('County', 'Municipio', 'Parish', 'Census Area', 'Borough', 'Municipality', 'city', 'City and Borough')
+    type_names = (
+        'County', 'Municipio', 'Parish', 'Census Area', 'Borough',
+        'Municipality', 'city', 'City and Borough')
     type_name_pattern = '|'.join('({})'.format(e) for e in type_names)
     type_names_re = re.compile(type_name_pattern)
 
@@ -142,6 +152,6 @@ class CountyName(TextValue):
         try:
             county, state = self.name.split(',')
         except ValueError:
-            return self.name # 'District of Colombia'
+            return self.name  # 'District of Colombia'
 
-        return self.type_names_re.sub('',county)
+        return self.type_names_re.sub('', county)
