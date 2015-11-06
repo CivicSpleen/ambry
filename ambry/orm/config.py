@@ -12,7 +12,7 @@ from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer,\
     event, UniqueConstraint
 from sqlalchemy.orm import object_session, relationship
 
-from six import iterkeys
+from six import iterkeys, u
 
 from ambry.orm import next_sequence_id
 from ambry.identity import GeneralNumber1
@@ -51,7 +51,7 @@ class Config(Base):
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     def __repr__(self):
-        return u'<config: {},{},{} = {}>'.format(self.d_vid, self.group, self.key, self.value)
+        return u('<config: {},{},{} = {}>').format(self.d_vid, self.group, self.key, self.value)
 
     @staticmethod
     def before_insert(mapper, conn, target):
