@@ -14,7 +14,7 @@ import traceback
 from functools import partial
 from decorator import decorator
 
-from six import string_types, iteritems, u, b
+from six import string_types, iteritems, u, b, text_type
 
 from fs.errors import NoSysPathError
 
@@ -514,7 +514,7 @@ class Bundle(object):
         """Write a log message only to the file"""
 
         with self.build_fs.open(BUILD_LOG_FILE, 'a+') as f:
-            f.write(unicode(message + '\n'))
+            f.write(text_type(message + '\n'))
 
     def log(self, message, **kwargs):
         """Log the messsage."""
@@ -1007,7 +1007,7 @@ class Bundle(object):
             if not source.is_downloadable:
                 continue
 
-            if isinstance(source, basestring):
+            if isinstance(source, string_types):
                 source_name = source
                 source = self.source(source_name)
 
@@ -1366,8 +1366,7 @@ class Bundle(object):
                         # the tables as a dest_table.
                         table = self.table(source)
                         try:
-                            resolved_sources += filter(
-                                lambda x: x.resolved_dest_table_name == table.name, self.sources)
+                            resolved_sources += [x for x in self.sources if x.resolved_dest_table_name == table.name]
                         except:
                             errors.append(source)
 
@@ -1509,7 +1508,7 @@ Caster Code
 {}
 
 """.format(str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
-           pl.dest_table, unicode(pl), pl.headers_report(), caster_code))
+           pl.dest_table, text_type(pl), pl.headers_report(), caster_code))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
@@ -1603,14 +1602,13 @@ Caster Code
 
         assert not pipe or (pipe.source is source and pipe.bundle is self)
 
-        exec compile(code, abs_path, 'exec') in env_dict
+        exec(compile(code, abs_path, 'exec'), env_dict)
 
         return env_dict['row_processors']
 
     def build_post_cast_error_codes(self):
         """If there are casting errors, final_cast_errors will generate codes for the values. This rounte
          will report all of them and report an error. """
-        from six import text_type
         if len(self.dataset.codes):
             cast_errors = 0
             self.error('Casting Errors')
