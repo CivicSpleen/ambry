@@ -402,11 +402,11 @@ def _run(host, port, redis, unregistered_key, reloader=False, **kwargs):
 
     # This is the key that can be distributed publically. It is only to
     # keep bots and spiders from sucking up a bunch of numbers.
-    rds.set("assignment_class:" + unregistered_key, 'unregistered')
+    rds.set('assignment_class:' + unregistered_key, 'unregistered')
 
     install(RedisPlugin(pool))
 
-    print(host, port)
+    print('{} {}'.format(host, port))
 
     return run(host=host, port=port, reloader=reloader, server='paste')
 

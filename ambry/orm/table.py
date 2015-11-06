@@ -48,8 +48,8 @@ class Table(Base, DictableMixin):
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
     )
 
-    columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
-                           cascade="all, delete-orphan", lazy='joined')
+    columns = relationship(Column, backref='table', order_by='asc(Column.sequence_id)',
+                           cascade='all, delete-orphan', lazy='joined')
 
     _column_sequence = {}
 
