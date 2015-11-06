@@ -51,6 +51,7 @@ class ConvertDatasetTest(unittest.TestCase):
 
         ds1 = DatasetFactory()
         FileFactory(dataset=ds1, path='documentation.md', contents='### Dataset documentation.')
+        self.sqlite_db.commit()
         bundle = _get_fake_bundle(ds1)
         ret = _convert_bundle(bundle)
 

@@ -8,12 +8,13 @@ __docformat__ = 'restructuredtext en'
 
 
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
+from sqlalchemy import event
 from sqlalchemy import Text, Binary, String, ForeignKey, Float
 
-from ..util import Constant
-from sqlalchemy import event
+import six
 
 from . import Base, MutationDict, JSONEncodedObj, BigIntegerType, DictableMixin
+from ..util import Constant
 
 
 class File(Base, DictableMixin):
@@ -187,6 +188,9 @@ class File(Base, DictableMixin):
 
             if not target.id:
                 target.id = 1
+
+        if target.contents and isinstance(target.contents, six.text_type):
+            target.contents = target.contents.encode('utf-8')
 
         File.before_update(mapper, conn, target)
 

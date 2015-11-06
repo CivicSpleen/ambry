@@ -162,7 +162,10 @@ def _convert_bundle(bundle):
 
     for f in bundle.dataset.files:
         if f.path.endswith('documentation.md'):
-            notes = json.dumps(f.unpacked_contents)
+            contents = f.unpacked_contents
+            if isinstance(contents, six.binary_type):
+                contents = contents.decode('utf-8')
+            notes = json.dumps(contents)
             break
 
     ret = {
