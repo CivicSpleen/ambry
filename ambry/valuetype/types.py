@@ -6,21 +6,25 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-class NullValue(Exception):
-    """Raised from a caster to indicate that the returned value should be None"""
+import datetime
 
 import dateutil.parser as dp
-import datetime
+
 from . import IntValue, FloatValue
 from exceptions import CastingError
 
-from six import string_types, iteritems
+import six
+
+
+class NullValue(Exception):
+    """Raised from a caster to indicate that the returned value should be None"""
 
 
 def transform_generator(fn):
     """A decorator that marks transform pipes that should be called to create the real transform"""
     fn.func_dict['is_transform_generator'] = True
     return fn
+
 
 def is_transform_generator(fn):
     """Return true of the function has been marked with @transform_generator"""
@@ -29,8 +33,9 @@ def is_transform_generator(fn):
     except AttributeError:
         return False
 
+
 @transform_generator
-def join( source_name, foreign_column, join_key, bundle):
+def join(source_name, foreign_column, join_key, bundle):
     """
     Join the local table to a foreign partition.
 
@@ -48,33 +53,32 @@ def join( source_name, foreign_column, join_key, bundle):
     fig = itemgetter(foreign_column)
 
     with bundle.dep(source_name).datafile.reader as r:
-        id_map = { fig(row) : row.copy() for row in r }
+        id_map = {fig(row): row.copy() for row in r}
 
     def _joins(v, scratch, **kwargs):  # kwargs needed to suck up superflous args in call.
-
-
         scratch[join_key] = id_map.get(v)
-
         return v
 
     return _joins
 
+
 @transform_generator
 def joined(join_key, foreign_col):
 
-    def _joined(scratch, **kwargs): # kwargs needed to suck up superflous args in call.
-
+    def _joined(scratch, **kwargs):  # kwargs needed to suck up superflous args in call.
         return scratch[join_key][foreign_col]
 
     return _joined
 
+
 def row_number(row_n):
     return row_n
+
 
 def nullify(v):
     """Convert empty strings and strings with only spaces to None values. """
 
-    if isinstance(v, string_types):
+    if isinstance(v, six.string_types):
         v = v.strip()
 
     if v is None or v == '':
@@ -94,6 +98,7 @@ def int_d(v, default=None):
     except:
         return default
 
+
 def float_d(v, default=None):
     """Cast to int, or on failure, return a default Value"""
 
@@ -101,6 +106,7 @@ def float_d(v, default=None):
         return float(v)
     except:
         return default
+
 
 #
 # Casters that return a null on failure
@@ -110,9 +116,10 @@ def int_n(v):
     """Cast to int, or on failure, return a default Value"""
 
     try:
-        return int(v) # Just to be sure the code property exists
+        return int(v)  # Just to be sure the code property exists
     except:
         return None
+
 
 def float_n(v):
     """Cast to int, or on failure, return None"""
@@ -132,7 +139,6 @@ def int_e(v):
         raise NullValue(v)
 
 
-
 def parse_int(v, header_d):
     """Parse as an integer, or a subclass of Int."""
 
@@ -147,6 +153,7 @@ def parse_int(v, header_d):
         return int(round(float(v), 0))
     except (TypeError, ValueError) as e:
         raise CastingError(int, header_d, v, 'Failed to cast to integer')
+
 
 def parse_float(v,  header_d):
     v = nullify(v)
@@ -166,29 +173,34 @@ def parse_str(v,  header_d):
 
     v = nullify(v)
 
-    if v is None: return None
+    if v is None:
+        return None
 
     try:
-        return str(v).strip()
+        return six.binary_type(v).strip()
     except UnicodeEncodeError:
-        return unicode(v).strip()
+        return six.text_type(v).strip()
+
 
 def parse_unicode(v,  header_d):
 
     v = nullify(v)
 
-    if v is None: return None
+    if v is None:
+        return None
 
     try:
-        return unicode(v).strip()
+        return six.text_type(v).strip()
     except Exception as e:
-        raise CastingError(unicode, header_d, v, str(e))
+        raise CastingError(six.text_type, header_d, v, str(e))
+
 
 def parse_type(type_, v,  header_d):
 
     v = nullify(v)
 
-    if v is None: return None
+    if v is None:
+        return None
 
     try:
         return type_(v)
@@ -200,9 +212,10 @@ def parse_date(v, header_d):
 
     v = nullify(v)
 
-    if v is None: return None
+    if v is None:
+        return None
 
-    if isinstance(v, string_types):
+    if isinstance(v, six.string_types):
         try:
             return dp.parse(v).date()
         except (ValueError,  TypeError) as e:
@@ -213,13 +226,15 @@ def parse_date(v, header_d):
     else:
         raise CastingError(int, header_d, v, "Expected datetime.date or basestring, got '{}'".format(type(v)))
 
+
 def parse_time(v,  header_d):
 
     v = nullify(v)
 
-    if v is None: return None
+    if v is None:
+        return None
 
-    if isinstance(v, string_types):
+    if isinstance(v, six.string_types):
         try:
             return dp.parse(v).time()
         except ValueError as e:
@@ -230,13 +245,15 @@ def parse_time(v,  header_d):
     else:
         raise CastingError(int, header_d, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
 
+
 def parse_datetime(v,  header_d):
 
     v = nullify(v)
 
-    if v is None: return None
+    if v is None:
+        return None
 
-    if isinstance(v, string_types):
+    if isinstance(v, six.string_types):
         try:
             return dp.parse(v)
         except (ValueError, TypeError) as e:
@@ -258,14 +275,13 @@ class IntOrCode(IntValue):
         try:
             o = super(IntOrCode, cls).__new__(cls, v)
         except Exception as e:
-
             o = super(IntOrCode, cls).__new__(cls, 0)
             o.code = v
-
         return o
 
     def __init__(self, v):
         super(IntOrCode, self).__init__(v)
+
 
 class FloatOrCode(FloatValue):
     "An Float value that stores values that fail to convert in the 'code' property"

@@ -6,7 +6,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from math import *
+from .math import *
 from random import *
 
 def rate(num, denom, round_digits = None):

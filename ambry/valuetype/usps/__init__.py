@@ -7,8 +7,9 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+import six
+
 from .. import ValueType, StrValue
-from ambry.util import memoize
 
 states = [('Alabama', 'AL', 1), ('Alaska', 'AK', 2), ('Arizona', 'AZ', 4), ('Arkansas', 'AR', 5),
           ('California', 'CA', 6), ('Colorado', 'CO', 8), ('Connecticut', 'CT', 9), ('Delaware', 'DE', 10),
@@ -23,6 +24,7 @@ states = [('Alabama', 'AL', 1), ('Alaska', 'AK', 2), ('Arizona', 'AZ', 4), ('Ark
           ('South Carolina', 'SC', 45), ('South Dakota', 'SD', 46), ('Tennessee', 'TN', 47), ('Texas', 'TX', 48),
           ('Utah', 'UT', 49), ('Vermont', 'VT', 50), ('Virginia', 'VA', 51), ('Virgin Islands', 'VI', 78),
           ('Washington', 'WA', 53), ('West Virginia', 'WV', 54), ('Wisconsin', 'WI', 55), ('Wyoming', 'WY', 56)]
+
 
 class StateAbr(StrValue):
     """Two letter state Abbreviation. May be uppercase or lower case. """
@@ -43,11 +45,11 @@ class StateAbr(StrValue):
         if isinstance(v, int):
             v = cls.abr_map(v)
 
-        if not isinstance(v, basestring):
-            raise ValueError("Value must be a string")
+        if not isinstance(v, six.string_types):
+            raise ValueError('Value must be a string')
 
-        if len(v) !=2:
-            raise ValueError("Value must be 2 char wide")
+        if len(v) != 2:
+            raise ValueError('Value must be 2 char wide')
 
         return v
 
@@ -98,7 +100,6 @@ class StateAbr(StrValue):
         return State(StateAbr.fips_map()[self])
 
 
-
 class Zip(ValueType):
     """Zip codes, 5 digits or zip+4 """
 
@@ -119,11 +120,10 @@ class Zip(ValueType):
         else:
             return 0
 
-
     def parse(self, v):
         """Parse a value of this type and return a list of parsed values"""
 
-        self._parsed =  self.z5p4re.match(str(v)).groups()
+        self._parsed = self.z5p4re.match(str(v)).groups()
 
         # TODO Could return state from 3 digit prefix
 
@@ -133,4 +133,4 @@ class Zip(ValueType):
 
     @property
     def zip5p4(self):
-        return "{}-{}".format(*self._parsed)
+        return '{}-{}'.format(*self._parsed)
