@@ -30,9 +30,9 @@ class Test(TestBase):
 
         # Convert to a FIPS code
         self.assertEqual('04', sa.fips.str)
-        self.assertEqual('04000US04', sa.fips.geoid)
-        self.assertEqual('04', sa.fips.tiger)
-        self.assertEqual('0E04', sa.fips.gvid)
+        self.assertEqual('04000US04', str(sa.fips.geoid))
+        self.assertEqual('04', str(sa.fips.tiger))
+        self.assertEqual('0E04', str(sa.fips.gvid))
         self.assertEqual('Arizona', sa.fips.name)
         self.assertEqual('AZ', sa.fips.usps.fips.usps)
 
