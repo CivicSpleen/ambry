@@ -56,7 +56,7 @@ class Test(TestBase):
         try:
             ds.config.metadata.identity = [1, 2, 3]
         except AssertionError as exc:
-            self.assertIn('Dictionary is required', exc.message)
+            self.assertIn('Dictionary is required', str(exc))
 
     def test_unique(self):
         """ d_vid, type, group and key are unique together. """
@@ -84,7 +84,7 @@ class Test(TestBase):
 
         dsn = rc.database('pg-func-test', return_dsn=True)
 
-        print(dsn)
+        # print(dsn)
 
         db = Database(dsn)
 
