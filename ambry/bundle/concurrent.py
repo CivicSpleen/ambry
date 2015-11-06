@@ -87,4 +87,4 @@ def ingest_mp(args):
 
     source = b.source(source_name)
 
-    return b.ingest_source(source, clean_files)
+    return b._ingest_source(source, clean_files)

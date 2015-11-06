@@ -237,7 +237,7 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
     command_p.add_argument('-a', '--all', default=False, action='store_true',
                            help='Clean everything: metadata, partitions, tables, config, everything. ')
-    command_p.add_argument('-S', '--source', default=False, action='store_true',
+    command_p.add_argument('-s', '--source', default=False, action='store_true',
                            help='Clean the source tables schema, but not ingested source files.  ')
     command_p.add_argument('-f', '--files', default=False, action='store_true',
                            help='Clean build source files')
@@ -249,6 +249,8 @@ def bundle_parser(cmd):
                            help='Clean any built partitions')
     command_p.add_argument('-b', '--build', default=False, action='store_true',
                            help='Clean the build directory')
+    command_p.add_argument('-S', '--sync', default=False, action='store_true',
+                           help='Sync in after cleaning')
     command_p.set_defaults(subcommand='clean')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
@@ -325,7 +327,6 @@ def bundle_parser(cmd):
                            help='Build only sources that output to these destination tables')
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
-
 
 
     #
@@ -658,8 +659,14 @@ def bundle_clean(args, l, rc):
             prt('Clean ingested')
             b.clean_ingested()
 
-    b.state = Bundle.STATES.CLEANED
-    b.set_last_access(Bundle.STATES.CLEANED)
+    if args.sync:
+        b.sync_in()
+        b.set_last_access(Bundle.STATES.SYNCED)
+        b.state = Bundle.STATES.SYNCED
+    else:
+        b.set_last_access(Bundle.STATES.CLEANED)
+        b.state = Bundle.STATES.CLEANED
+
     b.commit()
 
 def bundle_download(args, l, rc):
@@ -697,6 +704,9 @@ def bundle_ingest(args, l, rc):
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l, print_loc=False).cast_to_subclass()
 
+    if not args.force and not args.table and not args.source:
+        check_built(b)
+
     if args.table:
         b.ingest(tables=args.table, force=args.force)
     elif args.source:
@@ -715,9 +725,9 @@ def bundle_schema(args, l, rc):
     b.ingest(tables=args.table, force=args.force)
 
     if args.build:
-        b.build_schema(tables=args.table, clean=args.clean)
+        b.build_schema(sources=args.source, tables=args.table, clean=args.clean)
     else:
-        b.schema(tables=args.table, clean=args.clean)
+        b.schema(sources=args.source, tables=args.table, clean=args.clean)
 
     b.set_last_access(Bundle.STATES.SCHEMA)
 
@@ -759,7 +769,7 @@ def bundle_build(args, l, rc):
 
     args.force = True if args.quick else args.force
 
-    if not args.force:
+    if not args.force and not args.table and not args.source:
         check_built(b)
 
     if args.sync:
@@ -767,13 +777,9 @@ def bundle_build(args, l, rc):
 
     b = b.cast_to_subclass()
 
-    sources = b._resolve_sources(args.source, args.table)
-
-    b.run_stages(sources=sources, force=args.force)
+    b.run_stages(sources=args.source, tables=args.table, force=args.force)
 
     b.set_last_access(Bundle.STATES.BUILT)
-
-
 
 
 def bundle_install(args, l, rc):

@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 # Bundle test code
 
-import unittest
+from ambry.bundle.test import BundleTest, after_ingest, before_ingest
 
-class Test(unittest):
-
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
+class Test(BundleTest):
+    pass

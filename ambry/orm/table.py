@@ -151,6 +151,17 @@ class Table(Base, DictableMixin):
         self.add_column(name='id', datatype=Column.DATATYPE_INTEGER, is_primary_key=True,
                         description=self.description if not description else description)
 
+    def is_empty(self):
+        """Return True if the table has no columns or the only column is the id"""
+        if len(self.columns) == 0:
+            return True
+
+        if len(self.columns) == 1 and self.columns[0].name == 'id':
+            return True
+
+        return False
+
+
     @property
     def header(self):
         """Return an array of column names in the same order as the column

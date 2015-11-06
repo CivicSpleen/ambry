@@ -157,8 +157,10 @@ class ConfigGroupAccessor(object):
         self._type_name = type_name
 
     def clean(self):
+
         for config in [config for config in self._dataset.configs if config.type == self._type_name]:
             self._dataset.configs.remove(config)
+
 
     def __iter__(self):
         for config in [config for config in self._dataset.configs if config.type == self._type_name]:
@@ -185,6 +187,7 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
 
     # FIXME! These functions should return sensible value when the underlying config items are missing
     # or have non-integer values
+
 
     @property
     def build_duration(self):

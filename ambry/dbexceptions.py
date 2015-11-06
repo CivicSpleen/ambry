@@ -110,3 +110,7 @@ class PhaseError(Exception):
 class BuildError(PhaseError):
 
     """General error while building a bundle."""
+
+class TestError(PhaseError):
+
+    """Error or failure in built in tests"""

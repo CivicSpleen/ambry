@@ -467,6 +467,9 @@ class PythonSourceFile(StringSourceFile):
 
         bf = self._dataset.bsfile(self._file_const)
 
+        if not bf.contents:
+            return module
+
         module.__dict__.update(**kwargs)
 
         try:
@@ -474,7 +477,15 @@ class PythonSourceFile(StringSourceFile):
         except NoSysPathError:
             abs_path = '<string>'
 
-        exec compile(bf.contents, abs_path, 'exec') in module.__dict__
+        import re
+
+        if re.search(r'-\*-\s+coding:', bf.contents):
+            # Has encoding, so don't decode
+            contents = bf.contents
+        else:
+            contents = bf.unpacked_contents # Assumes utf-8
+
+        exec compile(contents, abs_path, 'exec') in module.__dict__
 
         return module
 

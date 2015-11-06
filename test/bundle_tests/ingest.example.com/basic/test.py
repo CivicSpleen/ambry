@@ -1,34 +1,27 @@
 # -*- coding: utf-8 -*-
 # Bundle test code
 
-import unittest
+from ambry.bundle.test import BundleTest, after_ingest, before_ingest
 
-# noinspection PyUnresolvedReferences
-from ambry.build import bundle  # Set in Bundle.run_tests
-# noinspection PyUnresolvedReferences
-from ambry.build import library  # Set in Bundle.run_tests
+class Test(BundleTest):
 
-from ambry.bundle import Bundle
+    @before_ingest()
+    def test_before_ingest(self):
+        print 'BEFORE INGEST', self.bundle.identity
 
-class Test(unittest.TestCase):
-    def setUp(self):
-        pass
+    @before_ingest()
+    def test_before_ingest(self):
+        self.assertTrue(False)
 
-    def tearDown(self):
-        pass
+    @after_ingest()
+    def test_after_ingest(self):
+        print 'AFTER INGEST', self.bundle.identity
+        x = 1/0
 
-    @unittest.skipIf(bundle.state == 'clean_done', 'Only test when clean')
-    def test_if_clean(self):
-        print "test_if_clean", bundle.state
 
-    @unittest.skipIf(bundle.state != 'clean_done', 'Only test if not clean')
-    def test_if_not_clean(self):
-        print "test_if_not_clean", bundle.state
-
-    @unittest.skipIf(bundle.state in (Bundle.STATES.INGESTED,Bundle.STATES.FINALIZED,Bundle.STATES.BUILT) ,
-                     'State is ingested, built or finalized')
-    def test_do_ingest(self):
+    def x_test_do_ingest(self):
         """Test ingestion, for when the ingestion hasn't been done yet. """
+
         bundle.clean_ingested()
         bundle.ingest()
 
@@ -36,8 +29,8 @@ class Test(unittest.TestCase):
 
         bundle.clean_ingested()
 
-    @unittest.skipIf(bundle.state != Bundle.STATES.INGESTED, 'Bundle is not ingested')
-    def test_ingested(self):
+
+    def x_test_ingested(self):
         """Run tests on ingestion, when the ingestion is done prior to running the test"""
         sources = [s for s in bundle.sources if s.is_downloadable]
 
@@ -48,3 +41,12 @@ class Test(unittest.TestCase):
 
         sum_ = sum(float(row.float) for row in s.datafile)
         self.assertEquals(497055.0, round(sum_, 0))
+
+        d =  s.datafile.info
+        self.assertEquals(1, d['data_start_row'])
+        self.assertEquals(10001, d['data_end_row'])
+        self.assertEquals(10001, d['rows'])
+        self.assertEquals(4, d['cols'])
+        self.assertEquals([u'id', u'uuid', u'int', u'float'], d['headers'])
+        self.assertEquals([0], d['header_rows'])
+

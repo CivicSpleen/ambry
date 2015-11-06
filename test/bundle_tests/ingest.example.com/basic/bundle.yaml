@@ -1,5 +1,6 @@
 about:
   access: restricted
+  remote: test
   footnote: nll
   grain: null
   groups: null

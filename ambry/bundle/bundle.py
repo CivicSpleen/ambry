@@ -94,7 +94,7 @@ class Bundle(object):
         },
     }
 
-    def __init__(self, dataset, library, source_url=None, build_url=None, test=False):
+    def __init__(self, dataset, library, source_url=None, build_url=None):
         import logging
         import signal
 
@@ -124,10 +124,14 @@ class Bundle(object):
 
         self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
 
-        self.test = test  # Set to true to trigger test behavior
+        self.stage = None # Set to the current ingest or build stage
+        self.limited_run = False  # Set to true to trigger bundle-specific limits on # of rows processed
 
         self.capture_exceptions = False  # If set to true (in CLI), will catch and log exceptions internally.
         self.exit_on_fatal = True
+
+        # Test class imported from the test.py file
+        self.test_class = None;
 
         self.init()
 
@@ -176,7 +180,8 @@ class Bundle(object):
         try:
             clz = bsf.import_bundle()
 
-            b = clz(self._dataset, self._library, self._source_url, self._build_url, self.test)
+            b = clz(self._dataset, self._library, self._source_url, self._build_url)
+            b.limited_run = self.limited_run
             b.capture_exceptions = self.capture_exceptions
             b.multi = self.multi
             return b
@@ -610,7 +615,6 @@ class Bundle(object):
         self.logger.error(message)
 
 
-
     def exception(self, e):
         """Log an error messsage.
 
@@ -939,9 +943,15 @@ Caster Code
         self.dataset.config.build.state.lasttime = time()
         return self.dataset.config.build.state.error
 
+    @property
+    def build_state(self):
+        """"Returns the build state accessor, self.dataset.config.build.state"""
+
+        return self.dataset.config.build.state
+
     @state.setter
     def state(self, state):
-        """Set the current build state and record the tim eto maintain history"""
+        """Set the current build state and record the time to maintain history"""
 
         self.dataset.config.build.state.current = state
         self.dataset.config.build.state[state] = time()
@@ -950,6 +960,14 @@ Caster Code
         self.dataset.config.build.state.error = False
         self.dataset.config.build.state.exception = None
         self.dataset.config.build.state.exception_type = None
+
+    def record_stage_state(self, phase, stage):
+        """Record the completion times of phases and stages"""
+
+        key = "{}-{}".format(phase, stage if stage else 1)
+
+        self.dataset.config.build.state[key] = time()
+
 
     def set_error_state(self):
         self.dataset.config.build.state.error = time()
@@ -971,31 +989,6 @@ Caster Code
         """Synonym for run_stages"""
         return self.run_stages(sources, tables, force=force, schema=schema)
 
-    def run_stage(self, stage=None, sources=None, tables=None,  schema=False, force=False,  finalize=True):
-
-        if self.is_finalized and not force:
-            self.error("Can't run; bundle is finalized")
-            return False
-
-        sources = self._resolve_sources(sources, tables)
-
-        if not self.ingest(sources=sources, force=force):
-            self.error('Run: failed to ingest')
-            return False
-
-        if schema:
-            if not self.schema(sources=sources):
-                self.error('Run: failed to build schema')
-                return False
-
-        if not self.build(sources=sources, stage=stage, force=force):
-            self.error('Run: failed to build')
-            return False
-
-        if finalize:
-            self.finalize()
-
-        return True
 
     def run_stages(self, sources=None, tables=None, force=False, schema = False):
         """Like run, but runs stages in order, rather than each phase in order. So, run() will ingest all sources,
@@ -1007,8 +1000,9 @@ Caster Code
 
         from itertools import groupby
         from operator import attrgetter
+        from ambry.bundle.test import TAG
 
-        sources = self._resolve_sources(sources, tables)
+        resolved_sources = self._resolve_sources(sources, tables)
 
         if force:  # Clean all of the old partitions
 
@@ -1020,23 +1014,57 @@ Caster Code
                 self.wrap_partition(p).datafile.remove()
                 self.session.delete(p)
 
-            for s in self.dataset.sources:
+            for s in resolved_sources:
                 if s.state in (self.STATES.BUILD, self.STATES.BUILT):
                     s.state = self.STATES.INGESTED
 
             self.commit()
 
         keyfunc = attrgetter('stage')
-        for stage, stage_sources in groupby(sorted(sources, key=keyfunc), keyfunc):
+        self.run_phase_test(TAG.BEFORE_RUN)
+        for stage, stage_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
             stage_sources = list(stage_sources)  # Stage_sources is an iterator, can only be traversed once
 
-            if not self.run_stage(stage,sources=stage_sources,  force=force, finalize=False, schema = schema):
+            self.run_phase_test(TAG.BEFORE_STAGE, stage)
+            if not self._run_stage(stage,sources=stage_sources,  force=force, finalize=False, schema = schema):
                 self.error('Failed to run stage {}'.format(stage))
-
+            self.run_phase_test(TAG.AFTER_STAGE, stage)
 
         self.post_run()
 
+        if not sources and not tables:
+            self.run_phase_test(TAG.AFTER_RUN)
+        else:
+            print sources, tables
+            self.log("Sources or tables specified; skipping after run test")
+
         return True
+
+    def _run_stage(self, stage=None, sources=None, tables=None, schema=False, force=False, finalize=True):
+
+        if self.is_finalized and not force:
+            self.error("Can't run; bundle is finalized")
+            return False
+
+        sources = self._resolve_sources(sources, tables)
+
+        if not self.ingest(sources=sources, force=force):
+            self.error('Run: failed to ingest')
+            return False
+
+        if not self.schema(sources=sources, force=schema):
+            self.error('Run: failed to build schema')
+            return False
+
+        if not self.build(sources=sources, stage=stage, force=force):
+            self.error('Run: failed to build')
+            return False
+
+        if finalize:
+            self.finalize()
+
+        return True
+
     #
     # Syncing
     #
@@ -1145,6 +1173,7 @@ Caster Code
         self.clean_build()
         self.clean_files()
         self.clean_ingested()
+        self.clean_build_state()
 
         ds.commit()
 
@@ -1191,6 +1220,7 @@ Caster Code
         """ Delete all ingested file records, but leave the ingested files in the build directory """
 
         self.dataset.files[:] = []
+        self.commit()
 
     def clean_ingested(self):
         """"Clean ingested files"""
@@ -1220,6 +1250,12 @@ Caster Code
 
         self.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
         self.build_source_files.file(File.BSFILE.SCHEMA).remove()
+        self.commit()
+
+    def clean_build_state(self):
+
+        self.dataset.config.build.clean()
+        self.commit()
 
     #
     # Ingestion
@@ -1231,10 +1267,10 @@ Caster Code
         If no stage is specified, execute the sources in groups by stage """
 
         from itertools import groupby
+        from ambry.bundle.test import TAG
 
-        key = lambda s: s.stage if s.stage else 1
-
-        sources = sorted(self._resolve_sources(sources, tables, stage),key=key)
+        self.state = self.STATES.INGESTING
+        self.commit()
 
         def not_final_or_delete(s):
             import zlib
@@ -1248,22 +1284,28 @@ Caster Code
                 s.datafile.remove()
                 return True
 
-        for k, g in groupby(sources, key):
+        key = lambda s: s.stage if s.stage else 1
+        sources = sorted(self._resolve_sources(sources, tables, stage), key=key)
+
+        for stage, g in groupby(sources, key):
             sources = [s for s in g if not_final_or_delete(s)]
             if len(sources):
-                self.log("Ingesting {} sources in stage {}".format(len(sources), k))
+                self.log("Ingesting {} sources in stage {}".format(len(sources), stage))
             else:
-                self.log("No sources left to ingest for stage {}".format(k))
+                self.log("No sources left to ingest for stage {}".format(stage))
                 continue
 
-            self.ingest_sources(sources, force=force)
+            self.run_phase_test(TAG.BEFORE_INGEST, stage)
+            self._ingest_sources(sources, force=force)
+            self.run_phase_test(TAG.AFTER_INGEST, stage)
+            self.record_stage_state(self.STATES.INGESTING, stage)
 
         self.state = self.STATES.INGESTED
         self.commit()
 
         return True
 
-    def ingest_sources(self, sources, force=False):
+    def _ingest_sources(self, sources, force=False):
         """Ingest a set of sources, usually for one stage"""
         from concurrent import ingest_mp
         try:
@@ -1271,7 +1313,6 @@ Caster Code
 
             downloadable_sources = [s for s in sources if force or
                                     (s.is_processable and not s.is_ingested and not s.is_built)]
-
 
             if self.multi:
                 args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
@@ -1284,7 +1325,7 @@ Caster Code
                     pool.terminate()
             else:
                 for source in downloadable_sources:
-                    self.ingest_source(source, force)
+                    self._ingest_source(source, force)
 
             return True
 
@@ -1292,24 +1333,35 @@ Caster Code
             self.commit()
             raise
 
-    def ingest_source(self, source, force=None):
+    def _ingest_source(self, source, force=None):
         """Ingest a single source"""
         from ambry_sources.sources import FixedSource, GeneratorSource
         from ambry_sources import get_source
         from ambry_sources.exceptions import MissingCredentials
+        from ambry.orm.exc import NotFoundError
 
         def account_accessor(url, accounts=self.library.config.accounts):
             # return empty dict if credentials do not exist
             # to force ambry_sources to raise exception with required config.
             return accounts.get(url, {})
 
-        if source.datafile.exists and not source.is_partition:
+        if not source.is_partition and source.datafile.exists:
             if not source.datafile.is_finalized:
                 source.datafile.remove()
             elif force:
                 source.datafile.remove()
             else:
                 self.log("Source {} already ingested, skipping".format(source.name))
+                return
+
+        if source.is_partition:
+            # Check if the partition exists
+            try:
+                p = self.library.partition(source.ref)
+            except NotFoundError:
+                # Maybe it is an internal reference, in which case we can just delay
+                # until the partition is built
+                self.log("Not Ingesting {}: referenced partition '{}' does not exist".format(source.name, source.ref))
                 return
 
         self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
@@ -1384,7 +1436,7 @@ Caster Code
         source.state = source.STATES.INGESTED
         self.commit()
 
-    def ingest_update_tables(self, sources):
+    def _ingest_update_tables(self, sources):
         # Do these updates, even if we skipped ingestion, so that the source tables will be generated if they
         # had been cleaned from the database, but the ingested files still exists.
         for i, source in enumerate(sources):
@@ -1400,11 +1452,22 @@ Caster Code
     #
 
     @CaptureException
-    def schema(self, sources = None, tables=None, clean=False):
-        """Generate destination schemas"""
+    def schema(self, sources = None, tables=None, clean=False, force = False, use_pipeline = False):
+        """
+        Generate destination schemas.
+
+        :param sources: If specified, build only destination tables for these soruces
+        :param tables: If specified, build only these tables
+        :param clean: Delete tables and partitions first
+        :param force: Population tables even if the table isn't empty
+        :param use_pipeline: If True, use the build pipeline to determine columns. If false, use the source schemas.
+
+        :return: True on success.
+        """
         from itertools import groupby
         from operator import attrgetter
         from ambry.orm.exc import NotFoundError
+        from ambry.etl import Collect, Head
 
         sources = self._resolve_sources(sources, tables, predicate = lambda s: s.is_processable)
 
@@ -1416,31 +1479,55 @@ Caster Code
         keyfunc = attrgetter('dest_table')
         for t, sources in groupby(sorted(sources, key=keyfunc), keyfunc):
 
-            if tables and t.name not in tables:
-                print 'Skipping'
+            if not force and not t.is_empty:
                 continue
 
-            # Get all of the header names, for each source, associating the header position in the table
-            # with the header, then sort on the postition. This will produce a stream of header names
-            # that may have duplicates, but which is generally in the order the headers appear in the
-            # sources. The duplicates are properly handled when we add the columns in add_column()
-            columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in sources
-                             for i, col in enumerate(source.source_table.columns)]))
+            if use_pipeline:
+                for source in sources:
+                    pl = self.pipeline(source)
 
-            for pos, name, datatype, desc in columns:
-                t.add_column(name=name, datatype=datatype, description=desc, update_existing = True)
+                    pl.cast = [ambry.etl.CastSourceColumns]
+                    pl.select_partition = []
+                    pl.write = [Head, Collect]
+                    pl.final = []
 
-            self.log("Populated destination table '{}' from source table '{}' with {} columns"
-                     .format(t.name, source.source_table.name, len(columns)))
+                    self.log_pipeline(pl)
+
+                    pl.run()
+                    pl.phase = 'build_schema'
+                    self.log_pipeline(pl)
+
+                    for h, c in zip(pl.write[Collect].headers, pl.write[Collect].rows[1]):
+                        t.add_column(name=h, datatype=type(c).__name__ if c is not None else 'str',
+                                     update_existing=True)
+
+                self.log("Populated destination table '{}' from pipeline '{}'"
+                         .format(t.name, pl.name))
+
+            else:
+                # Get all of the header names, for each source, associating the header position in the table
+                # with the header, then sort on the postition. This will produce a stream of header names
+                # that may have duplicates, but which is generally in the order the headers appear in the
+                # sources. The duplicates are properly handled when we add the columns in add_column()
+                columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in sources
+                                 for i, col in enumerate(source.source_table.columns)]))
+
+                for pos, name, datatype, desc in columns:
+                    t.add_column(name=name, datatype=datatype, description=desc, update_existing = True)
+
+                self.log("Populated destination table '{}' from source table '{}' with {} columns"
+                         .format(t.name, source.source_table.name, len(columns)))
 
         for i, source in enumerate(self.refs):
             try:
-                source.update_table()  # Generate the source tables.
+                pass
+                #source.update_table()  # Generate the source tables.
             except NotFoundError:
                 # Ignore not found errors here, because the ref may be to a partition that has not been built yet.
                 self.log("Skipping {}".format(source.name))
 
         self.commit()
+
         return True
 
     @CaptureException
@@ -1452,12 +1539,13 @@ Caster Code
         """
         from itertools import groupby
         from operator import attrgetter
-        from ambry.etl import Collect, Head
+
 
         self.load_requirements() # Required to load bundle
         self.import_lib() # Load bundle, pissibly get generators, pipelines, etc.
 
         sources = self._resolve_sources(sources, tables)
+
 
         if clean:
             self.dataset.delete_tables_partitions()
@@ -1465,30 +1553,14 @@ Caster Code
 
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
-        for t, grouped_sources in groupby(sorted(sources+self.refs, key=keyfunc), keyfunc):
+        for t, grouped_sources in groupby(sorted(sources, key=keyfunc), keyfunc):
 
             if tables and t.name not in tables:
                 continue
 
             self.log("Populating table: {}".format(t.name))
 
-            for source in grouped_sources:
-                pl = self.pipeline(source)
 
-                pl.cast = [ ambry.etl.CastSourceColumns ]
-                pl.select_partition = []
-                pl.write = [Head, Collect]
-                pl.final = []
-
-                self.log_pipeline(pl)
-
-                pl.run()
-                pl.phase = 'build_schema'
-                self.log_pipeline(pl)
-
-                for h, c in zip(pl.write[Collect].headers,  pl.write[Collect].rows[1]):
-                    t.add_column(name=h, datatype=type(c).__name__ if c is not None else 'str',
-                                 update_existing = True)
 
         self.commit()
         return True
@@ -1535,6 +1607,7 @@ Caster Code
         from operator import attrgetter
         from itertools import groupby
         from .concurrent import build_mp
+        from ambry.bundle.test import TAG
 
         if not self.pre_build(force):
             return False
@@ -1565,8 +1638,12 @@ Caster Code
                     pool.terminate()
 
             else:
+                # Only run the tests on local, single process builds
+                self.run_phase_test(TAG.BEFORE_BUILD, stage)
                 for source in sources:
                     self.build_source(source, force = force)
+                self.run_phase_test(TAG.AFTER_BUILD, stage)
+                self.record_stage_state(self.STATES.BUILDING, stage)
 
             self.unify_partitions()
 
@@ -1957,25 +2034,80 @@ Caster Code
         self.finalize_write_bundle_file()
         return True
 
+    def import_tests(self):
+        bsf = self.build_source_files.file(File.BSFILE.TEST)
+        module = bsf.import_module(library=lambda: self.library,
+                                   bundle=lambda: self)
+
+        return module.Test
+
     def run_tests(self, tests=None):
         """Run the unit tests in the test.py file"""
-        bsf = self.build_source_files.file(File.BSFILE.TEST)
-        module = bsf.import_module(library=self.library, bundle=self)
-
-        test_class = module.Test
 
         import unittest
 
+        if not self.test_class:
+            self.test_class = self.import_tests()
+
         if tests:
-            print '!!!!', tests
             suite = unittest.TestSuite()
             for test in tests:
-                suite.addTest(test_class(test))
+                suite.addTest(self.test_class(test))
 
             unittest.TextTestRunner(verbosity=2).run(suite)
         else:
-            suite = unittest.TestLoader().loadTestsFromTestCase(test_class)
+            suite = unittest.TestLoader().loadTestsFromTestCase(self.test_class)
             unittest.TextTestRunner(verbosity=2).run(suite)
+
+    def run_phase_test(self, tag, stage=None):
+        """Run tests marked with a particular tag and stage"""
+
+        import inspect
+        import unittest
+        from ambry.bundle.test import _runable_test, TAG
+        import StringIO
+
+        suite = unittest.TestSuite()
+
+        if not self.test_class:
+            self.test_class = self.import_tests()
+
+        funcs = inspect.getmembers(self.test_class, predicate=inspect.ismethod)
+
+        tests = []
+
+        for func_name, f in funcs:
+            if hasattr(f, '__ambry_test__'):
+
+                if _runable_test(f, tag, stage):
+                    tests.append(self.test_class(f.__name__))
+
+        if tests:
+            suite.addTests(tests)
+            stream = StringIO.StringIO()
+
+            r = unittest.TextTestRunner(stream=stream,verbosity=2).run(suite)
+
+            #self.log(stream.getvalue())
+
+            self.log("Ran {} tests for tag '{}', {}{} failed, {} errors, {} skipped".format(
+                r.testsRun, tag, ' stage {}, '.format(stage) if stage else '',
+                len(r.failures), len(r.errors), len(r.skipped)
+            ))
+            for test, trace in r.failures:
+                self.error('Test Failure: {} {}'.format(test, trace))
+
+            for test, trace in r.errors:
+                self.error('Test Error: {} {}'.format(test, trace))
+
+            if len(r.failures) + len(r.errors) > 0:
+                from ambry.dbexceptions import TestError
+                self.set_error_state()
+                self.dataset.config.build.state.test_error = [
+                    (str(test), str(trc)) for test, trc in r.failures+r.errors
+                ]
+                raise TestError("Failed tests: {}"
+                                .format(', '.join([str(test) for test, trc in r.failures+r.errors])))
 
     #
     # Check in to remote
