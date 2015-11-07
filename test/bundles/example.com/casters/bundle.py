@@ -88,6 +88,11 @@ class Bundle(Bundle):
         try:
             return int(v)
         except ValueError:
+            # binary type for py3
+            try:
+                v = v.decode('utf-8')
+            except Exception:
+                pass
             return int(v.replace(',', ''))
 
     def remove_codes(self, v):

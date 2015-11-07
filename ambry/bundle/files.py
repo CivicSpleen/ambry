@@ -28,8 +28,8 @@ import sys
 import time
 import yaml
 
+import six
 from six import string_types, iteritems, u, iterkeys
-from six.moves import zip as six_izip
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import File
@@ -238,7 +238,7 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fr.modified = self.fs_modtime
 
-    def record_to_fh(self,f):
+    def record_to_fh(self, f):
         import unicodecsv as csv
 
         fr = self._dataset.bsfile(self._file_const)
@@ -251,7 +251,6 @@ class RowBuildSourceFile(BuildSourceFile):
                 return u(',').join(u('{}').format(e).replace(',', '\,') for e in v)
             elif isinstance(v, dict):
                 import json
-
                 return json.dumps(v)
             else:
                 return v
@@ -260,22 +259,26 @@ class RowBuildSourceFile(BuildSourceFile):
 
             w = csv.writer(f)
             for i, row in enumerate(fr.unpacked_contents):
-                w.writerow(munge_types(e) for e in row)
+                w.writerow([munge_types(e) for e in row])
 
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
-        import unicodecsv as csv
 
         fr = self._dataset.bsfile(self._file_const)
 
         fn_path = file_name(self._file_const)
 
         if fr.contents:
-            with self._fs.open(fn_path, 'wb') as f:
-                self.record_to_fh(f)
+            if six.PY2:
+                with self._fs.open(fn_path, 'wb') as f:
+                    self.record_to_fh(f)
+            else:
+                # py3
+                with self._fs.open(fn_path, 'w', newline='') as f:
+                    self.record_to_fh(f)
 
 
 class DictBuildSourceFile(BuildSourceFile):
@@ -531,7 +534,7 @@ class SourcesFile(RowBuildSourceFile):
             if i == 0:
                 header = row
             else:
-                d = dict(six_izip(header, row))
+                d = dict(six.moves.zip(header, row))
 
                 if 'widths' in d:
                     del d['widths']  # Obsolete column in old spreadsheets.

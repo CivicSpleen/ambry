@@ -97,7 +97,10 @@ class File(Base, DictableMixin):
         if self.mime_type == 'text/plain':
             return self.contents
         elif self.mime_type == 'application/msgpack':
-            return msgpack.unpackb(self.contents)
+            # FIXME: Note: I'm not sure that encoding='utf-8' will not break old data.
+            # We need utf-8 to make python3 to work. (kazbek)
+            # return msgpack.unpackb(self.contents)
+            return msgpack.unpackb(self.contents, encoding='utf-8')
         else:
             return self.contents
 
@@ -135,7 +138,7 @@ class File(Base, DictableMixin):
 
     @property
     def has_contents(self):
-        return self.size > 0 and self.unpacked_contents is not None
+        return (self.size or 0) > 0 and self.unpacked_contents is not None
 
     @property
     def row(self):

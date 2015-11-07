@@ -22,14 +22,22 @@ class NullValue(Exception):
 
 def transform_generator(fn):
     """A decorator that marks transform pipes that should be called to create the real transform"""
-    fn.func_dict['is_transform_generator'] = True
+    if six.PY2:
+        fn.func_dict['is_transform_generator'] = True
+    else:
+        # py3
+        fn.__dict__['is_transform_generator'] = True
     return fn
 
 
 def is_transform_generator(fn):
     """Return true of the function has been marked with @transform_generator"""
     try:
-        return fn.func_dict.get('is_transform_generator', False)
+        if six.PY2:
+            fn.func_dict['is_transform_generator'] = True
+        else:
+            # py3
+            return fn.__dict__.get('is_transform_generator', False)
     except AttributeError:
         return False
 
@@ -176,10 +184,39 @@ def parse_str(v,  header_d):
     if v is None:
         return None
 
-    try:
-        return six.binary_type(v).strip()
-    except UnicodeEncodeError:
-        return six.text_type(v).strip()
+    if six.PY2:
+        try:
+            return six.binary_type(v).strip()
+        except UnicodeEncodeError:
+            return six.text_type(v).strip()
+    else:
+        # py3
+        try:
+            return six.binary_type(v, 'utf-8').strip()
+        except UnicodeEncodeError:
+            return six.text_type(v).strip()
+
+
+def parse_bytes(v, header_d):
+
+    # This is often a no-op, but it ocassionally converts numbers into strings
+
+    v = nullify(v)
+
+    if v is None:
+        return None
+
+    if six.PY2:
+        try:
+            return six.binary_type(v).strip()
+        except UnicodeEncodeError:
+            return six.text_type(v).strip()
+    else:
+        # py3
+        try:
+            return six.binary_type(v, 'utf-8').strip()
+        except UnicodeEncodeError:
+            return six.text_type(v).strip()
 
 
 def parse_unicode(v,  header_d):
@@ -279,9 +316,6 @@ class IntOrCode(IntValue):
             o.code = v
         return o
 
-    def __init__(self, v):
-        super(IntOrCode, self).__init__(v)
-
 
 class FloatOrCode(FloatValue):
     "An Float value that stores values that fail to convert in the 'code' property"
@@ -293,14 +327,9 @@ class FloatOrCode(FloatValue):
         try:
             o = super(FloatOrCode, cls).__new__(cls, v)
         except Exception as e:
-
             o = super(FloatOrCode, cls).__new__(cls, float('nan'))
             o.code = v
-
         return o
-
-    def __init__(self, v):
-        super(FloatOrCode, self).__init__(v)
 
 
 class ForeignKey(IntValue):
@@ -316,5 +345,5 @@ class ForeignKey(IntValue):
         return o
 
     def __init__(self, v):
-        super(ForeignKey, self).__init__(v)
+        super(ForeignKey, self).__init__()
         self.row = None

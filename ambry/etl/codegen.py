@@ -121,8 +121,13 @@ def find_function(bundle, base_env, code):
                 f.ambry_preamble = '{} = bundle.{}'.format(code, code)
                 f.ambry_from = 'bundle'
             except AttributeError:  # for instance methods
-                f.im_func.ambry_preamble = '{} = bundle.{}'.format(code, code)
-                f.im_func.ambry_from = 'bundle'
+                if six.PY2:
+                    f.im_func.ambry_preamble = '{} = bundle.{}'.format(code, code)
+                    f.im_func.ambry_from = 'bundle'
+                else:
+                    # py3
+                    f.__func__.ambry_preamble = '{} = bundle.{}'.format(code, code)
+                    f.__func__.ambry_from = 'bundle'
             return f
 
         except AttributeError as e:

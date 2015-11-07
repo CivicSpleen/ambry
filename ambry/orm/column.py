@@ -88,8 +88,8 @@ class Column(Base):
     )
 
     # FIXME. These types should be harmonized with   SourceColumn.DATATYPE
-    DATATYPE_STR = 'str'
-    DATATYPE_UNICODE = 'unicode'
+    DATATYPE_STR = six.binary_type.__name__
+    DATATYPE_UNICODE = six.text_type.__name__
     DATATYPE_INTEGER = 'int'
     DATATYPE_INTEGER64 = 'long' if six.PY2 else 'int'
     DATATYPE_FLOAT = 'float'
@@ -108,7 +108,9 @@ class Column(Base):
     types = {
         # Sqlalchemy, Python, Sql,
 
-        # Here, 'str' means ascii, 'unicode' means not ascii
+        # Here, 'str' means ascii, 'unicode' means not ascii.
+        # FIXME: Change names to DATATYPE_ASCII, DATATYPE_NOT_ASCII because it confuses while
+        # python2/python3 porting.
         DATATYPE_STR: (sqlalchemy.types.String, six.binary_type, 'VARCHAR'),
         DATATYPE_UNICODE: (sqlalchemy.types.String, six.text_type, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
