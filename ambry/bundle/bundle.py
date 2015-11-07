@@ -16,6 +16,7 @@ import shutil
 from time import time
 import traceback
 
+import six
 from six import string_types, iteritems, u, b, text_type
 
 from fs.errors import NoSysPathError
@@ -1735,8 +1736,11 @@ Caster Code
     def build_post_write_bundle_file(self):
 
         path = self.library.create_bundle_file(self)
+        mode = 'r'
+        if six.PY3:
+            mode = 'rb'
 
-        with open(path) as f:
+        with open(path, mode=mode) as f:
             self.build_fs.makedir(os.path.dirname(self.identity.cache_key), allow_recreate=True)
             self.build_fs.setcontents(self.identity.cache_key + '.db', data=f)
 
