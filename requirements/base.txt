@@ -44,4 +44,4 @@ terminaltables==1.2.1
 watchdog==0.8.3
 filelock==2.0.4
 ambry-sources>=0.0.8
-unicodecsv>=0.12.0
+unicodecsv==0.12.0  # using 0.13.0 breaks many tests.

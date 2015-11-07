@@ -228,7 +228,6 @@ class RowBuildSourceFile(BuildSourceFile):
                     rows.append(row)
 
         try:
-
             fr.update_contents(msgpack.packb(rows))
         except AssertionError:
             raise
