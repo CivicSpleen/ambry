@@ -10,10 +10,10 @@ import datetime
 
 import dateutil.parser as dp
 
-from . import IntValue, FloatValue
-from exceptions import CastingError
-
 import six
+
+from . import IntValue, FloatValue
+from .exceptions import CastingError
 
 
 class NullValue(Exception):

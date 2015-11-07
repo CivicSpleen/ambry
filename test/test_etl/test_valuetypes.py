@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
+import os
+import shutil
+
+from ambry.orm.column import Column
 
 from test.test_base import TestBase
-import shutil
-import os
 
 
 class Test(TestBase):
@@ -45,7 +47,6 @@ class Test(TestBase):
 
     def test_clean_transform(self):
         from ambry.dbexceptions import ConfigurationError
-        from ambry.orm.column import Column
 
         ct = Column.clean_transform
 
@@ -78,8 +79,6 @@ class Test(TestBase):
 
         with self.assertRaises(ConfigurationError):  # Two inits in a segment
             ct('t1|^init|t2|^init|!except|t3|t4')
-
-        from ambry.orm.column import Column
 
         c = Column(name='column', sequence_id=1, datatype='int')
 

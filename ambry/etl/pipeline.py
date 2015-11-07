@@ -268,8 +268,8 @@ class GeneratorSourcePipe(Pipe):
 
     def __str__(self):
         from ..util import qualified_class_name
+        return 'Generator {}'.format(qualified_class_name(self))
 
-        return "Generator {}".format(qualified_class_name(self))
 
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""

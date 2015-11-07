@@ -6,13 +6,15 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+from decorator import decorator
+from itertools import groupby
+from functools import partial
+from operator import attrgetter
 import os
 import sys
 import shutil
 from time import time
 import traceback
-from functools import partial
-from decorator import decorator
 
 from six import string_types, iteritems, u, b, text_type
 
@@ -763,9 +765,6 @@ class Bundle(object):
         Actual operation is to group sources by order, then call run() on each group
         """
 
-        from itertools import groupby
-        from operator import attrgetter
-
         sources = self._resolve_sources(sources, tables)
 
         self.sync_in()
@@ -963,6 +962,13 @@ class Bundle(object):
             self.commit()
             raise
 
+    @classmethod
+    def _group_sources(cls, sources):
+        """ Groups given sources by the destination table name. """
+        sort_key = attrgetter('dest_table.name')
+        groupby_key = attrgetter('dest_table')
+        return groupby(sorted(sources, key=sort_key), groupby_key)
+
     def _resolve_sources(self, sources, tables, predicate=None):
         """Determine what sources to run from an input of sources and tables"""
 
@@ -1093,9 +1099,6 @@ class Bundle(object):
 
     def schema(self, sources=None, tables=None, stage=1, clean=False):
         """Generate destination schemas"""
-        from itertools import groupby
-        from operator import attrgetter
-
         sources = self._resolve_sources(sources, tables, lambda s: s.is_processable)
 
         if clean:
@@ -1103,8 +1106,7 @@ class Bundle(object):
             self.commit()
 
         # Group the sources by the destination table name
-        keyfunc = attrgetter('dest_table')
-        for t, sources in groupby(sorted(sources, key=keyfunc), keyfunc):
+        for t, sources in self._group_sources(sources):
 
             if tables and t.name not in tables:
                 continue
@@ -1119,8 +1121,8 @@ class Bundle(object):
             for pos, name, datatype, desc in columns:
                 t.add_column(name=name, datatype=datatype, description=desc, update_existing=True)
 
-            self.log("Populated destination table '{}' from source table '{}' with {} columns"
-                     .format(t.name, source.source_table.name, len(columns)))
+            self.log("Populated destination table '{}' from source tables '{}' with {} columns"
+                     .format(t.name, [s.source_table.name for s in sources], len(columns)))
 
         for i, source in enumerate(self.refs):
             try:
@@ -1152,9 +1154,7 @@ class Bundle(object):
             self.commit()
 
         # Group the sources by the destination table name
-        keyfunc = attrgetter('dest_table')
-        for t, grouped_sources in groupby(sorted(sources+self.refs, key=keyfunc), keyfunc):
-
+        for t, grouped_sources in self._group_sources(sources + self.refs):
             if tables and t.name not in tables:
                 continue
 
@@ -1260,7 +1260,6 @@ class Bundle(object):
         self.edit_pipeline(pl)
 
         try:
-
             pl.dest_table = source.dest_table_name
             pl.source_table = source.source_table.name
             pl.source_name = source.name

@@ -401,7 +401,7 @@ class MetadataFile(DictBuildSourceFile):
 
     def objects_to_record(self):
 
-        #FIXME -- this looks more like records to file
+        # FIXME: -- this looks more like records to file
 
         fr = self._dataset.bsfile(self._file_const)
 

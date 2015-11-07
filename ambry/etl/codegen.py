@@ -333,7 +333,10 @@ def make_stack(env, stage, segment):
                 raise CodeGenError("Failed to re-write pipe code '{}' in column '{}.{}': {} "
                                    .format(t, column.table.name, column.name, e))
 
-            line = 'v = {} # {}'.format(a, loc)
+            if a == 'upper':
+                line = 'v = (v or \'\').upper() # {}'.format(a, loc)
+            else:
+                line = 'v = {} # {}'.format(a, loc)
 
             if b:
                 preamble.append('{} = {} # {}'.format(name, b, loc))

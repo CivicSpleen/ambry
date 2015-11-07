@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-
-from test.test_base import TestBase
 import os
 import shutil
 
 import pytest
+
+import six
+
+from test.test_base import TestBase
 
 
 class Test(TestBase):
@@ -68,7 +70,7 @@ class Test(TestBase):
 
         # Check that the cells of the first row all have the right type.
         for c, v in zip(p.table.columns, row.row):
-            if type(v) != unicode:  # It gets reported as string
+            if type(v) != six.text_type:  # It gets reported as string
                 self.assertEqual(type(v), c.python_type)
 
     @pytest.mark.slow
@@ -124,7 +126,7 @@ class Test(TestBase):
 
     @pytest.mark.slow
     def test_complete_build_run(self):
-        """Build the complete-load"""
+        """ Build the complete-load. """
         b = self.setup_bundle('complete-build', build_url=self.setup_temp_dir())
         b.sync_in()
         b = b.cast_to_subclass()

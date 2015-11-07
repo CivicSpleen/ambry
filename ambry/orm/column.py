@@ -400,7 +400,7 @@ class Column(Base):
         self._transform = self.clean_transform(v)
 
     @staticmethod
-    def make_xform_seg(init_=None, datatype = None, transforms = None, exception = None, column = None):
+    def make_xform_seg(init_=None, datatype=None, transforms=None, exception=None, column=None):
         return {
             'init': init_,
             'transforms': transforms if transforms else [],
@@ -413,17 +413,17 @@ class Column(Base):
     def expanded_transform(self):
         """Expands the transform string into segments """
 
-        segments =  self._expand_transform(self.transform)
+        segments = self._expand_transform(self.transform)
 
         if not segments:
-            return [self.make_xform_seg(datatype=self.valuetype_class, column = self)]
+            return [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
 
         segments[0]['datatype'] = self.valuetype_class
 
         for s in segments:
             s['column'] = self
 
-        return  segments
+        return segments
 
     @staticmethod
     def clean_transform(transform):
