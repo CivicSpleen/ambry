@@ -176,6 +176,7 @@ def parse_float(v,  header_d):
 
 
 def parse_str(v,  header_d):
+    # TODO: It's so complicated while py2/py3 work because str is binary for py2, but unicode for py3.
 
     # This is often a no-op, but it ocassionally converts numbers into strings
 
@@ -185,51 +186,18 @@ def parse_str(v,  header_d):
         return None
 
     if six.PY2:
-        try:
-            return six.binary_type(v).strip()
-        except UnicodeEncodeError:
-            return six.text_type(v).strip()
+        return _parse_binary(v, header_d)
     else:
         # py3
-        try:
-            return six.binary_type(v, 'utf-8').strip()
-        except UnicodeEncodeError:
-            return six.text_type(v).strip()
+        return _parse_text(v, header_d)
 
 
 def parse_bytes(v, header_d):
-
-    # This is often a no-op, but it ocassionally converts numbers into strings
-
-    v = nullify(v)
-
-    if v is None:
-        return None
-
-    if six.PY2:
-        try:
-            return six.binary_type(v).strip()
-        except UnicodeEncodeError:
-            return six.text_type(v).strip()
-    else:
-        # py3
-        try:
-            return six.binary_type(v, 'utf-8').strip()
-        except UnicodeEncodeError:
-            return six.text_type(v).strip()
+    return _parse_binary(v, header_d)
 
 
-def parse_unicode(v,  header_d):
-
-    v = nullify(v)
-
-    if v is None:
-        return None
-
-    try:
-        return six.text_type(v).strip()
-    except Exception as e:
-        raise CastingError(six.text_type, header_d, v, str(e))
+def parse_unicode(v, header_d):
+    return _parse_text(v, header_d)
 
 
 def parse_type(type_, v,  header_d):
@@ -347,3 +315,50 @@ class ForeignKey(IntValue):
     def __init__(self, v):
         super(ForeignKey, self).__init__()
         self.row = None
+
+
+def _parse_text(v, header_d):
+    """ Parses unicode.
+
+    Note:
+        unicode types for py2 and str types for py3.
+
+    """
+
+    v = nullify(v)
+
+    if v is None:
+        return None
+
+    try:
+        return six.text_type(v).strip()
+    except Exception as e:
+        raise CastingError(six.text_type, header_d, v, str(e))
+
+
+def _parse_binary(v, header_d):
+    """ Parses binary string.
+
+    Note:
+        <str> for py2 and <binary> for py3.
+
+    """
+
+    # This is often a no-op, but it ocassionally converts numbers into strings
+
+    v = nullify(v)
+
+    if v is None:
+        return None
+
+    if six.PY2:
+        try:
+            return six.binary_type(v).strip()
+        except UnicodeEncodeError:
+            return six.text_type(v).strip()
+    else:
+        # py3
+        try:
+            return six.binary_type(v, 'utf-8').strip()
+        except UnicodeEncodeError:
+            return six.text_type(v).strip()
