@@ -4,6 +4,8 @@ import unittest
 
 import pytest
 
+import csv
+
 from boto.exception import S3ResponseError
 
 import six
@@ -61,12 +63,12 @@ class Test(TestBase):
         self.assertEqual(7, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
-        print(file_names)
+        # print(file_names)
 
         expected_names = [
             six.u('bundle.py'), six.u('lib.py'), six.u('documentation.md'), six.u('source_schema.csv'),
             six.u('sources.csv'), six.u('bundle.yaml'), six.u('schema.csv')]
-        self.assertEqual(file_names, expected_names)
+        self.assertEqual(sorted(file_names), sorted(expected_names))
 
         self.assertEqual(14, len(b.dataset.configs))
 
@@ -79,20 +81,32 @@ class Test(TestBase):
 
         def muck_source_file(g, val='grain'):
             """Alter the source_schema file"""
-            import csv
-            with b.source_fs.open('sources.csv', 'rb') as f:
-                rows = list(csv.reader(f))
+            if six.PY2:
+                with b.source_fs.open('sources.csv', 'rb') as f:
+                    rows = list(csv.reader(f))
+            else:
+                # py#
+                with b.source_fs.open('sources.csv', 'rt', encoding='utf-8') as f:
+                    rows = list(csv.reader(f))
 
             rows[1][rows[0].index(val)] = g
 
-            with b.source_fs.open('sources.csv', 'wb') as f:
-                csv.writer(f).writerows(rows)
+            if six.PY2:
+                with b.source_fs.open('sources.csv', 'wb') as f:
+                    csv.writer(f).writerows(rows)
+            else:
+                # py3
+                with b.source_fs.open('sources.csv', 'wt', encoding='utf-8') as f:
+                    csv.writer(f).writerows(rows)
 
         def source_file(val='grain'):
-            import csv
-
-            with b.source_fs.open('sources.csv', 'rb') as f:
-                rows = list(csv.reader(f))
+            if six.PY2:
+                with b.source_fs.open('sources.csv', 'rb') as f:
+                    rows = list(csv.reader(f))
+            else:
+                # py#
+                with b.source_fs.open('sources.csv', 'rt', encoding='utf-8') as f:
+                    rows = list(csv.reader(f))
 
             self.assertEqual(2, len(rows))
 
@@ -272,23 +286,33 @@ class Test(TestBase):
 
         def muck_schema_file(source_header, dest_header):
             """Alter the source_schema file"""
-            import csv
 
-            with b.source_fs.open('source_schema.csv', 'rb') as f:
-                rows = list(csv.reader(f))
+            if six.PY2:
+                with b.source_fs.open('source_schema.csv', 'rb') as f:
+                    rows = list(csv.reader(f))
+            else:
+                with b.source_fs.open('source_schema.csv', 'rt', encoding='utf-8') as f:
+                    rows = list(csv.reader(f))
 
             for row in rows:
                 if row[2] == source_header:
                     row[3] = dest_header
 
-            with b.source_fs.open('source_schema.csv', 'wb') as f:
-                csv.writer(f).writerows(rows)
+            if six.PY2:
+                with b.source_fs.open('source_schema.csv', 'wb') as f:
+                    csv.writer(f).writerows(rows)
+            else:
+                with b.source_fs.open('source_schema.csv', 'wt', encoding='utf-8') as f:
+                    csv.writer(f).writerows(rows)
 
         def check_schema_file(source_header):
-            import csv
-
-            with b.source_fs.open('source_schema.csv', 'rb') as f:
-                rows = list(csv.reader(f))
+            if six.PY2:
+                with b.source_fs.open('source_schema.csv', 'rb') as f:
+                    rows = list(csv.reader(f))
+            else:
+                # py3
+                with b.source_fs.open('source_schema.csv', 'rt', encoding='utf-8') as f:
+                    rows = list(csv.reader(f))
 
             for row in rows:
                 if row[2] == source_header:
@@ -385,7 +409,7 @@ class Test(TestBase):
             ds1 = b.dataset
             ds2 = db.dataset(ds1.vid)
 
-            print(list(ds1.tables))
+            # print(list(ds1.tables))
 
             self.assertEqual(len(ds1.tables), len(ds2.tables))
             self.assertEqual(len(ds1.tables[0].columns), len(ds2.tables[0].columns))
@@ -413,7 +437,7 @@ class Test(TestBase):
         p = list(b.partitions)[0]
         p_vid = p.vid
 
-        print(p.datafile.reader.info)
+        # print(p.datafile.reader.info)
 
         self.assertEqual(497054, int(sum(row[3] for row in iter(p))))
 
@@ -446,7 +470,7 @@ class Test(TestBase):
 
         self.assertEqual(10000, sum(1 for _ in p))
 
-        self.assertEqual(497054, int(sum(row[3] for row in p )))
+        self.assertEqual(497054, int(sum(row[3] for row in p)))
 
     def test_msgpack_build(self):
         """Build the simple bundle"""

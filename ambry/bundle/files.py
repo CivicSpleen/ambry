@@ -28,6 +28,8 @@ import sys
 import time
 import yaml
 
+import csv
+
 import six
 from six import string_types, iteritems, u, iterkeys
 
@@ -579,7 +581,6 @@ class SourcesFile(RowBuildSourceFile):
             rows = list(drop_empty(rows))
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile = self._dataset.bsfile(self._file_const)
@@ -730,7 +731,6 @@ class SchemaFile(RowBuildSourceFile):
 
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile = self._dataset.bsfile(self._file_const)
@@ -793,7 +793,6 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile.mime_type = 'application/msgpack'
@@ -830,8 +829,13 @@ def file_default(const):
 
     path = os.path.join(os.path.dirname(df.__file__),  file_name(const))
 
-    with open(path, 'rb') as f:
-        return f.read()
+    if six.PY2:
+        with open(path, 'rb') as f:
+            return f.read()
+    else:
+        # py3
+        with open(path, 'rt', encoding='utf-8') as f:
+            return f.read()
 
 
 class BuildSourceFileAccessor(object):
