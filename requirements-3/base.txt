@@ -1,7 +1,7 @@
 # project requirements
 
 address-parser==0.0.1
-ambry_source==0.1.1
+ambry_source==0.1.3
 boto==2.38.0
 beautifulsoup4==4.3.2
 ckanapi==3.5
