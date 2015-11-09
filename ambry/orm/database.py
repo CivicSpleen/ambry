@@ -275,6 +275,7 @@ class Database(object):
 
         self.create()
 
+
         self.commit()
 
     def drop(self):
@@ -282,23 +283,28 @@ class Database(object):
         # Should close connection before table drop to avoid hanging in postgres.
         # http://docs.sqlalchemy.org/en/rel_0_8/faq.html#metadata-schema
 
-        for ds in self.datasets:
-            self.logger.info('Cleaning: {}'.format(ds.name))
+        if False:
+            for ds in self.datasets:
+                self.logger.info('Cleaning: {}'.format(ds.name))
+                try:
+                    self.remove_dataset(ds)
+                except:
+                    pass
+
             try:
-                self.remove_dataset(ds)
+                self.remove_dataset(self.root_dataset)
             except:
                 pass
 
-        try:
-            self.remove_dataset(self.root_dataset)
-        except:
-            pass
+            self.commit()
 
-        self.metadata.drop_all()
+        for tbl in reversed(self.metadata.sorted_tables):
+            self.logger.info("Dropping {}".format(tbl))
+            self.engine.execute(tbl.delete())
 
         self.commit()
 
-        self.create()
+        #self.create()
 
         self.commit()
 
@@ -478,6 +484,7 @@ class Database(object):
     def remove_dataset(self, ds):
 
         if ds:
+            self.delete_tables_partitions(ds)
             self.session.delete(ds)
             self.session.commit()
 

@@ -109,8 +109,10 @@ def root_command(args, rc):
     from . import global_logger
     from ambry.orm.exc import DatabaseError
 
+    database_name = "test" if args.test_library else None
+
     try:
-        l = new_library(rc)
+        l = new_library(rc, database_name=database_name)
         l.logger = global_logger
     except DatabaseError as e:
         warn('No library: {}'.format(e))
@@ -167,8 +169,22 @@ def root_list(args, l, rc):
 
     records = []
 
+    if args.term and '='in args.term:
+        search_key, search_value = args.term.split('=')
+        args.term = None
+    else:
+        search_key, search_value = None, None
+
     for b in l.bundles:
-        records.append(b.field_row(header))
+
+        if search_key:
+            d = dict(b.metadata.kv)
+            v = d.get(search_key,None)
+            if v and search_value and v.strip() == search_value.strip():
+                records.append(b.field_row(header))
+
+        else:
+            records.append(b.field_row(header))
 
     if args.sort:
         idx = header.index(args.sort)

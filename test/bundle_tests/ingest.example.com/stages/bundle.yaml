@@ -1,25 +1,24 @@
 about:
   access: restricted
+  remote: test
   footnote: nll
   grain: null
   groups: null
   license: ckdbl
   processed: null
-  remote: test
   rights: public
   source: null
   space: null
   subject: null
-  summary: Ingest a single simple file.
+  summary: Ingest multiple stages
   tags: []
   time: null
-  title: Simple ingest
+  title: Ingest multiple stages
 contacts:
   creator:
-    email: eric@civicknowledge.com
-    name: Eric Busboom
-    org: Civic Knowledge
-    url: http://civicknowledge.com
+    email: bob@example.com
+    name: Bob Bobson
+    url: http://example.com
 dependencies: {}
 external_documentation:
   dataset:
@@ -33,15 +32,15 @@ external_documentation:
     title: Download Page
     url: http://example.com
 identity:
-  dataset: basic
-  id: dLMQfCPN4s
+  dataset: stages
+  id: duamFSJzB5
   revision: 1
   source: ingest.example.com
   version: 0.0.1
 names:
-  fqname: ingest.example.com-basic-0.0.1~dLMQfCPN4s001
-  name: ingest.example.com-basic
-  vid: dLMQfCPN4s001
-  vname: ingest.example.com-basic-0.0.1
+  fqname: ingest.example.com-stages-0.0.1~duamFSJzB5001
+  name: ingest.example.com-stages
+  vid: duamFSJzB5001
+  vname: ingest.example.com-stages-0.0.1
 requirements: {}
 versions: {}

@@ -5,15 +5,14 @@ about:
   groups: null
   license: ckdbl
   processed: null
-  remote: test
   rights: public
   source: null
   space: null
   subject: null
-  summary: Ingest a single simple file.
+  summary: Ensure that converage values from  the partition names, metadata and datasets are included in the partition coverage information
   tags: []
   time: null
-  title: Simple ingest
+  title: Tests of time, space and grain coverage
 contacts:
   creator:
     email: eric@civicknowledge.com
@@ -33,15 +32,15 @@ external_documentation:
     title: Download Page
     url: http://example.com
 identity:
-  dataset: basic
-  id: dLMQfCPN4s
+  dataset: coverage
+  id: d9wiWb8rei
   revision: 1
-  source: ingest.example.com
+  source: build.example.com
   version: 0.0.1
 names:
-  fqname: ingest.example.com-basic-0.0.1~dLMQfCPN4s001
-  name: ingest.example.com-basic
-  vid: dLMQfCPN4s001
-  vname: ingest.example.com-basic-0.0.1
+  fqname: build.example.com-coverage-0.0.1~d9wiWb8rei001
+  name: build.example.com-coverage
+  vid: d9wiWb8rei001
+  vname: build.example.com-coverage-0.0.1
 requirements: {}
 versions: {}

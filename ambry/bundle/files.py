@@ -304,6 +304,7 @@ class DictBuildSourceFile(BuildSourceFile):
 
         fn_path = file_name(self._file_const)
 
+
         if fr.contents:
             yaml.safe_dump(fr.unpacked_contents, f, default_flow_style=False, encoding='utf-8')
             fr.source_hash = self.fs_hash
@@ -318,6 +319,7 @@ class DictBuildSourceFile(BuildSourceFile):
 
         if fr.contents:
             with self._fs.open(fn_path, 'w', encoding='utf-8') as f:
+
                 self.record_to_fh(f)
 
 class StringSourceFile(BuildSourceFile):
@@ -426,7 +428,7 @@ class MetadataFile(DictBuildSourceFile):
 
         fr.update_contents(msgpack.packb(o), 'application/msgpack')
 
-
+        return fr
 
 class PythonSourceFile(StringSourceFile):
 
@@ -668,7 +670,6 @@ class SchemaFile(RowBuildSourceFile):
         warnings = []
 
         extant_tables = {t.name: t for t in self._dataset.tables}
-
 
         old_types_map = {
             'varchar': Column.DATATYPE_STR,

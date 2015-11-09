@@ -1,0 +1,4 @@
+"name","stage","description","reftype","ref"
+"stage1p",2,"A reference to the stage 1 partition","ref","ingest.example.com-stages-stage1"
+"stage2",2,"Builds from the stage 1 partition","partition","ingest.example.com-stages-stage1"
+"stage1",1,"Staggered Integers",,"http://public.source.civicknowledge.com/example.com/basics/staggered_integers.csv"

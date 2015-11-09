@@ -80,7 +80,7 @@ def export(bundle, force=False, force_restricted=False):
 
     assert access, 'CKAN publishing requires access level.'
 
-    if access in ('internal', 'test', 'controlled', 'restricted', 'census'):
+    if access in ('internal',  'controlled', 'restricted', 'census'):
         # Never publish dataset with such access.
         raise UnpublishedAccessError(
             '{} dataset can not be published because of {} access.'
@@ -101,7 +101,7 @@ def export(bundle, force=False, force_restricted=False):
             {'user': 'visitor', 'domain_object': bundle.dataset.vid.lower(), 'roles': []},
             {'user': 'logged_in', 'domain_object': bundle.dataset.vid.lower(), 'roles': ['editor']}
         ]
-    elif access in ('private', 'licensed'):
+    elif access in ('private', 'licensed', 'test'):
         # Organization users can read/edit
         # http://docs.ckan.org/en/ckan-1.7/authorization.html#publisher-mode
         # disable access for anonymous and logged_in

@@ -42,15 +42,9 @@ def new_library(config=None, database_name=None):
 
     lfs = LibraryFilesystem(config)
 
-    library_config = config.library()
+    library_config = config.library(database_name)
 
-    if database_name is not None:
-        try:
-            db_config = config.database(database_name, return_dsn = True)
-        except ConfigurationError: # Assume it is a DSN
-            db_config = database_name
-    else:
-        db_config = library_config['database']
+    db_config = library_config['database']
 
     db = Database(db_config, echo = False)
     warehouse = None
@@ -70,10 +64,17 @@ def new_library(config=None, database_name=None):
 class Library(object):
 
     def __init__(self, config, database, filesystem, warehouse, search=None):
+        from sqlalchemy.exc import OperationalError
 
+        self.logger = logger
         self._config = config
         self._db = database
-        self._db.open()
+
+        try:
+            self._db.open()
+        except OperationalError as e:
+            self.logger.error("Failed to open database '{}': {} ".format(self._db.dsn, e))
+
         self._fs = filesystem
         self._warehouse = warehouse
         self.processes = None # Number of multiprocessing proccors. Default to all of them
@@ -81,7 +82,7 @@ class Library(object):
             self._search = Search(self, search)
         else:
             self._search = None
-        self.logger = logger
+
 
     def resolve_object_number(self, ref):
         """Resolve a variety of object numebrs to a dataset number"""
@@ -553,4 +554,74 @@ class Library(object):
             install(python_dir, module_name, pip_name)
 
 
+    def import_bundles(self, dir, detach = False, force = False):
+        """
+        Import bundles from a directory
+
+        :param dir:
+        :return:
+        """
+
+        import yaml
+
+        fs = fsopendir(dir)
+
+        bundles = []
+
+        for f in fs.walkfiles(wildcard='bundle.yaml'):
+
+            self.logger.info("Visiting {}".format(f))
+            config = yaml.load(fs.getcontents(f))
+
+            if not config:
+                self.logger.error("Failed to get a valid bundle configuration from '{}'".format(f))
+
+            bid = config['identity']['id']
+
+            try:
+                b = self.bundle(bid)
+
+            except NotFoundError:
+                b = None
+
+            if not b:
+                b = self.new_from_bundle_config(config)
+                self.logger.info('{} Loading New'.format(b.identity.fqname))
+            else:
+                self.logger.info('{} Loading Existing'.format(b.identity.fqname))
+
+            source_url = os.path.dirname(fs.getsyspath(f))
+            b.set_file_system(source_url=source_url)
+            self.logger.info('{} Loading from {}'.format(b.identity.fqname, source_url))
+            b.sync_in()
+
+            if detach:
+                self.logger.info("{} Detaching".format(b.identity.fqname))
+                b.set_file_system(source_url=None)
+
+            if force:
+                self.logger.info("{} Sync out".format(b.identity.fqname))
+                # FIXME. It won't actually sync out until re-starting the bundle.
+                # The source_file_system is probably cached
+                b = self.bundle(bid)
+                b.sync_out()
+
+            bundles.append(b)
+
+        return  bundles
+
+    @property
+    def process_pool(self):
+        """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
+
+        import multiprocessing
+        from ambry.bundle.concurrent import init_library
+
+        if self.processes:
+            cpus = self.processes
+        else:
+            cpus = multiprocessing.cpu_count()
+
+        self.logger.info("Starting MP pool with {} processors".format(cpus))
+        return multiprocessing.Pool(processes=cpus, initializer=init_library, initargs=[self.config.path, self.database.dsn])
 

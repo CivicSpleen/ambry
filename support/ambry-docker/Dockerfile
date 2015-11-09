@@ -1,7 +1,7 @@
 #
 # docker build -t civick/ambry .
 
-FROM ubuntu:14.04
+FROM ubuntu:15.04
 
 MAINTAINER Eric Busboom "eric@civicknowledge.org"
 
@@ -24,11 +24,10 @@ RUN dpkg-reconfigure locales
 # Spatialite services.
 RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
-RUN pip install git+https://github.com/CivicKnowledge/ambry.git
-RUN pip install git+https://github.com/CivicKnowledge/ambrydoc.git
+RUN pip install git+https://github.com/CivicKnowledge/ambry.git@develop
 
 VOLUME /var/ambry
 RUN mkdir -p /var/ambry/source
 RUN ambry config install
 
-RUN ambry library sync -r
+#RUN ambry library sync -r

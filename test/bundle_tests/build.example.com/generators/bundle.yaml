@@ -1,19 +1,19 @@
 about:
   access: restricted
+  remote: test
   footnote: nll
   grain: null
   groups: null
   license: ckdbl
   processed: null
-  remote: test
   rights: public
   source: null
   space: null
   subject: null
-  summary: Ingest a single simple file.
+  summary: Test use of generators as soruces
   tags: []
   time: null
-  title: Simple ingest
+  title: Building with Generators
 contacts:
   creator:
     email: eric@civicknowledge.com
@@ -33,15 +33,15 @@ external_documentation:
     title: Download Page
     url: http://example.com
 identity:
-  dataset: basic
-  id: dLMQfCPN4s
+  dataset: generators
+  id: dERJQxWUVb
   revision: 1
-  source: ingest.example.com
+  source: build.example.com
   version: 0.0.1
 names:
-  fqname: ingest.example.com-basic-0.0.1~dLMQfCPN4s001
-  name: ingest.example.com-basic
-  vid: dLMQfCPN4s001
-  vname: ingest.example.com-basic-0.0.1
+  fqname: build.example.com-generators-0.0.1~dERJQxWUVb001
+  name: build.example.com-generators
+  vid: dERJQxWUVb001
+  vname: build.example.com-generators-0.0.1
 requirements: {}
 versions: {}

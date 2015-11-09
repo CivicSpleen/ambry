@@ -34,10 +34,10 @@ def _CaptureException(f, *args, **kwargs):
 
     b = args[0]  # The 'self' argument
 
-    return f(*args, **kwargs)
+
 
     try:
-        pass
+        return f(*args, **kwargs)
     except Exception as e:
 
         if b.capture_exceptions:
@@ -148,16 +148,15 @@ class Bundle(object):
         if source_url:
             self._source_url = source_url
             self.dataset.config.library.source.url = self._source_url
-            self.dataset.commit()
         elif source_url is None:
             self._source_url = None
             self.dataset.config.library.source.url = self._source_url
-            self.dataset.commit()
 
         if build_url:
             self._build_url = build_url
             self.dataset.config.library.build.url = self._build_url
-            self.dataset.commit()
+
+        self.dataset.commit()
 
     def cast_to_subclass(self):
         """
@@ -350,8 +349,15 @@ class Bundle(object):
         Return a iterator of tables in this bundle
         :return:
         """
+        from ambry.orm import Table
+        from sqlalchemy.orm import joinedload, noload
 
-        return self.dataset.tables
+        return (self.dataset.session.query(Table)
+                .filter(Table.d_vid == self.dataset.vid)
+                .options(noload('column'))
+                .all())
+
+        #return self.dataset.tables
 
     def new_table(self, name, add_id=True, **kwargs):
         """
@@ -480,7 +486,7 @@ class Bundle(object):
 
     @property
     def build_fs(self):
-        from fs.opener import fsopendir
+        from fs.opener import fsopendir, opener
 
         if not self._build_fs:
             build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
@@ -489,6 +495,7 @@ class Bundle(object):
                 build_url = self.library.filesystem.build(self.identity.cache_key)
                 # raise ConfigurationError(
                 #    'Must set build URL either in the constructor or the configuration')
+
 
             self._build_fs = fsopendir(build_url, create_dir=True)
 
@@ -513,7 +520,7 @@ class Bundle(object):
         base_path = 'ingest'
 
         if not self.build_fs.exists(base_path):
-            self.build_fs.makedir(base_path, allow_recreate=True)
+            self.build_fs.makedir(base_path, recursive=True, allow_recreate=True)
 
         return self.build_fs.opendir(base_path)
 
@@ -613,7 +620,6 @@ class Bundle(object):
             self.set_error_state()
 
         self.logger.error(message)
-
 
     def exception(self, e):
         """Log an error messsage.
@@ -921,6 +927,12 @@ Caster Code
             elif f.startswith('state'):
                 _, key = f.split('.')
                 row[i] = self.dataset.config.build.state[key]
+            elif f.startswith('count'):
+                _, key = f.split('.')
+                if key == 'sources':
+                    row[i] = len(self.dataset.sources)
+                elif key == 'tables':
+                    row[i] = len(self.dataset.tables)
 
         return row
 
@@ -976,7 +988,6 @@ Caster Code
     def set_last_access(self, tag):
         """Mark the time that this bundle was last accessed"""
         self.dataset.config.build.access.last = tag
-        self.dataset.commit()
 
     #########################
     # Build phases
@@ -989,8 +1000,8 @@ Caster Code
         """Synonym for run_stages"""
         return self.run_stages(sources, tables, force=force, schema=schema)
 
-
-    def run_stages(self, sources=None, tables=None, force=False, schema = False):
+    @CaptureException
+    def run_stages(self, sources=None, tables=None, force=False):
         """Like run, but runs stages in order, rather than each phase in order. So, run() will ingest all sources,
         then build all sources, while run_stages() will ingest then build all order=1 sources, then ingest and
         build all order=2 sources.
@@ -1000,7 +1011,7 @@ Caster Code
 
         from itertools import groupby
         from operator import attrgetter
-        from ambry.bundle.test import TAG
+        from ambry.bundle.events import TAG
 
         resolved_sources = self._resolve_sources(sources, tables)
 
@@ -1021,26 +1032,25 @@ Caster Code
             self.commit()
 
         keyfunc = attrgetter('stage')
-        self.run_phase_test(TAG.BEFORE_RUN)
+        self._run_events(TAG.BEFORE_RUN)
         for stage, stage_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
             stage_sources = list(stage_sources)  # Stage_sources is an iterator, can only be traversed once
 
-            self.run_phase_test(TAG.BEFORE_STAGE, stage)
-            if not self._run_stage(stage,sources=stage_sources,  force=force, finalize=False, schema = schema):
+            self._run_events(TAG.BEFORE_STAGE, stage)
+            if not self._run_stage(stage,sources=stage_sources,  force=force, finalize=False):
                 self.error('Failed to run stage {}'.format(stage))
-            self.run_phase_test(TAG.AFTER_STAGE, stage)
+            self._run_events(TAG.AFTER_STAGE, stage)
 
         self.post_run()
 
         if not sources and not tables:
-            self.run_phase_test(TAG.AFTER_RUN)
+            self._run_events(TAG.AFTER_RUN)
         else:
-            print sources, tables
             self.log("Sources or tables specified; skipping after run test")
 
         return True
 
-    def _run_stage(self, stage=None, sources=None, tables=None, schema=False, force=False, finalize=True):
+    def _run_stage(self, stage=None, sources=None, tables=None,  force=False, finalize=True):
 
         if self.is_finalized and not force:
             self.error("Can't run; bundle is finalized")
@@ -1052,7 +1062,7 @@ Caster Code
             self.error('Run: failed to ingest')
             return False
 
-        if not self.schema(sources=sources, force=schema):
+        if not self.schema(sources=sources, stage=stage, force=force):
             self.error('Run: failed to build schema')
             return False
 
@@ -1252,6 +1262,12 @@ Caster Code
         self.build_source_files.file(File.BSFILE.SCHEMA).remove()
         self.commit()
 
+    def clean_build_files(self):
+        """Remove all of the build files"""
+
+        for bs in self.build_source_files:
+            print '!!!!', bs.path
+
     def clean_build_state(self):
 
         self.dataset.config.build.clean()
@@ -1264,13 +1280,29 @@ Caster Code
     @CaptureException
     def ingest(self, sources=None, tables=None, stage=None, force=False, update_tables = True):
         """Ingest a set of sources, specified as source objects, source names, or destination tables.
-        If no stage is specified, execute the sources in groups by stage """
+        If no stage is specified, execute the sources in groups by stage.
+
+        Note, however, that when this is called from run_stage, all of the sources have the same stage, so they
+        get grouped together. The result it that the stage in the inner loop is the same as the stage being
+        run buy run_stage.
+        """
 
         from itertools import groupby
-        from ambry.bundle.test import TAG
+        from ambry.bundle.events import TAG
+        from fs.errors import ResourceNotFoundError
+        import zlib
 
         self.state = self.STATES.INGESTING
         self.commit()
+
+        # Clear out all ingested files that are malformed
+        for s in self.sources:
+            if s.is_downloadable:
+                df = s.datafile
+                try:
+                    info = df.info
+                except (ResourceNotFoundError, zlib.error, IOError):
+                    s.datafile.remove()
 
         def not_final_or_delete(s):
             import zlib
@@ -1295,9 +1327,9 @@ Caster Code
                 self.log("No sources left to ingest for stage {}".format(stage))
                 continue
 
-            self.run_phase_test(TAG.BEFORE_INGEST, stage)
+            self._run_events(TAG.BEFORE_INGEST, stage)
             self._ingest_sources(sources, force=force)
-            self.run_phase_test(TAG.AFTER_INGEST, stage)
+            self._run_events(TAG.AFTER_INGEST, stage)
             self.record_stage_state(self.STATES.INGESTING, stage)
 
         self.state = self.STATES.INGESTED
@@ -1452,7 +1484,7 @@ Caster Code
     #
 
     @CaptureException
-    def schema(self, sources = None, tables=None, clean=False, force = False, use_pipeline = False):
+    def schema(self, sources =None, tables=None, stage=None, clean=False, force=False, use_pipeline=False):
         """
         Generate destination schemas.
 
@@ -1468,12 +1500,15 @@ Caster Code
         from operator import attrgetter
         from ambry.orm.exc import NotFoundError
         from ambry.etl import Collect, Head
+        from ambry.bundle.events import TAG
 
-        sources = self._resolve_sources(sources, tables, predicate = lambda s: s.is_processable)
+        sources = self._resolve_sources(sources, tables, stage, predicate = lambda s: s.is_processable)
 
         if clean:
             self.dataset.delete_tables_partitions()
             self.commit()
+
+        self._run_events(TAG.BEFORE_SCHEMA, stage)
 
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
@@ -1521,49 +1556,16 @@ Caster Code
         for i, source in enumerate(self.refs):
             try:
                 pass
-                #source.update_table()  # Generate the source tables.
+                source.update_table()  # Generate the source tables.
             except NotFoundError:
                 # Ignore not found errors here, because the ref may be to a partition that has not been built yet.
                 self.log("Skipping {}".format(source.name))
 
+        self._run_events(TAG.AFTER_SCHEMA, stage)
         self.commit()
 
         return True
 
-    @CaptureException
-    def build_schema(self, sources = None, tables=None,  clean=False):
-        """Update or generate destination schemas by running a bit of the build process.
-
-        Runs the first 10 rows of each source, then extracts the schema from the end of the pipeline.
-
-        """
-        from itertools import groupby
-        from operator import attrgetter
-
-
-        self.load_requirements() # Required to load bundle
-        self.import_lib() # Load bundle, pissibly get generators, pipelines, etc.
-
-        sources = self._resolve_sources(sources, tables)
-
-
-        if clean:
-            self.dataset.delete_tables_partitions()
-            self.commit()
-
-        # Group the sources by the destination table name
-        keyfunc = attrgetter('dest_table')
-        for t, grouped_sources in groupby(sorted(sources, key=keyfunc), keyfunc):
-
-            if tables and t.name not in tables:
-                continue
-
-            self.log("Populating table: {}".format(t.name))
-
-
-
-        self.commit()
-        return True
 
     #
     # Build
@@ -1588,6 +1590,10 @@ Caster Code
             self.error("Can't run build; bundle is built")
             return False
 
+        if self.state.endswith('error'):
+            self.error("Can't run build; bundle is in error state")
+            return False
+
         self.state = self.STATES.BUILD
 
         self.import_lib()
@@ -1607,7 +1613,7 @@ Caster Code
         from operator import attrgetter
         from itertools import groupby
         from .concurrent import build_mp
-        from ambry.bundle.test import TAG
+        from ambry.bundle.events import TAG
 
         if not self.pre_build(force):
             return False
@@ -1626,6 +1632,8 @@ Caster Code
             self.log('Processing {} sources, stage {} ; first 10: {}'
                      .format(len(sources), stage, [x.name for x in sources[:10]]))
 
+            self._run_events(TAG.BEFORE_BUILD, stage)
+
             if self.multi:
                 args = [(self.identity.vid, source.vid, force) for source in sources]
 
@@ -1638,16 +1646,19 @@ Caster Code
                     pool.terminate()
 
             else:
-                # Only run the tests on local, single process builds
-                self.run_phase_test(TAG.BEFORE_BUILD, stage)
+
                 for source in sources:
                     self.build_source(source, force = force)
-                self.run_phase_test(TAG.AFTER_BUILD, stage)
+
                 self.record_stage_state(self.STATES.BUILDING, stage)
+
+            self.dataset.commit()
 
             self.unify_partitions()
 
             self.dataset.commit()
+
+            self._run_events(TAG.AFTER_BUILD, stage)
 
         return True
 
@@ -1744,6 +1755,7 @@ Caster Code
 
             raise
 
+
     def unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
         and delete the children. """
@@ -1762,6 +1774,7 @@ Caster Code
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
 
+
         for name, segments in iteritems(partitions):
             self.unify_partition(name, segments)
 
@@ -1778,7 +1791,7 @@ Caster Code
                     if name == partition_name:
                         segments.add(p)
 
-        self.debug('Coalescing segments for partition {} '.format(partition_name))
+        self.log('Coalescing segments for partition {} '.format(partition_name))
 
         parent = self.partitions.get_or_new_partition(partition_name, type=Partition.TYPE.UNION)
 
@@ -2022,6 +2035,7 @@ Caster Code
     @property
     def is_finalized(self):
         """Return True if the bundle is installed."""
+
         return self.state == self.STATES.FINALIZED or self.state == self.STATES.INSTALLED
 
     def do_finalize(self):
@@ -2039,7 +2053,10 @@ Caster Code
         module = bsf.import_module(library=lambda: self.library,
                                    bundle=lambda: self)
 
-        return module.Test
+        try:
+            return module.Test
+        except AttributeError:
+            return None
 
     def run_tests(self, tests=None):
         """Run the unit tests in the test.py file"""
@@ -2059,12 +2076,33 @@ Caster Code
             suite = unittest.TestLoader().loadTestsFromTestCase(self.test_class)
             unittest.TextTestRunner(verbosity=2).run(suite)
 
-    def run_phase_test(self, tag, stage=None):
+    def _run_events(self, tag, stage=None):
         """Run tests marked with a particular tag and stage"""
 
+        self._run_event_methods(tag, stage)
+
+        self._run_tests(tag, stage)
+
+
+    def _run_event_methods(self, tag, stage=None):
+        """Run code in the bundle that is marked with events. """
+        import inspect
+        from ambry.bundle.events import _runable_for_event
+
+        funcs = []
+
+        for func_name, f in inspect.getmembers(self, predicate=inspect.ismethod):
+            if _runable_for_event(f, tag, stage):
+                funcs.append(f)
+
+        for func in funcs:
+            func()
+
+    def _run_tests(self,tag, stage=None):
+        """Run test codes, defined in the test.py file, at event points"""
         import inspect
         import unittest
-        from ambry.bundle.test import _runable_test, TAG
+        from ambry.bundle.events import _runable_for_event
         import StringIO
 
         suite = unittest.TestSuite()
@@ -2077,10 +2115,8 @@ Caster Code
         tests = []
 
         for func_name, f in funcs:
-            if hasattr(f, '__ambry_test__'):
-
-                if _runable_test(f, tag, stage):
-                    tests.append(self.test_class(f.__name__))
+            if _runable_for_event(f, tag, stage):
+                tests.append(self.test_class(f.__name__))
 
         if tests:
             suite.addTests(tests)
@@ -2118,7 +2154,7 @@ Caster Code
         if self.is_built:
             self.finalize()
 
-        if not (self.is_finalized or self.is_prepared):
+        if not self.is_finalized :
             self.error("Can't checkin; bundle state must be either finalized or prepared")
             return False, False
 

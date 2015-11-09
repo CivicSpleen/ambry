@@ -321,18 +321,23 @@ class RunConfig(object):
 
         return r
 
-    def library(self):
+    def library(self, database=None):
+
         e = self.config['library']
 
         fs = self.group('filesystem')
 
-        database = e.get('database', '').format(**fs)
+        if not database:
+            database = e.get('database', '').format(**fs)
+
         warehouse = e.get('warehouse', '').format(**fs),
 
         try:
             database = self.database(database, missing_is_dsn=True, return_dsn=True)
         except:
             raise
+
+        database = database.format(**fs)
 
         try:
             warehouse = self.database(warehouse, missing_is_dsn=True, return_dsn=True)
@@ -409,9 +414,6 @@ class RunConfig(object):
                 except ConfigurationError as exc:
                     fails.append((account_key, str(exc)))
 
-            #for fail in fails:
-            #    print fail
-
             if account:
                 config.update(account)
 
@@ -425,58 +427,6 @@ class RunConfig(object):
     @property
     def dict(self):
         return self.config.to_dict()
-
-
-def mp_run(mp_run_args):
-    """ Run a bundle in a multi-processor child process. """
-
-    # FIXME: Seems unused. Remove if so.
-    bundle_dir, run_args, method_name, args = mp_run_args
-
-    try:
-
-        # bundle_file = sys.argv[1]
-
-        if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
-            error_msg = "ERROR: Current directory '{}' does not have a bundle.yaml file, "\
-                "so it isn't a bundle file. Did you mean to run 'cli'?"\
-                .format(os.getcwd())
-            print_(error_msg, file=sys.stderr)
-            sys.exit(1)
-
-        # Import the bundle file from the
-        rp = os.path.realpath(os.path.join(bundle_dir, 'bundle.py'))
-        # FIXME: What is import_file?
-        mod = import_file(rp)
-
-        dir_ = os.path.dirname(rp)
-        b = mod.Bundle(dir_)
-        b.run_args = AttrDict(run_args)
-
-        method = getattr(b, method_name)
-
-        b.log(
-            "MP Run: pid={} {}{} ".format(
-                os.getpid(),
-                method.__name__,
-                args))
-
-        try:
-            # This close is really important; the child process can't be allowed to use the database
-            # connection created by the parent; you get horrible breakages in
-            # random places.
-            b.close()
-            method(*args)
-        except:
-            b.close()
-            raise
-
-    except:
-        tb = traceback.format_exc()
-        print('==========vvv MP Run Exception: {} pid = {} ==========='.format(args, os.getpid()))
-        print(tb)
-        print('==========^^^ MP Run Exception: {} pid = {} ==========='.format(args, os.getpid()))
-        raise
 
 
 def normalize_dsn_or_dict(d):

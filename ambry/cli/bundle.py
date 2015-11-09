@@ -32,7 +32,9 @@ def bundle_command(args, rc):
     from ambry.orm.exc import ConflictError
     from ambry.dbexceptions import LoggedException
 
-    l = new_library(rc)
+    database_name = "test" if args.test_library else None
+
+    l = new_library(rc, database_name=database_name)
     l.logger = global_logger
 
     if args.debug:
@@ -104,8 +106,8 @@ def using_bundle(args, l, print_loc=True):
 
     b.multi = args.multi
 
-    if args.test:
-        b.test = True
+    if args.limited_run:
+        b.limited_run = True
     if print_loc: # Try to only do this once
         b.log_to_file('==============================')
 
@@ -121,8 +123,8 @@ def bundle_parser(cmd):
     parser.add_argument('-i', '--id', required=False, help='Bundle ID')
     parser.add_argument('-D', '--debug', required=False, default=False, action="store_true",
                         help='URS1 signal will break to interactive prompt')
-    parser.add_argument('-t', '--test', default=False, action="store_true",
-                        help='Enable bundle-specific test behaviour')
+    parser.add_argument('-L', '--limited-run', default=False, action="store_true",
+                        help='Enable bundle-specific behavior to reduce number of rows processed')
     parser.add_argument('-m', '--multi', default=False, action="store_true", help='Run in multiprocessing mode')
     parser.add_argument('-p', '--processes',  type = int, help='Number of multiprocessing processors. implies -m')
 
@@ -178,10 +180,12 @@ def bundle_parser(cmd):
     group.add_argument('-p', '--partitions', default=False, action='store_const',
                        const='partitions', dest='table',
                        help='Dump partitions')
-
     group.add_argument('-P', '--pipes', default=False, action='store_const',
                        const='pipes', dest='table',
                        help='Dump destination tables')
+    group.add_argument('-m', '--metadata', default=False, action='store_const',
+                       const='metadata', dest='table',
+                       help='Dump metadata as json')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Set
@@ -239,7 +243,7 @@ def bundle_parser(cmd):
                            help='Clean everything: metadata, partitions, tables, config, everything. ')
     command_p.add_argument('-s', '--source', default=False, action='store_true',
                            help='Clean the source tables schema, but not ingested source files.  ')
-    command_p.add_argument('-f', '--files', default=False, action='store_true',
+    command_p.add_argument('-F', '--files', default=False, action='store_true',
                            help='Clean build source files')
     command_p.add_argument('-i', '--ingested', default=False, action='store_true',
                            help='Clean the ingested files')
@@ -251,6 +255,8 @@ def bundle_parser(cmd):
                            help='Clean the build directory')
     command_p.add_argument('-S', '--sync', default=False, action='store_true',
                            help='Sync in after cleaning')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Clean even built and finalized bundles')
     command_p.set_defaults(subcommand='clean')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
@@ -631,33 +637,35 @@ def bundle_clean(args, l, rc):
 
     b = using_bundle(args, l)
 
-    if not any((args.source, args.files, args.tables, args.partitions, args.ingested)) or args.all:
-        prt('Clean everything')
-        b.clean()
-    else:
-        if args.source or args.all:
-            prt('Clean sources')
-            b.clean_sources()
+    if not args.force:
+        check_built(b)
 
-        if args.files or args.all:
-            prt('Clean files')
-            b.clean_files()
+    if not any((args.source, args.files, args.tables, args.partitions, args.ingested)):
+        args.all = True
 
-        if args.tables or args.all:
-            prt('Clean tables and partitions')
-            b.dataset.delete_tables_partitions()
+    if args.source or args.all:
+        prt('Clean sources')
+        b.clean_sources()
 
-        elif args.partitions or args.all:
-            prt('Clean partitions')
-            b.clean_partitions()
+    if args.files or args.all:
+        prt('Clean files')
+        b.clean_files()
 
-        if args.build or args.all:
-            prt('Clean build')
-            b.clean_build()
+    if args.tables or args.all:
+        prt('Clean tables and partitions')
+        b.dataset.delete_tables_partitions()
 
-        if args.ingested or args.all:
-            prt('Clean ingested')
-            b.clean_ingested()
+    if args.partitions or args.all:
+        prt('Clean partitions')
+        b.clean_partitions()
+
+    if args.build or args.all:
+        prt('Clean build')
+        b.clean_build()
+
+    if args.ingested or args.all:
+        prt('Clean ingested')
+        b.clean_ingested()
 
     if args.sync:
         b.sync_in()
@@ -696,6 +704,7 @@ def bundle_sync(args, l, rc):
 
     b.set_last_access(Bundle.STATES.SYNCED)
 
+    b.commit()
 
 def bundle_ingest(args, l, rc):
 
@@ -1016,9 +1025,7 @@ def bundle_dump(args, l, rc):
 
                 try:
                     info = df.info
-                except ResourceNotFoundError:
-                    continue
-                except zlib.error:
+                except (ResourceNotFoundError, zlib.error, IOError):
                     continue
 
                 records.append((s.name,
@@ -1033,8 +1040,18 @@ def bundle_dump(args, l, rc):
 
         records = sorted(records, key=lambda r: (r[4], r[0]) )
 
+    elif args.table == 'metadata':
+        import json
+
+        for key, value in b.metadata.kv:
+            print key, value
+
+        return
+
     if records:
         print(tabulate(records, headers=headers))
+
+
 
 
 def bundle_new(args, l, rc):

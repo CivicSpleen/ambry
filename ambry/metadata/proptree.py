@@ -337,6 +337,18 @@ class StructuredPropertyTree(object):
         return self._term_values.to_dict()
 
     @property
+    def flat(self):
+        return self._term_values.flatten()
+
+    @property
+    def kv(self):
+        """Return a fattened set of key vlaue pairs, where heirarchical keys are
+        in dotten format"""
+
+        for key, value in self.flat:
+            yield '.'.join(key), value
+
+    @property
     def json(self):
         return self._term_values.json()
 

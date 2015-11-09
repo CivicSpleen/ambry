@@ -51,10 +51,6 @@ def library_parser(cmd):
     sp = asp.add_parser('clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
 
-    sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
-    sp.set_defaults(subcommand='sync')
-    sp.add_argument('-C', '--clean', default=False, action='store_true',
-                    help='Clean before syncing. Will clean only the locations that are also synced')
 
     sp.add_argument('-a', '--all', default=False, action='store_true', help='Sync everything')
     sp.add_argument('-l', '--library', default=False, action='store_true', help='Sync the library')
@@ -333,18 +329,7 @@ def library_get(args, l, config):
     return b
 
 
-
-def library_sync(args, l, config):
-    """Synchronize the remotes and the upstream to a local library database."""
-    l.logger.info('args: %s' % args)
-
-
-    for r in l.remotes:
-        print(r)
-
-
 def library_number(args, l, config):
-
     print(l.number(assignment_class=args.key))
 
 def library_unknown(args, l, config):
