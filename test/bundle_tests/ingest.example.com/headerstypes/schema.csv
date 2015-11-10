@@ -13,7 +13,7 @@
 "headers","title_cost_gt_30_pct_cv_c","float","^ignore"
 ,,,
 "types","id","int",
-"types","int","str",
+"types","int","int","^ignore"
 "types","float","float","^ignore"
 "types","string","str",
 "types","time","time",
