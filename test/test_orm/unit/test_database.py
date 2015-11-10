@@ -73,9 +73,9 @@ class DatabaseTest(TestBase):
 
         # check result and calls.
         self.assertTrue(ret)
-        self.sqlite_db.exists.assert_called_once()
-        self.sqlite_db._create_path.assert_called_once()
-        self.sqlite_db.create_tables.assert_called_once()
+        self.sqlite_db.exists.assert_called_once_with()
+        self.sqlite_db._create_path.assert_called_once_with()
+        self.sqlite_db.create_tables.assert_called_once_with()
 
     def test_returns_false_if_database_exists(self):
 
@@ -178,7 +178,7 @@ class DatabaseTest(TestBase):
         db = Database('sqlite://')
         self.assertIsInstance(db.engine, Engine)
         self.assertIsInstance(db._engine, Engine)
-        fake_validate.assert_called_once()
+        self.assertEqual(len(fake_validate.mock_calls), 1)
 
     # connection tests.
     def test_creates_and_caches_new_sqlalchemy_connection(self):
@@ -197,8 +197,8 @@ class DatabaseTest(TestBase):
             with patch.object(db.connection, 'close', Mock()) as fake_connection_close:
                 db.close()
 
-                fake_session_close.assert_called_once()
-                fake_connection_close.assert_called_once()
+                fake_session_close.assert_called_once_with()
+                fake_connection_close.assert_called_once_with()
 
         self.assertIsNone(db._session)
         self.assertIsNone(db._connection)
@@ -212,7 +212,7 @@ class DatabaseTest(TestBase):
 
         with patch.object(db._session, 'commit', Mock()) as fake_commit:
             db.commit()
-            fake_commit.assert_called_once()
+            fake_commit.assert_called_once_with()
 
     def test_raises_session_commit_exception(self):
         db = Database('sqlite://')
@@ -233,7 +233,7 @@ class DatabaseTest(TestBase):
 
         with patch.object(db._session, 'rollback', Mock()) as fake_rollback:
             db.rollback()
-            fake_rollback.assert_called_once()
+            fake_rollback.assert_called_once_with()
 
     # .clean tests FIXME:
 
@@ -260,7 +260,7 @@ class DatabaseTest(TestBase):
         fake_drop = Mock(side_effect=OperationalError('select 1;', [], 'a'))
         with patch.object(db, 'drop', fake_drop):
             db.create_tables()
-            fake_drop.assert_called_once()
+            fake_drop.assert_called_once_with()
 
     def test_creates_dataset_table(self):
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
@@ -329,7 +329,7 @@ class DatabaseTest(TestBase):
         # testing
         with patch.object(self.sqlite_db, 'close_session', Mock()) as fake_close:
             self.sqlite_db._add_config_root()
-            fake_close.assert_called_once()
+            fake_close.assert_called_once_with()
 
     # .new_dataset test FIXME:
 
@@ -419,7 +419,7 @@ class ValidateVersionTest(unittest.TestCase):
         engine = create_engine('sqlite://')
         connection = engine.connect()
         _validate_version(connection)
-        fake_required.assert_called_once()
+        fake_required.assert_called_once_with(connection)
 
 
 class MigrationRequiredTest(unittest.TestCase):
@@ -550,12 +550,12 @@ class MigrateTest(unittest.TestCase):
         # testing.
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
         self.assertEqual(stored_version, 100)
-        fake_migrate.assert_called_once()
+        fake_migrate.assert_called_once_with(self.connection)
 
     @patch('ambry.orm.database._is_missed')
     @patch('ambry.orm.migrations.0100_init.Migration.migrate')
     def test_does_not_change_version_if_migration_failed(self, fake_migrate, fake_is_missed):
-        fake_is_missed.return_value = True  # .expects_call().returns(True)
+        fake_is_missed.return_value = True
 
         class MyException(Exception):
             pass
@@ -565,5 +565,5 @@ class MigrateTest(unittest.TestCase):
         with self.assertRaises(MyException):
             migrate(self.connection)
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
-        fake_migrate.assert_called_once()
+        fake_migrate.assert_called_once_with(self.connection)
         self.assertEqual(stored_version, 22)
