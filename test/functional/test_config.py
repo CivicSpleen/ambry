@@ -22,8 +22,8 @@ class Test(TestBase):
 
         self.rc = self.get_rc()
 
-        self.assertEqual('/tmp/test/downloads', self.rc.filesystem('downloads'))
-        self.assertEqual('/tmp/test/extracts', self.rc.filesystem('extracts'))
+        self.assertEqual('/tmp/ambry/downloads', self.rc.filesystem('downloads'))
+        self.assertEqual('/tmp/ambry/extracts', self.rc.filesystem('extracts'))
 
     def test_run_config_library(self):
 
