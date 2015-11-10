@@ -125,7 +125,6 @@ class Database(object):
 
         # init engine
         self.engine
-        rows = []
 
         try:
             # Since we are using the connection, rather than the session, need to
@@ -135,19 +134,10 @@ class Database(object):
 
             inspector = Inspector.from_engine(self.engine)
 
-            if 'config' not in inspector.get_table_names(schema=self._schema):
-                return False
-            else:
+            if 'config' in inspector.get_table_names(schema=self._schema):
                 return True
-
-        except ProgrammingError:
-            # This happens when the datasets table doesn't exist
-            pass
-        except OperationalError:
-            # TODO Should check that the error is b/c the datasets table is missing, and reraise if it is for
-            # some other reason.
-            return False
-
+            else:
+                return False
         finally:
             self.close_connection()
 
