@@ -85,7 +85,7 @@ class Test(TestBase):
         c.transform = 't1|^init|t2|!except|t3|t4'
 
         self.assertEqual(['init'], [e['init'] for e in c.expanded_transform])
-        self.assertEqual([ ['t1', 't2', 't3', 't4']], [e['transforms'] for e in c.expanded_transform])
+        self.assertEqual([['t1', 't2', 't3', 't4']], [e['transforms'] for e in c.expanded_transform])
 
     def test_col_clean_transform(self):
 
@@ -96,8 +96,6 @@ class Test(TestBase):
         for t in b.tables:
             for c in t.columns:
                 print(c.name, c.transform, c.expanded_transform)
-
-
 
     def test_code_calling_pipe(self):
 

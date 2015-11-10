@@ -61,7 +61,7 @@ def cst_double(v, row, header_d, bundle, source):
     return v*2 if v is not None  else None
 
 def cst_exception(v, i_d, header_d, row, errors, pipe, exception):
-    print "CST_EXCEPTION ",i_d, header_d, exception
+    print('CST_EXCEPTION ', i_d, header_d, exception)
     errors[header_d] = v
     return None
 
