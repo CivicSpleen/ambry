@@ -590,7 +590,7 @@ class SelectRows(Pipe):
         :param pred: Callable or string. If a string, it must be just an expression which can take arguments source and row
         :return:
         """
-        if isinstance(pred, basestring):
+        if isinstance(pred, string_types):
             self.pred_str = pred
             self.pred = eval('lambda source, row: {}'.format(pred))
         else:

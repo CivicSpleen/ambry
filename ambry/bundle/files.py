@@ -492,7 +492,7 @@ class PythonSourceFile(StringSourceFile):
         else:
             contents = bf.unpacked_contents # Assumes utf-8
 
-        exec compile(contents, abs_path, 'exec') in module.__dict__
+        exec(compile(contents, abs_path, 'exec'), module.__dict__)
 
         return module
 
@@ -542,10 +542,11 @@ class PythonSourceFile(StringSourceFile):
 
         exec(bf.contents, module.__dict__)
 
-        # print self._file_const, bundle.__dict__.keys()
-        # print bf.contents
+        # print(self._file_const, bundle.__dict__.keys())
+        # print(bf.contents)
 
         return module
+
 
 class SourcesFile(RowBuildSourceFile):
 
@@ -611,9 +612,9 @@ class SourcesFile(RowBuildSourceFile):
                     name = d['name']
                     del d['name']
                     ds = self._dataset.new_source(name, **d)
-                except: # Odd error with 'none' in keys for d
-                    print '!!!', header
-                    print '!!!', row
+                except:  # Odd error with 'none' in keys for d
+                    print('!!!', header)
+                    print('!!!', row)
                     raise
 
                 s.merge(ds)

@@ -69,7 +69,7 @@ class Test(TestBase):
         except NotFoundError:
             pass
 
-        print db.dsn
+        # print(db.dsn)
 
         ds = self.new_db_dataset(db, self.d_vid)
 
@@ -129,12 +129,12 @@ class Test(TestBase):
 
         pool = self.library.process_pool
 
-        for mp_f, ds_attr in ( (run_mp_tables, 'tables'),
-                               (run_mp_sourcetables, 'source_tables'),
-                               (run_mp_partitions, 'partitions')
-                               ):
+        for mp_f, ds_attr in ((run_mp_tables, 'tables'),
+                              (run_mp_sourcetables, 'source_tables'),
+                              (run_mp_partitions, 'partitions')
+                              ):
 
-            print 'Running: ', ds_attr
+            # print('Running: ', ds_attr)
 
             names = pool.map(mp_f, [(ds.vid, i) for i in range(1, N+1)])
 

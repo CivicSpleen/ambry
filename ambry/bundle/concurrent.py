@@ -6,7 +6,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-library = None # GLobal library object
+library = None  # GLobal library object
 
 
 def _MPBundleMethod(f, args):
@@ -18,7 +18,7 @@ def _MPBundleMethod(f, args):
     :param args:
     :return:
     """
-    import traceback, os
+    import traceback
     import signal
 
     # Have the child processes ignore the keyboard interrupt, and other signals. Instead, the parent will
@@ -36,20 +36,20 @@ def _MPBundleMethod(f, args):
         b.is_subprocess = True
         args[0] = b
     except:
-        print "Exception in feching bundle in multiprocessing run."
+        print('Exception in feching bundle in multiprocessing run.')
         traceback.print_exc()
         raise
 
     try:
         return f(args)
     except Exception as e:
-        import sys
 
         tb = traceback.format_exc()
-        b.error("Subprocess raised an exception: {}".format(e), False)
+        b.error('Subprocess raised an exception: {}'.format(e), False)
         b.error(tb, False)
 
         raise
+
 
 def MPBundleMethod(f, *args, **kwargs):
     """Decorator to capture exceptions. and logging the error"""
@@ -57,9 +57,11 @@ def MPBundleMethod(f, *args, **kwargs):
 
     return decorator(_MPBundleMethod, f)  # Preserves signature
 
+
 def alt_init(l):
     global library
     library = l
+
 
 def init_library(rc_path, database_dsn=None):
     """Child initializer, setup in Library.process_pool"""
@@ -70,6 +72,7 @@ def init_library(rc_path, database_dsn=None):
     rc = get_runconfig(rc_path)
     library = new_library(rc, database_dsn)
 
+
 @MPBundleMethod
 def build_mp(args):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
@@ -78,6 +81,7 @@ def build_mp(args):
     source = b.source(source_name)
 
     return b.build_source(source, force)
+
 
 @MPBundleMethod
 def ingest_mp(args):
