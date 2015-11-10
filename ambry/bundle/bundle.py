@@ -1266,7 +1266,7 @@ Caster Code
         """Remove all of the build files"""
 
         for bs in self.build_source_files:
-            print '!!!!', bs.path
+            print('!!!!', bs.path)
 
     def clean_build_state(self):
 
@@ -1727,7 +1727,7 @@ Caster Code
                     try:
                         p.finalize()
                     except AttributeError:
-                        print self.table(p.table_name)
+                        print(self.table(p.table_name))
                         raise
 
                     # FIXME Shouldn't need to do this commit, but without it, some stats get added multiple
@@ -1754,7 +1754,6 @@ Caster Code
             self.commit()
 
             raise
-
 
     def unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
@@ -1931,10 +1930,9 @@ Caster Code
 
         assert not pipe or (pipe.source is source and pipe.bundle is self)
 
-        exec compile(code, abs_path, 'exec') in env_dict
+        exec(compile(code, abs_path, 'exec'), env_dict)
 
         return env_dict['row_processors']
-
 
     def finalize_write_bundle_file(self):
 
