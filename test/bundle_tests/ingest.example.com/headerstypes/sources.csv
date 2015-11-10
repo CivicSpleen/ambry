@@ -1,8 +1,8 @@
-"name","title","table","description","url"
-"types1",,"types","Basic multi-type file","http://public.source.civicknowledge.com/example.com/type_intuit/types_1.csv"
-"types2",,"types","Missing values and codes","http://public.source.civicknowledge.com/example.com/type_intuit/types_2.csv"
-"types3",,"types","Commas in Integers","http://public.source.civicknowledge.com/example.com/type_intuit/types_3.csv"
-"headers1",,"headers","Basic multi headers","http://public.source.civicknowledge.com/example.com/row_intuit/headers_1.csv"
-"headers2",,"headers","Multiple headers with gaps","http://public.source.civicknowledge.com/example.com/row_intuit/headers_2.csv"
-"headers3",,"headers","Gaps and codes in data","http://public.source.civicknowledge.com/example.com/row_intuit/headers_3.csv"
-"headers4",,"headers","Centered title and many missing values","http://public.source.civicknowledge.com/example.com/row_intuit/headers_4.csv"
+name,dest_table_name,start_line,end_line,header_lines,description,ref,state
+headers1,headers,5,12003,"3,4",Basic multi headers,http://public.source.civicknowledge.com/example.com/row_intuit/headers_1.csv,build_done
+headers2,headers,6,12005,"3,5",Multiple headers with gaps,http://public.source.civicknowledge.com/example.com/row_intuit/headers_2.csv,build_done
+headers3,headers,6,12005,"3,5",Gaps and codes in data,http://public.source.civicknowledge.com/example.com/row_intuit/headers_3.csv,build_done
+headers4,headers,7,12005,"0,1,5,6",Centered title and many missing values,http://public.source.civicknowledge.com/example.com/row_intuit/headers_4.csv,build_done
+types1,types,1,14,0,Basic multi-type file,http://public.source.civicknowledge.com/example.com/type_intuit/types_1.csv,build_done
+types2,types,1,40,0,Missing values and codes,http://public.source.civicknowledge.com/example.com/type_intuit/types_2.csv,build_error
+types3,types,1,14,0,Commas in Integers,http://public.source.civicknowledge.com/example.com/type_intuit/types_3.csv,ingest_done
