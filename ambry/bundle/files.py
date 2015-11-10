@@ -227,11 +227,19 @@ class RowBuildSourceFile(BuildSourceFile):
         fr.path = fn_path
         rows = []
 
-        with self._fs.open(fn_path,'rb') as f:
-            for row in csv.reader(f, encoding='utf-8'):
-                row = [e if e.strip() != '' else None for e in row]
-                if any(bool(e) for e in row):
-                    rows.append(row)
+        if six.PY2:
+            with self._fs.open(fn_path, 'rb') as f:
+                for row in csv.reader(f, encoding='utf-8'):
+                    row = [e if e.strip() != '' else None for e in row]
+                    if any(bool(e) for e in row):
+                        rows.append(row)
+        else:
+            # py3
+            with self._fs.open(fn_path, 'rt', encoding='utf-8') as f:
+                for row in csv.reader(f):
+                    row = [e if e.strip() != '' else None for e in row]
+                    if any(bool(e) for e in row):
+                        rows.append(row)
         try:
             fr.update_contents(msgpack.packb(rows), 'application/msgpack')
         except AssertionError:
