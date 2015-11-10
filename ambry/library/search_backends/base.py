@@ -482,16 +482,16 @@ class BasePartitionIndex(BaseIndex):
 
         doc_field = u('{} {} {}').format(
             values, schema, ' '.join([
-                u'{}'.format(partition.identity.vid),
-                u'{}'.format(partition.identity.id_),
-                u'{}'.format(partition.identity.name),
-                u'{}'.format(partition.identity.vname)]))
+                u('{}').format(partition.identity.vid),
+                u('{}').format(partition.identity.id_),
+                u('{}').format(partition.identity.name),
+                u('{}').format(partition.identity.vname)]))
 
         document = dict(
-            vid=u'{}'.format(partition.identity.vid),
-            dataset_vid=u'{}'.format(partition.identity.as_dataset().vid),
-            title=u'{}'.format(partition.table.description),
-            keywords=u'{}'.format(keywords),
+            vid=u('{}').format(partition.identity.vid),
+            dataset_vid=u('{}').format(partition.identity.as_dataset().vid),
+            title=u('{}').format(partition.table.description),
+            keywords=u('{}').format(keywords),
             doc=doc_field)
 
         return document

@@ -386,7 +386,7 @@ class Dataset(Base):
                 .first()
 
         if not source:
-            from exc import NotFoundError
+            from .exc import NotFoundError
             raise NotFoundError("Failed to find source for name : '{}' ".format(name))
 
         return source

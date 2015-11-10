@@ -4,16 +4,18 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
+import datetime
 
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
-from sqlalchemy import  Text, Binary, String, ForeignKey
-import datetime
+from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
+
+import six
+
+from ambry_sources.intuit import unknown
 
 from ..util import Constant
 from ..orm.column import Column
-from ambry_sources.intuit import unknown
-
 
 from . import Base, MutationDict, JSONEncodedObj
 
@@ -27,8 +29,8 @@ class SourceColumn(Base):
     DATATYPE = Constant()
     DATATYPE.INT = int.__name__
     DATATYPE.FLOAT = float.__name__
-    DATATYPE.STRING = str.__name__
-    DATATYPE.UNICODE = unicode.__name__
+    DATATYPE.STRING = six.binary_type.__name__
+    DATATYPE.UNICODE = six.text_type.__name__
     DATATYPE.DATE = datetime.date.__name__
     DATATYPE.TIME = datetime.time.__name__
     DATATYPE.DATETIME = datetime.datetime.__name__
@@ -37,15 +39,15 @@ class SourceColumn(Base):
     type_map = {
         DATATYPE.INT: int,
         DATATYPE.FLOAT: float,
-        DATATYPE.STRING: str,
-        DATATYPE.UNICODE: unicode,
+        DATATYPE.STRING: six.binary_type,
+        DATATYPE.UNICODE: six.text_type,
         DATATYPE.DATE: datetime.date,
         DATATYPE.TIME: datetime.time,
         DATATYPE.DATETIME: datetime.datetime,
         DATATYPE.DATETIME: unknown
     }
 
-    column_type_map = { # FIXME The Column types should be harmonized with these types
+    column_type_map = {  # FIXME The Column types should be harmonized with these types
         DATATYPE.INT: Column.DATATYPE_INTEGER,
         DATATYPE.FLOAT: Column.DATATYPE_FLOAT,
         DATATYPE.STRING: Column.DATATYPE_STR,

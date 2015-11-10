@@ -3,7 +3,8 @@
 """ Export datasets and partitions to CKAN. """
 
 import json
-from StringIO import StringIO
+
+import six
 
 import unicodecsv
 
@@ -34,7 +35,7 @@ rc = get_runconfig()
 CKAN_CONFIG = rc.accounts.get('ckan')
 
 
-if CKAN_CONFIG and set(['host', 'organization', 'apikey']).issubset(CKAN_CONFIG.keys()):
+if CKAN_CONFIG and set(['host', 'organization', 'apikey']).issubset(list(CKAN_CONFIG.keys())):
     ckan = ckanapi.RemoteCKAN(
         CKAN_CONFIG.host,
         apikey=CKAN_CONFIG.apikey,
@@ -130,7 +131,7 @@ def export(bundle, force=False, force_restricted=False):
     ckan.action.resource_create(**_convert_schema(bundle))
 
     # publish external documentation
-    for name, external in bundle.dataset.config.metadata.external_documentation.items():
+    for name, external in six.iteritems(bundle.dataset.config.metadata.external_documentation):
         ckan.action.resource_create(**_convert_external(bundle, name, external))
 
 
@@ -161,7 +162,10 @@ def _convert_bundle(bundle):
 
     for f in bundle.dataset.files:
         if f.path.endswith('documentation.md'):
-            notes = json.dumps(f.unpacked_contents)
+            contents = f.unpacked_contents
+            if isinstance(contents, six.binary_type):
+                contents = contents.decode('utf-8')
+            notes = json.dumps(contents)
             break
 
     ret = {
@@ -186,7 +190,7 @@ def _convert_partition(partition):
     # http://docs.ckan.org/en/latest/api/#ckan.logic.action.create.resource_create
 
     # convert bundle to csv.
-    csvfile = StringIO()
+    csvfile = six.StringIO()
     writer = unicodecsv.writer(csvfile)
     headers = partition.datafile.headers
     writer.writerow(headers)
@@ -220,10 +224,10 @@ def _convert_schema(bundle):
     schema_csv = None
     for f in bundle.dataset.files:
         if f.path.endswith('schema.csv'):
-            schema_csv = StringIO()
-            writer = unicodecsv.writer(schema_csv)
-            for row in f.unpacked_contents:
-                writer.writerow(row)
+            contents = f.unpacked_contents
+            if isinstance(contents, six.binary_type):
+                contents = contents.decode('utf-8')
+            schema_csv = six.StringIO(contents)
             schema_csv.seek(0)
             break
 

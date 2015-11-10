@@ -1,4 +1,5 @@
 import unittest
+import yaml
 
 from test.test_base import TestBase
 
@@ -13,6 +14,7 @@ def cast_int(v):
 
 def cast_float(v):
     return float(v)
+
 
 class Test(TestBase):
 
@@ -35,8 +37,6 @@ class Test(TestBase):
         from fs.opener import fsopendir
 
         self.fs = fsopendir('mem://test')
-
-
 
     @unittest.skip('Timing test')
     def test_csv_time(self):
@@ -66,7 +66,7 @@ class Test(TestBase):
             for name, t in schema:
                 funcs.append('cast_{}(row[{}])'.format(t.__name__, name))
 
-            return eval("lambda row: [{}]".format(','.join(funcs)))
+            return eval('lambda row: [{}]'.format(','.join(funcs)))
 
         row_munger1 = munger1(schema)
 
@@ -102,11 +102,11 @@ class Test(TestBase):
         n = 30000
         s = time.time()
         for i in range(n):
-            row = data[i%100]
+            row = data[i % 100]
             row = row_munger1(row)
             cdf.insert(row)
 
-        print "Munger 1", round(float(n)/(time.time() - s),3), 'rows/s'
+        print('Munger 1', round(float(n)/(time.time() - s), 3), 'rows/s')
 
         s = time.time()
         for i in range(n):
@@ -114,7 +114,7 @@ class Test(TestBase):
             row = row_munger2(row)
             cdf.insert(row)
 
-        print "Munger 2", round(float(n) / (time.time() - s), 3), 'rows/s'
+        print('Munger 2', round(float(n) / (time.time() - s), 3), 'rows/s')
 
 
 
@@ -125,22 +125,22 @@ class Test(TestBase):
 
             def __iter__(self):
 
-                yield ['int','int']
+                yield ['int', 'int']
 
                 for i in range(10000):
-                    yield([i,i])
+                    yield([i, i])
 
         # Sample
         pl = Pipeline(
             source=Source(),
-            first = Sample(est_length=10000),
-            last = PrintRows(count=50)
+            first=Sample(est_length=10000),
+            last=PrintRows(count=50)
         )
 
         pl.run()
 
         # head
-        self.assertIn([7, 7],pl[PrintRows].rows)
+        self.assertIn([7, 7], pl[PrintRows].rows)
         self.assertIn([2018, 2018], pl[PrintRows].rows)
         self.assertIn([9999, 9999], pl[PrintRows].rows)
 
@@ -167,7 +167,7 @@ class Test(TestBase):
 
         pl = Pipeline(
             source=Source(),
-            first= SelectRows("row.a == 100 or row.b == 1000"),
+            first=SelectRows('row.a == 100 or row.b == 1000'),
             last=PrintRows(count=50)
         )
 
@@ -184,7 +184,7 @@ class Test(TestBase):
         from ambry.etl.pipeline import Pipeline, Pipe, Slice, PrintRows
 
         self.assertEquals('lambda row: tuple(row[0:3])+tuple(row[10:13])+(row[9],)+(row[-1],)',
-                          Slice.make_slicer((0,3),(10,13),9,-1)[1])
+                          Slice.make_slicer((0, 3), (10, 13), 9, -1)[1])
 
         self.assertEquals('lambda row: tuple(row[0:3])+tuple(row[10:13])+(row[9],)+(row[-1],)',
                           Slice.make_slicer("0:3,10:13,9,-1")[1])
@@ -194,23 +194,29 @@ class Test(TestBase):
         class Source(Pipe):
             def __iter__(self):
 
-                yield [ 'col'+str(j) for j in range(20)]
+                yield ['col'+str(j) for j in range(20)]
 
                 for i in range(10000):
-                    yield [ j for j in range(20) ]
+                    yield [j for j in range(20)]
 
         # Sample
         pl = Pipeline(
-            source=[Source(), Slice((0,3),(10,13),9,-1) ],
+            source=[Source(), Slice((0, 3), (10, 13), 9, -1)],
             last=PrintRows(count=50)
         )
 
         pl.run()
 
-        self.assertEquals([1, 0, 1, 2, 10, 11, 12, 9, 19], pl[PrintRows].rows[0])
-        self.assertEquals(['col0', 'col1', 'col2', 'col10', 'col11', 'col12', 'col9', 'col19'], pl[PrintRows].headers)
+        self.assertEquals(
+            [1, 0, 1, 2, 10, 11, 12, 9, 19],
+            pl[PrintRows].rows[0])
+        self.assertEquals(
+            ['col0', 'col1', 'col2', 'col10', 'col11', 'col12', 'col9', 'col19'],
+            pl[PrintRows].headers)
 
-        self.assertEqual([('0', '3'), ('10', '13'), 9, -1], Slice.parse("0:3,10:13,9,-1"))
+        self.assertEqual(
+            [('0', '3'), ('10', '13'), 9, -1],
+            Slice.parse("0:3,10:13,9,-1"))
 
         pl = Pipeline(
             source=[Source(), Slice("0:3,10:13,9,-1")],
@@ -236,7 +242,7 @@ class Test(TestBase):
 
                 for i in range(self.start, self.start+10):
                     if i == self.start:
-                        yield ['int', 'int'] # header
+                        yield ['int', 'int']  # header
 
                     yield ([self.start, i])
 
@@ -248,7 +254,7 @@ class Test(TestBase):
             last=PrintRows(count=50)
         )
 
-        print pl
+        print(pl)
 
         pl.run(source_pipes=[Source(0), Source(10), Source(20)])
 

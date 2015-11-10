@@ -88,8 +88,8 @@ class Column(Base):
     )
 
     # FIXME. These types should be harmonized with   SourceColumn.DATATYPE
-    DATATYPE_STR = 'str'
-    DATATYPE_UNICODE = 'unicode'
+    DATATYPE_STR = six.binary_type.__name__
+    DATATYPE_UNICODE = six.text_type.__name__
     DATATYPE_INTEGER = 'int'
     DATATYPE_INTEGER64 = 'long' if six.PY2 else 'int'
     DATATYPE_FLOAT = 'float'
@@ -108,7 +108,9 @@ class Column(Base):
     types = {
         # Sqlalchemy, Python, Sql,
 
-        # Here, 'str' means ascii, 'unicode' means not ascii
+        # Here, 'str' means ascii, 'unicode' means not ascii.
+        # FIXME: Change names to DATATYPE_ASCII, DATATYPE_NOT_ASCII because it confuses while
+        # python2/python3 porting.
         DATATYPE_STR: (sqlalchemy.types.String, six.binary_type, 'VARCHAR'),
         DATATYPE_UNICODE: (sqlalchemy.types.String, six.text_type, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
@@ -141,14 +143,13 @@ class Column(Base):
 
     @classmethod
     def python_types(cls):
-        return [e[1] for e in cls.types.values()]
-
+        return [e[1] for e in six.itervalues(cls.types)]
 
     def type_is_int(self):
-        return self.python_type  == int
+        return self.python_type == int
 
     def type_is_real(self):
-        return self.python_type  == float
+        return self.python_type == float
 
     def type_is_number(self):
         return self.type_is_real or self.type_is_int
@@ -172,7 +173,7 @@ class Column(Base):
 
     def type_is_builtin(self):
         """Return False if the datatype is not one of the builtin type"""
-        return self.datatype in self.types.keys()
+        return self.datatype in self.types
 
     @property
     def sqlalchemy_type(self):
@@ -191,8 +192,8 @@ class Column(Base):
             try:
                 return self.types[self.datatype][1]
             except KeyError:
-                raise KeyError("Failed to find type {} in column {}.{}".format(self.datatype, self.table.name, self.name))
-
+                raise KeyError('Failed to find type {} in column {}.{}'
+                               .format(self.datatype, self.table.name, self.name))
 
     @property
     def python_type(self):
@@ -219,7 +220,7 @@ class Column(Base):
             if self.datatype == Column.DATATYPE_TIME:
                 dt = dt.time()
             if not isinstance(dt, self.python_type):
-                raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt),self.python_type))
+                raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt), self.python_type))
 
             return dt
         else:
@@ -394,7 +395,7 @@ class Column(Base):
         self._transform = self.clean_transform(v)
 
     @staticmethod
-    def make_xform_seg(init_=None, datatype = None, transforms = None, exception = None, column = None):
+    def make_xform_seg(init_=None, datatype=None, transforms=None, exception=None, column=None):
         return {
             'init': init_,
             'transforms': transforms if transforms else [],
@@ -407,17 +408,17 @@ class Column(Base):
     def expanded_transform(self):
         """Expands the transform string into segments """
 
-        segments =  self._expand_transform(self.transform)
+        segments = self._expand_transform(self.transform)
 
         if not segments:
-            return [self.make_xform_seg(datatype=self.valuetype_class, column = self)]
+            return [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
 
         segments[0]['datatype'] = self.valuetype_class
 
         for s in segments:
             s['column'] = self
 
-        return  segments
+        return segments
 
     @staticmethod
     def clean_transform(transform):

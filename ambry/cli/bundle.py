@@ -5,7 +5,6 @@ This file is licensed under the terms of the Revised BSD License,
 included in this distribution as LICENSE.txt
 
 """
-from collections import OrderedDict
 import os
 import sys
 import yaml
@@ -14,7 +13,7 @@ from fs.opener import fsopendir
 
 from tabulate import tabulate
 
-from six import iteritems, iterkeys, callable as six_callable
+from six import iteritems, iterkeys, callable as six_callable, text_type, binary_type
 from six.moves import queue as six_queue
 
 from ambry.identity import NotObjectNumberError
@@ -570,9 +569,9 @@ def bundle_info(args, l, rc):
 
         def cast_str(x):
             try:
-                return unicode(x)
+                return text_type(x)
             except:
-                return str(x)
+                return binary_type(x)
 
         for p in b.partitions:
             rows = ['Column LOM Count Uniques Values'.split()]
@@ -588,11 +587,12 @@ def bundle_info(args, l, rc):
                         values = v.text_hist
                     else:
                         values = '\n'.join(wrap(', '.join(islice(sorted(cast_str(x)
-                                            for x in iterkeys(v.uvalues)), None, 10)), 50))
+                                           for x in iterkeys(v.uvalues)), None, 10)), 50))
 
-                    rows.append([ cast_str(k), cast_str(v.lom), cast_str(v.count), cast_str(v.nuniques), values])
+                    rows.append(
+                        [cast_str(k), cast_str(v.lom), cast_str(v.count), cast_str(v.nuniques), values])
 
-            #print tabulate(row, tablefmt='plain')
+            # print tabulate(row, tablefmt='plain')
             print(SingleTable(rows, title='Stats for ' + str(p.identity.name)).table)
 
     elif args.partitions:
@@ -614,6 +614,7 @@ def check_built(b):
         fatal("Can't perform operation; state = '{}'. "
               "Call `bambry clean` explicity or build with -f option".format(b.state))
 
+
 def bundle_duplicate(args, l, rc):
 
     b = using_bundle(args, l)
@@ -625,7 +626,8 @@ def bundle_duplicate(args, l, rc):
 
     nb.set_last_access(Bundle.STATES.NEW)
 
-    prt("New Bundle: {} ".format(nb.identity.vname))
+    prt('New Bundle: {} '.format(nb.identity.vname))
+
 
 def bundle_finalize(args, l, rc):
     b = using_bundle(args, l)
@@ -677,6 +679,7 @@ def bundle_clean(args, l, rc):
 
     b.commit()
 
+
 def bundle_download(args, l, rc):
     b = using_bundle(args, l).cast_to__subclass()
     b.download()
@@ -691,7 +694,7 @@ def bundle_sync(args, l, rc):
     sync_in = getattr(args,'in') or not any((getattr(args,'in'),args.code,  args.out))
 
     if sync_in:
-        prt("Sync in")
+        prt('Sync in')
         b.sync_in()
 
     if args.code:
@@ -739,6 +742,7 @@ def bundle_schema(args, l, rc):
         b.schema(sources=args.source, tables=args.table, clean=args.clean)
 
     b.set_last_access(Bundle.STATES.SCHEMA)
+
 
 
 def bundle_meta(args, l, rc):
@@ -833,7 +837,8 @@ def bundle_run(args, l, rc):
     if args.sync:
         b.sync_out()
 
-    prt("RETURN: ", r)
+    prt('RETURN: ', r)
+
 
 def bundle_checkin(args, l, rc):
 
@@ -854,7 +859,7 @@ def bundle_set(args, l, rc):
     b = l.bundle(ref, True)
 
     if args.state:
-        prt("Setting state to {}".format(args.state))
+        prt('Setting state to {}'.format(args.state))
         b.state = args.state
         b.commit()
 
@@ -866,7 +871,7 @@ def bundle_dump(args, l, rc):
 
     b = l.bundle(ref, True)
 
-    prt("Dumping {} for {}\n".format(args.table, b.identity.fqname))
+    prt('Dumping {} for {}\n'.format(args.table, b.identity.fqname))
 
     def trunc(v, l):
         return v[:l] + (v[l:] and '..')
@@ -958,10 +963,10 @@ def bundle_dump(args, l, rc):
 
         for t in b.dataset.tables:
 
-            print '---', t.name
+            print('---{}'.format(t.name))
 
             def record_gen():
-                for i, row in enumerate([ c.row for c in t.columns]):
+                for i, row in enumerate([c.row for c in t.columns]):
                     if i == 0:
                         yield row.keys()
                     yield row.values()
@@ -1006,7 +1011,7 @@ def bundle_dump(args, l, rc):
 
         pl = b.pipeline(phase, source)
 
-        print pl
+        print(pl)
 
         records = None
 
@@ -1099,6 +1104,7 @@ def bundle_new(args, l, rc):
 
     print(b.identity.fqname)
 
+
 def bundle_import(args, l, rc):
 
     if args.source:
@@ -1126,10 +1132,11 @@ def bundle_import(args, l, rc):
 
     b.sync()
 
-    prt("Loaded bundle: {}".format(b.identity.fqname))
+    prt('Loaded bundle: {}'.format(b.identity.fqname))
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
+
 
 def bundle_export(args, l, rc):
 
@@ -1152,7 +1159,7 @@ def bundle_export(args, l, rc):
 
     b.sync_out()
 
-    prt("Exported bundle: {}".format(b.source_fs))
+    prt('Exported bundle: {}'.format(b.source_fs))
 
 file_const_map = dict(
     b=File.BSFILE.BUILD,
@@ -1174,7 +1181,7 @@ def bundle_edit(args, l, rc):
 
     b = using_bundle(args, l)
 
-    prt("Found bundle {}".format(b.identity.fqname))
+    prt('Found bundle {}'.format(b.identity.fqname))
 
     EDITOR = os.environ.get('EDITOR', 'vim')  # that easy!
 
@@ -1189,7 +1196,7 @@ def bundle_edit(args, l, rc):
 
         file_path = bf.path
 
-        prt("Editing {}".format(file_path))
+        prt('Editing {}'.format(file_path))
 
         _, ext = os.path.splitext(file_path)
 
@@ -1253,7 +1260,7 @@ def bundle_edit(args, l, rc):
                 if b.is_buildable:
                     b.sync()
                 else:
-                    err("Bundle is not in a buildable state; did not sync")
+                    err('Bundle is not in a buildable state; did not sync')
 
             elif command == 'build':
                 bc = b.cast_to_subclass()
@@ -1262,7 +1269,7 @@ def bundle_edit(args, l, rc):
                         bc.clean()
                         bc.build()
                 else:
-                    err("Bundle is not in a buildable state; not building")
+                    err('Bundle is not in a buildable state; not building')
 
             elif command == 'unknown':
                 warn('Unknown command char: {} '.format(arg))
@@ -1291,15 +1298,14 @@ def bundle_extract(args, l, rc):
             w.writerow(r.headers)
             if limit:
                 from itertools import islice
-                w.writerows(islice(r.rows,None, limit))
+                w.writerows(islice(r.rows, None, limit))
             else:
                 w.writerows(r.rows)
 
     b.logger.info('Extracted to: {}'.format(bfs.getsyspath('/')))
 
-def bundle_ampr(args, l, rc):
 
-    import os
+def bundle_ampr(args, l, rc):
     from ambry_sources.cli import main
 
     b = using_bundle(args, l)
@@ -1333,25 +1339,23 @@ def bundle_ampr(args, l, rc):
     if not path:
         fatal("Didn't get a path to an MPR file, nor a reference to a soruce or partition")
 
-
     args.path = [path]
-
     main(args)
+
 
 def bundle_cluster(args, l, rc):
 
     from ambry.etl import ClusterHeaders
-    import yaml
 
     b = using_bundle(args, l)
 
     ch = ClusterHeaders()
 
     for t in b.dataset.source_tables:
-        ch.add_header(t.name, sorted([c.source_header for c in t.columns ]))
+        ch.add_header(t.name, sorted([c.source_header for c in t.columns]))
 
+    print(yaml.safe_dump({'source_sets': ch.cluster()}, indent=4, default_flow_style=False))
 
-    print yaml.safe_dump({'source_sets': ch.cluster()}, indent=4, default_flow_style=False)
 
 def bundle_colmap(args, l, rc):
     """
@@ -1406,7 +1410,7 @@ def bundle_colmap(args, l, rc):
                     if c_name in source_cols:
                         row[i] = c_name
 
-            fn = "colmap_{}.csv".format(dest_table.name)
+            fn = 'colmap_{}.csv'.format(dest_table.name)
 
             with b.source_fs.open(fn, 'wb') as f:
 
@@ -1419,7 +1423,7 @@ def bundle_colmap(args, l, rc):
                 for col_name, cols in columns.items():
                     w.writerow([col_name] + cols)
 
-                prt("Wrote {}".format(fn))
+                prt('Wrote {}'.format(fn))
 
     elif args.build:
         # Coalesce the individual table maps into one colmap
@@ -1435,7 +1439,7 @@ def bundle_colmap(args, l, rc):
             count = 0
 
             for dest_table_name in dest_tables:
-                fn = "colmap_{}.csv".format(dest_table_name)
+                fn = 'colmap_{}.csv'.format(dest_table_name)
 
                 if not b.source_fs.exists(fn):
                     continue
@@ -1456,7 +1460,7 @@ def bundle_colmap(args, l, rc):
                                 count += 1
                                 w.writerow((source, source_col, dest_col))
 
-            prt("Wrote {} mappings to {}".format(count, mapfile_name))
+            prt('Wrote {} mappings to {}'.format(count, mapfile_name))
 
     elif args.load:
         # Load the single colmap into the database.
@@ -1470,7 +1474,7 @@ def bundle_colmap(args, l, rc):
                 c = st.column(row['source'])
 
                 if c.dest_header != row['dest']:
-                    prt("{}: {} -> {}".format(st.name, c.dest_header, row['dest']))
+                    prt('{}: {} -> {}'.format(st.name, c.dest_header, row['dest']))
                     c.dest_header = row['dest']
 
         b.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()

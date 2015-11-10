@@ -7,7 +7,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from collections import Mapping, OrderedDict, MutableMapping
 import copy
 
-from six import iteritems, iterkeys, itervalues, StringIO, text_type, binary_type, string_types, b
+from six import iteritems, iterkeys, itervalues, StringIO, text_type, binary_type, string_types, u
 from six.moves.html_parser import HTMLParser
 
 from sqlalchemy.orm import object_session
@@ -396,7 +396,7 @@ class StructuredPropertyTree(object):
         elif isinstance(st, text_type):
             return _ScalarTermU(st, self._jinja_sub)
         elif st is None:
-            return _ScalarTermS(b(''), self._jinja_sub)
+            return _ScalarTermU(u(''), self._jinja_sub)
         else:
             return st
 
@@ -927,7 +927,7 @@ class ScalarTerm(Term):
     """A Term that can only be a string or number."""
 
     def set(self, v):
-        #logger.debug(u'set term: {} = {}'.format(self._fqkey, v))
+        # logger.debug(u'set term: {} = {}'.format(self._fqkey, v))
         if self._constraint and v not in self._constraint:
             raise ValueError('{} is not valid value. Use one from {}.'.format(v, self._constraint))
         self._parent._term_values[self._key] = v
@@ -935,9 +935,7 @@ class ScalarTerm(Term):
             self.update_config()
 
     def get(self):
-
         st = self._parent._term_values.get(self._key, None)
-
         return self._top.scalar_term(st)
 
     def null_entry(self):

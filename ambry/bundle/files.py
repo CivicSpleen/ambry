@@ -28,8 +28,10 @@ import sys
 import time
 import yaml
 
+import csv
+
+import six
 from six import string_types, iteritems, u, iterkeys
-from six.moves import zip as six_izip
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import File
@@ -239,7 +241,7 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fr.modified = self.fs_modtime
 
-    def record_to_fh(self,f):
+    def record_to_fh(self, f):
         import unicodecsv as csv
 
         fr = self._dataset.bsfile(self._file_const)
@@ -252,7 +254,6 @@ class RowBuildSourceFile(BuildSourceFile):
                 return u(',').join(u('{}').format(e).replace(',', '\,') for e in v)
             elif isinstance(v, dict):
                 import json
-
                 return json.dumps(v)
             else:
                 return v
@@ -261,22 +262,26 @@ class RowBuildSourceFile(BuildSourceFile):
 
             w = csv.writer(f, encoding='utf-8')
             for i, row in enumerate(fr.unpacked_contents):
-                w.writerow(munge_types(e) for e in row)
+                w.writerow([munge_types(e) for e in row])
 
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
-        import unicodecsv as csv
 
         fr = self._dataset.bsfile(self._file_const)
 
         fn_path = file_name(self._file_const)
 
         if fr.contents:
-            with self._fs.open(fn_path, 'wb') as f:
-                self.record_to_fh(f)
+            if six.PY2:
+                with self._fs.open(fn_path, 'wb') as f:
+                    self.record_to_fh(f)
+            else:
+                # py3
+                with self._fs.open(fn_path, 'w', newline='') as f:
+                    self.record_to_fh(f)
 
 class DictBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -399,7 +404,7 @@ class MetadataFile(DictBuildSourceFile):
 
     def objects_to_record(self):
 
-        #FIXME -- this looks more like records to file
+        # FIXME: -- this looks more like records to file
 
         fr = self._dataset.bsfile(self._file_const)
 
@@ -515,7 +520,7 @@ class PythonSourceFile(StringSourceFile):
         except NoSysPathError:
             abs_path = '<string>'
 
-        exec compile(bf.contents, abs_path, 'exec') in module.__dict__
+        exec(compile(bf.contents, abs_path, 'exec'), module.__dict__)
 
         return module.Bundle
 
@@ -573,7 +578,7 @@ class SourcesFile(RowBuildSourceFile):
             if i == 0:
                 header = row
             else:
-                d = dict(six_izip(header, row))
+                d = dict(six.moves.zip(header, row))
 
                 if 'widths' in d:
                     del d['widths']  # Obsolete column in old spreadsheets.
@@ -630,7 +635,6 @@ class SourcesFile(RowBuildSourceFile):
             rows = list(drop_empty(rows))
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile = self._dataset.bsfile(self._file_const)
@@ -786,7 +790,6 @@ class SchemaFile(RowBuildSourceFile):
 
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile = self._dataset.bsfile(self._file_const)
@@ -852,7 +855,6 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
@@ -885,6 +887,14 @@ def file_default(const):
 
     path = os.path.join(os.path.dirname(df.__file__),  file_name(const))
 
+    if six.PY2:
+        with open(path, 'rb') as f:
+            return f.read()
+    else:
+        # py3
+        with open(path, 'rt', encoding='utf-8') as f:
+            return f.read()
+
     with open(path, 'rb') as f:
         return f.read()
 
@@ -908,15 +918,14 @@ class BuildSourceFileAccessor(object):
 
         """
 
-        if item not in file_info_map.keys():
+        if item not in file_info_map:
             return super(BuildSourceFileAccessor, self).__getattr__(item)
-
         else:
             return self.file(item)
 
     def __iter__(self):
 
-        for key in file_info_map.keys():
+        for key in iterkeys(file_info_map):
             yield(self.file(key))
 
     @property

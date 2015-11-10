@@ -8,12 +8,13 @@ __docformat__ = 'restructuredtext en'
 
 
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
+from sqlalchemy import event
 from sqlalchemy import Text, Binary, String, ForeignKey, Float
 
-from ..util import Constant
-from sqlalchemy import event
+import six
 
 from . import Base, MutationDict, JSONEncodedObj, BigIntegerType, DictableMixin
+from ..util import Constant
 
 
 class File(Base, DictableMixin):
@@ -100,7 +101,11 @@ class File(Base, DictableMixin):
         if self.mime_type == 'text/plain':
             return self.contents.decode('utf-8')
         elif self.mime_type == 'application/msgpack':
+            # FIXME: Note: I'm not sure that encoding='utf-8' will not break old data.
+            # We need utf-8 to make python3 to work. (kazbek)
+            # return msgpack.unpackb(self.contents)
             return msgpack.unpackb(self.contents, encoding='utf-8')
+           
         else:
             return self.contents
 
@@ -140,7 +145,7 @@ class File(Base, DictableMixin):
 
     @property
     def has_contents(self):
-        return self.size > 0 and self.unpacked_contents is not None
+        return (self.size or 0) > 0 and self.unpacked_contents is not None
 
     @property
     def row(self):
@@ -193,6 +198,9 @@ class File(Base, DictableMixin):
 
             if not target.id:
                 target.id = 1
+
+        if target.contents and isinstance(target.contents, six.text_type):
+            target.contents = target.contents.encode('utf-8')
 
         File.before_update(mapper, conn, target)
 

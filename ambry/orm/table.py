@@ -10,12 +10,14 @@ from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import text
+
+import six
 
 from ambry.identity import TableNumber,  ObjectNumber
 from ambry.orm import Column, DictableMixin
 from ambry.orm.exc import NotFoundError
 from . import Base, MutationDict, JSONEncodedObj
+
 
 class Table(Base, DictableMixin):
     __tablename__ = 'tables'
@@ -46,8 +48,8 @@ class Table(Base, DictableMixin):
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
     )
 
-    columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
-                           cascade="all, delete-orphan", lazy='joined')
+    columns = relationship(Column, backref='table', order_by='asc(Column.sequence_id)',
+                           cascade='all, delete-orphan', lazy='joined')
 
     _column_sequence = {}
 
@@ -78,9 +80,10 @@ class Table(Base, DictableMixin):
             if str(column_name) == c.name or str(ref) == c.id or str(ref) == c.vid:
                 return c
 
-        raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
+        raise NotFoundError(
+            "Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
 
-    def add_column(self, name, update_existing = False, **kwargs):
+    def add_column(self, name, update_existing=False, **kwargs):
         """
         Add a column to the table, or update an existing one.
         :param name: Name of the new or existing column.
@@ -103,7 +106,7 @@ class Table(Base, DictableMixin):
 
             sequence_id = next_sequence_id(object_session(self), self._column_sequence, self.vid, Column)
 
-            assert sequence_id > len(self.columns), "{}: {} ! > {} ".format(name, sequence_id, len(self.columns))
+            assert sequence_id > len(self.columns), '{}: {} ! > {} '.format(name, sequence_id, len(self.columns))
 
             c = Column(t_vid=self.vid,
                        sequence_id=sequence_id,
@@ -175,12 +178,11 @@ class Table(Base, DictableMixin):
 
     @property
     def dict(self):
-        d = {
-            k: v for k,
-                     v in list(self.__dict__.items()) if k in [
-                'id', 'vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description', 'universe',
-            'keywords',
-                'installed', 'proto_vid', 'type', 'codes']}
+        INCLUDE_FIELDS = [
+            'id', 'vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname',
+            'description', 'universe', 'keywords', 'installed', 'proto_vid', 'type', 'codes']
+
+        d = {k: v for k, v in six.iteritems(self.__dict__) if k in INCLUDE_FIELDS}
 
         if self.data:
             for k in self.data:
@@ -242,13 +244,12 @@ class Table(Base, DictableMixin):
         each segment having one entry per column.
 
         """
-        from itertools import izip_longest
 
         tr = []
         for c in self.columns:
             tr.append(c.expanded_transform)
 
-        return izip_longest(*tr)
+        return six.moves.zip_longest(*tr)
 
     @property
     def row(self):
@@ -268,8 +269,8 @@ class Table(Base, DictableMixin):
     def __str__(self):
         from tabulate import tabulate
 
-        headers = "Seq Vid Name Datatype ".split()
-        rows = [ (c.sequence_id, c.vid, c.name, c.datatype ) for c in self.columns ]
+        headers = 'Seq Vid Name Datatype '.split()
+        rows = [(c.sequence_id, c.vid, c.name, c.datatype) for c in self.columns]
 
         return ('Dest Table: {}\n'.format(self.name)) + tabulate(rows, headers)
 

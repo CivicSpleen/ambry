@@ -273,3 +273,17 @@ instead of
 ```python
 types = [int, unicode]
 ```
+
+# Setting up Docker Environment
+
+## Postgres
+
+    $ docker run  \
+    -e POSTGRES_USER=ambry \
+    -e POSTGRES_PASSWORD=ambry \
+    -P  -d postgres --name ambry
+
+The config file in the container is: /var/lib/postgresql/data/postgresql.conf.
+
+To connect to the database, you'll use a DSN URL that has the port that docker picted to make the internal Postgres 
+port to, which you can get with `docker ps` or `docker port ambry 5432`

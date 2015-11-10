@@ -663,14 +663,18 @@ def get_stored_version(connection):
         return version
     elif connection.engine.name == 'postgresql':
         try:
-            version = connection.execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone()[0]
+            r = connection.execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone()
+            if not r:
+                raise VersionIsNotStored
+
+            version = r[0]
+
         except ProgrammingError:
             # This happens when the user_version table doesn't exist
             raise VersionIsNotStored
         return version
     else:
-        raise DatabaseMissingError(
-            'Do not know how to get version from {} engine.'.format(connection.engine.name))
+        raise DatabaseError('Do not know how to get version from {} engine.'.format(connection.engine.name))
 
 
 def _pragma_on_connect(dbapi_con, con_record):

@@ -26,7 +26,7 @@ class ExampleSourcePipe(DatafileSourcePipe):
             row['uuid'] = str(uuid.uuid4())
             row['index'] = i
             row['index2'] = i*2
-            row['numcom'] = locale.format('%d', i, grouping=True)
+            row['numcom'] = locale.format("%d", i, grouping=True)
             row['indexd3'] = float(i) / 3.0
             row['categorical'] = next(cat_cycle)
             row['removecodes'] = next(num_cycle)
@@ -42,33 +42,26 @@ class ExampleSourcePipe(DatafileSourcePipe):
 def cst_init(v):
     return 1
 
-
 def caster_everything(v, i_s, header_s, i_d, header_d, row, errors, scratch, pipe):
-    return v + 1
-
+    return v+1
 
 def caster_all(v, i_s, header_s, row, errors, pipe):
-    return v + 1
-
+    return v+1
 
 def caster_v(v):
-    return v + 1
-
+    return v+1
 
 def caster_vih(v, i_s, header_s):
-    return v + 1
-
+    return v+1
 
 def caster_vrep(v, row, errors, pipe):
-    return v + 1
-
+    return v+1
 
 def cst_double(v, row, header_d, bundle, source):
-    return v*2 if v is not None else None
-
+    return v*2 if v is not None  else None
 
 def cst_exception(v, i_d, header_d, row, errors, pipe, exception):
-    print('CST_EXCEPTION ', i_d, header_d, exception)
+    print "CST_EXCEPTION ",i_d, header_d, exception
     errors[header_d] = v
     return None
 
@@ -88,11 +81,6 @@ class Bundle(Bundle):
         try:
             return int(v)
         except ValueError:
-            # binary type for py3
-            try:
-                v = v.decode('utf-8')
-            except Exception:
-                pass
             return int(v.replace(',', ''))
 
     def remove_codes(self, v):
@@ -114,6 +102,8 @@ class Bundle(Bundle):
         return int(v) * 2
 
     def recode(self, v):
+        from ambry.valuetype.types import IntOrCode
+
         try:
             return int(v)
         except:

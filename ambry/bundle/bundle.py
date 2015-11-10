@@ -998,7 +998,7 @@ Caster Code
 
     def run(self, sources=None, tables=None, force=False, schema=False):
         """Synonym for run_stages"""
-        return self.run_stages(sources, tables, force=force, schema=schema)
+        return self.run_stages(sources, tables, force=force)
 
     @CaptureException
     def run_stages(self, sources=None, tables=None, force=False):
