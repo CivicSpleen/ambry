@@ -123,7 +123,7 @@ class Dataset(Base):
     def config(self):
         return ConfigAccessor(self)
 
-    def next_sequence_id(self, table_class, force_query= False):
+    def next_sequence_id(self, table_class, force_query=False):
         """Return the next sequence id for a object, identified by the vid of the parent object, and the database prefix
         for the child object. On the first call, will load the max sequence number
         from the database, but subsequence calls will run in process, so this isn't suitable for
@@ -158,7 +158,7 @@ class Dataset(Base):
         o.update_id(sequence_id)
         o.dataset = self
 
-        if commit == False:
+        if commit is False:
             return o
 
         # This is horrible, but it's the only thing that has worked for both
@@ -180,7 +180,7 @@ class Dataset(Base):
 
                 # This bit is helpful in a multiprocessing run.
                 tb = traceback.format_exc()
-                print 'Really Bad Error!', tb
+                print('Really Bad Error!', tb)
 
                 raise
 
