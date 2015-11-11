@@ -10,7 +10,7 @@ from ambry.identity import DatasetNumber, TableNumber, ObjectNumber, ColumnNumbe
     Name, NameQuery, PartitionName, PartitionNameQuery,\
     Identity, PartitionIdentity, NumberServer, GeneralNumber1
 
-from .test_base import TestBase
+from test.test_base import TestBase
 
 
 class Test(TestBase):

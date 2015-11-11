@@ -11,7 +11,7 @@ from ambry.orm.database import Database
 from ambry.run import get_runconfig
 from ambry.exporters.ckan.core import export, MISSING_CREDENTIALS_MSG
 
-from test.test_orm.factories import FileFactory
+from test.unit.orm_factories import FileFactory
 from test.test_base import TestBase
 
 # CKAN is mocked by default. If you really want to hit CKAN instance set MOCK_CKAN to False.
