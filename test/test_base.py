@@ -93,7 +93,7 @@ class TestBase(unittest.TestCase):
         return new_library(cls.config())
 
     @classmethod
-    def import_bundles(cls, clean = True, force_import = False):
+    def import_bundles(cls, clean=True, force_import=False):
         """
         Import the test bundles into the library, from the test.test_bundles directory
         :param clean: If true, drop the library first.
@@ -150,7 +150,6 @@ class TestBase(unittest.TestCase):
         from test import bundles
         from os.path import dirname, join
         from fs.opener import fsopendir
-        from fs.errors import ParentDirectoryMissingError
         from ambry.library import new_library
         import yaml
         from ambry.util import parse_url_to_dict
@@ -172,7 +171,7 @@ class TestBase(unittest.TestCase):
             d = parse_url_to_dict((fs_url))
 
             # For persistent fs types, make sure it is empty before the test.
-            if d['scheme'] not in ('temp','mem'):
+            if d['scheme'] not in ('temp', 'mem'):
                 assert fsopendir(fs_url).isdirempty('/')
 
         test_source_fs = fsopendir(join(dirname(bundles.__file__), 'example.com', name))

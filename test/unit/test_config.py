@@ -47,6 +47,7 @@ class TestConfig(TestBase):
     # __repr__ tests
     def test_returns_config_repr(self):
         ds = DatasetFactory()
+        self.library.database.session.commit()
         config1 = ConfigFactory(d_vid=ds.vid)
         repr_str = config1.__repr__()
         self.assertIsInstance(repr_str, text_type)

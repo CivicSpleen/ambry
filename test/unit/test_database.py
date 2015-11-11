@@ -31,6 +31,7 @@ from test.unit.asserts import assert_spec
 
 from test.test_base import TestBase, PostgreSQLTestBase
 
+
 class DatabaseTest(TestBase):
 
     def setUp(self):
@@ -533,13 +534,13 @@ class MigrateTest(unittest.TestCase):
         self.connection = engine.connect()
 
     @patch('ambry.orm.database._is_missed')
-    @patch('test.test_orm.functional.migrations.0100_init.Migration.migrate')
+    @patch('test.functional.migrations.0100_init.Migration.migrate')
     @patch('ambry.orm.database._get_all_migrations')
     def test_runs_missed_migration_and_changes_version(self, fake_get, fake_migrate, fake_is_missed):
         # prepare state.
         fake_is_missed.return_value = True
         test_migrations = [
-            (100, 'test.test_orm.functional.migrations.0100_init')
+            (100, 'test.functional.migrations.0100_init')
         ]
         fake_get.return_value = test_migrations
 
