@@ -122,10 +122,13 @@ class Docker(Command):
         self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile',
                     '-t', 'civicknowledge/ambry', '.'])
 
+tests_require = ['pytest']
+
 if sys.version_info >= (3, 0):
     requirements = parse_requirements('requirements-3.txt', session=uuid.uuid1())
 else:
     requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
+    tests_require.append('mock')
 
 
 d = dict(
@@ -153,7 +156,7 @@ d = dict(
     ],
     # zip_safe=False,
     install_requires=[x for x in reversed([str(x.req) for x in requirements])],
-    tests_require=['pytest'],
+    tests_require=tests_require,
     extras_require={
         'server': ['paste', 'bottle']
     }

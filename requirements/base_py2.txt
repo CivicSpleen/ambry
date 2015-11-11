@@ -1,0 +1,6 @@
+# py2 base requirements
+
+-r base.txt
+
+geoid>=0.1.1  # waiting for ported version.
+pdfminer==20140328
