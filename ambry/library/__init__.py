@@ -96,6 +96,15 @@ class Library(object):
 
         return ds_on
 
+    def drop(self):
+        return self.database.drop()
+
+    def clean(self):
+        return self.database.clean()
+
+    def create(self):
+        return self.database.create()
+
     @property
     def database(self):
         return self._db

@@ -17,17 +17,6 @@ about:
     - demo
     time: 2010
     title: Load a wide range of source files
-build:
-    dict1:
-        dict2:
-            dict3:
-                key1: value1
-                key2: value2
-            key1: value1
-            key2: value2
-        key1: value1
-        key2: value2
-    key1: value1
 contacts:
     analyst:
         org: Example Com
@@ -38,18 +27,12 @@ contacts:
         org: Example Com
         url: http://example.com
 dependencies: {}
-external_documentation:
-    main_site:
-        description: Main website for Example.com
-        source: null
-        title: Main Website
-        url: http://example.com/
+external_documentation: {}
 identity:
-    dataset: complete
-    id: d00000load
+    dataset: variety
+    id: d00variety
     revision: 3
-    source: example.com
-    subset: load
+    source: ingest.example.com
     version: 0.1.3
 names:
     fqname: example.com-complete-load-0.1.3~d00000load003

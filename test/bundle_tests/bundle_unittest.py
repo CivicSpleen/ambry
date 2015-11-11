@@ -5,66 +5,66 @@ Created on Jun 22, 2012
 """
 import os
 
-import unittest
+from test.test_base import TestBase
 
-from ambry.run import get_runconfig
+class Test(TestBase):
 
-class TestBase(unittest.TestCase):
+    l = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.import_bundles(clean=False) # If clean==true, class setup completely reloads the library
+        cls.l = cls.library()
+
     def setUp(self):
-
         super(TestBase, self).setUp()
 
     def tearDown(self):
         pass
 
-    @classmethod
-    def get_rc(self, name='ambry.yaml'):
-        import os
-        from test import bundlefiles
 
-        def bf_dir(fn):
-            return os.path.join(os.path.dirname(bundlefiles.__file__), fn)
+    def run_bundle(self, name, reimport = False):
+        """
+        Ingest and build a bundle
 
-        return get_runconfig(bf_dir('ambry.yaml'))
-
-    def copy_bundle_files(self, source, dest):
-        from ambry.bundle.files import file_info_map
-        from fs.errors import ResourceNotFoundError
-
-        for const_name, (path, clz) in list(file_info_map.items()):
-            try:
-                dest.setcontents(path, source.getcontents(path))
-            except ResourceNotFoundError:
-                pass
-
-    def setup_bundle(self, name):
-        """Configure a bundle from existing sources"""
+        :param name: The name or vid of the bundle
+        :param reimport: If True, reimport the bundle source
+        :return:
+        """
         from test import bundle_tests
-        from os.path import dirname, join
-        from ambry.library import new_library
+        b = self.l.bundle(name).cast_to_subclass()
+        b.capture_exceptions = True
 
-        rc = self.get_rc()
-        self.library = new_library(rc)
+        if reimport:
+            orig_source = os.path.join(os.path.dirname(bundle_tests.__file__), b.identity.source_path)
+            self.l.import_bundles(orig_source, detach=True, force = True)
 
-        self.db = self.library._db
+        b.clean_except_files() # Clean objects, but leave the import files
+        b.sync_objects_in() # Sync from file records to objects.
+        b.commit()
 
-        bundles = self.library.import_bundles(join(dirname(bundle_tests.__file__),  name), force = True, detach = True)
-
-        self.assertEqual(1, len(bundles))
-
-        return bundles.pop()
-
-    def run_bundle(self, name):
-        b = self.setup_bundle(name).cast_to_subclass()
-        b.clean()
-        b.sync_in()
         b.run()
 
     def test_ingest_basic(self):
-        self.run_bundle('ingest.example.com/basic')
+        self.run_bundle('ingest.example.com-basic')
 
     def test_ingest_stages(self):
-        self.run_bundle('ingest.example.com/stages')
+        self.run_bundle('ingest.example.com-stages')
 
     def test_ingest_headerstypes(self):
-        self.run_bundle('ingest.example.com/headerstypes')
+        self.run_bundle('ingest.example.com-headerstypes')
+
+    def test_ingest_variety(self):
+        self.run_bundle('ingest.example.com-variety')
+
+    def test_build_generators(self):
+        self.run_bundle('build.example.com-generators')
+
+    def test_build_casters(self):
+        self.run_bundle('build.example.com-casters')
+
+    def test_build_coverage(self):
+        self.run_bundle('build.example.com-coverage')
+
+    def test_pipes_geoid(self):
+        self.run_bundle('pipes.example.com-geoidpipes')

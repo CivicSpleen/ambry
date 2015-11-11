@@ -19,6 +19,7 @@ from ambry.orm import Database, Dataset
 from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
 from ambry.run import get_runconfig
 
+from ambry.util import memoize
 
 MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgres-test '\
     'to the database config of the ambry config.'
@@ -37,23 +38,84 @@ class TestBase(unittest.TestCase):
         self.db = None
 
     def tearDown(self):
-        if hasattr(self, 'library'):
-            self.library.database.close()
-            if 'tmp' in self.library.database.path:
-                os.remove(self.library.database.path)
-
+        pass
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
     @classmethod
-    def get_rc(self, name='ambry.yaml'):
+    def get_rc(cls):
+        """Create a new config file for test and return the RunConfig.
+
+         This method will start with the user's default Ambry configuration, but will replace the
+         filesystet.root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
+         environmental variable, it will set library.database to the DSN of either database.test-sqlite or
+         database.test-postrgres
+
+        """
+
+        from fs.opener import fsopendir
         import os
-        from test import bundlefiles
 
-        def bf_dir(fn):
-            return os.path.join(os.path.dirname(bundlefiles.__file__), fn)
+        rc = get_runconfig()
 
-        return get_runconfig(bf_dir('ambry.yaml'))
+        config = rc.config
+
+        try:
+            del config['accounts']
+        except KeyError:
+            pass
+
+        config.filesystem.root = config.filesystem.test
+
+        db = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+
+        try:
+            config.library.database = config.database['test-sqlite']
+        except KeyError:
+            sqlite_dsn = 'sqlite:///{root}/library.db'
+            config.library.database = sqlite_dsn
+            print "WARN: missing config for test database 'test-{}', using '{}' ".format(db, sqlite_dsn)
+
+        cls._db_type = db
+
+        test_root = fsopendir(rc.filesystem('test'))
+
+        with test_root.open('.ambry.yaml', 'w', encoding='utf-8') as f:
+            config.dump(f)
+
+        return get_runconfig(test_root.getsyspath('.ambry.yaml'))
+
+    @classmethod
+    def config(cls):
+        return cls.get_rc()
+
+    @classmethod
+    def library(cls):
+        from ambry.library import new_library
+        return new_library(cls.config())
+
+    @classmethod
+    def import_bundles(cls, clean = True, force_import = False):
+        """
+        Import the test bundles into the library, from the test.test_bundles directory
+        :param clean: If true, drop the library first.
+        :param force_import: If true, force importaing even if the library already has bundles.
+        :return:
+        """
+
+        from test import bundle_tests
+        import os
+
+        l = cls.library()
+
+        if clean:
+            l.drop()
+            l.create()
+
+        bundles = list(l.bundles)
+
+        if len(bundles) == 0 or force_import:
+            l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
 
     def new_dataset(self, n=1, source='source'):
         return Dataset(**self.ds_params(n, source=source))
