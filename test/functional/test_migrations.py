@@ -52,10 +52,10 @@ class MigrationTest(TestBase):
         # replace real migrations with tests migrations.
 
         test_migrations = [
-            (100, 'test.test_orm.functional.migrations.0100_init'),
-            (101, 'test.test_orm.functional.migrations.0101_add_column'),
-            (102, 'test.test_orm.functional.migrations.0102_create_table'),
-            (103, 'test.test_orm.functional.migrations.0103_not_ready')  # that should not apply
+            (100, 'test.functional.migrations.0100_init'),
+            (101, 'test.functional.migrations.0101_add_column'),
+            (102, 'test.functional.migrations.0102_create_table'),
+            (103, 'test.functional.migrations.0103_not_ready')  # that should not apply
         ]
 
         fake_get.expects_call().returns(test_migrations)
@@ -81,8 +81,7 @@ class MigrationTest(TestBase):
             finally:
                 db.close()
 
-    @fudge.patch(
-        'ambry.orm.database._get_all_migrations')
+    @fudge.patch('ambry.orm.database._get_all_migrations')
     def test_applies_new_migration_to_postgresql_database(self, fake_get):
         # replace real migrations with tests migrations.
         test_migrations = [
