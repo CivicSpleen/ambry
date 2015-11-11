@@ -424,7 +424,7 @@ class AttrDict(OrderedDict):
         self.update_dict(base)
 
     def dump(self, stream=None, map_view=None):
-        from ambry.metadata.meta import _ScalarTermS, _ScalarTermU
+        from ambry.metadata.proptree import _ScalarTermS, _ScalarTermU
         from ambry.orm import MutationList, MutationDict  # cross-module import
 
         yaml.representer.SafeRepresenter.add_representer(

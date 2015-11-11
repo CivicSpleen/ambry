@@ -34,8 +34,6 @@ def _CaptureException(f, *args, **kwargs):
 
     b = args[0]  # The 'self' argument
 
-
-
     try:
         return f(*args, **kwargs)
     except Exception as e:
@@ -965,6 +963,8 @@ Caster Code
     def state(self, state):
         """Set the current build state and record the time to maintain history"""
 
+        assert state != 'build_bundle'
+
         self.dataset.config.build.state.current = state
         self.dataset.config.build.state[state] = time()
         self.dataset.config.build.state.lasttime = time()
@@ -1026,13 +1026,14 @@ Caster Code
                 self.session.delete(p)
 
             for s in resolved_sources:
-                if s.state in (self.STATES.BUILD, self.STATES.BUILT):
+                if s.state in (self.STATES.BUILDING, self.STATES.BUILT):
                     s.state = self.STATES.INGESTED
 
             self.commit()
 
         keyfunc = attrgetter('stage')
         self._run_events(TAG.BEFORE_RUN)
+
         for stage, stage_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
             stage_sources = list(stage_sources)  # Stage_sources is an iterator, can only be traversed once
 
@@ -1148,10 +1149,8 @@ Caster Code
         return self.state == self.STATES.CLEANED
 
     def clean(self, force=False):
-
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
-        from ambry.orm import ColumnStat
 
         if self.is_finalized and not force:
             self.warn("Can't clean; bundle is finalized")
@@ -1160,22 +1159,7 @@ Caster Code
         self.log('---- Cleaning ----')
         self.state = self.STATES.CLEANING
 
-        ds = self.dataset
-        s = self.session
-
-        # FIXME. There is a problem with the cascades for ColumnStats that prevents them from
-        # being  deleted with the partitions. Probably, the are seen to be owed by the columns instead.
-        s.query(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
-
-        self.dataset.partitions[:] = []
-
-        ds.commit()
-
-        for src in self.dataset.sources:
-            src.st_id = None
-            src.t_id = None
-
-        ds.commit()
+        self.commit()
 
         self.clean_sources()
         self.clean_tables()
@@ -1185,7 +1169,36 @@ Caster Code
         self.clean_ingested()
         self.clean_build_state()
 
-        ds.commit()
+        self.state = self.STATES.CLEANED
+
+        self.commit()
+
+        self.log('---- Done Cleaning ----')
+
+        return True
+
+    def clean_except_files(self):
+        """Clean everything except the build source files"""
+
+        if self.is_finalized:
+            self.warn("Can't clean; bundle is finalized")
+            return False
+
+        self.log('---- Cleaning ----')
+        self.state = self.STATES.CLEANING
+
+        self.commit()
+
+        self.clean_sources()
+        self.clean_tables()
+        self.clean_partitions()
+        self.clean_build()
+        self.clean_ingested()
+        self.clean_build_state()
+
+        self.state = self.STATES.CLEANED
+
+        self.commit()
 
         self.log('---- Done Cleaning ----')
 
@@ -1193,6 +1206,10 @@ Caster Code
 
     def clean_sources(self):
         """Like clean, but also clears out files. """
+
+        for src in self.dataset.sources:
+            src.st_id = None
+            src.t_id = None
 
         self.dataset.sources[:] = []
         self.dataset.source_tables[:] = []
@@ -1205,6 +1222,11 @@ Caster Code
     def clean_partitions(self):
         """Delete partition records and any built partition files.  """
         import shutil
+        from ambry.orm import ColumnStat
+
+        # FIXME. There is a problem with the cascades for ColumnStats that prevents them from
+        # being  deleted with the partitions. Probably, the are seen to be owed by the columns instead.
+        self.session.query(ColumnStat).filter(ColumnStat.d_vid == self.dataset.vid).delete()
 
         self.dataset.delete_partitions()
 
@@ -1218,8 +1240,6 @@ Caster Code
         """Delete the build directory and all ingested files """
         import shutil
 
-        self.clean_files()
-
         if self.build_fs.exists:
             try:
                 shutil.rmtree(self.build_fs.getsyspath('/'))
@@ -1227,7 +1247,7 @@ Caster Code
                 pass # If there isn't a syspath, probably don't need to delete.
 
     def clean_files(self):
-        """ Delete all ingested file records, but leave the ingested files in the build directory """
+        """ Delete all build source files """
 
         self.dataset.files[:] = []
         self.commit()
@@ -1594,7 +1614,7 @@ Caster Code
             self.error("Can't run build; bundle is in error state")
             return False
 
-        self.state = self.STATES.BUILD
+        self.state = self.STATES.BUILDING
 
         self.import_lib()
         self.load_requirements()
@@ -1671,6 +1691,7 @@ Caster Code
 
         self.state = phase + '_done'
 
+        self.commit()
         self.log("---- Finished phase {} ---- ".format(phase))
 
         return True

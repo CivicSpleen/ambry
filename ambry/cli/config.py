@@ -68,13 +68,18 @@ def config_install(args, l, rc):
 
     user = getpass.getuser()
 
-    if user == 'root':
+    default_contents = pkgutil.get_data("ambry.support", 'ambry-{}.yaml'.format(args.template))
+
+    if user == 'root': # Root user
         install_file = RunConfig.ROOT_CONFIG
-        default_root = '/ambry'
+        dr_d = yaml.load(default_contents)
+        default_root = dr_d['filesystem']['root']
+
     elif os.getenv('VIRTUAL_ENV'):  # Special case for python virtual environments
         install_file = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
         default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
-    else:
+
+    else: # Non-root user, outside of virtualenv
         install_file = RunConfig.USER_CONFIG
         warn(("Installing as non-root, to '{}'\n" +
               "Run as root to install for all users.").format(install_file))
@@ -88,8 +93,7 @@ def config_install(args, l, rc):
         elif args.force:
             prt("File output file exists, overwriting: {}".format(
                 install_file))
-            contents = pkgutil.get_data(
-                "ambry.support", 'ambry-{}.yaml'.format(args.template))
+            contents = default_contents
         else:
             fatal(
                 "Output file {} exists. Use -e to edit, or -f to overwrite".format(install_file))

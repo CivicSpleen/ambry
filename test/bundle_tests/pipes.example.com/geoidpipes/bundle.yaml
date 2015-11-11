@@ -25,8 +25,8 @@ identity:
   source: pipes.example.com
   version: 0.1.1
 names:
-  fqname: example.com-dimension-0.1.1~ddimension001
-  name: example.com-dimension
-  vid: ddimension001
-  vname: example.com-dimension-0.1.1
+  fqname: pipes.example.com-geoidpipes-0.1.1~d0000geoid001
+  name: pipes.example.com-geoidpipes
+  vid: d0000geoid001
+  vname: pipes.example.com-geoidpipes-0.1.1
 

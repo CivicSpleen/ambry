@@ -18,13 +18,12 @@ from ambry.orm.dataset import Dataset
 
 from ambry.run import get_runconfig
 
-from test.test_orm.factories import DatasetFactory, TableFactory,\
+from test.unit.orm_factories import DatasetFactory, TableFactory,\
     ColumnFactory, PartitionFactory
 
-from test.test_library.asserts import assert_spec
+from test.unit.asserts import assert_spec
 
 from test.test_base import TestBase, PostgreSQLTestBase
-
 
 class DatabaseTest(TestBase):
 

@@ -118,13 +118,13 @@ def library_init(args, l, config):
 def library_drop(args, l, config):
     prt("Drop tables")
     l.database.enable_delete = True
-    l.database.drop()
+    l.drop()
 
 
 
 def library_clean(args, l, config):
     prt("Clean tables")
-    l.database.clean()
+    l.clean()
 
 def library_remove(args, l, config):
     from ambry.orm.exc import NotFoundError

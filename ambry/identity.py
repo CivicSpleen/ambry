@@ -263,8 +263,7 @@ class Name(object):
         try:
             return self.path
         except TypeError:
-            raise TypeError(
-                "self.path is invalild: '{}', '{}'".format(str(self.path), type(self.path)))
+            raise TypeError("self.path is invalild: '{}', '{}'".format(str(self.path), type(self.path)))
 
     def clone(self):
         return self.__class__(**self.dict)
@@ -1525,6 +1524,7 @@ class Identity(object):
         """The name in a form suitable for use as a cache-key"""
         self.is_valid()
         return self._name.cache_key
+
 
     @property
     def dict(self):
