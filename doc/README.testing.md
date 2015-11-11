@@ -50,7 +50,8 @@ The `test.test_base.TestBase` base class has methods for setting up a test libra
  but new code should use the new bundles, located in test.bundle_tests. To get to these bundles in functional tests, 
  they should be loaded in the test library, which is most often done in the test class  set up method: 
  
-```class Test(TestBase):
+```
+class Test(TestBase):
 
     @classmethod
     def setUpClass(cls):
@@ -65,7 +66,8 @@ Most of the tests should be functional tests, implemented as bundle tests. Bundl
 bundles. See the `ambry/test/bundle_tests/ingest.example.com/stages` bundle as an example. The test file is `test.py`, 
 and it is a normal python `uittest` test class, with annotations to mark tests for specific parts of the build process:
 
-```class Test(BundleTest):
+```
+class Test(BundleTest):
 
 
     @before_run
