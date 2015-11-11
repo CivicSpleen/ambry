@@ -26,8 +26,8 @@ RUN dpkg-reconfigure locales
 # Spatialite services.
 RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
-# The pip installs allow the creation of a layer for each, so changes to the main AMbry source
-# can be isolated, resulting in faster docker builds
+# The pip installs allow the creation of a layer for each, so changes to the main Ambry source
+# can be isolated, resulting in faster docker builds. The list is built from the merge-requirements script
 # Start pip installs
 RUN pip install 'pyasn1>=0.1.8'
 RUN pip install 'address-parser==0.0.1'
@@ -77,18 +77,22 @@ RUN pip install 'ambry-sources>=0.1.1'
 RUN pip install 'unicodecsv==0.12.0  '
 # End pip installs
 
-COPY . /var/src/ambry
-WORKDIR /var/src/ambry
+COPY . /var/ambry/src
+WORKDIR /var/ambry/src
 
 RUN python setup.py install
 
-#RUN pip install git+https://github.com/CivicKnowledge/ambry.git@develop
+WORKDIR /var/ambry
 
 VOLUME /var/ambry
+
+ADD support/ambry-docker/ambry-init.sh /var/ambry/ambry-init.sh
+
 RUN mkdir -p /var/ambry/source
 RUN ambry config install
 
 RUN echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
 
-RUN ambry import /var/src/ambry/test/bundle_tests/
+RUN ambry import /var/ambry/src/test/bundle_tests/
 
+CMD bash ambry-init.sh

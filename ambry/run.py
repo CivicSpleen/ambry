@@ -82,7 +82,7 @@ class RunConfig(object):
         """
 
         config = AttrDict()
-        config['loaded'] = []
+        config['loaded'] = {'accounts': None, 'configs': []}
 
         if not path:
             pass
@@ -100,7 +100,7 @@ class RunConfig(object):
         for f in files:
             if f is not None and os.path.exists(f):
                 try:
-                    config.loaded.append(f)
+                    config['loaded']['configs'].append(f)
                     config.update_yaml(f)
                     loaded = True
                 except TypeError:
@@ -110,7 +110,8 @@ class RunConfig(object):
             raise ConfigurationError("Failed to load any config from: {}".format(files))
 
         if os.path.exists(RunConfig.USER_ACCOUNTS):
-            config.loaded.append(RunConfig.USER_ACCOUNTS)
+            config['loaded']['accounts'] = RunConfig.USER_ACCOUNTS
+
             config.update_yaml(RunConfig.USER_ACCOUNTS)
 
         object.__setattr__(self, 'config', config)

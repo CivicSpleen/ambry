@@ -22,7 +22,6 @@ def config_parser(cmd):
         help='Print, rather than save, the config file')
 
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-e', '--edit', default=False, action='store_true', help='Edit existing file')
     group.add_argument(
         '-f', '--force', default=False, action='store_true',
         help="Force using the default config; don't re-use the existing config")
@@ -41,6 +40,10 @@ def config_parser(cmd):
     sp.add_argument('service', metavar='service', nargs=1, help='Service name, usually a hostname')  # Get everything else.
     sp.add_argument('username', metavar='username', nargs=1, help='username')
 
+    sp = asp.add_parser('edit', help='Edit the config file')
+    sp.set_defaults(subcommand='edit')
+    sp.add_argument('args', nargs='*', help='key=value entries')  # Get everything else.
+
 
 def config_command(args, rc):
     from ..library import new_library
@@ -56,6 +59,45 @@ def config_command(args, rc):
 
     globals()['config_' + args.subcommand](args, l, rc)
 
+def config_edit(args, l, rc):
+    from ambry.dbexceptions import ConfigurationError
+
+
+    edit_args = ' '.join(args.args)
+
+    key, value = edit_args.split('=')
+
+    value = value.strip()
+    key = key.strip()
+    key_parts = key.split('.')
+    e = rc.config
+    for k in key_parts:
+        k = k.strip()
+        #print(k, str(key_parts[-1]))
+        if str(k) == str(key_parts[-1]):
+            e[k] = value
+        else:
+            e = e[k]
+
+
+    configs = rc.config['loaded']['configs']
+
+    if len(configs) != 1:
+        raise ConfigurationError("Configuration was loaded from multiple files; don't know which to edit; "
+                                 "'{}'".format(configs))
+
+    try:
+        del rc.config['accounts']
+    except KeyError:
+        pass
+
+    try:
+        del rc.config['loaded']
+    except KeyError:
+        pass
+
+    with open(configs[0], 'w') as f:
+        rc.config.dump(f)
 
 def config_install(args, l, rc):
     import yaml
@@ -64,7 +106,6 @@ def config_install(args, l, rc):
     from ambry.run import RunConfig
     import getpass
 
-    edit_args = ' '.join(args.args)
 
     user = getpass.getuser()
 
@@ -86,39 +127,20 @@ def config_install(args, l, rc):
         default_root = os.path.join(os.path.expanduser('~'), 'ambry')
 
     if os.path.exists(install_file):
-        if args.edit:
-            prt("File output file exists, editing: {}".format(install_file))
-            with open(install_file) as f:
-                contents = f.read()
-        elif args.force:
+
+        if args.force:
             prt("File output file exists, overwriting: {}".format(
                 install_file))
             contents = default_contents
         else:
             fatal(
-                "Output file {} exists. Use -e to edit, or -f to overwrite".format(install_file))
+                "Output file {} exists. Use  -f to overwrite".format(install_file))
     else:
         contents = pkgutil.get_data(
             "ambry.support", 'ambry-{}.yaml'.format(args.template))
 
     d = yaml.load(contents)
 
-    # Set the key-value entries.
-    if edit_args:
-        key, value = edit_args.split('=')
-
-        value = value.strip()
-        key = key.strip()
-        key_parts = key.split('.')
-        e = d
-        for k in key_parts:
-            k = k.strip()
-            print(k, str(key_parts[-1]))
-            if str(k) == str(key_parts[-1]):
-                e[k] = value
-            else:
-                
-                e = e[k]
 
     if args.root:
         d['filesystem']['root'] = args.root
@@ -172,7 +194,7 @@ def config_install(args, l, rc):
             pass
 
 
-def config_value(args, rc):
+def config_value(args, l, rc):
 
     def sub_value(value, subs):
 
@@ -194,7 +216,7 @@ def config_value(args, rc):
             else:
                 print(dot_path, '=', sub_value(value, subs))
 
-    subs = dict(root=rc.filesystem_path('root'))
+    subs = dict(root=rc.filesystem('root'))
 
     if not args.key:
         if args.yaml:
