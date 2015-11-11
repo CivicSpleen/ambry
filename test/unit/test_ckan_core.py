@@ -17,7 +17,7 @@ from ambry.exporters.ckan.core import _convert_bundle, _convert_partition, expor
 from ambry.orm.database import Database
 from ambry.run import get_runconfig
 
-from test.test_orm.factories import DatasetFactory, PartitionFactory, FileFactory
+from test.unit.orm_factories import DatasetFactory, PartitionFactory, FileFactory
 
 
 class ConvertDatasetTest(unittest.TestCase):

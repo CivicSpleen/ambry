@@ -74,8 +74,7 @@ class TestConfig(TestBase):
         self.assertTrue(config1.id.startswith('Fds'))
 
     # before_update tests
-    @fudge.patch(
-        'ambry.orm.config.time')
+    @fudge.patch('ambry.orm.config.time')
     def test_updates_modified_field(self, fake_time):
         FAKE_TIME = 111111
         fake_time\

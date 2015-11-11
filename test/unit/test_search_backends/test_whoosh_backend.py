@@ -10,7 +10,7 @@ from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
 from ambry.library import new_library
 from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult,\
     PartitionSearchResult
-from test.test_orm.factories import PartitionFactory
+from test.unit.orm_factories import PartitionFactory
 
 
 class WhooshSearchBackendTest(TestBase):
