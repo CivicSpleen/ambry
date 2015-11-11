@@ -19,8 +19,6 @@ from ambry.orm import Database, Dataset
 from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
 from ambry.run import get_runconfig
 
-from ambry.util import memoize
-
 MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgres-test '\
     'to the database config of the ambry config.'
 SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
@@ -39,6 +37,7 @@ class TestBase(unittest.TestCase):
 
     def tearDown(self):
         pass
+
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
@@ -54,7 +53,6 @@ class TestBase(unittest.TestCase):
         """
 
         from fs.opener import fsopendir
-        import os
 
         rc = get_runconfig()
 
@@ -74,7 +72,7 @@ class TestBase(unittest.TestCase):
         except KeyError:
             sqlite_dsn = 'sqlite:///{root}/library.db'
             config.library.database = sqlite_dsn
-            print "WARN: missing config for test database 'test-{}', using '{}' ".format(db, sqlite_dsn)
+            print("WARN: missing config for test database 'test-{}', using '{}' ".format(db, sqlite_dsn))
 
         cls._db_type = db
 
