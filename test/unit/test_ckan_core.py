@@ -111,7 +111,7 @@ class ExportTest(unittest.TestCase):
 
     def setUp(self):
         rc = get_runconfig()
-        if 'ckan' not in rc.accounts:
+        if 'ckan' not in rc.accounts.to_dict():
             raise EnvironmentError(MISSING_CREDENTIALS_MSG)
         self.sqlite_db = Database('sqlite://')
         self.sqlite_db.create()

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
 from ambry.util import AttrDict
