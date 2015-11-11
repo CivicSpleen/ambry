@@ -48,13 +48,17 @@ def find_package_data():
 
 class PyTest(TestCommand):
     user_options = [
-        ('pytest-args=', 'p', 'Arguments to pass to py.test'),
-        ('all', 'a', 'Run unit tests only.'),
+        ('pytest-args=', 't', 'Arguments to pass to py.test'),
+
+        ('all', 'a', 'Run all tests.'),
         ('unit', 'u', 'Run unit tests only.'),
-        ('functional', 'f', 'Run unit tests only.'),
-        ('bundle', 'b', 'Run unit tests only.'),
-        ('regression', 'r', 'Run unit tests only.'),
-        ]
+        ('functional', 'f', 'Run functional tests only.'),
+        ('bundle', 'b', 'Run bundle tests only.'),
+        ('regression', 'r', 'Run regression tests only.'),
+
+        ('sqlite', 's', 'Run tests on sqlite.'),
+        ('postgres', 'p', 'Run tests on postgres.'),
+    ]
 
     def initialize_options(self):
         TestCommand.initialize_options(self)
@@ -64,6 +68,8 @@ class PyTest(TestCommand):
         self.bundle = 0
         self.functional = 0
         self.all = 0
+        self.sqlite = 0
+        self.postgres = 0
 
     def finalize_options(self):
         TestCommand.finalize_options(self)
@@ -89,6 +95,15 @@ class PyTest(TestCommand):
         if 'capture' not in self.pytest_args:
             # capture arg is not given. Disable capture by default.
             self.pytest_args = self.pytest_args + ' --capture=no'
+
+        if self.postgres and self.sqlite:
+            # run tests for both
+            print('ERROR: You can not run both - postgres and sqlite. Select exactly one.')
+            sys.exit(1)
+        elif self.postgres:
+            os.environ['AMBRY_TEST_DB'] = 'postgres'
+        if self.sqlite:
+            os.environ['AMBRY_TEST_DB'] = 'sqlite'
 
         errno = pytest.main(self.pytest_args)
         sys.exit(errno)
