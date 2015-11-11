@@ -2,7 +2,7 @@
 
 pyasn1>=0.1.8 # Version requirement of PyOpenSSL, but earlier version installed elsewhere.
 address-parser==0.0.1
-# ambry_source==0.1.4  FIXME: Waiting for release on pypi.
+# ambry_sources==0.1.4  FIXME: Waiting for release on pypi.
 https://github.com/CivicKnowledge/ambry_sources/archive/v0.1.4.tar.gz#egg=ambry_sources
 boto==2.38.0
 beautifulsoup4==4.3.2
@@ -12,6 +12,7 @@ decorator>=4
 Flask-Compress==1.2.1
 Flask==0.10.1
 Flask-Session==0.1.1
+geoid>=0.1.2
 ipython==3.1.0
 isodate==0.5.1
 itsdangerous==0.24
