@@ -22,6 +22,7 @@ ambry_meta = imp.load_source('_meta', 'ambry/_meta.py')
 
 long_description = open('README.rst').read()
 
+
 def find_package_data():
     """ Returns package_data, because setuptools is too stupid to handle nested directories.
 
@@ -46,26 +47,52 @@ def find_package_data():
 
 
 class PyTest(TestCommand):
-    user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
+    user_options = [
+        ('pytest-args=', 'p', 'Arguments to pass to py.test'),
+        ('all', 'a', 'Run unit tests only.'),
+        ('unit', 'u', 'Run unit tests only.'),
+        ('functional', 'f', 'Run unit tests only.'),
+        ('bundle', 'b', 'Run unit tests only.'),
+        ('regression', 'r', 'Run unit tests only.'),
+        ]
 
     def initialize_options(self):
         TestCommand.initialize_options(self)
         self.pytest_args = ''
+        self.unit = 0
+        self.regression = 0
+        self.bundle = 0
+        self.functional = 0
+        self.all = 0
 
     def finalize_options(self):
         TestCommand.finalize_options(self)
-        self.test_args = []
-        self.test_suite = True
 
     def run_tests(self):
         # import here, cause outside the eggs aren't loaded
         import pytest
+        if self.all:
+            self.pytest_args += 'test'
+        elif self.unit or self.regression or self.bundle or self.functional:
+            if self.unit:
+                self.pytest_args += 'test/unit'
+            if self.regression:
+                self.pytest_args += 'test/regression'
+            if self.bundle:
+                self.pytest_args += 'test/bundle_tests'
+            if self.functional:
+                self.pytest_args += 'test/functional'
+        else:
+            # default case - functional.
+            self.pytest_args += 'test/functional'
+
         if 'capture' not in self.pytest_args:
             # capture arg is not given. Disable capture by default.
             self.pytest_args = self.pytest_args + ' --capture=no'
 
         errno = pytest.main(self.pytest_args)
         sys.exit(errno)
+
 
 class Docker(Command):
     user_options = []
@@ -77,13 +104,14 @@ class Docker(Command):
         pass
 
     def run(self):
-        import os
+        self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile',
+                    '-t', 'civicknowledge/ambry', '.'])
 
-        self.spawn(['docker', 'build', '-f','support/ambry-docker/Dockerfile',
-                    '-t','civicknowledge/ambry', '.'])
+if sys.version_info >= (3, 0):
+    requirements = parse_requirements('requirements-3.txt', session=uuid.uuid1())
+else:
+    requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
 
-
-requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
 
 d = dict(
     name='ambry',
