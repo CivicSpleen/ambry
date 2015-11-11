@@ -9,6 +9,7 @@ import uuid
 from pip.req import parse_requirements
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
+from distutils.cmd import Command
 
 if sys.version_info <= (2, 6):
     error = 'ERROR: ambry requires Python Version 2.7 or above...exiting.'
@@ -43,6 +44,7 @@ def find_package_data():
 
     return {'ambry': l}
 
+
 class PyTest(TestCommand):
     user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
 
@@ -65,6 +67,21 @@ class PyTest(TestCommand):
         errno = pytest.main(self.pytest_args)
         sys.exit(errno)
 
+class Docker(Command):
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        import os
+
+        self.spawn(['docker', 'build', '-f','support/ambry-docker/Dockerfile',
+                    '-t','civicknowledge/ambry', '.'])
+
 
 requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
 
@@ -77,11 +94,10 @@ d = dict(
     author_email=ambry_meta.__email__,
     url='https://github.com/CivicKnowledge/ambry',
     packages=find_packages(),
-    scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh' ],
+    scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh'],
     package_data=find_package_data(),
     license=ambry_meta.__license__,
-    cmdclass={'test': PyTest},
-    # test_suite='nose.collector',
+    cmdclass={'test': PyTest, 'docker': Docker},
     platforms='Posix; MacOS X; Linux',
     classifiers=[
         'Development Status :: 3 - Alpha',

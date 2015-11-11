@@ -61,9 +61,9 @@ class Partition(Base, DictableMixin):
     cache_key = SAColumn('p_cache_key', String(200), unique=True, nullable=False, index=True)
     parent_vid = SAColumn('p_p_vid', String(16), ForeignKey('partitions.p_vid'), nullable=True, index=True)
     ref = SAColumn('p_ref', String(16), index=True,
-        doc='VID reference to an eariler version to use instead of this one.')
+                   doc='VID reference to an eariler version to use instead of this one.')
     type = SAColumn('p_type', String(20), default=TYPE.UNION,
-        doc='u - normal partition, s - segment')
+                    doc='u - normal partition, s - segment')
     table_name = SAColumn('p_table_name', String(50))
     time = SAColumn('p_time', String(20))  # FIXME: add helptext
     space = SAColumn('p_space', String(50))
@@ -71,7 +71,7 @@ class Partition(Base, DictableMixin):
     variant = SAColumn('p_variant', String(50))
     format = SAColumn('p_format', String(50))
     segment = SAColumn('p_segment', Integer,
-        doc='Part of a larger partition. segment_id is usually also a source ds_id')
+                       doc='Part of a larger partition. segment_id is usually also a source ds_id')
     min_id = SAColumn('p_min_id', BigIntegerType)
     max_id = SAColumn('p_max_id', BigIntegerType)
     count = SAColumn('p_count', Integer)
@@ -98,9 +98,10 @@ class Partition(Base, DictableMixin):
 
     children = relationship('Partition', backref=backref('parent', remote_side=[vid]), cascade='all')
 
-    _bundle  = None # Set when returned from a bundle.
+    _bundle = None  # Set when returned from a bundle.
     _datafile = None
     _datafile_writer = None
+    _stats_dict = None
 
     @property
     def identity(self):
@@ -132,29 +133,23 @@ class Partition(Base, DictableMixin):
 
     @property
     def is_segment(self):
-
         return self.type == self.TYPE.SEGMENT
 
+    @property
+    def description(self):
+        return self.table.description
+
+    @property
+    def headers(self):
+        return [c.name for c in self.table.columns]
+
     def __repr__(self):
-        return '<{} partition: {}>'.format(self.format, self.vname)
+        return '<partition: {} {}>'.format(self.vid, self.vname)
 
-    def set_ids(self, sequence_id):
-
-        if not self.vid or not self.id_:
-
-            self.sequence_id = sequence_id
-
-            don = ObjectNumber.parse(self.d_vid)
-            pon = PartitionNumber(don, self.sequence_id)
-
-            self.vid = str(pon)
-            self.id_ = str(pon.rev(None))
-
-        self.fqname = Identity._compose_fqname(self.vname, self.vid)
 
     def set_stats(self, stats):
 
-        self.stats[:] = [] # Delete existing stats
+        self.stats[:] = []  # Delete existing stats
 
         for c in self.table.columns:
 
@@ -192,26 +187,58 @@ class Partition(Base, DictableMixin):
         tcov = set()
         grains = set()
 
+        def summarize_maybe(gvid):
+            try:
+                return GVid.parse(gvid).summarize()
+            except:
+                return None
+
+        def simplifiy_maybe(values, column):
+
+            parsed = []
+
+            for gvid in values:
+                try:
+                    parsed.append(GVid.parse(gvid))
+                except ValueError as e:
+                    if self._bundle:
+                        self._bundle.error("Failed to parse gvid '{}' in {}.{}: {}"
+                                           .format(str(gvid), column.table.name, column.name, e))
+                    pass
+
+            try:
+                return isimplify(parsed)
+            except:
+                return None
+
+        def int_maybe(year):
+            try:
+                return int(year)
+            except:
+                return None
+
         for c in self.table.columns:
-
-
 
             if c.name not in stats:
                 continue
 
             try:
                 if stats[c.name].is_gvid:
-                    scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in stats[c.name].uniques))
-                    grains |= set(GVid.parse(gvid).summarize() for gvid in stats[c.name].uniques)
-                elif stats[c.name].is_year:
+                    scov |= set(x for x in simplifiy_maybe(stats[c.name].uniques, c))
+                    grains |= set(summarize_maybe(gvid) for gvid in stats[c.name].uniques)
 
-                    tcov |= set(int(x) for x in stats[c.name].uniques)
+                elif stats[c.name].is_year:
+                    tcov |= set(int_maybe(x) for x in stats[c.name].uniques)
+
                 elif stats[c.name].is_date:
                     # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
                     tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, string_types) else x.year for x in stats[c.name].uniques)
+
             except Exception as e:
                 self._bundle.error("Failed to set coverage for column '{}', partition '{}': {}"
                                    .format(c.name, self.identity.vname, e))
+                raise
+
         # Space Coverage
 
         if 'source_data' in self.data:
@@ -222,7 +249,8 @@ class Partition(Base, DictableMixin):
         if self.identity.space:  # And from the partition name
             scov.add(self.parse_gvid_or_place(self.identity.space))
 
-        # For geo_coverage, only includes the higher level summary levels, counties, states, places and urban areas
+        # For geo_coverage, only includes the higher level summary levels, counties, states,
+        # places and urban areas.
         self.space_coverage = sorted([str(x) for x in scov if bool(x) and x.sl
                                       in (10, 40, 50, 60, 160, 400)])
 
@@ -267,20 +295,23 @@ class Partition(Base, DictableMixin):
                 return str(self.__dict__)
 
             def __repr__(self):
-                return str(self.__dict__)
+                return repr(self.__dict__)
 
             def items(self):
                 return list(self.__dict__.items())
 
             def iteritems(self):
-                return iter(list(self.__dict__.items()))
+                return iter(self.__dict__.items())
 
             def __getitem__(self, k):
                 return self.__dict__[k]
 
-        cols = {s.column.name: Bunch(s.dict) for s in self.stats}
+        if not self._stats_dict:
+            cols = {s.column.name: Bunch(s.dict) for s in self.stats}
 
-        return Bunch(cols)
+            self._stats_dict = Bunch(cols)
+
+        return self._stats_dict
 
     def build_sample(self):
 
@@ -330,27 +361,25 @@ class Partition(Base, DictableMixin):
             if hasattr(self, k):
                 setattr(self, k, v)
 
-    def finalize(self, stats = None):
+    def finalize(self):
 
         self.state = self.STATES.BUILT
 
         # Write the stats for this partition back into the partition
 
         with self.datafile.writer as w:
-            for i, c in enumerate(self.table.columns,1):
+            for i, c in enumerate(self.table.columns, 1):
                 wc = w.column(i)
-                assert wc.pos == c.sequence_id
+                assert wc.pos == c.sequence_id, (c.name, wc.pos, c.sequence_id)
                 wc.name = c.name
                 wc.description = c.description
                 wc.type = c.python_type.__name__
+            w.finalize()
 
-
-
-        stats = self.datafile.run_stats()
-
-        self.set_stats(stats)
-
-        self.set_coverage(stats)
+        if self.type == self.TYPE.UNION:
+            stats = self.datafile.run_stats()
+            self.set_stats(stats)
+            self.set_coverage(stats)
 
         self._location = 'build'
 
@@ -366,21 +395,12 @@ class Partition(Base, DictableMixin):
         self.datafile.remove()
 
     @property
-    def datafile(self):
-        from ambry_sources import MPRowsFile
-        if self._datafile is None:
-
-            assert bool(self.cache_key)
-            self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
-
-        return self._datafile
-
-    @property
     def location(self):
 
         base_location = self._location
 
-        assert bool(base_location)
+        if not base_location:
+            return None
 
         if self._bundle.build_fs.exists(base_location):
             if self._bundle.build_fs.hashsyspath(base_location):
@@ -392,40 +412,124 @@ class Partition(Base, DictableMixin):
     def location(self, v):
         self._location = v
 
-    def stream(self):
-        """Yield rows of a partition, as an iterator. Data is taken from one of these locations:
-        - The warehouse, for installed data
-        - The build directory, for built data
-        - The remote, for checked in data.
+    @property
+    def datafile(self):
+        """Return the datafile for this partition, from the bulid directory, the remote, or the warehouse"""
+        from ambry_sources import MPRowsFile
+
+        if self._datafile is None:
+
+            if not self.location or self.location == 'build':
+                assert bool(self.cache_key)
+                self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
+
+            elif self.location == 'remote':
+                from ambry_sources import MPRowsFile
+                # Get bundle for this partition
+                # Actually ... this seems way to complex. Why note self._bundle.remote()
+                # FIXME
+                b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+                remote = self._bundle.library.remote(b)
+
+                self._datafile = MPRowsFile(remote, self.cache_key)
+
+            elif self.location == 'warehouse':
+                raise NotImplementedError()
+
+            else:
+                raise NotImplementedError()
+
+        return self._datafile
+
+    @property
+    def reader(self):
+        """The reader for the datafile"""
+        return self.datafile.reader
+
+    def select(self, predicate=None, headers=None):
+        """
+        Select rows from the reader using a predicate to select rows and and itemgetter to return a
+        subset of elements
+        :param predicate: If defined, a callable that is called for each row, and if it returns true, the
+        row is included in the output.
+        :param headers: If defined, a list or tuple of header names to return from each row
+        :return: iterable of results
+
+        WARNING: This routine works from the reader iterator, which returns RowProxy objects. RowProxy objects
+        are reused, so if you construct a list directly from the output from this method, the list will have
+        multiple copies of a single RowProxy, which will have as an inner row the last result row. If you will
+        be directly constructing a list, use a getter that extracts the inner row, or which converts the RowProxy
+        to a dict:
+
+            list(s.datafile.select(lambda r: r.stusab == 'CA', lambda r: r.dict ))
+
         """
 
-        from ..orm.exc import NotFoundError
-        from fs.errors import ResourceNotFoundError
+        # FIXME; in Python 3, use yield from
+        with self.reader as r:
+            for row in r.select(predicate, headers):
+                yield row
 
-        if self.location == 'build':
-            try:
-                reader = self.datafile.reader
-            except ResourceNotFoundError:
-                raise NotFoundError("Partition {} not found in location '{}'. System Path: {} "
-                                    .format(self.identity.fqname, self.location, self.datafile.syspath))
-
-        elif self.location == 'remote':
-            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
-            remote = self._bundle.library.remote(b)
-            from ambry_sources import MPRowsFile
-
-            f = MPRowsFile(remote, self.datafile.path)
-            reader = f.reader
-
-        elif self.location == 'warehouse':
-            raise NotImplementedError()
-
-
-        return iter(reader)
-
-
+    def __iter__(self):
+        """ Iterator over the partition, returning RowProxy objects.
+        :return: a generator
+        """
+        with self.reader as r:
+            for row in r:
+                yield row
 
     # ============================
+
+    def update_id(self, sequence_id):
+        """Alter the sequence id, and all of the names and ids derived from it. This
+        often needs to be don after an IntegrityError in a multiprocessing run"""
+
+        self.sequence_id = sequence_id
+
+        self._set_ids(force=True)
+
+        if self.dataset:
+            self._update_names()
+
+    def _set_ids(self, force = False):
+        if not self.sequence_id:
+            from .exc import DatabaseError
+
+            raise DatabaseError("Sequence ID must be set before insertion")
+
+        if not self.vid or force:
+
+            assert bool(self.d_vid)
+            assert bool(self.sequence_id)
+            don = ObjectNumber.parse(self.d_vid)
+            assert don.revision
+            on = don.as_partition(self.sequence_id)
+            self.vid = str(on.rev(don.revision))
+            self.id = str(on.rev(None))
+
+        if not self.data:
+            self.data = {}
+
+    def _update_names(self):
+        """Update the derived names"""
+
+        d = dict(
+            table = self.table_name,
+            time = self.time,
+            space = self.space,
+            grain = self.grain,
+            segment = self.segment
+        )
+
+        assert self.dataset
+
+        name = PartialPartitionName(**d).promote(self.dataset.identity.name)
+
+        self.name = str(name.name)
+        self.vname = str(name.vname)
+        self.cache_key = name.cache_key
+        self.fqname = str(self.identity.fqname)
+
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -433,35 +537,17 @@ class Partition(Base, DictableMixin):
         object and create an ObjectNumber value for the id_"""
         from sqlalchemy import text
 
-        if not target.sequence_id:
-            from .exc import DatabaseError
-            raise DatabaseError("Sequence ID must be set before insertion")
-
-        if not target.vid:
-            assert bool(target.d_vid)
-            assert bool(target.sequence_id)
-            on = ObjectNumber.parse(target.d_vid).as_partition(target.sequence_id)
-            target.vid = str(on)
-            target.id = str(on.rev(None))
-
-        if not target.data:
-            target.data = {}
+        target._set_ids()
 
         Partition.before_update(mapper, conn, target)
+
 
     @staticmethod
     def before_update(mapper, conn, target):
         """"""
 
-        d = target.dict
-        d['table'] = target.table_name
+        target._update_names()
 
-        name = PartialPartitionName(**d).promote(target.dataset.identity.name)
-
-        target.name = str(name.name)
-        target.vname = name.vname
-        target.cache_key = name.cache_key
-        target.fqname = target.identity.fqname
 
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)

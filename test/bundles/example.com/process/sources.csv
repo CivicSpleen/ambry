@@ -1,8 +1,0 @@
-"name","title","table","segment","time","space","grain","start_line","end_line","comment_lines","header_lines","description","url"
-"types1",,"types",,,,,,,,,"Basic multi-type file","http://public.source.civicknowledge.com/example.com/type_intuit/types_1.csv"
-"types2",,"types",,,,,,,,,"Missing values and codes","http://public.source.civicknowledge.com/example.com/type_intuit/types_2.csv"
-"types3",,"types",,,,,,,,,"Commas in Integers","http://public.source.civicknowledge.com/example.com/type_intuit/types_3.csv"
-"headers1",,"headers",,,,,,,,,"Basic multi headers","http://public.source.civicknowledge.com/example.com/row_intuit/headers_1.csv"
-"headers2",,"headers",,,,,,,,,"Multiple headers with gaps","http://public.source.civicknowledge.com/example.com/row_intuit/headers_2.csv"
-"headers3",,"headers",,,,,,,,,"Gaps and codes in data","http://public.source.civicknowledge.com/example.com/row_intuit/headers_3.csv"
-"headers4",,"headers",,,,,,,,,"Centered title and many missing values","http://public.source.civicknowledge.com/example.com/row_intuit/headers_4.csv"

@@ -10,7 +10,8 @@ from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import text
+
+import six
 
 from ambry.identity import TableNumber,  ObjectNumber
 from ambry.orm import Column, DictableMixin
@@ -47,40 +48,17 @@ class Table(Base, DictableMixin):
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
     )
 
-    columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
-                           cascade="all, delete-orphan", lazy='joined')
+    columns = relationship(Column, backref='table', order_by='asc(Column.sequence_id)',
+                           cascade='all, delete-orphan', lazy='joined')
 
     _column_sequence = {}
-
-    def link_columns(self, other):
-        """Return columns that can be used to link another table to this one"""
-
-        def protos(t):
-
-            protos = {}
-
-            protos.update({c.fk_vid: c for c in t.columns if c.fk_vid})
-            protos.update({c.proto_vid: c for c in t.columns if c.proto_vid})
-
-            # HACK: The numbering in the proto dataset changes, so we have to make substitutions
-            if 'c00104002' in protos:
-                protos['c00109003'] = protos['c00104002']
-                del protos['c00104002']
-
-            protos = {str(ObjectNumber.parse(n).rev(None)): c for n, c in list(protos.items())}  # Remove revisions
-
-            return protos
-
-        protos_s = protos(self)
-        protos_o = protos(other)
-
-        inter = set(protos_s.keys()) & set(protos_o.keys())
-
-        return list(set((protos_s[n], protos_o[n]) for n in inter))
 
     @staticmethod
     def mangle_name(name, preserve_case=False):
         import re
+
+        assert name
+
         try:
             r = re.sub('[^\w_]', '_', name.strip())
 
@@ -90,11 +68,6 @@ class Table(Base, DictableMixin):
             return r
         except TypeError:
             raise TypeError('Not a valid type for name ' + str(type(name)))
-
-    @property
-    def oid(self):
-        return TableNumber(self.d_id, self.sequence_id)
-
 
     def column(self, ref):
         # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
@@ -107,10 +80,10 @@ class Table(Base, DictableMixin):
             if str(column_name) == c.name or str(ref) == c.id or str(ref) == c.vid:
                 return c
 
-        raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
+        raise NotFoundError(
+            "Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
 
-
-    def add_column(self, name, update_existing = False, **kwargs):
+    def add_column(self, name, update_existing=False, **kwargs):
         """
         Add a column to the table, or update an existing one.
         :param name: Name of the new or existing column.
@@ -133,11 +106,13 @@ class Table(Base, DictableMixin):
 
             sequence_id = next_sequence_id(object_session(self), self._column_sequence, self.vid, Column)
 
+            assert sequence_id > len(self.columns), '{}: {} ! > {} '.format(name, sequence_id, len(self.columns))
+
             c = Column(t_vid=self.vid,
                        sequence_id=sequence_id,
                        vid=str(ColumnNumber(ObjectNumber.parse(self.vid), sequence_id)),
                        name=name,
-                       datatype='varchar')
+                       datatype='str')
             extant = False
 
         # Update possibly existing data
@@ -146,6 +121,14 @@ class Table(Base, DictableMixin):
         for key, value in list(kwargs.items()):
 
             if key[0] != '_' and key not in ['t_vid', 'name',  'sequence_id', 'data']:
+
+                # Don't update the type if the user has specfied a custom type
+                if key == 'datatype' and not c.type_is_builtin():
+                    continue
+
+                # Don't change a datatype if the value is set and the new value is unknown
+                if key == 'datatype' and value == 'unknown' and c.datatype:
+                    continue
 
                 try:
                     setattr(c, key, value)
@@ -171,24 +154,16 @@ class Table(Base, DictableMixin):
         self.add_column(name='id', datatype=Column.DATATYPE_INTEGER, is_primary_key=True,
                         description=self.description if not description else description)
 
+    def is_empty(self):
+        """Return True if the table has no columns or the only column is the id"""
+        if len(self.columns) == 0:
+            return True
 
+        if len(self.columns) == 1 and self.columns[0].name == 'id':
+            return True
 
+        return False
 
-    @property
-    def null_dict(self):
-        if self._null_row is None:
-            self._null_row = {}
-            for col in self.columns:
-                if col.is_primary_key:
-                    v = None
-                elif col.default:
-                    v = col.default
-                else:
-                    v = None
-
-                self._null_row[col.name] = v
-
-        return self._null_row
 
     @property
     def header(self):
@@ -201,16 +176,13 @@ class Table(Base, DictableMixin):
 
         return [c.name for c in self.columns]
 
-
-
     @property
     def dict(self):
-        d = {
-            k: v for k,
-                     v in list(self.__dict__.items()) if k in [
-                'id', 'vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description', 'universe',
-            'keywords',
-                'installed', 'proto_vid', 'type', 'codes']}
+        INCLUDE_FIELDS = [
+            'id', 'vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname',
+            'description', 'universe', 'keywords', 'installed', 'proto_vid', 'type', 'codes']
+
+        d = {k: v for k, v in six.iteritems(self.__dict__) if k in INCLUDE_FIELDS}
 
         if self.data:
             for k in self.data:
@@ -227,33 +199,6 @@ class Table(Base, DictableMixin):
             set([c.data['index'].split(":")[0] for c in self.columns if c.data.get('index', False)]))
 
         return d
-
-    @property
-    def nonull_dict(self):
-        return {k: v for k, v in list(self.dict.items()) if v and k not in 'codes'}
-
-    @property
-    def nonull_col_dict(self):
-
-        tdc = {}
-
-        for c in self.columns:
-            tdc[c.id] = c.nonull_dict
-            tdc[c.id]['codes'] = {cd.key: cd.dict for cd in c.codes}
-
-        td = self.nonull_dict
-        td['columns'] = tdc
-
-        return td
-
-    @property
-    def insertable_dict(self):
-        x = {('t_' + k).strip('_'): v for k, v in list(self.dict.items())}
-
-        if 't_vid' not in x or not x['t_vid']:
-            raise ValueError("Must have vid set: {} ".format(x))
-
-        return x
 
     def update_from_stats(self, stats):
         """Update columns based on partition statistics"""
@@ -272,15 +217,62 @@ class Table(Base, DictableMixin):
 
             c.lom = stat.lom
 
+    def update_id(self, sequence_id, force=True):
+        """Alter the sequence id, and all of the names and ids derived from it. This
+        often needs to be don after an IntegrityError in a multiprocessing run"""
+        from ..identity import ObjectNumber
+
+        self.sequence_id = sequence_id
+
+        assert self.d_vid
+
+        if self.id is None or force:
+            dataset_id = ObjectNumber.parse(self.d_vid).rev(None)
+            self.d_id = str(dataset_id)
+            self.id = str(TableNumber(dataset_id, self.sequence_id))
+
+        if self.vid is None or force:
+            dataset_vid = ObjectNumber.parse(self.d_vid)
+            self.vid = str(TableNumber(dataset_vid, self.sequence_id))
+
+
+    @property
+    def transforms(self):
+        """Return an array of arrays of column transforms.
+
+        The return value is an list of list, with each list being a segment of column transformations, and
+        each segment having one entry per column.
+
+        """
+
+        tr = []
+        for c in self.columns:
+            tr.append(c.expanded_transform)
+
+        return six.moves.zip_longest(*tr)
+
+    @property
+    def row(self):
+        from collections import OrderedDict
+        import six
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+
+        d = OrderedDict([( p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in ['id','d_id','d_vid','dataset','columns','data', 'partitions', 'sources']])
+
+        for k, v in six.iteritems(self.data):
+            d['d_' + k] = v
+
+        return d
+
     def __str__(self):
         from tabulate import tabulate
 
-        headers = "Seq Vid Name Datatype ".split()
-        rows = [ (c.sequence_id, c.vid, c.name, c.datatype ) for c in self.columns ]
+        headers = 'Seq Vid Name Datatype '.split()
+        rows = [(c.sequence_id, c.vid, c.name, c.datatype) for c in self.columns]
 
         return ('Dest Table: {}\n'.format(self.name)) + tabulate(rows, headers)
-
-
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -302,13 +294,7 @@ class Table(Base, DictableMixin):
         if isinstance(target, Column):
             raise TypeError('Got a column instead of a table')
 
-        if target.id is None:
-            dataset_id = ObjectNumber.parse(target.d_id)
-            target.id = str(TableNumber(dataset_id, target.sequence_id))
-
-        if target.vid is None:
-            dataset_id = ObjectNumber.parse(target.d_vid)
-            target.vid = str(TableNumber(dataset_id, target.sequence_id))
+        target.update_id(target.sequence_id, False)
 
 
 event.listen(Table, 'before_insert', Table.before_insert)

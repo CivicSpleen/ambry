@@ -2,18 +2,20 @@
 import logging
 from ambry.util import get_logger
 
-from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend
+from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend, PostgreSQLSearchBackend
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 # All backends.
 BACKENDS = {
     'whoosh': WhooshSearchBackend,
-    'sqlite': SQLiteSearchBackend
+    'sqlite': SQLiteSearchBackend,
+    'postgresql+psycopg2': PostgreSQLSearchBackend
 }
 
 
 class Search(object):
+
     def __init__(self, library, backend=None):
 
         if not backend:
@@ -25,13 +27,16 @@ class Search(object):
 
                 if backend_name not in BACKENDS:
                     raise Exception(
-                        'Missing backend: search section of the config contains {} unknown backend'.format(backend_name))
+                        'Missing backend: search section of the config contains unknown backend {}'
+                        .format(backend_name))
             except KeyError:
+                # config does not contain search backend. Try to find backend by database driver.
                 backend_name = library.database.driver
 
             if backend_name not in BACKENDS:
                 logger.debug(
-                    'Missing backend: ambry does not have {} search backend. Using whoosh search.'.format(backend_name))
+                    'Missing backend: ambry does not have {} search backend. Using whoosh search.'
+                    .format(backend_name))
                 backend_name = 'whoosh'
 
             backend = BACKENDS[backend_name](library)
@@ -50,7 +55,7 @@ class Search(object):
         """ Adds given partition to the index. """
         self.backend.partition_index.index_one(partition, force=force)
 
-    def index_bundle(self, bundle, force = False):
+    def index_bundle(self, bundle, force=False):
         """
         Indexes a bundle/dataset and all of its partitions
         :param bundle: A bundle or dataset object
@@ -113,10 +118,7 @@ class Search(object):
 
             yield r
 
-
-
-
-    def list_documents(self, limit = None):
+    def list_documents(self, limit=None):
         """
         Return a list of the documents
         :param limit:
@@ -125,9 +127,8 @@ class Search(object):
         from itertools import chain
 
         return chain(self.backend.dataset_index.list_documents(limit=limit),
-               self.backend.partition_index.list_documents(limit=limit),
-               self.backend.identifier_index.list_documents(limit=limit) )
-
+                     self.backend.partition_index.list_documents(limit=limit),
+                     self.backend.identifier_index.list_documents(limit=limit))
 
     def get_parsed_query(self):
         """ Returns string with last query parsed. Assuming called after search_datasets."""

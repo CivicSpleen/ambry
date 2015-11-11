@@ -1,0 +1,4 @@
+name,start_line,end_line,header_lines,description,reftype,ref
+dimensions,,,,Basic test of dimensions,ref,http://public.source.civicknowledge.com/example.com/dimensions/geofile155.csv
+counties,1,3222,0,Counties,,http://public.source.civicknowledge.com/example.com/dimensions/civicknowledge.com-entities-census-counties.csv
+integers,1,21,0,Lists of Integers,,http://public.source.civicknowledge.com/example.com/basics/integers.csv

@@ -4,16 +4,18 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
+import datetime
 
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
-from sqlalchemy import  Text, Binary, String, ForeignKey
-import datetime
+from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
+
+import six
+
+from ambry_sources.intuit import unknown
 
 from ..util import Constant
 from ..orm.column import Column
-from ambry_sources.intuit import unknown
-
 
 from . import Base, MutationDict, JSONEncodedObj
 
@@ -22,11 +24,13 @@ class SourceColumn(Base):
 
     __tablename__ = 'sourcecolumns'
 
+    _parent_col = 'sc_st_vid'
+
     DATATYPE = Constant()
     DATATYPE.INT = int.__name__
     DATATYPE.FLOAT = float.__name__
-    DATATYPE.STRING = str.__name__
-    DATATYPE.UNICODE = unicode.__name__
+    DATATYPE.STRING = six.binary_type.__name__
+    DATATYPE.UNICODE = six.text_type.__name__
     DATATYPE.DATE = datetime.date.__name__
     DATATYPE.TIME = datetime.time.__name__
     DATATYPE.DATETIME = datetime.datetime.__name__
@@ -35,15 +39,15 @@ class SourceColumn(Base):
     type_map = {
         DATATYPE.INT: int,
         DATATYPE.FLOAT: float,
-        DATATYPE.STRING: str,
-        DATATYPE.UNICODE: unicode,
+        DATATYPE.STRING: six.binary_type,
+        DATATYPE.UNICODE: six.text_type,
         DATATYPE.DATE: datetime.date,
         DATATYPE.TIME: datetime.time,
         DATATYPE.DATETIME: datetime.datetime,
         DATATYPE.DATETIME: unknown
     }
 
-    column_type_map = { # FIXME The Column types should be harmonized with these types
+    column_type_map = {  # FIXME The Column types should be harmonized with these types
         DATATYPE.INT: Column.DATATYPE_INTEGER,
         DATATYPE.FLOAT: Column.DATATYPE_FLOAT,
         DATATYPE.STRING: Column.DATATYPE_STR,
@@ -122,6 +126,19 @@ class SourceColumn(Base):
 
         return d
 
+    @property
+    def dict(self):
+        """A dict that holds key/values for all of the properties in the
+        object.
+
+        :return:
+
+        """
+        from collections import OrderedDict
+        SKIP_KEYS = ()
+        return OrderedDict(
+            (p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS)
+
     def update(self, **kwargs):
 
         if 'table' in kwargs:
@@ -136,6 +153,7 @@ class SourceColumn(Base):
                         continue
 
                 setattr(self, k, v)
+
 
 
 
@@ -187,6 +205,8 @@ class SourceTable(Base):
         c = self.column(source_header)
         c_by_pos = self.column(position)
 
+
+        datatype = 'str' if datatype == 'unicode' else datatype
 
         assert not c or not c_by_pos or c.vid == c_by_pos.vid
 
@@ -253,6 +273,15 @@ class SourceTable(Base):
         widths = [int(w) for w in widths]
 
         return widths
+
+    def update_id(self, sequence_id):
+        """Alter the sequence id, and all of the names and ids derived from it. This
+        often needs to be don after an IntegrityError in a multiprocessing run"""
+        from ..identity import GeneralNumber1
+
+        self.sequence_id = sequence_id
+        self.vid = str(GeneralNumber1('T', self.d_vid, sequence_id))
+
 
     def __str__(self):
         from tabulate import tabulate

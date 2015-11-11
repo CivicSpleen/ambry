@@ -52,23 +52,22 @@ def get_logger(name, file_name=None, stream=None, template=None, propagate=False
     logger.setLevel(level)
     logger.propagate = propagate
 
-    if not template:
-        template = '%(name)s %(process)s %(levelname)s %(message)s'
-
     formatter = logging.Formatter(template)
 
-    if not file_name and not stream:
+    if not stream:
         stream = sys.stdout
 
+    logger.handlers = []
     handler = logging.StreamHandler(stream=stream)
     handler.setFormatter(formatter)
-
-    logger.handlers = []
     logger.addHandler(handler)
 
+    if file_name:
+        handler = logging.FileHandler(file_name)
+        handler.setFormatter(logging.Formatter('%(asctime)s '+template))
+        logger.addHandler(handler)
+
     return logger
-
-
 
 
 # From https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
@@ -425,7 +424,7 @@ class AttrDict(OrderedDict):
         self.update_dict(base)
 
     def dump(self, stream=None, map_view=None):
-        from ambry.metadata.meta import _ScalarTermS, _ScalarTermU
+        from ambry.metadata.proptree import _ScalarTermS, _ScalarTermU
         from ambry.orm import MutationList, MutationDict  # cross-module import
 
         yaml.representer.SafeRepresenter.add_representer(
@@ -1019,10 +1018,18 @@ def print_yaml(o):
 
 
 def qualified_class_name(o):
+    """Full name of an object, including the module"""
     module = o.__class__.__module__
     if module is None or module == str.__class__.__module__:
         return o.__class__.__name__
     return module + '.' + o.__class__.__name__
+
+def qualified_name(cls):
+    """Full name of a class, including the module. Like qualified_class_name, but when you already have a class """
+    module = cls.__module__
+    if module is None or module == str.__class__.__module__:
+        return cls.__name__
+    return module + '.' + cls.__name__
 
 
 class _Getch:
@@ -1166,3 +1173,64 @@ def drop_empty(rows):
     transpose back. The result is that columns that have a header but no data in the body are removed, assuming
     the header is the first row. """
     return zip(*[col for col in zip(*rows) if bool(filter(bool, col[1:]))])
+
+#http://stackoverflow.com/a/20577580
+def dequote(s):
+    """
+    If a string has single or double quotes around it, remove them.
+    Make sure the pair of quotes match.
+    If a matching pair of quotes is not found, return the string unchanged.
+    """
+
+    if (s[0] == s[-1]) and s.startswith(("'", '"')):
+        return s[1:-1]
+
+    return s
+
+def pretty_time(s, granularity=3):
+    """Pretty print time in seconds. COnverts the input time in seconds into a string with
+    interval names, such as days, hours and minutes
+
+    From:
+    http://stackoverflow.com/a/24542445/1144479
+
+    """
+
+    intervals = (
+        ('weeks', 604800),  # 60 * 60 * 24 * 7
+        ('days', 86400),  # 60 * 60 * 24
+        ('hours', 3600),  # 60 * 60
+        ('minutes', 60),
+        ('seconds', 1),
+    )
+
+    def display_time(seconds, granularity=granularity):
+        result = []
+
+        for name, count in intervals:
+            value = seconds // count
+            if value:
+                seconds -= value * count
+                if value == 1:
+                    name = name.rstrip('s')
+                result.append('{} {}'.format(int(value), name))
+
+        return ', '.join(result[:granularity])
+
+    return display_time(s,granularity)
+
+import warnings
+
+# From: http://code.activestate.com/recipes/391367-deprecated/
+def deprecated(func):
+    """This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emmitted
+    when the function is used."""
+    def newFunc(*args, **kwargs):
+        warnings.warn("Call to deprecated function %s." % func.__name__,
+                      category=DeprecationWarning)
+        return func(*args, **kwargs)
+    newFunc.__name__ = func.__name__
+    newFunc.__doc__ = func.__doc__
+    newFunc.__dict__.update(func.__dict__)
+    return newFunc

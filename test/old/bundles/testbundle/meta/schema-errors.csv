@@ -1,8 +1,0 @@
-"table"	"seq"	"column"	"is_pk"	"is_fk"	"i1"	"ui1"	"type"	"scale"	"units"	"default"	"width"	"size"	"d_hash"	"d_mandatory"	"d_data_one"	"d_make_partition"
-"errors"		"id"	1				"INTEGER"									
-"errors"		"bad_int_default"					"INTEGER"			"-"						
-"errors"		"bad_float_default"					"REAL"			"X"						
-"errors"		"short_size"					"VARCHAR"			12345		4				
-"errors"		"short_width"					"VARCHAR"			12345	4					
-"errors"		"no_size"					"VARCHAR"			12345						
-"errors"		"default_text"					"TEXT"			12345						

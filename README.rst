@@ -1,5 +1,5 @@
 Ambry Databundles
-================
+=================
 
 Install
 =======
@@ -13,7 +13,8 @@ Setup with Miniconda on Mac
 You can setup Ambry as a normal package, but the geographic library, GDAL, is really difficult to install, so your
 Ambry installation won't produce geo databases. The best way to get GDAL installed is with Anaconda.
 
-First, install miniconda, ( python 2.7 )
+First, install miniconda, (python 2.7)
+
 .. code-block:: bash
 
     $ wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
@@ -56,8 +57,10 @@ Running the ambry tests
     $ python setup.py test
 
 Postgres extensions notes (Note: If you use virtualenv see DEVEL-README.md)
-==========================================================================
+===========================================================================
+
 Full text search
+~~~~~~~~~~~~~~~~
 
 Datasets search implemented on top of PostgreSQL requires postgresql-contrib and pg_trgm extension.
 
@@ -78,8 +81,10 @@ Datasets search implemented on top of PostgreSQL requires postgresql-contrib and
     $ psql <db_name> -c 'CREATE EXTENSION pg_trgm;'
 
 Foreign Data Wrapper (need to query partition files packed with psgpack.)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 1. Install multicorn:
+
 .. code-block:: bash
 
     wget https://github.com/Kozea/Multicorn/archive/v1.2.3.zip
@@ -88,5 +93,24 @@ Foreign Data Wrapper (need to query partition files packed with psgpack.)
     make && sudo make install
 
 2. Install ambryfdw:
+
 .. code-block:: bash
+
     pip install ambryfdw
+
+CKAN export
+===========
+1. Add CKAN credentials to ~/.ambry-accounts.yaml:
+
+.. code-block:: yaml
+
+    ckan:
+        host: http://demo.ckan.org        
+        organization: <your organization>        
+        apikey: <your API key>
+
+2. Run:
+
+.. code-block:: bash
+
+    ambry ckan_export <dataset_vid>

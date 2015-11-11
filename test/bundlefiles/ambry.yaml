@@ -3,7 +3,7 @@ environment:
     category: development
 
 filesystem:
-    root: '/tmp/test'
+    root: '/tmp/ambry'
     downloads: '{root}/downloads'
     extracts: '{root}/extracts'
     python: '{root}/python'
@@ -11,6 +11,7 @@ filesystem:
     build: '{root}/build'
     source: '{root}/source'
     search: '{root}/search'
+    test: /tmp/ambry
 
 library:
   database: test-database
@@ -22,8 +23,8 @@ library:
 
 database:
 
-  test-database: sqlite://
-  postgres-test: postgres://user:pass@host # Do not include db name here because db will be created while tests running
+  test-database: sqlite:////tmp/test.db
+  postgres-test: postgres://ambry10test:ambry10test@warehouse2 # Do not include db name here because db will be created while tests running
 
   pg-func-test: postgres://ambry10@warehouse2/ambry10-test
 

@@ -83,78 +83,6 @@ Add ambryfdw.pth containing path to the ambryfdw package. Example (use your own 
 /usr/local/lib/python2.7/dist-packages/ambryfdw
 ```
 
-### To run tests:
-    1. Install ambry
-```bash
-$ git clone https://github.com/<githubid>/ambry.git
-$ cd ambry
-$ pip install -r requirements/dev.txt
-```
-
-    2. Provide PostgreSQL credentials
-Tests use two databases - sqlite and postgresql. SQLite does not need any credentials, but PostgreSQL needs. You should add postgresql-test section with dsn to the database section of the ambry config. Example:
-```yaml
-database:
-    ...
-    postgresql-test: postgresql+psycopg2://ambry:secret@127.0.0.1/
-```
-Note: Do not include database name to the dsn because each test creates new empty database on each run.
-
-    3. Install multicorn and ambryfdw extensions
-Ambry uses custom postgres template because of ambry tests require pg_trgm and multicorn extensions. I do not know how to install extensions on the fly so you need to create the template and install both extensions before running tests. If postgres does not have such template all postgres tests will be skipped.
-```bash
-# Switch to postgres account
-$ sudo su - postgres
-
-# create template
-$ psql postgres -c 'CREATE DATABASE template0_ambry_test TEMPLATE template0;'
-
-# install extensions
-$ psql template0_ambry_test -c 'CREATE EXTENSION pg_trgm;'
-$ psql template0_ambry_test -c 'CREATE EXTENSION multicorn;'
-
-# Create copy permission needed by test framework to create database.
-$ psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_ambry_test';"
-
-# User from the dsn needs USAGE permission (Assuming your db user is ambry)
-$ psql postgres -c "GRANT USAGE ON FOREIGN DATA WRAPPER multicorn TO ambry;"
-
-# Exit postgres account
-$ exit
-```
-
-    4. Run all tests. Note: Do not make previous steps more than once.
-```bash
-$ python setup.py test
-```
-
-### To all run tests with coverage:
-
-    1. Run with coverage
-```bash
-$ coverage run setup.py test
-```
-    2. Generage html:
-```bash
-$ coverage html
-```
-    3. Open htmlcov/index.html in the browser.
-
-### To run certain test (use pytest):
-```bash
-py.test test/test_metadata/regression/test_ambry_93.py::Test::test_deletes_removed_keys_from_db
-```
-or all tests of test_metadata module
-```bash
-py.test test/test_metadata
-```
-
-### To stop testing of first fail:
-```bash
-py.test test/test_metadata -x
-```
-
-
 ### To write python2/python3 compatible code:
 
 Ambry uses one code base for both - python2 and python3. This requires some extra work.
@@ -268,3 +196,17 @@ instead of
 ```python
 types = [int, unicode]
 ```
+
+# Setting up Docker Environment
+
+## Postgres
+
+    $ docker run  \
+    -e POSTGRES_USER=ambry \
+    -e POSTGRES_PASSWORD=ambry \
+    -P  -d postgres --name ambry
+
+The config file in the container is: /var/lib/postgresql/data/postgresql.conf.
+
+To connect to the database, you'll use a DSN URL that has the port that docker picted to make the internal Postgres 
+port to, which you can get with `docker ps` or `docker port ambry 5432`

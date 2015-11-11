@@ -1,9 +1,0 @@
-sequence_id,name,dest_table_name,stage,time,space,generator
-1,source1,demo,,2000,nv,RandomSourcePipe
-2,source2,demo,,2001,ca,RandomSourcePipe
-3,source3,demo,,2002,la,RandomSourcePipe
-4,source4,demo,,2003,ut,RandomSourcePipe
-5,source5,demo,build2,2000,nv,RandomSourcePipe
-6,source6,demo,build2,2001,ca,RandomSourcePipe
-7,source7,demo,build2,2002,la,RandomSourcePipe
-8,source8,demo,build2,2003,ut,RandomSourcePipe

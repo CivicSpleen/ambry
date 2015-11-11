@@ -4,21 +4,25 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from collections import OrderedDict, MutableMapping
+from collections import OrderedDict
 import inspect
 import time
 
 from tabulate import tabulate
 
-from six import iteritems, itervalues, string_types, u, b
+import six
+from six import iteritems, itervalues, string_types, u
 
 from ambry.identity import PartialPartitionName
 from ambry.util import qualified_class_name
 
 from ambry_sources import RowProxy
 
+from ambry.dbexceptions import ConfigurationError
+
+
 class PipelineError(Exception):
-    def __init__(self,  pipe, *args, **kwargs):
+    def __init__(self,  pipe,  *args, **kwargs):
 
         super(PipelineError, self).__init__(*args, **kwargs)
         self.pipe = pipe
@@ -26,6 +30,7 @@ class PipelineError(Exception):
         self.extra = ''
         self.extra_section = ''
 
+        assert isinstance(pipe, Pipe), "Got a  type: "+str(type(pipe))
 
     def __str__(self):
         return """
@@ -45,11 +50,22 @@ Pipeline:
            pipe_class=qualified_class_name(self.pipe), source_name=self.pipe.source.name,
            headers=self.pipe.headers, exc_name = self.exc_name, extra = self.extra, extra_section=self.extra_section)
 
+class BadRowError(PipelineError):
+    def __init__(self, pipe, row, *args, **kwargs):
+        super(BadRowError, self).__init__(pipe, *args, **kwargs)
+
+        self.row = row
+
+    def __str__(self):
+        self.extra = "Last Row       : {}".format(self.row)
+
+        return super(BadRowError, self).__str__()
 
 class MissingHeaderError(PipelineError):
-    def __init__(self, pipe, header, table, *args, **kwargs):
+    def __init__(self, pipe, table_headers, header, table, *args, **kwargs):
         super(MissingHeaderError, self).__init__(pipe, *args, **kwargs)
 
+        self.table_headers = table_headers
         self.header = header
         self.table = table
 
@@ -57,7 +73,8 @@ class MissingHeaderError(PipelineError):
         self.extra = \
 """
 Missing Header:  {header}
-""".format(header=self.header)
+Table headers :  {table_headers}
+""".format(header=self.header, table_headers=self.table_headers)
 
         self.extra_section = \
 """
@@ -80,10 +97,8 @@ Bad/Missing Table:  {source_table}
 """.format(source_table=self.source_table)
         return super(BadSourceTable, self).__str__()
 
-
 class StopPipe(Exception):
     pass
-
 
 class Pipe(object):
     """A step in the pipeline"""
@@ -98,6 +113,8 @@ class Pipe(object):
     headers = None
 
     indent = '    ' # For __str__ formatting
+
+    scratch = {} # Data area for the casters and derived values to use.
 
     @property
     def source(self):
@@ -141,13 +158,25 @@ class Pipe(object):
 
         header_len = len(self.headers)
 
-        for row in rg:
+        try:
+            for row in rg:
+                row = self.process_body(row)
 
-            row = self.process_body(row)
+                if row: # Check that the rows have the same length as the header
+                    if len(row) != header_len:
+                        m = "Header width mismatch. Row width = {}, header width = {}".format(len(row), header_len)
 
-            if row:
-                assert len(row) == header_len, (self.headers, row, type(self))
-                yield row
+                        self.bundle.error(m)
+                        raise BadRowError(self, row, m)
+
+                    yield row
+        except StopIteration:
+            raise
+        except Exception as e:
+            if self.bundle:
+                self.bundle.error("Exception during pipeline processing, in pipe {}: {} "
+                                  .format(qualified_class_name(self),e))
+            raise
 
         self.finish()
 
@@ -167,12 +196,40 @@ class Pipe(object):
     def __str__(self):
         return self.print_header()
 
+class RowProxyPipe(Pipe):
+    """A pipe that passes a RowProxy object into the process_body method"""
+
+    def __iter__(self):
+        from ambry_sources.sources.util import RowProxy
+        rg = iter(self._source_pipe)
+
+        self.headers = self.process_header(next(rg))
+
+        yield self.headers
+
+        header_len = len(self.headers)
+
+        rp = RowProxy(self.headers)
+
+        for row in rg:
+
+            row = self.process_body(rp.set_row(row)).row
+
+            if row:
+                assert len(row) == header_len, (self.headers, row, type(self))
+                yield row
+
+        self.finish()
 
 class DatafileSourcePipe(Pipe):
     """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
 
     def __init__(self, bundle, source):
         self.bundle = bundle
+
+        if isinstance(source, string_types):
+            source = bundle.source(source)
+
         self._source = source
 
         self._datafile = source.datafile
@@ -184,10 +241,23 @@ class DatafileSourcePipe(Pipe):
 
         self.start()
 
-        yield self._source.headers
+        with self._datafile.reader as r:
 
-        for row in self._datafile.reader.rows:
-            yield row
+            if r.n_rows == 0:
+                return
+
+            # Gets the headers from the source table, which assumes that the source table was created in ingestion.
+            self.headers = self._source.headers
+
+            # No? then get the headers from the datafile
+            if not self.headers:
+
+                self.headers = r.headers
+
+            yield self.headers
+
+            for row in r.rows:
+                yield row
 
         self.finish()
 
@@ -235,9 +305,7 @@ class GeneratorSourcePipe(Pipe):
 
     def __str__(self):
         from ..util import qualified_class_name
-
-        return "Generator {}".format(qualified_class_name(self))
-
+        return 'Generator {}'.format(qualified_class_name(self))
 
 
 class Sink(Pipe):
@@ -273,7 +341,6 @@ class Sink(Pipe):
         return (self.i,
                 round(float(self.i) / float(time() - self._start_time), 2))
 
-
 class IterSource(Pipe):
     """Creates a source from an Iterator"""
 
@@ -296,7 +363,6 @@ class IterSource(Pipe):
         for row in itr:
             yield row
 
-
 class OnlySource(Pipe):
     """Only allow iteration on a named source. """
 
@@ -317,6 +383,40 @@ class OnlySource(Pipe):
         self.headers = row
         return row
 
+class Nullify(Pipe):
+    """Turn all column values that don't represent a real value, such as SPACE, empty string, or None,
+    into a real None value"""
+    def __init__(self):
+        """
+        Construct with one or more 2-element tuple or a string, in a similar format to what
+        __getitem__ accepts
+
+        >>> s = Slice((2,3), (6,8))
+        >>> s = Slice("2:3,6:8")
+
+        :param args: One or more slice objects
+        :return:
+        """
+
+        self.row_processor = None
+
+    def process_header(self, row):
+
+        code = ','.join([ 'nullify(row[{}])'.format(i) for i, _ in enumerate(row)])
+
+        self.row_processor = eval('lambda row: [{}]'.format(code), self.bundle.exec_context())
+
+        return row
+
+    def process_body(self, row):
+
+        return self.row_processor(row)
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return "{} ".format(qualified_class_name(self))
+
 
 class Slice(Pipe):
     """Select a slice of the table, using a set of tuples to represent the start and end positions of each
@@ -334,6 +434,7 @@ class Slice(Pipe):
         """
 
         self._args = args
+        self.code = None
 
     @staticmethod
     def parse(v):
@@ -387,19 +488,27 @@ class Slice(Pipe):
             args = self.source.segment
 
         try:
-            self.slicer, code = Slice.make_slicer(args)
+            self.slicer, self.code = Slice.make_slicer(args)
         except Exception as e:
             raise PipelineError(self, "Failed to eval slicer for parts: {} for source {} "
                                 .format(args, self.source.name))
 
         try:
-            return self.slicer(row)
+            self.headers =  self.slicer(row)
+            return self.headers
         except Exception as e:
-            raise PipelineError(self, "Failed to run slicer: '{}' : {}".format(code, e))
+
+            raise PipelineError(self, "Failed to run slicer: '{}' : {}".format(self.code, e))
 
     def process_body(self, row):
 
         return self.slicer(row)
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return "{}; Slice Args = {}".format(qualified_class_name(self), self.code)
+
 
 class Head(Pipe):
     """ Pass-through only the first N rows
@@ -420,7 +529,6 @@ class Head(Pipe):
 
     def __str__(self):
         return "{}; N={}; i={}".format(super(Head, self).__str__(), self.N, self.i )
-
 
 class Sample(Pipe):
     """ Take a sample of rows, skipping rows exponentially to end at the est_length input row, with
@@ -465,7 +573,8 @@ class Ticker(Pipe):
         print('== {} {} =='.format(self.source.name, self._name if self._name else ''))
         return row
 
-class Select(Pipe):
+
+class SelectRows(Pipe):
     """ Pass-through only rows that satisfy a predicate. The predicate may be
     specified as a callable, or a string, which will be evaled. The predicate has the signature f(source, row)
     where row is a RowProxy object.
@@ -481,7 +590,7 @@ class Select(Pipe):
         :param pred: Callable or string. If a string, it must be just an expression which can take arguments source and row
         :return:
         """
-        if isinstance(pred, basestring):
+        if isinstance(pred, string_types):
             self.pred_str = pred
             self.pred = eval('lambda source, row: {}'.format(pred))
         else:
@@ -503,6 +612,28 @@ class Select(Pipe):
 
     def __str__(self):
         return qualified_class_name(self) + ': pred = {} '.format(self.pred_str)
+
+class MatchPredicate(Pipe):
+    """Store rows that match a predicate. THe predicate is a function that takes the row as its
+    sole parameter and returns true or false.
+
+    Unlike the Select pipe, MatchPredicate passes all of the rows through and only stores the
+    ones that match
+
+    The matches can be retrieved from the pipeline via the ``matches`` property
+    """
+
+    def __init__(self, pred):
+        self._pred = pred
+        self.i = 0
+        self.matches = []
+
+    def process_body(self, row):
+
+        if self._pred(row):
+            self.matches.append(row)
+
+        return row
 
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one. If no header is specified in the
@@ -532,13 +663,28 @@ class AddDestHeader(Pipe):
 
     def __iter__(self):
 
+        rg = iter(self._source_pipe)
+
         if not self._added_headers:
             self._added_headers = [c.name for c in self.source.dest_table.columns][1:]
 
+        self.headers = self._added_headers
         yield self._added_headers
 
-        for row in self._source_pipe:
+        for row in rg:
             yield row
+
+class ReplaceWithDestHeader(Pipe):
+    """Replace the incomming header with the destination header, excluding the destination tables
+     first column, which should be the id"""
+
+    def __init__(self):
+        pass
+
+    def process_header(self, headers):
+        """Ignore the incomming header and replace it with the destination header"""
+
+        return [c.name for c in self.source.dest_table.columns][1:]
 
 class MapHeader(Pipe):
     """Alter the header using a map"""
@@ -556,34 +702,77 @@ class MapHeader(Pipe):
         for row in rg:
             yield row
 
-class MapSourceHeaders(Pipe):
-    """Alter the header using the source_header and dest_header in the source table """
+class CastSourceColumns(Pipe):
+    """Cast a row from the source to the types described in the source  """
 
-    def __init__(self, error_on_fail=True):
+    def __init__(self, error_on_fail=False):
+
+        self.processor = None
+
+    def process_header(self, headers):
+        st = self.source.source_table
+
+        def cast_maybe(type_,v):
+            try:
+                return type_(v)
+            except:
+                return v
+
+        inner_code =  ','.join([ "cast_maybe({},row[{}])".format(c.datatype,i) for i,c in enumerate(st.columns) ])
+        self.processor = eval('lambda row: [{}]'.format(inner_code), locals())
+
+        return headers
+
+    def process_body(self, row):
+        return self.processor(row)
+
+    def __str__(self):
+        return qualified_class_name(self)
+
+class MapSourceHeaders(Pipe):
+    """Alter the header using the source_header and dest_header in the source table. The primary
+     purpose of this pipe is to normalize multiple sources to one header structure, for instance,
+      there are multiple year releases of a file that have column name changes from year to year. """
+
+    def __init__(self, error_on_fail=False):
 
         self.error_on_fail = error_on_fail
+        self.map = {}
 
-    def process_header(self, row):
+    def process_header(self, headers):
 
-        m = {c.source_header: c.dest_header for c in self.source.source_table.columns}
+        if len(list(self.source.source_table.columns)) == 0:
+            raise ConfigurationError("Source table '{}' has no columns".format(self.source.source_table.name))
 
-        if not m:
-            raise BadSourceTable(self, self.source.source_table_name, "Malformed or entirely missing source table")
+        self.map = {c.source_header: c.dest_header for c in self.source.source_table.columns
+                    if c.dest_header and c.source_header != c.dest_header}
+
+        if len(headers) == 0:
+            raise ConfigurationError("Didn't get any source headers from source table '{}' "
+                                     .format(self.source.source_table.name))
 
         if self.error_on_fail:
             try:
-                headers =  list([m[h] for h in row])
+                headers = list([self.map[h] for h in headers])
             except KeyError:
-                for h in row:
-                    if not h in m:
+                for h in headers:
+                    if h not in self.map:
                         # pipe, header, table,
-                        raise MissingHeaderError( self, h, self.source.source_table,
+                        raise MissingHeaderError( self, headers, h, self.source.source_table,
                                                   "Failed to find header in source_table ")
 
         else:
-            headers = list([m.get(h, h) for h in row])
+            headers = list([self.map.get(h, h) for h in headers])
 
         return headers
+
+    def __str__(self):
+        return qualified_class_name(self) + ': map = {} '.format(self.map)
+
+
+class NoOp(Pipe):
+    """Do Nothing. Mostly for replacing other pipes to remove them from the pipeline"""
+
 
 class MangleHeader(Pipe):
     """"Alter the header so the values are well-formed, converting to alphanumerics and underscores"""
@@ -875,7 +1064,7 @@ class AddDeleteExpand(Pipe):
         self.edit_row = eval(self.edit_row_code)
 
         # Run it!
-        headers =  self.edit_header(row)
+        headers = self.edit_header(row)
 
         self._row_proxy = RowProxy(headers)
 
@@ -905,9 +1094,8 @@ class AddDeleteExpand(Pipe):
         from ..util import qualified_class_name
 
         return (qualified_class_name(self) + '\n' +
-                self.indent + "H:" + str(self.edit_header_code) + '\n' +
-                self.indent + "B:" + str(self.edit_row_code)
-                )
+                self.indent + 'H:' + str(self.edit_header_code) + '\n' +
+                self.indent + 'B:' + str(self.edit_row_code))
 
 
 class Add(AddDeleteExpand):
@@ -935,7 +1123,23 @@ class Delete(AddDeleteExpand):
 
     def __str__(self):
 
-        return qualified_class_name(self) + "delete = "+ ', '.join(self.delete)
+        return qualified_class_name(self) + 'delete = ' + ', '.join(self.delete)
+
+
+class SelectColumns(AddDeleteExpand):
+    """Pass through only the sepcified columns, deleting all others.  """
+    def __init__(self, keep):
+        super(SelectColumns, self).__init__()
+
+        self.keep = keep
+
+    def process_header(self, row):
+        self.delete = filter(lambda e: e not in self.keep, row)
+
+        return super(SelectColumns, self).process_header(row)
+
+    def __str__(self):
+        return qualified_class_name(self) + ' keep = ' + ', '.join(self.keep)
 
 
 class Edit(AddDeleteExpand):
@@ -950,62 +1154,70 @@ class PassOnlyDestColumns(Delete):
 
     def process_header(self, row):
 
-        dest_cols = [c.name for c in self.source.dest_table.columns ]
+        dest_cols = [c.name for c in self.source.dest_table.columns]
 
-        self.delete = [ h for h in row if h not in dest_cols]
+        self.delete = [h for h in row if h not in dest_cols]
 
         return super(Delete, self).process_header(row)
 
 
-class AddDerived(Pipe):
-    """Add values for the columns with a 'derivedfrom' entry. This pipe assumes to be be run after
-    the Caster, so the rows are in the same shape as the schema for the destination table
+class CastColumns(Pipe):
+    """Composes functions to map from the source table, to the destination table, with potentially
+    complex transformations for each column.
 
+    The CastColumns pipe uses the transformation values in the destination schema ,
+    datatype, nullify, initialize, typecast, transform and exception, to transform the source rows to destination
+    rows. The output rows have the lenghts and column types as speciefied in the destination schema.
 
     """
 
     def __init__(self):
-        self.code = None
-        self.processor = None
-        self.row_proxy = None
+
+        super(CastColumns, self).__init__()
+
+        self.row_processors = []
+        self.orig_headers = None
+        self.new_headers = None
+        self.row_proxy_1 = None
+        self.row_proxy_2 = None
+
+        self.accumulator = {}
+
+        self.row_n = 0
 
     def process_header(self, headers):
-        import ambry.valuetype.math
 
-        parts = []
+        self.orig_headers = headers
+        self.row_proxy_1 = RowProxy(self.orig_headers)
 
-        for i, c in enumerate(self.source.dest_table.columns):
-            if c.derivedfrom:
-                index = headers.index(c.name)
-                assert i == index
+        # Return the table header, rather than the original row header.
+        self.new_headers = [c.name for c in self.source.dest_table.columns]
 
-                parts.append(c.derivedfrom)
-            else:
-                parts.append('row[{}]'.format(i))
+        self.row_proxy_2 = RowProxy(self.new_headers)
 
-        if not parts:
-            self.process_body = self.process_body_default
-        else:
-            # FIXME: Should probably use itemgetter() instead of eval
-            self.code = 'lambda caster,  row: [ {} ] '.format(','.join(parts))
+        self.row_processors = self.bundle.build_caster_code(self.source, headers, pipe=self)
 
-            self.processor = eval(self.code, ambry.valuetype.math.__dict__)
-
-            self.row_proxy = RowProxy(headers)
-
-        return headers
+        return self.new_headers
 
     def process_body(self, row):
 
-        try:
+        self.row_n += 1
+        scratch = {}
+        errors = {}
 
-            return self.processor(self, self.row_proxy.set_row(row))
-        except Exception as e:
-            self.error("Exception in AddDerived processor\ncode={}\nexception={}".format(self.code, str(e)))
-            raise
+        rp = self.row_proxy_1
 
-    def process_body_default(self, row):
+        for proc in self.row_processors:
+            row = proc(rp.set_row(row), self.row_n, errors, scratch, self.accumulator, self, self.bundle, self.source)
+            rp = self.row_proxy_2
+
         return row
+
+    def __str__(self):
+
+        o = qualified_class_name(self) + '{} pipelines\n'.format(len(self.row_processors))
+
+        return o
 
 
 class Modify(Pipe):
@@ -1046,6 +1258,7 @@ class RemoveBlankColumns(Pipe):
             self.editor = eval("lambda r: [{}]".format(','.join(header_parts)))
             return self.editor(row)
         else:
+            # If there are no header parts, replace the process_body() method with a passthrough.
             self.process_body = lambda self, row: row
             return row
 
@@ -1079,8 +1292,25 @@ class Skip(Pipe):
         self.skipped = 0
         self.passed = 0
         self.ignored = 0
+        self.env = None
+        self.code = None
 
-    def process_header(self, row):
+    def process_header(self, headers):
+        from .codegen import calling_code
+
+        self.env = self.bundle.exec_context(source = self.source, pipe = self)
+
+        if self.pred in self.env:
+            self.code = 'lambda row: {}'.format(calling_code(self.env[self.pred], self.pred))
+            self.pred = eval(self.code, self.env)
+
+        elif not callable(self.pred):
+            self.code = 'lambda row: {}'.format(self.pred)
+            self.pred = eval(self.code, self.env)
+
+        else:
+            self.code = self.pred
+            pass # The predicate is a callable but not in the environment.
 
         # If there is no table specified, always run the predicate, but if the table
         # is specified, only run the predicate for that table.
@@ -1089,23 +1319,42 @@ class Skip(Pipe):
         else:
             self._check = self.table == self.source.dest_table.name
 
-        return row
+        self.row_proxy = RowProxy(headers)
+
+        return headers
 
     def __str__(self):
-
         return 'Skip. {} skipped, {} passed, {} ignored'.format(self.skipped, self.passed, self.ignored)
 
     def process_body(self, row):
 
-        if not self._check:
-            self.ignored += 1
-            return row
-        elif self.pred(dict(list(zip(self.headers, row))) if self._use_dict else row):
-            self.skipped += 1
-            return None
-        else:
-            self.passed += 1
-            return row
+        try:
+            if not self._check:
+                self.ignored += 1
+                return row
+            elif self.pred(self.row_proxy.set_row(row)):
+                self.skipped += 1
+                return None
+            else:
+                self.passed += 1
+                return row
+        except Exception as e:
+            self.bundle.error("Failed to process predicate in Skip pipe: '{}' ".format(self.code))
+            raise
+
+
+class Collect(Pipe):
+    """Collect rows so they can be viewed or processed after the run. """
+
+    def __init__(self):
+        self.rows = []
+
+    def process_body(self, row):
+        self.rows.append(row)
+        return row
+
+    def process_header(self, row):
+        return row
 
 
 class LogRate(Pipe):
@@ -1168,11 +1417,11 @@ class PrintRows(Pipe):
     def __str__(self):
 
         if self.rows:
-            aug_header =  ['0'] + ['#' + str(j) + ' ' + str(c) for j, c in enumerate(self.headers)]
+            aug_header = ['0'] + ['#' + str(j) + ' ' + str(c) for j, c in enumerate(self.headers)]
 
             return (qualified_class_name(self) +
                     ' {} rows total\n'.format(self.i) +
-                    tabulate( [[i] + row for i, row in enumerate(self.rows)],
+                    tabulate([[i] + row for i, row in enumerate(self.rows)],
                              headers=aug_header[self.offset:self.columns], tablefmt='pipe'))
         else:
             return qualified_class_name(self) + ' 0 rows'
@@ -1193,26 +1442,6 @@ class PrintEvery(Pipe):
         if self.i % self.N == 0:
             print('Print Row   :', row)
         self.i += 1
-        return row
-
-
-class MatchPredicate(Pipe):
-    """Store rows that match a predicate. THe predicate is a function that takes the row as its
-    sole parameter and returns true or false.
-
-    The matches can be retrieved from the pipeline vial the ``matches`` property
-    """
-
-    def __init__(self, pred):
-        self._pred = pred
-        self.i = 0
-        self.matches = []
-
-    def process_body(self, row):
-
-        if self._pred(row):
-            self.matches.append(row)
-
         return row
 
 
@@ -1264,25 +1493,39 @@ class SelectPartition(Pipe):
     partition a row is written to. By default, uses a partition name that consists of only the
      destination table of the source and a segment of the id of the source"""
 
-    def __init__(self, select_f=None, as_dict=False):
+    def __init__(self, select_f=None):
 
         self._default = None
-        self._as_dict = as_dict
+        self._code = 'default'
 
         # Under the theory that removing an if is faster.
         if select_f:
 
-            if not callable(self):
-                select_f = eval('lambda source, row: {}'.format(select_f))
+            if not six.callable(self):
+                self._code = 'lambda pipe, bundle, source, row: {}'.format(select_f)
+                select_f = eval(self._code)
+            else:
+                self._code = str(select_f)
 
             self.select_f = select_f
             self.process_body = self.process_body_select
         else:
             self.process_body = self.process_body_default
 
+        self._row_proxy = None
+
     def process_header(self, row):
-        self._default = PartialPartitionName(table=self.source.dest_table.name, segment=self.source.sequence_id)
+        from ambry_sources.sources.util import RowProxy
+        assert self.source.sequence_id != None
+        # The segment value make this a segment partition. Segment partitions are coalesced at
+        # the end of the build
+        self._default = PartialPartitionName(table=self.source.dest_table.name,
+                                             #time=self.source.time,
+                                             #space=self.source.space,
+                                             #grain=self.source.grain,
+                                             segment=self.source.sequence_id)
         self._orig_headers = row
+        self._row_proxy = RowProxy(row)
         return row + ['_pname']
 
     def process_body(self, row):
@@ -1291,10 +1534,7 @@ class SelectPartition(Pipe):
 
     def process_body_select(self, row):
 
-        if self._as_dict:
-            name = self.select_f(self.source, dict(list(zip(self.headers, row))))
-        else:
-            name = self.select_f(self.source, row)
+        name = self.select_f(self, self.bundle, self.source, self._row_proxy.set_row(row))
 
         # Name must be a dict
         if not isinstance(name, PartialPartitionName):
@@ -1312,6 +1552,37 @@ class SelectPartition(Pipe):
 
         return list(row) + [self._default]
 
+    def __str__(self):
+
+        return qualified_class_name(self) + " selector = {}".format(self._code)
+
+class SelectPartitionFromSource(Pipe):
+    """Set the name of the partition to write rows to from the  table, time, space and grain of the source"""
+
+    def __init__(self):
+
+        self._default = None
+        self._code = 'default'
+        self._row_proxy = None
+
+    def process_header(self, row):
+        from ambry_sources.sources.util import RowProxy
+
+        self._default = PartialPartitionName(table=self.source.dest_table.name,
+                                             time=str(self.source.time) if self.source.time is not None else None,
+                                             space=str(self.source.space) if self.source.space is not None else None,
+                                             grain=str(self.source.grain) if self.source.grain is not None else None,
+                                             segment=self.source.sequence_id)
+        self._orig_headers = row
+        self._row_proxy = RowProxy(row)
+        return row + ['_pname']
+
+    def process_body(self, row):
+        return list(row) + [self._default]
+
+    def __str__(self):
+
+        return qualified_class_name(self) + " selector = {}".format(self._code)
 
 class PartitionWriter(object):
     """Marker class so the partitions can be retrieved after the pipeline finishes
@@ -1369,35 +1640,40 @@ class WriteToPartition(Pipe, PartitionWriter):
         if not pname.segment:
             pname.segment = self._source_id
 
-        df_key = (self.source.name, pname)
+        df_key = (str(self.source.name), str(pname))
 
         try:
-            (p,  header_mapper, body_mapper) = self._datafiles[df_key]
+            (p,  header_mapper, body_mapper, writer) = self._datafiles[df_key]
         except KeyError:  # Failed to find the datafile, so make a new one
             try:
-                p = self._partitions[pname]
+                p = self._partitions[str(pname)]
             except KeyError:
                 p = self.bundle.partitions.partition(pname)
                 if not p:
                     from ..orm.partition import Partition
+                    import os
 
                     p = self.bundle.partitions.new_partition(pname, type=Partition.TYPE.SEGMENT)
-                    self.bundle.commit()
                     p.clean()
 
-                self._partitions[pname] = p
+                    self.bundle.commit()
+
+                assert p.table
+                self._partitions[str(pname)] = p
 
             header_mapper, body_mapper = make_table_map(p.table, self._headers[self.source.name])
 
-            self._datafiles[df_key] = (p, header_mapper, body_mapper)
+            writer = p.datafile.writer
+
+            self._datafiles[df_key] = (p, header_mapper, body_mapper, writer)
 
             # It is a new datafile, so it needs a header.
-            p.datafile.writer.headers = header_mapper(self.headers)
+            writer.headers = header_mapper(self.headers)
 
         try:
-            p.datafile.writer.insert_row(body_mapper(row))
+            writer.insert_row(body_mapper(row))
         except Exception as e:
-            self.bundle.logger.error("Insert failed: {}\n{}".format(row, e))
+            self.bundle.logger.error("Insert failed to {}: {}\n{}".format(p.datafile.path, row, e))
             raise
 
         return row
@@ -1406,8 +1682,13 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         self._end_time = time.time()
 
-        for key, (p, header_mapper, body_mapper) in iteritems(self._datafiles):
-            p.datafile.writer.close()
+        for key, (p, header_mapper, body_mapper, writer) in iteritems(self._datafiles):
+            try:
+                writer.close()
+            except Exception as e:
+                self.bundle.logger.error("Failed to close {}: {}".format(p.datafile.path, e))
+                raise
+
 
     @property
     def rate(self):
@@ -1452,7 +1733,7 @@ class PipelineSegment(list):
             matches = [e for e in self if isinstance(e, k)]
 
             if not matches:
-                raise IndexError("No entry for class: {}".format(k))
+                raise IndexError('No entry for class: {}'.format(k))
 
             k = self.index(matches[0])  # Only return first index
 
@@ -1492,10 +1773,14 @@ class Pipeline(OrderedDict):
     bundle = None
     name = None
     phase = None
+    dest_table = None
+    source_table = None
+    source_name = None
     final = None
     sink = None
 
-    _group_names = ['source', 'first', 'map', 'cast', 'augment', 'select', 'last', 'store', 'final']
+    _group_names = ['source', 'first', 'map', 'cast', 'body',
+                    'last', 'select_partition', 'write', 'final']
 
     def __init__(self, bundle=None,  *args, **kwargs):
 
@@ -1503,6 +1788,9 @@ class Pipeline(OrderedDict):
         super(Pipeline, self).__setattr__('bundle', bundle)
         super(Pipeline, self).__setattr__('name', None)
         super(Pipeline, self).__setattr__('phase', None)
+        super(Pipeline, self).__setattr__('source_table', None)
+        super(Pipeline, self).__setattr__('dest_table', None)
+        super(Pipeline, self).__setattr__('source_name', None)
         super(Pipeline, self).__setattr__('final', [])
         super(Pipeline, self).__setattr__('stopped', False)
         super(Pipeline, self).__setattr__('sink', None)
@@ -1520,8 +1808,6 @@ class Pipeline(OrderedDict):
 
         if args:
             self.__setitem__('body', PipelineSegment(self, 'body', *args))
-
-
 
     def _subset(self, subset):
         """Return a new pipeline with a subset of the sections"""
@@ -1556,7 +1842,7 @@ class Pipeline(OrderedDict):
                 return pipe
 
         def pipe_location(pipe):
-
+            """Return a location prefix from a pipe, or None if there isn't one """
             if not isinstance(pipe, string_types):
                 return None
 
@@ -1579,26 +1865,27 @@ class Pipeline(OrderedDict):
 
                 # Check if any of the pipes have a location command. If not, the pipe is cleared and the set of
                 # pipes replaces the ones that are there.
-                if not any( bool(pipe_location(pipe)) for pipe in pipes ):
+
+                if not any(bool(pipe_location(pipe)) for pipe in pipes):
                     # Nope, they are all clean
                     self[segment_name] = [eval_pipe(pipe) for pipe in pipes]
                 else:
-                    for i,pipe in enumerate(pipes):
+                    for i, pipe in enumerate(pipes):
 
-                        if pipe_location(pipe) : # The pipe is prefixed with a location command
+                        if pipe_location(pipe):  # The pipe is prefixed with a location command
                             location = pipe_location(pipe)
                             pipe = pipe[1:]
                         else:
-                            raise PipelineError("If any pipes in a section have a location command, they all must"
-                                                " Segment: {} pipes: {}".format(segment_name, pipes))
+                            raise PipelineError('If any pipes in a section have a location command, they all must'
+                                                ' Segment: {} pipes: {}'.format(segment_name, pipes))
 
                         ep = eval_pipe(pipe)
 
-                        if location == '+': #append to the segment
+                        if location == '+':  # append to the segment
                             self[segment_name].append(ep)
-                        elif location == '-': # Prepend to the segment
+                        elif location == '-':  # Prepend to the segment
                             self[segment_name].prepend(ep)
-                        elif location == '!': # Replace a pipe of the same class
+                        elif location == '!':  # Replace a pipe of the same class
 
                             if isinstance(ep, type):
                                 repl_class = ep
@@ -1607,15 +1894,13 @@ class Pipeline(OrderedDict):
 
                             self.replace(repl_class, ep, segment_name)
 
-
-    def replace(self, repl_class, replacement, target_segment_name = None):
+    def replace(self, repl_class, replacement, target_segment_name=None):
         """Replace a pipe segment, specified by its class, with another segment"""
 
         for segment_name, pipes in iteritems(self):
 
             if target_segment_name and segment_name != target_segment_name:
                 raise Exception()
-                continue
 
             repl_pipes = []
             found = False
@@ -1632,10 +1917,9 @@ class Pipeline(OrderedDict):
 
     @property
     def file_name(self):
-
         try:
             return self.source[0].file_name
-        except Exception as e:
+        except Exception:
             raise
 
     def __setitem__(self, k, v):
@@ -1666,7 +1950,7 @@ class Pipeline(OrderedDict):
             # This maybe should be an error?
             super(Pipeline, self).__setitem__(k, v)
 
-        assert isinstance(self[k], PipelineSegment), "Unexpected type: {}".format(type(self[k]))
+        assert isinstance(self[k], PipelineSegment), "Unexpected type: {} for {}".format(type(self[k]), k)
 
     def __getitem__(self, k):
 
@@ -1691,7 +1975,7 @@ class Pipeline(OrderedDict):
             return super(Pipeline, self).__getattr__(k)
 
     def __setattr__(self, k, v):
-        if k.startswith('_OrderedDict__') or k in ('name', 'phase', 'sink'):
+        if k.startswith('_OrderedDict__') or k in ('name', 'phase', 'sink', 'dest_table', 'source_name', 'source_table'):
             return super(Pipeline, self).__setattr__(k, v)
 
         self.__setitem__(k, v)
@@ -1712,10 +1996,15 @@ class Pipeline(OrderedDict):
 
         if len(chain):
             last = chain[0]
+
             for p in chain[1:]:
                 assert not inspect.isclass(p)
-                p.set_source_pipe(last)
-                last = p
+                try:
+                    p.set_source_pipe(last)
+                    last = p
+                except:
+                    print(p)
+                    raise
         else:
             last = None
 
@@ -1770,8 +2059,9 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
 
         for pipe in chain:
+
             segment_name = pipe.segment.name if hasattr(pipe, 'segment') else '?'
-            out.append(u('{}: {}').format(segment_name,pipe))
+            out.append(u('{}: {}').format(segment_name, pipe))
 
         out.append('final: ' + str(self.final))
 
@@ -1783,16 +2073,17 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
         for pipe in chain:
 
+            seg_name = pipe.segment.name if hasattr(pipe, 'segment') else '?'
+
             if not hasattr(pipe, 'headers') or not pipe.headers:
-                continue
+                out.append([seg_name, qualified_class_name(pipe)])
+            else:
+                try:
+                    v = [seg_name, qualified_class_name(pipe), len(pipe.headers)]+[str(e) for e in pipe.headers if e]
+                    out.append(v)
 
-            try:
-                seg_name = pipe.segment.name if hasattr(pipe, 'segment') else '?'
-                v = [seg_name, qualified_class_name(pipe)]+[str(e) for e in pipe.headers if e]
-                out.append(v)
-
-            except AttributeError:
-                pass
+                except AttributeError:
+                    pass
 
         if not out:
             return None

@@ -103,9 +103,7 @@ class Partitions(object):
         from ambry.orm import Partition as OrmPartition  # , Table
         from sqlalchemy.orm import joinedload  # , joinedload_all
 
-        assert isinstance(
-            pnq, PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(
-            type(pnq))
+        assert isinstance(pnq, PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(type(pnq))
 
         pnq = pnq.with_none()
 
@@ -138,7 +136,7 @@ class Partitions(object):
                 if pnq.table is None:
                     q = q.filter(OrmPartition.t_id is None)
                 else:
-                    tr = self.bundle.schema.table(pnq.table)
+                    tr = self.bundle.table(pnq.table)
 
                     if not tr:
                         raise ValueError("Didn't find table named {} in {} bundle path = {}".format(
@@ -168,6 +166,7 @@ class Partitions(object):
     def new_partition(self, name=None, data=None, **kwargs):
 
         from ambry.identity import PartialPartitionName
+        import os
 
         if name:
             name_parts = [e[0] for e in PartialPartitionName._name_parts]
@@ -175,6 +174,11 @@ class Partitions(object):
                           if k in name_parts)
 
         p = self.bundle.dataset.new_partition(data=data, **kwargs)
+
+        # These are called from before_insert and before_update,
+        # but calling them here can avoid some requirements for early commits()
+
+        p._update_names()
 
         return self.bundle.wrap_partition(p)
 

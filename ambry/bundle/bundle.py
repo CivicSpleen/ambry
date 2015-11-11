@@ -10,20 +10,44 @@ import os
 import sys
 from time import time
 import traceback
-from functools import partial
+from decorator import decorator
 
 from six import string_types, iteritems, u, b
+
+from fs.errors import NoSysPathError
 
 from geoid.civick import GVid
 from geoid import NotASummaryName
 
 from ambry.dbexceptions import PhaseError, BuildError, BundleError, FatalError
-
+from ambry.orm import File
 import ambry.etl
 from ..util import get_logger, Constant
 
 indent = '    '  # Indent for structured log output
 
+BUILD_LOG_FILE = 'log/build_log{}.txt'
+
+def _CaptureException(f, *args, **kwargs):
+    """Decorator implementation for capturing exceptions."""
+    from ambry.dbexceptions import LoggedException
+
+    b = args[0]  # The 'self' argument
+
+    try:
+        return f(*args, **kwargs)
+    except Exception as e:
+
+        if b.capture_exceptions:
+            b.exception(e)
+            b.commit()
+            raise LoggedException(e, b)
+        else:
+            raise
+
+def CaptureException(f, *args, **kwargs):
+    """Decorator to capture exceptions. and logging the error"""
+    return decorator(_CaptureException, f)  # Preserves signature
 
 class Bundle(object):
 
@@ -42,7 +66,10 @@ class Bundle(object):
     STATES.INSTALLING = 'install'
     STATES.INSTALLED = 'install_done'
     STATES.META = 'meta'
-    STATES.INGEST = 'ingest'
+    STATES.SCHEMA = 'schema'
+    STATES.INGESTING = 'ingest'
+    STATES.INGESTED = 'ingest_done'
+    STATES.NOTINGESTABLE = 'not_ingestable'
 
     # Other things that can be part of the 'last action'
     STATES.INFO = 'info'
@@ -50,40 +77,31 @@ class Bundle(object):
     # If the bundle is in test mode, only run 1000 rows, selected from the first 100,000
     TEST_ROWS = 1000  # Number of test rows to select from file.
 
-
-    # Default body content for pipelines
+    #  Default body content for pipelines
     default_pipelines = {
 
         'build': {
             'first': [],
-            'map': [
-                ambry.etl.MapSourceHeaders
-            ],
-            'cast': [
-                ambry.etl.CasterPipe
-            ],
-            'select': [],
-            'augment': [],
+            'map': [ambry.etl.MapSourceHeaders],
+            'cast': [ambry.etl.CastColumns],
+            'body': [],
             'last': [],
-            'store': [
-                ambry.etl.SelectPartition,
-                ambry.etl.WriteToPartition
-            ],
-            'final': [
-                'final_log_pipeline',
-                'final_finalize_segments',
-                'final_cast_errors'
-            ]
+            'select_partition': [ambry.etl.SelectPartition],
+            'write': [ambry.etl.WriteToPartition],
+            'final': []
         },
     }
 
-    def __init__(self, dataset, library, source_url=None, build_url=None, test = False):
+    def __init__(self, dataset, library, source_url=None, build_url=None):
         import logging
         import signal
 
         self._dataset = dataset
         self._library = library
         self._logger = None
+
+        self.multi = None # Number of multiprocessing processes
+        self.is_subprocess = False # Externally set in child processes.
 
         assert bool(library)
 
@@ -102,9 +120,16 @@ class Bundle(object):
 
         self._identity = None
 
-        self._orig_alarm_handler = signal.SIG_DFL # For start_progress_loggin
+        self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
 
-        self.test = test # Set to true to trigger test behavior
+        self.stage = None # Set to the current ingest or build stage
+        self.limited_run = False  # Set to true to trigger bundle-specific limits on # of rows processed
+
+        self.capture_exceptions = False  # If set to true (in CLI), will catch and log exceptions internally.
+        self.exit_on_fatal = True
+
+        # Test class imported from the test.py file
+        self.test_class = None;
 
         self.init()
 
@@ -121,16 +146,15 @@ class Bundle(object):
         if source_url:
             self._source_url = source_url
             self.dataset.config.library.source.url = self._source_url
-            self.dataset.commit()
         elif source_url is None:
             self._source_url = None
             self.dataset.config.library.source.url = self._source_url
-            self.dataset.commit()
 
         if build_url:
             self._build_url = build_url
             self.dataset.config.library.build.url = self._build_url
-            self.dataset.commit()
+
+        self.dataset.commit()
 
     def cast_to_subclass(self):
         """
@@ -139,19 +163,31 @@ class Bundle(object):
 
         :return:
         """
-        from ambry.orm import File
-        bsf = self.build_source_files.file(File.BSFILE.BUILD)
+
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            self.commit() # To ensure the rollback() doesn't clear out anything important
+            bsf = self.build_source_files.file(File.BSFILE.BUILD)
+        except:
+            self.log("Error trying to create a bundle source file ... ")
+            self.rollback()
+            return self
+
         try:
             clz = bsf.import_bundle()
 
-            return clz(self._dataset, self._library, self._source_url, self._build_url, self.test)
+            b = clz(self._dataset, self._library, self._source_url, self._build_url)
+            b.limited_run = self.limited_run
+            b.capture_exceptions = self.capture_exceptions
+            b.multi = self.multi
+            return b
 
         except Exception as e:
-            raise BundleError("Failed to load bundle code file, skipping : {}".format(e))
+            raise BundleError('Failed to load bundle code file, skipping : {}'.format(e))
 
     def import_lib(self):
         """Import the lib.py file from the bundle"""
-        from ambry.orm import File
         return self.build_source_files.file(File.BSFILE.LIB).import_lib()
 
     def load_requirements(self):
@@ -172,7 +208,7 @@ class Bundle(object):
         return self.dataset._database.session
 
     def rollback(self):
-        return self.dataset._database.session.rollback()
+        return self.dataset.rollback()
 
     @property
     def dataset(self):
@@ -187,7 +223,7 @@ class Bundle(object):
     @property
     def identity(self):
         if not self._identity:
-            self._identity =  self.dataset.identity
+            self._identity = self.dataset.identity
 
         return self._identity
 
@@ -210,10 +246,31 @@ class Bundle(object):
         except NotFoundError:
             return self.library.bundle(source.url)
 
-    def init_log_rate(self, N=None, message='', print_rate=None):
-        from ..util import init_log_rate as ilr
+    @property
+    def config(self):
+        """Return the Cofig acessors. THe returned object has properties for acessing other
+        groups of configuration values:
 
-        return ilr(self.log, N=N, message=message, print_rate=print_rate)
+        - build: build state
+        - metadata: raw acess to metadata values
+        - sync: Synchronization times among the build source files, file records, and objects.
+
+        """
+        return self.dataset.config
+
+    @property
+    def metadata(self):
+        """Return the Metadata acessor"""
+        return self.dataset.config.metadata
+
+    @property
+    def documentation(self):
+        """Return the documentation, from the documentation.md file, with template substitutions"""
+
+        # Return the documentation as a scalar term, which has .text() and .html methods to do
+        # metadata substitution using Jinja
+
+        return self.metadata.scalar_term(self.build_source_files.documentation.record_content)
 
     @property
     def partitions(self):
@@ -222,21 +279,28 @@ class Bundle(object):
         return Partitions(self)
 
     def partition(self, ref=None, **kwargs):
-        """Return the Schema acessor"""
+        """Return a partition in this bundle for a vid reference or name parts"""
+
+        if not ref and not kwargs:
+            return None
 
         if ref:
 
             for p in self.partitions:
                 if p.vid == b(ref) or p.name == b(ref):
+                    p._bundle = self
                     return p
+
             return None
 
         elif kwargs:
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
 
-
-        raise NotImplementedError("Haven't finished this!")
+            p = self.partitions._find_orm(pnq).one()
+            if p:
+                p._bundle = self
+                return p
 
     def new_partition(self, table, **kwargs):
         """
@@ -247,34 +311,6 @@ class Bundle(object):
         """
 
         return self.dataset.new_partition(table, **kwargs)
-
-    def table(self, ref):
-        """
-        Return a table object for a name or id
-        :param ref: Table name, vid or id
-        :return:
-        """
-        return self.dataset.table(ref)
-
-    @property
-    def tables(self):
-        """
-        Return a iterator of tables in this bundle
-        :return:
-        """
-
-        return self.dataset.tables
-
-    def new_table(self, name, add_id=True, **kwargs):
-        """
-        Create a new table, if it does not exist, or update an existing table if it does
-        :param name:  Table name
-        :param add_id: If True, add an id field ( default is True )
-        :param kwargs: Other options passed to table object
-        :return:
-        """
-
-        return self.dataset.new_table(name = name, add_id = add_id, **kwargs)
 
     def wrap_partition(self, p):
 
@@ -297,14 +333,49 @@ class Bundle(object):
 
         self.session.delete(p._partition)
 
+    def table(self, ref):
+        """
+        Return a table object for a name or id
+        :param ref: Table name, vid or id
+        :return:
+        """
+        return self.dataset.table(ref)
+
+    @property
+    def tables(self):
+        """
+        Return a iterator of tables in this bundle
+        :return:
+        """
+        from ambry.orm import Table
+        from sqlalchemy.orm import joinedload, noload
+
+        return (self.dataset.session.query(Table)
+                .filter(Table.d_vid == self.dataset.vid)
+                .options(noload('column'))
+                .all())
+
+        #return self.dataset.tables
+
+    def new_table(self, name, add_id=True, **kwargs):
+        """
+        Create a new table, if it does not exist, or update an existing table if it does
+        :param name:  Table name
+        :param add_id: If True, add an id field ( default is True )
+        :param kwargs: Other options passed to table object
+        :return:
+        """
+
+        return self.dataset.new_table(name=name, add_id=add_id, **kwargs)
+
     def source(self, name):
-        source =  self.dataset.source_file(name)
+        source = self.dataset.source_file(name)
         source._bundle = self
         return source
 
     def source_pipe(self, source):
         """Create a source pipe for a source, giving it access to download files to the local cache"""
-        from ambry.etl import DatafileSourcePipe, GeneratorSourcePipe
+        from ambry.etl import DatafileSourcePipe
         if isinstance(source, string_types):
             source = self.source(source)
 
@@ -320,21 +391,67 @@ class Bundle(object):
             s._bundle = self
             return s
 
-        return list(set_bundle(s) for s in self.dataset.sources if s.is_downloadable)
+        return list(set_bundle(s) for s in self.dataset.sources )
+
+    def _resolve_sources(self, sources, tables, stage=None, predicate=None):
+        """
+        Determine what sources to run from an input of sources and tables
+
+        :param sources:  A collection of source objects, source names, or source vids
+        :param tables: A collection of table names
+        :param stage: If not None, select only sources from this stage
+        :param predicate: If not none, a callable that selects a source to return when True
+        :return:
+        """
+
+        assert sources is None or tables is None
+
+        if not sources:
+            if tables:
+                sources = list(s for s in self.sources if s.dest_table_name in tables)
+            else:
+                sources = self.sources
+        elif not isinstance(sources, (list, tuple)):
+            sources = [sources]
+
+        def objectify(source):
+            if isinstance(source, basestring):
+                source_name = source
+                return self.source(source_name)
+            else:
+                return source
+
+        sources = [objectify(s) for s in sources]
+
+        if predicate:
+            sources = [s for s in sources if predicate(s)]
+
+        if stage:
+            sources = [s for s in sources if s.stage == stage]
+
+
+        return sources
+
+    @property
+    def refs(self):
+
+        def set_bundle(s):
+            s._bundle = self
+            return s
+
+        """Iterate over downloadable sources -- references and templates"""
+        return list(set_bundle(s) for s in self.dataset.sources if not s.is_downloadable)
 
     @property
     def source_tables(self):
         return self.dataset.source_tables
 
-    @property
-    def refs(self):
-        """Iterate over downloadable sources -- referecnes and templates"""
-        return list(s for s in self.dataset.sources if not s.is_downloadable)
+    def source_table(self, ref):
+        return self.dataset.source_table(ref)
 
-    @property
-    def metadata(self):
-        """Return the Metadata acessor"""
-        return self.dataset.config.metadata
+    #
+    # Files and Filesystems
+    #
 
     @property
     def build_source_files(self):
@@ -356,6 +473,7 @@ class Bundle(object):
                 source_url = self.library.filesystem.source(self.identity.cache_key)
 
             try:
+
                 self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
                 self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
@@ -366,7 +484,7 @@ class Bundle(object):
 
     @property
     def build_fs(self):
-        from fs.opener import fsopendir
+        from fs.opener import fsopendir, opener
 
         if not self._build_fs:
             build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
@@ -376,7 +494,8 @@ class Bundle(object):
                 # raise ConfigurationError(
                 #    'Must set build URL either in the constructor or the configuration')
 
-            self._build_fs = fsopendir(build_url)
+
+            self._build_fs = fsopendir(build_url, create_dir=True)
 
         return self._build_fs
 
@@ -399,14 +518,19 @@ class Bundle(object):
         base_path = 'ingest'
 
         if not self.build_fs.exists(base_path):
-            self.build_fs.makedir(base_path, allow_recreate=True)
-
+            self.build_fs.makedir(base_path, recursive=True, allow_recreate=True)
 
         return self.build_fs.opendir(base_path)
 
-
     def phase_search_names(self, source, phase):
+        """Search the bundle.yaml metadata file for pipeline configurations. Looks for:
+        - <phase>-<source_table>
+        - <phase>-<dest_table>
+        - <phase>-<source_name>
+
+        """
         search = []
+
 
         # Create a search list of names for getting a pipline from the metadata
         if source and source.source_table_name:
@@ -422,20 +546,56 @@ class Bundle(object):
 
         return search
 
+    #
+    # Logging
+    #
+
+    @property
+    def log_file(self):
+
+        from os.path import dirname
+
+        if self.multi:
+            log_file = BUILD_LOG_FILE.format('_' + str(os.getpid()))
+        else:
+            log_file = BUILD_LOG_FILE.format('')
+
+        if not self.build_fs.exists(log_file):
+            self.build_fs.makedir(dirname(log_file), recursive=True, allow_recreate=True)
+            self.build_fs.createfile(log_file)
+
+        return log_file
+
     @property
     def logger(self):
         """The bundle logger."""
+        import os
+
 
         if not self._logger:
 
             ident = self.identity
-            template = "%(levelname)s " + ident.sname + " %(message)s"
+            if self.multi:
+                template = '%(levelname)s %(process)d {} %(message)s'.format(ident.vid)
+            else:
+                template = '%(levelname)s {} %(message)s'.format(ident.vid)
 
-            self._logger = get_logger(__name__, template=template, stream=sys.stdout)
+            try:
+                file_name = self.build_fs.getsyspath(self.log_file)
+                self._logger = get_logger(__name__, template=template, stream=sys.stdout, file_name=file_name)
+            except NoSysPathError:
+                # file does not exists in the os - memory fs for example.
+                self._logger = get_logger(__name__, template=template, stream=sys.stdout)
 
             self._logger.setLevel(self._log_level)
 
         return self._logger
+
+    def log_to_file(self, message):
+        """Write a log message only to the file"""
+
+        with self.build_fs.open(self.log_file, 'a+') as f:
+            f.write(unicode(message + '\n'))
 
     def log(self, message, **kwargs):
         """Log the messsage."""
@@ -445,17 +605,33 @@ class Bundle(object):
         """Log the messsage."""
         self.logger.debug(message)
 
-    def error(self, message):
+    def error(self, message, set_error_state = False):
         """Log an error messsage.
 
         :param message:  Log message.
 
         """
-        if message not in self._errors:
-            self._errors.append(message)
+        if set_error_state:
+            if message not in self._errors:
+                self._errors.append(message)
+
+            self.set_error_state()
+
+        self.logger.error(message)
+
+    def exception(self, e):
+        """Log an error messsage.
+
+        :param e:  Exception to log.
+
+        """
+        if str(e) not in self._errors:
+            self._errors.append(str(e))
 
         self.set_error_state()
-        self.logger.error(message)
+        self.dataset.config.build.state.exception_type = str(e.__class__.__name__)
+        self.dataset.config.build.state.exception = str(e)
+        self.logger.exception(e)
 
     def warn(self, message):
         """Log an error messsage.
@@ -509,7 +685,6 @@ class Bundle(object):
 
         return _ProgressLogger()
 
-
     def start_progress_logging(self, f, interval=2):
         """
         Call the function ``f`` every ``interval`` seconds to produce a logging message to be passed
@@ -532,13 +707,13 @@ class Bundle(object):
 
             r = f()
 
-            if isinstance(r, (tuple,list)):
+            if isinstance(r, (tuple, list)):
                 try:
                     self.log(r[0].format(*r[1]))
                 except IndexError:
-                    self.log(str(r)+" (Bad log format)") # Well, at least log something
+                    self.log(str(r) + ' (Bad log format)')  # Well, at least log something
             else:
-                self.log(str(r) + ' '+str(type(r)))
+                self.log(str(r) + ' ' + str(type(r)))
 
             # Or, use signal.itimer()? Maybe, but this way, the handler will stop if there is
             # an exception, rather than getting regular exceptions.
@@ -546,7 +721,7 @@ class Bundle(object):
 
         old_handler = signal.signal(signal.SIGALRM, handler)
 
-        if not self._orig_alarm_handler: # Only want the handlers from other outside sources
+        if not self._orig_alarm_handler:  # Only want the handlers from other outside sources
             self._orig_alarm_handler = old_handler
 
         signal.alarm(interval)
@@ -563,384 +738,67 @@ class Bundle(object):
             signal.signal(signal.SIGALRM, self._orig_alarm_handler)
             self._orig_alarm_handler = None
 
-            signal.alarm(0) # Cancel any currently active alarm.
+            signal.alarm(0)  # Cancel any currently active alarm.
+
+    def init_log_rate(self, N=None, message='', print_rate=None):
+        from ..util import init_log_rate as ilr
+
+        return ilr(self.log, N=N, message=message, print_rate=print_rate)
 
     #
-    # Source Synced
+    # Pipelines
     #
 
-    def sync(self, force=None, defaults=False):
+    def log_pipeline(self, pl):
+        """Write a report of the pipeline out to a file """
+        from datetime import datetime
+        from ambry.etl.pipeline import CastColumns
+
+        self.build_fs.makedir('pipeline', allow_recreate=True)
+
+        try:
+            ccp = pl[CastColumns]
+            caster_code = ccp.pretty_code
+        except Exception as e:
+            caster_code = str(e)
+
+        v = u("""
+Pipeline     : {}
+run time     : {}
+phase        : {}
+source name  : {}
+source table : {}
+dest table   : {}
+========================================================
+{}
+
+Pipeline Headers
+================
+{}
+
+Caster Code
+===========
+{}
+
+""".format(pl.name, str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
+           pl.dest_table, unicode(pl), pl.headers_report(), caster_code))
+
+        path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
+
+        self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
+
+        self.build_fs.setcontents(path, v, encoding='utf8')
+
+    def pipeline(self, source=None, phase='build'):
         """
+        Construct the ETL pipeline for all phases. Segments that are not used for the current phase
+        are filtered out later.
 
-        :param force: Force a sync in one direction, either ftr or rtf.
-        :param defaults [False] If True and direction is rtf, write default source files
-        :return:
+        :param source: A source object, or a source string name
+        :return: an etl Pipeline
         """
-
-        if self.is_finalized:
-            self.error("Can't sync; bundle is finalized")
-            return False
-
-        if self.is_finalized:
-            self.error("Can't sync; bundle is finalized")
-            return False
-
-        ds = self.dataset  # FIXME: Unused variable. Remove after testing.
-
-        syncs = self.build_source_files.sync(force, defaults)
-
-        self.state = self.STATES.SYNCED
-        self.log("---- Synchronized ----")
-        self.dataset.commit()
-
-        self.library.search.index_bundle(self, force = True)
-
-        return syncs
-
-    def sync_in(self):
-        """Synchronize from files to records, and records to objects"""
-        from ambry.bundle.files import BuildSourceFile
-        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
-        self.build_source_files.record_to_objects()
-
-        self.library.search.index_bundle(self, force = True)
-        # self.state = self.STATES.SYNCED
-
-    def sync_objects_in(self):
-        """Synchronize from records to objects"""
-        self.build_source_files.record_to_objects()
-
-    def sync_out(self):
-        from ambry.bundle.files import BuildSourceFile
-        """Synchronize from objects to records"""
-        self.build_source_files.objects_to_record()
-        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
-        # self.state = self.STATES.SYNCED
-
-    def sync_objects_out(self):
-        """Synchronize from objects to records, and records to files"""
-        self.build_source_files.objects_to_record()
-
-    def sync_objects(self):
-        self.build_source_files.record_to_objects()
-        self.build_source_files.objects_to_record()
-
-    def sync_code(self):
-        """Sync in code files and the meta file, avoiding syncing the larger files"""
-        from ambry.orm.file import File
-        from ambry.bundle.files import BuildSourceFile
-
-        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB]:
-            self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
-
-    #
-    # Do All; Run the full process
-
-    def run(self,sources = None, force = False, clean = False):
-
-        if self.is_finalized:
-            self.error("Can't run; bundle is finalized")
-            return False
-
-        self.sync_in()
-
-        if not self.ingest(sources = sources, force = force, clean_files = clean):
-            self.error('Run: failed to ingest')
-            return False
-
-        if not self.schema():
-            self.error('Run: failed to build schema')
-            return False
-
-        if not self.build(sources=sources, force = force):
-            self.error('Run: failed to build')
-            return False
-
-        self.sync_out()
-
-        self.finalize()
-
-        return True
-
-    #
-    # Clean
-    #
-
-    @property
-    def is_clean(self):
-        return self.state == self.STATES.CLEANED
-
-    def clean(self, force=False):
-
-        """Clean generated objects from the dataset, but only if there are File contents
-         to regenerate them"""
-        from ambry.orm import ColumnStat, File
-
-        if self.is_finalized and not force:
-            self.warn("Can't clean; bundle is finalized")
-            return False
-
-        self.log('---- Cleaning ----')
-        self.state = self.STATES.CLEANING
-
-        ds = self.dataset
-        s = self.session
-
-        # FIXME. There is a problem with the cascades for ColumnStats that prevents them from
-        # being  deleted with the partitions. Probably, the are seen to be owed by the columns instead.
-        s.query(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
-
-        self.dataset.partitions[:] = []
-
-        ds.commit()
-
-        for src in self.dataset.sources:
-            src.st_id = None
-            src.t_id = None
-
-        ds.commit()
-
-        if ds.bsfile(File.BSFILE.SOURCES).has_contents:
-            self.dataset.sources[:] = []
-
-        ds.commit()
-
-        if ds.bsfile(File.BSFILE.SOURCESCHEMA).has_contents:
-            self.dataset.source_tables[:] = []
-
-        if ds.bsfile(File.BSFILE.SCHEMA).has_contents:
-            self.dataset.tables[:] = []
-
-        self.log('---- Done Cleaning ----')
-
-        return True
-
-    def clean_source(self, force=False):
-        """Like clean, but also clears out files. """
-
-
-    def clean_tables(self, force=False):
-        """Like clean, but also clears out files. """
-
-    def clean_partitions(self, force=False):
-        """Delete partition records and any built partition files.  """
-        import shutil
-
-        self.dataset.delete_partitions()
-
-        shutil.rmtree(self.build_partition_dir.getsyspath('/'))
-
-    def clean_build(self, force=False):
-        """Delete the build directory and all ingested files """
-        import shutil
-
-        self.clean_files()
-
-        shutil.rmtree(self.build_fs.getsyspath('/'))
-
-
-    def clean_files(self, force=False):
-        """Delete all ingested file records, but leave the ingested files in the build directory """
-
-        self.dataset.files[:] = []
-
-    def clean_all(self, force=False):
-        """Like clean, but also clears out files. """
-
-        self.clean()
-
-
-    def clean_process_meta(self):
-        """Remove all process and build metadata"""
-
-        ds.config.build.clean()
-        ds.config.process.clean()
-
-        ds.commit()
-
-        self.state = self.STATES.CLEANED
-
-
-    #
-    # Prepare
-    #
-
-    @property
-    def is_prepared(self):
-        return self.state == Bundle.STATES.PREPARED
-
-    def prepare(self):
-        """This method runs pre_, main and post_ prepare methods."""
-
-        self.load_requirements()
-
-        self.import_lib()
-
-        r = True
-
-        if self.pre_prepare():
-            self.state = self.STATES.PREPARING
-            self.log('---- Preparing ----')
-            if self.prepare_main():
-                self.state = self.STATES.PREPARED
-                if self.post_prepare():
-                    self.log('---- Done Preparing ----')
-                else:
-                    self.set_error_state()
-                    self.log('---- Post-prepare exited with failure ----')
-                    r = False
-            else:
-                self.set_error_state()
-                self.log('---- Prepare exited with failure ----')
-                r = False
-        else:
-            self.log('---- Skipping prepare ---- ')
-            r = False
-
-        self.dataset.commit()
-
-        return r
-
-    def prepare_main(self):
-
-        return True
-
-    def pre_prepare(self):
-        """"""
-        if self.is_finalized:
-            self.warn("Can't prepare; bundle is finalized")
-            return False
-        return True
-
-    def post_prepare(self):
-        """"""
-
-        for t in self.dataset.tables:
-            if not bool(t.description):
-                self.error('No title ( Description of id column ) set for table: {} '.format(t.name))
-
-        self.commit()
-
-        return True
-
-    #
-    # General Phase Runs
-    #
-
-    def ingest(self, sources = None, tables = None, force = False, clean_files=False):
-        """
-        Load sources files into MPR files, attached to the source record
-        :param source: Sources or destination table name. If tables, the parameter is converted to the set of sources
-        that have that table as a destination table.
-        :param force: Delete files before loading.
-        :param clean: Same as force; exists for consistency
-        :return:
-        """
-        from ambry_sources import get_source
-        from ambry_sources.sources import FixedSource, GeneratorSource
-        from ambry.orm.exc import NotFoundError
-
-        if not sources:
-            if tables:
-                sources = list(s for s in self.sources if s.dest_table_name in tables)
-            else:
-                sources = self.sources
-        elif not isinstance(sources, (list,tuple)):
-            sources = [sources]
-
-        processed_sources = []
-        for i, source in enumerate(sources):
-
-            if isinstance(source, basestring):
-                source_name = source
-                source = self.source(source_name)
-
-                if not source:
-                    raise BundleError("Failed to get source for '{}'".format(source_name))
-
-            processed_sources.append(source)
-
-            if source.datafile.exists:
-                if clean_files:
-                    source.datafile.remove()
-                else:
-                    self.log("Source {} already ingested, skipping".format(source.name))
-                    continue
-
-            self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
-
-            if source.url:
-                with self.progress_logging(lambda: ("Downloading {}", (source.url,)), 10):
-                    s = get_source(source.spec, self.library.download_cache, clean = force)
-
-                if isinstance(s, FixedSource):
-                    s.spec.columns = list(source.source_table.columns)
-
-            elif source.generator:
-                import sys
-
-                if hasattr(self, source.generator):
-                    gen_cls = getattr(self, source.generator)
-                elif source.generator in  sys.modules['ambry.build'].__dict__:
-                    gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
-                else:
-                    gen_cls = self.import_lib().__dict__[source.generator]
-
-                s = GeneratorSource(source.spec, gen_cls(self, source), use_row_spec = False)
-
-            with self.progress_logging(lambda : ("Ingesting {}: {} {} of {}, rate: {}",
-                                                 (source.spec.name,) + source.datafile.report_progress()), 10):
-                source.datafile.load_rows(s, s.spec)
-
-            self.log("Ingested: {}".format(source.datafile.path))
-
-        self.commit()
-
-        # Do these updates, even if we skipped ingestion, so that the source tables will be generates if they
-        # had been cleaned from the database, but the ingested files still exists.
-        for i, source in enumerate(processed_sources):
-            source.update_table()  # Generate the source tables.
-            source.update_spec()  # Update header_lines, start_line, etc.
-
-        return True
-
-
-    def schema(self, tables = None, force = False, clean = False):
-        """Generate destination schemas"""
-        from itertools import groupby
-        from operator import attrgetter
-
-        if clean:
-            self.dataset.delete_tables_partitions()
-            self.commit()
-
-        # Group the sources by the destination table name
-        keyfunc = attrgetter('dest_table')
-        for t, sources in groupby(sorted(self.sources, key=keyfunc), keyfunc):
-
-            if tables and t.name not in tables:
-                continue
-
-            self.log("Populating table: {}".format(t.name))
-
-            # Get all of the header names, for each source, associating the header position in the table
-            # with the header, then sort on the postition. This will produce a stream of header names
-            # that may have duplicates, but with is generally in the order the headers appear in the
-            # sources. The duplicates are properly handled when we add the columns in add_column()
-            headers = sorted(set([ (i, col.name, col.datatype, col.description) for source in sources
-                             for i, col in enumerate(source.source_table.columns) ]))
-
-            for pos, name, datatype, desc in headers:
-                t.add_column(name=name, datatype=datatype, description=desc)
-
-        self.commit()
-        return True
-
-    def pipeline(self, phase, source=None):
-        """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
-        are filtered out later. """
-
         from ambry.etl.pipeline import Pipeline, PartitionWriter
+        from ambry.dbexceptions import ConfigurationError
 
         if source:
             source = self.source(source) if isinstance(source, string_types) else source
@@ -963,12 +821,20 @@ class Bundle(object):
         # Find the pipe configuration, from the metadata
         pipe_config = None
         pipe_name = None
-        for name in self.phase_search_names(source, phase):
-            if name in self.metadata.pipelines:
-                pipe_config = self.metadata.pipelines[name]
-                pipe_name = name
+        if source and source.pipeline:
+            pipe_name = source.pipeline
+            try:
+                pipe_config = self.metadata.pipelines[pipe_name]
+            except KeyError:
+                raise ConfigurationError("Pipeline '{}' declared in source '{}', but not found in metadata"
+                                         .format(source.pipeline, source.name))
+        else:
+            for name in self.phase_search_names(source, phase):
+                if name in self.metadata.pipelines:
+                    pipe_config = self.metadata.pipelines[name]
+                    pipe_name = name
 
-                break
+                    break
 
         if pipe_name:
             pl.name = pipe_name
@@ -977,8 +843,9 @@ class Bundle(object):
 
         pl.phase = phase
 
-        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the         augment segment
-        # or it could be a dict, in which case each is a list of pipes for the named segments.
+        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the
+        # augment segment or it could be a dict, in which case each is a list of pipes
+        # for the named segments.
 
         def apply_config(pl, pipe_config):
 
@@ -991,7 +858,7 @@ class Bundle(object):
                 for pipe in pipe_config:
                     store.append(pipe) if isinstance(pipe, PartitionWriter) else body.append(pipe)
 
-                pipe_config = dict(augment=body, store=store)
+                pipe_config = dict(body=body, store=store)
 
             if pipe_config:
                 pl.configure(pipe_config)
@@ -1002,9 +869,16 @@ class Bundle(object):
         if 'all' in self.metadata.pipelines:
             apply_config(pl, self.metadata.pipelines['all'])
 
-
         # Allows developer to over ride pipe configuration in code
         self.edit_pipeline(pl)
+
+        try:
+
+            pl.dest_table = source.dest_table_name
+            pl.source_table = source.source_table.name
+            pl.source_name = source.name
+        except AttributeError:
+            pl.dest_table = None
 
         return pl
 
@@ -1021,212 +895,696 @@ class Bundle(object):
 
         return pipeline
 
-    def pre_phase(self, phase, force=False):
+    def field_row(self, fields):
+        """
+        Return a list of values to match the fields values. This is used when listing bundles to
+        produce a table of information about the bundle.
 
-        if self.is_built and not force:
-            self.error("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
-            return False
+        :param fields: A list of names of data items.
+        :return: A list of values, in the same order as the fields input
 
-        if self.is_finalized and not force:
-            self.error("Can't build; bundle is finalized")
-            return False
+        The names in the fields llist can be:
 
-        self.state = phase
+        - state: The current build state
+        - source_fs: The URL of the build source filesystem
+        - about.*: Any of the metadata fields in the about section
 
-        self.load_requirements()
+        """
 
-        self.import_lib()
+        row = self.dataset.row(fields)
+
+        # Modify for special fields
+        for i, f in enumerate(fields):
+            if f == 'state':
+                row[i] = self.state
+            elif f == 'source_fs':
+                row[i] = self.source_fs
+            elif f.startswith('about'):  # all metadata in the about section, ie: about.title
+                _, key = f.split('.')
+                row[i] = self.metadata.about[key]
+            elif f.startswith('state'):
+                _, key = f.split('.')
+                row[i] = self.dataset.config.build.state[key]
+            elif f.startswith('count'):
+                _, key = f.split('.')
+                if key == 'sources':
+                    row[i] = len(self.dataset.sources)
+                elif key == 'tables':
+                    row[i] = len(self.dataset.tables)
+
+        return row
+
+    #
+    # States
+    #
+
+    def clear_states(self):
+        """Delete  all of the build state information"""
+        return self.dataset.config.build.clean()
+
+    @property
+    def state(self):
+        """Return the current build state"""
+        return self.dataset.config.build.state.current
+
+    @property
+    def error_state(self):
+        """Set the error condition"""
+        self.dataset.config.build.state.lasttime = time()
+        return self.dataset.config.build.state.error
+
+    @property
+    def build_state(self):
+        """"Returns the build state accessor, self.dataset.config.build.state"""
+
+        return self.dataset.config.build.state
+
+    @state.setter
+    def state(self, state):
+        """Set the current build state and record the time to maintain history"""
+
+        assert state != 'build_bundle'
+
+        self.dataset.config.build.state.current = state
+        self.dataset.config.build.state[state] = time()
+        self.dataset.config.build.state.lasttime = time()
+
+        self.dataset.config.build.state.error = False
+        self.dataset.config.build.state.exception = None
+        self.dataset.config.build.state.exception_type = None
+
+    def record_stage_state(self, phase, stage):
+        """Record the completion times of phases and stages"""
+
+        key = "{}-{}".format(phase, stage if stage else 1)
+
+        self.dataset.config.build.state[key] = time()
+
+
+    def set_error_state(self):
+        self.dataset.config.build.state.error = time()
+        self.state = self.state + ('_error' if not self.state.endswith('_error') else '')
+
+    def set_last_access(self, tag):
+        """Mark the time that this bundle was last accessed"""
+        self.dataset.config.build.access.last = tag
+
+    #########################
+    # Build phases
+    #########################
+
+    #
+    # Do All; Run the full process
+
+    def run(self, sources=None, tables=None, force=False, schema=False):
+        """Synonym for run_stages"""
+        return self.run_stages(sources, tables, force=force)
+
+    @CaptureException
+    def run_stages(self, sources=None, tables=None, force=False):
+        """Like run, but runs stages in order, rather than each phase in order. So, run() will ingest all sources,
+        then build all sources, while run_stages() will ingest then build all order=1 sources, then ingest and
+        build all order=2 sources.
+
+        Actual operation is to group sources by order, then call run() on each group
+        """
+
+        from itertools import groupby
+        from operator import attrgetter
+        from ambry.bundle.events import TAG
+
+        resolved_sources = self._resolve_sources(sources, tables)
+
+        if force:  # Clean all of the old partitions
+
+            for p in self.dataset.partitions:
+                if p.type == p.TYPE.SEGMENT:
+                    self.log("Removing old segment partition: {}".format(p.identity.name))
+                else:
+                    self.log("Removing build partition: {}".format(p.identity.name))
+                self.wrap_partition(p).datafile.remove()
+                self.session.delete(p)
+
+            for s in resolved_sources:
+                if s.state in (self.STATES.BUILDING, self.STATES.BUILT):
+                    s.state = self.STATES.INGESTED
+
+            self.commit()
+
+        keyfunc = attrgetter('stage')
+        self._run_events(TAG.BEFORE_RUN)
+
+        for stage, stage_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
+            stage_sources = list(stage_sources)  # Stage_sources is an iterator, can only be traversed once
+
+            self._run_events(TAG.BEFORE_STAGE, stage)
+            if not self._run_stage(stage,sources=stage_sources,  force=force, finalize=False):
+                self.error('Failed to run stage {}'.format(stage))
+            self._run_events(TAG.AFTER_STAGE, stage)
+
+        self.post_run()
+
+        if not sources and not tables:
+            self._run_events(TAG.AFTER_RUN)
+        else:
+            self.log("Sources or tables specified; skipping after run test")
 
         return True
 
-    def phase_main(self, phase,  stage='main', sources=None):
+    def _run_stage(self, stage=None, sources=None, tables=None,  force=False, finalize=True):
+
+        if self.is_finalized and not force:
+            self.error("Can't run; bundle is finalized")
+            return False
+
+        sources = self._resolve_sources(sources, tables)
+
+        if not self.ingest(sources=sources, force=force):
+            self.error('Run: failed to ingest')
+            return False
+
+        if not self.schema(sources=sources, stage=stage, force=force):
+            self.error('Run: failed to build schema')
+            return False
+
+        if not self.build(sources=sources, stage=stage, force=force):
+            self.error('Run: failed to build')
+            return False
+
+        if finalize:
+            self.finalize()
+
+        return True
+
+    #
+    # Syncing
+    #
+
+    def sync(self, force=None, defaults=False):
         """
 
-        :param phase:
-        :param stage:
-        :param sources: Source names or destination table names.
+        :param force: Force a sync in one direction, either ftr or rtf.
+        :param defaults [False] If True and direction is rtf, write default source files
         :return:
         """
 
-        from ambry.orm.exc import NotFoundError
-
-        assert isinstance(stage, string_types) or stage is None
-
         if self.is_finalized:
-            self.error("Can't run phase {}; bundle is finalized".format(phase))
+            self.error("Can't sync; bundle is finalized")
             return False
 
-        if self.is_built:
-            self.error("Can't run phase {}; bundle is built".format(phase))
-            return False
+        syncs = self.build_source_files.sync(force, defaults)
 
-        self.import_lib()
-        self.load_requirements()
-
-        def stage_match(source_stage, this_stage):
-            if not bool(source_stage) and (this_stage == 'main' or this_stage is None):
-                return True
-
-            if bool(source_stage) and source_stage == this_stage:
-                return True
-
-            return False
-
-        # Enumerate all of the sources first.
-        if not sources:
-            # Select sources that match this stage
-            sources = []
-            for i, source in enumerate(self.sources):
-
-                if stage_match(source.stage, stage):
-                    # print 'MATCH ', source.stage, stage
-                    sources.append(source)
-        else:
-            # Use the named sources, but ensure they are all source objects.
-            source_objs = []
-
-            if not isinstance(sources, (list, tuple)):
-                sources = [sources]
-
-            resolved_sources = []
-            errors = []
-            for source in sources:
-                if isinstance(source, string_types):
-
-                    try:
-                        resolved_sources.append( self.source(source))
-                    except NotFoundError:
-                        # Maybe the source is actually a table name, so find all of the sorces that have
-                        # the tables as a dest_table.
-                        table = self.table(source)
-                        try:
-                            resolved_sources += filter(lambda x: x.resolved_dest_table_name == table.name, self.sources)
-                        except:
-                            errors.append(source)
-
-                else:
-                    resolved_sources.append(source)
-
-            sources = resolved_sources
-
-            if errors:
-                raise NotFoundError("Failed to find these source names / table names:  ".format(errors))
-
-        log_msg = 'Processing {} sources, stage {} ; {}'\
-            .format(len(sources), stage, [x.name for x in sources[:10]])
-
-        self.log(log_msg)
-
-        for i, source in enumerate(sources):
-
-            pl = self.pipeline(phase, source)
-
-            self.logger.info('Running phase {} for source {} with pipeline {}'.format(phase, source.name, pl.name))
-
-            # Doing this before hand to get at least some information about the pipline,
-            # in case there is an error during the run. It will get overwritten with more information
-            # after asecussful run
-            self.final_log_pipeline(pl)
-
-            with self.progress_logging(lambda: ("Run source {}: {} rows, {} rows/sec",
-                                                (source.spec.name,) + pl.sink.report_progress()), 10):
-
-                rows_count = int(min(source.datafile.n_rows, self.TEST_ROWS) ) if self.test else None
-
-                pl.run(count = rows_count)
-
-            self.debug('Final methods')
-            for m in pl.final:
-                self.debug(indent + m)
-                getattr(self, m)(pl)
-
-            if pl.stopped:
-                break
-
+        self.state = self.STATES.SYNCED
+        self.log("---- Synchronized ----")
         self.dataset.commit()
+
+        self.library.search.index_bundle(self, force=True)
+
+        return syncs
+
+    def sync_in(self):
+        """Synchronize from files to records, and records to objects"""
+        from ambry.bundle.files import BuildSourceFile
+        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+        self.build_source_files.record_to_objects()
+        self.log("---- Sync In ----")
+        self.library.search.index_bundle(self, force=True)
+        # self.state = self.STATES.SYNCED
+
+    def sync_objects_in(self):
+        """Synchronize from records to objects"""
+        self.build_source_files.record_to_objects()
+
+    def sync_out(self):
+        from ambry.bundle.files import BuildSourceFile
+        """Synchronize from objects to records"""
+        self.build_source_files.objects_to_record()
+        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
+        # self.state = self.STATES.SYNCED
+
+    def sync_objects_out(self):
+        """Synchronize from objects to records, and records to files"""
+        self.log("---- Sync Out ----")
+        self.build_source_files.objects_to_record()
+
+    def sync_objects(self):
+        self.build_source_files.record_to_objects()
+        self.build_source_files.objects_to_record()
+
+    def sync_code(self):
+        """Sync in code files and the meta file, avoiding syncing the larger files"""
+        from ambry.orm.file import File
+        from ambry.bundle.files import BuildSourceFile
+
+        self.log("---- Sync Code ----")
+        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
+            self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+
+    #
+    # Clean
+    #
+
+    @property
+    def is_clean(self):
+        return self.state == self.STATES.CLEANED
+
+    def clean(self, force=False):
+        """Clean generated objects from the dataset, but only if there are File contents
+         to regenerate them"""
+
+        if self.is_finalized and not force:
+            self.warn("Can't clean; bundle is finalized")
+            return False
+
+        self.log('---- Cleaning ----')
+        self.state = self.STATES.CLEANING
+
+        self.commit()
+
+        self.clean_sources()
+        self.clean_tables()
+        self.clean_partitions()
+        self.clean_build()
+        self.clean_files()
+        self.clean_ingested()
+        self.clean_build_state()
+
+        self.state = self.STATES.CLEANED
+
+        self.commit()
+
+        self.log('---- Done Cleaning ----')
 
         return True
 
-    def post_phase(self, phase):
-        """After the build, update the configuration with the time required for
-        the build, then save the schema back to the tables, if it was revised
-        during the build."""
+    def clean_except_files(self):
+        """Clean everything except the build source files"""
 
-        self.state = phase + '_done'
+        if self.is_finalized:
+            self.warn("Can't clean; bundle is finalized")
+            return False
+
+        self.log('---- Cleaning ----')
+        self.state = self.STATES.CLEANING
+
+        self.commit()
+
+        self.clean_sources()
+        self.clean_tables()
+        self.clean_partitions()
+        self.clean_build()
+        self.clean_ingested()
+        self.clean_build_state()
+
+        self.state = self.STATES.CLEANED
+
+        self.commit()
+
+        self.log('---- Done Cleaning ----')
+
+        return True
+
+    def clean_sources(self):
+        """Like clean, but also clears out files. """
+
+        for src in self.dataset.sources:
+            src.st_id = None
+            src.t_id = None
+
+        self.dataset.sources[:] = []
+        self.dataset.source_tables[:] = []
+
+    def clean_tables(self):
+        """Like clean, but also clears out schema tables and the partitions that depend on them. . """
+
+        self.dataset.delete_tables_partitions()
+
+    def clean_partitions(self):
+        """Delete partition records and any built partition files.  """
+        import shutil
+        from ambry.orm import ColumnStat
+
+        # FIXME. There is a problem with the cascades for ColumnStats that prevents them from
+        # being  deleted with the partitions. Probably, the are seen to be owed by the columns instead.
+        self.session.query(ColumnStat).filter(ColumnStat.d_vid == self.dataset.vid).delete()
+
+        self.dataset.delete_partitions()
+
+        if self.build_partition_fs.exists:
+            try:
+                shutil.rmtree(self.build_partition_fs.getsyspath('/'))
+            except NoSysPathError:
+                pass # If there isn't a syspath, probably don't need to delete.
+
+    def clean_build(self):
+        """Delete the build directory and all ingested files """
+        import shutil
+
+        if self.build_fs.exists:
+            try:
+                shutil.rmtree(self.build_fs.getsyspath('/'))
+            except NoSysPathError:
+                pass # If there isn't a syspath, probably don't need to delete.
+
+    def clean_files(self):
+        """ Delete all build source files """
+
+        self.dataset.files[:] = []
+        self.commit()
+
+    def clean_ingested(self):
+        """"Clean ingested files"""
+        for s in self.sources:
+            df = s.datafile
+            if df.exists:
+                df.remove()
+                s.state = s.STATES.NEW
+
+        self.commit()
+
+    def clean_all(self):
+        """Like clean, but also clears out files. """
+
+        self.clean()
+
+    def clean_process_meta(self):
+        """Remove all process and build metadata"""
+        ds = self.dataset
+        ds.config.build.clean()
+        ds.config.process.clean()
+        ds.commit()
+        self.state = self.STATES.CLEANED
+
+    def clean_source_files(self):
+        """Remove the schema.csv and source_schema.csv files"""
+
+        self.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
+        self.build_source_files.file(File.BSFILE.SCHEMA).remove()
+        self.commit()
+
+    def clean_build_files(self):
+        """Remove all of the build files"""
+
+        for bs in self.build_source_files:
+            print('!!!!', bs.path)
+
+    def clean_build_state(self):
+
+        self.dataset.config.build.clean()
+        self.commit()
+
+    #
+    # Ingestion
+    #
+
+    @CaptureException
+    def ingest(self, sources=None, tables=None, stage=None, force=False, update_tables = True):
+        """Ingest a set of sources, specified as source objects, source names, or destination tables.
+        If no stage is specified, execute the sources in groups by stage.
+
+        Note, however, that when this is called from run_stage, all of the sources have the same stage, so they
+        get grouped together. The result it that the stage in the inner loop is the same as the stage being
+        run buy run_stage.
+        """
+
+        from itertools import groupby
+        from ambry.bundle.events import TAG
+        from fs.errors import ResourceNotFoundError
+        import zlib
+
+        self.state = self.STATES.INGESTING
+        self.commit()
+
+        # Clear out all ingested files that are malformed
+        for s in self.sources:
+            if s.is_downloadable:
+                df = s.datafile
+                try:
+                    info = df.info
+                except (ResourceNotFoundError, zlib.error, IOError):
+                    s.datafile.remove()
+
+        def not_final_or_delete(s):
+            import zlib
+
+            if force:
+                return True
+
+            try:
+                return s.is_processable and not s.is_ingested and not s.is_built
+            except (IOError, zlib.error):
+                s.datafile.remove()
+                return True
+
+        key = lambda s: s.stage if s.stage else 1
+        sources = sorted(self._resolve_sources(sources, tables, stage), key=key)
+
+        for stage, g in groupby(sources, key):
+            sources = [s for s in g if not_final_or_delete(s)]
+            if len(sources):
+                self.log("Ingesting {} sources in stage {}".format(len(sources), stage))
+            else:
+                self.log("No sources left to ingest for stage {}".format(stage))
+                continue
+
+            self._run_events(TAG.BEFORE_INGEST, stage)
+            self._ingest_sources(sources, force=force)
+            self._run_events(TAG.AFTER_INGEST, stage)
+            self.record_stage_state(self.STATES.INGESTING, stage)
+
+        self.state = self.STATES.INGESTED
+        self.commit()
+
+        return True
+
+    def _ingest_sources(self, sources, force=False):
+        """Ingest a set of sources, usually for one stage"""
+        from concurrent import ingest_mp
+        try:
+            self.state = self.STATES.INGESTING
+
+            downloadable_sources = [s for s in sources if force or
+                                    (s.is_processable and not s.is_ingested and not s.is_built)]
+
+            if self.multi:
+                args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
+
+                pool = self.library.process_pool
+                try:
+                    pool.map(ingest_mp, args)
+                except KeyboardInterrupt:
+                    self.log("Got keyboard interrrupt; terminating workers")
+                    pool.terminate()
+            else:
+                for source in downloadable_sources:
+                    self._ingest_source(source, force)
+
+            return True
+
+        except Exception as e:
+            self.commit()
+            raise
+
+    def _ingest_source(self, source, force=None):
+        """Ingest a single source"""
+        from ambry_sources.sources import FixedSource, GeneratorSource
+        from ambry_sources import get_source
+        from ambry_sources.exceptions import MissingCredentials
+        from ambry.orm.exc import NotFoundError
+
+        def account_accessor(url, accounts=self.library.config.accounts):
+            # return empty dict if credentials do not exist
+            # to force ambry_sources to raise exception with required config.
+            return accounts.get(url, {})
+
+        if not source.is_partition and source.datafile.exists:
+            if not source.datafile.is_finalized:
+                source.datafile.remove()
+            elif force:
+                source.datafile.remove()
+            else:
+                self.log("Source {} already ingested, skipping".format(source.name))
+                return
+
+        if source.is_partition:
+            # Check if the partition exists
+            try:
+                p = self.library.partition(source.ref)
+            except NotFoundError:
+                # Maybe it is an internal reference, in which case we can just delay
+                # until the partition is built
+                self.log("Not Ingesting {}: referenced partition '{}' does not exist".format(source.name, source.ref))
+                return
+
+        self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
+        source.state = source.STATES.INGESTING
+        self.commit()
+
+        s = None
+
+        if source.reftype == 'partition':
+            source.update_table()  # Generate the source tables.
+            self.log('Ingested partition: {}'.format(source.datafile.path))
+            source.state = source.STATES.INGESTED
+            self.commit()
+
+            return
+
+        elif source.reftype == 'generator':
+            import sys
+
+            if hasattr(self, source.generator):
+                gen_cls = getattr(self, source.generator)
+            elif source.generator in sys.modules['ambry.build'].__dict__:
+                gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
+            else:
+                gen_cls = self.import_lib().__dict__[source.generator]
+
+            spec = source.spec
+            spec.start_line = 1
+            spec.header_lines = [0]
+            s = GeneratorSource(spec, gen_cls(self, source))
+
+        elif source.is_downloadable:
+
+            with self.progress_logging(lambda: ('Downloading {}', (source.url,)), 10):
+                try:
+                    s = get_source(
+                        source.spec, self.library.download_cache,
+                        clean=force, account_accessor=account_accessor)
+
+                except MissingCredentials as exc:
+                    formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
+                    msg = \
+                        'Missing credentials for {location}.\n' \
+                        'Hint: Check accounts section of your ~/.ambry-accounts.yaml ' \
+                        'for {location} credentials. If there is no such, use next template to ' \
+                        'add credentials:\n' \
+                        '{location}:\n' \
+                        '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
+                    raise Exception(msg)
+
+            if isinstance(s, FixedSource):
+                from ambry_sources.sources.spec import ColumnSpec
+
+                s.spec.columns = [ColumnSpec(c.name, c.position, c.start, c.width)
+                                  for c in source.source_table.columns]
+
+        else:
+            self.log('Not an ingestiable source: {}'.format(source.name))
+            source.state = source.STATES.NOTINGESTABLE
+            self.commit()
+            return
+
+        with self.progress_logging(lambda: ('Ingesting {}: {} {} of {}, rate: {}',
+                                              (source.spec.name,) + source.datafile.report_progress()), 10):
+
+            source.datafile.load_rows(s)
+
+        source.update_table()  # Generate the source tables.
+        source.update_spec()  # Update header_lines, start_line, etc.
+
+        self.log('Ingested: {}'.format(source.datafile.path))
+        source.state = source.STATES.INGESTED
+        self.commit()
+
+    def _ingest_update_tables(self, sources):
+        # Do these updates, even if we skipped ingestion, so that the source tables will be generated if they
+        # had been cleaned from the database, but the ingested files still exists.
+        for i, source in enumerate(sources):
+            source.update_table()  # Generate the source tables.
+            source.update_spec()  # Update header_lines, start_line, etc.
 
         self.commit()
 
         return True
 
-    def run_phase(self, phase, stage='main', sources=None, force = False):
-
-        assert isinstance(stage, string_types) or stage is None
-
-        phase_pre_name = 'pre_{}'.format(phase)
-        phase_post_name = 'post_{}'.format(phase)
-
-        if hasattr(self, phase_pre_name):
-            phase_pre = getattr(self, phase_pre_name)
-        else:
-            phase_pre = partial(self.pre_phase, phase)
-
-        if hasattr(self, phase_post_name):
-            phase_post = getattr(self, phase_post_name)
-        else:
-            phase_post = partial(self.post_phase, phase)
-
-        try:
-
-            step_name = 'Pre-{}'.format(phase)
-            if not phase_pre(force = force):
-                self.log("---- Skipping {} ---- ".format(phase))
-                return False
-
-            self.log("---- Phase: {} ---".format(phase))
-            step_name = phase.title()
-            self.phase_main(phase, stage=stage, sources=sources)
-
-            step_name = 'Post-{}'.format(phase)
-            phase_post()
-
-        except Exception as e:
-            self.rollback()
-            self.error('{} phase, stage {} failed: {}'.format(step_name, stage, e))
-            self.set_error_state()
-            raise
-
-        return True
-
-    def final_log_pipeline(self, pl):
-        """Write a report of the pipeline out to a file """
-        from datetime import datetime
-        self.build_fs.makedir('pipeline', allow_recreate=True)
-        v = u("""
-Pipeline {}
-========================================================
-{}
-
-Pipeline Headers
-================
-{}
-""".format(str(datetime.now()),unicode(pl), pl.headers_report()))
-
-        path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
-
-        self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
-
-        self.build_fs.setcontents(path, v, encoding='utf8')
-
     #
-    # Meta
+    # Schema
     #
 
-    def meta(self, sources=None):
-        self.run_phase('schema', sources=sources)
-        return True
+    @CaptureException
+    def schema(self, sources =None, tables=None, stage=None, clean=False, force=False, use_pipeline=False):
+        """
+        Generate destination schemas.
 
-    def meta_schema(self, sources=None):
-        return self.run_phase('schema', sources=sources)
+        :param sources: If specified, build only destination tables for these soruces
+        :param tables: If specified, build only these tables
+        :param clean: Delete tables and partitions first
+        :param force: Population tables even if the table isn't empty
+        :param use_pipeline: If True, use the build pipeline to determine columns. If false, use the source schemas.
+
+        :return: True on success.
+        """
+        from itertools import groupby
+        from operator import attrgetter
+        from ambry.orm.exc import NotFoundError
+        from ambry.etl import Collect, Head
+        from ambry.bundle.events import TAG
+
+        sources = self._resolve_sources(sources, tables, stage, predicate = lambda s: s.is_processable)
+
+        if clean:
+            self.dataset.delete_tables_partitions()
+            self.commit()
+
+        self._run_events(TAG.BEFORE_SCHEMA, stage)
+
+        # Group the sources by the destination table name
+        keyfunc = attrgetter('dest_table')
+        for t, sources in groupby(sorted(sources, key=keyfunc), keyfunc):
+
+            if not force and not t.is_empty:
+                continue
+
+            if use_pipeline:
+                for source in sources:
+                    pl = self.pipeline(source)
+
+                    pl.cast = [ambry.etl.CastSourceColumns]
+                    pl.select_partition = []
+                    pl.write = [Head, Collect]
+                    pl.final = []
+
+                    self.log_pipeline(pl)
+
+                    pl.run()
+                    pl.phase = 'build_schema'
+                    self.log_pipeline(pl)
+
+                    for h, c in zip(pl.write[Collect].headers, pl.write[Collect].rows[1]):
+                        t.add_column(name=h, datatype=type(c).__name__ if c is not None else 'str',
+                                     update_existing=True)
+
+                self.log("Populated destination table '{}' from pipeline '{}'"
+                         .format(t.name, pl.name))
+
+            else:
+                # Get all of the header names, for each source, associating the header position in the table
+                # with the header, then sort on the postition. This will produce a stream of header names
+                # that may have duplicates, but which is generally in the order the headers appear in the
+                # sources. The duplicates are properly handled when we add the columns in add_column()
+                columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in sources
+                                 for i, col in enumerate(source.source_table.columns)]))
+
+                for pos, name, datatype, desc in columns:
+                    t.add_column(name=name, datatype=datatype, description=desc, update_existing = True)
+
+                self.log("Populated destination table '{}' from source table '{}' with {} columns"
+                         .format(t.name, source.source_table.name, len(columns)))
+
+        for i, source in enumerate(self.refs):
+            try:
+                pass
+                source.update_table()  # Generate the source tables.
+            except NotFoundError:
+                # Ignore not found errors here, because the ref may be to a partition that has not been built yet.
+                self.log("Skipping {}".format(source.name))
+
+        self._run_events(TAG.AFTER_SCHEMA, stage)
+        self.commit()
+
+        return True
 
 
     #
@@ -1242,78 +1600,187 @@ Pipeline Headers
         """Return True is the bundle has been built."""
         return self.state == self.STATES.BUILT
 
-    def pre_build(self, phase='build', force=False):
-        assert isinstance(force, bool)
-        r =  self.pre_phase(phase, force=force)
+    def pre_build(self, force=False):
 
-        if not r:
+        if self.is_finalized:
+            self.error("Can't build; bundle is finalized")
             return False
 
-        if force:
+        if self.is_built:
+            self.error("Can't run build; bundle is built")
+            return False
 
-            for p in self.dataset.partitions:
-                if p.type == p.TYPE.SEGMENT:
-                    self.log("Removing old segment partition: {}".format(p.identity.name))
-                else:
-                    self.log("Removing build partition: {}".format(p.identity.name))
-                self.wrap_partition(p).datafile.remove()
-                self.session.delete(p)
-            self.commit()
+        if self.state.endswith('error'):
+            self.error("Can't run build; bundle is in error state")
+            return False
+
+        self.state = self.STATES.BUILDING
+
+        self.import_lib()
+        self.load_requirements()
 
         return True
 
+    def build(self, sources=None, tables=None, stage=None, force=False):
+        """
 
-    def build(self,  stage='main', sources=None, force = False):
-        assert isinstance(stage, string_types) or stage is None
-        return self.run_phase('build', sources=sources, stage=stage, force = force)
+        :param phase:
+        :param stage:
+        :param sources: Source names or destination table names.
+        :return:
+        """
 
-    def post_build(self, phase='build'):
+        from operator import attrgetter
+        from itertools import groupby
+        from .concurrent import build_mp
+        from ambry.bundle.events import TAG
+
+        if not self.pre_build(force):
+            return False
+
+        resolved_sources = self._resolve_sources(sources, None, stage=stage,
+                                                 predicate=lambda s : s.is_processable )
+
+        if not resolved_sources:
+            self.log("No processable sources, skiping build stage {}".format(stage))
+            return True
+
+        for stage, source_group in groupby(sorted(resolved_sources, key=attrgetter('stage')), attrgetter('stage')):
+
+            sources = list(source_group)
+
+            self.log('Processing {} sources, stage {} ; first 10: {}'
+                     .format(len(sources), stage, [x.name for x in sources[:10]]))
+
+            self._run_events(TAG.BEFORE_BUILD, stage)
+
+            if self.multi:
+                args = [(self.identity.vid, source.vid, force) for source in sources]
+
+                pool = self.library.process_pool
+
+                try:
+                    pool.map(build_mp, args)
+                except KeyboardInterrupt:
+                    self.log("Got keyboard interrrupt; terminating workers")
+                    pool.terminate()
+
+            else:
+
+                for source in sources:
+                    self.build_source(source, force = force)
+
+                self.record_stage_state(self.STATES.BUILDING, stage)
+
+            self.dataset.commit()
+
+            self.unify_partitions()
+
+            self.dataset.commit()
+
+            self._run_events(TAG.AFTER_BUILD, stage)
+
+        return True
+
+    def post_run(self, phase='build'):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
 
-        try:
-            self.build_post_cast_error_codes()
-
-            self.build_post_unify_partitions()
-
-            self.build_post_write_bundle_file()
-        except Exception as e:
-            self.set_error_state()
-            self.state = phase + '_error'
-            self.commit()
-            raise
-
-        self.library.search.index_bundle(self, force = True)
+        self.library.search.index_bundle(self, force=True)
 
         self.state = phase + '_done'
 
-        self.log("Finished {}".format(phase))
+        self.commit()
+        self.log("---- Finished phase {} ---- ".format(phase))
 
         return True
 
-    def build_post_cast_error_codes(self):
-        """If there are casting errors, final_cast_errors will generate codes for the values. This rounte
-         will report all of them and report an error. """
+    def build_table(self, table, force = False):
+        """Build all of the sources for a table """
 
-        if len(self.dataset.codes):
-            cast_errors = 0
-            self.error('Casting Errors')
-            for c in self.dataset.codes:
-                if c.source == 'cast_error':
-                    self.error(
-                        indent + "Casting Errors {}.{} {}".format(c.column.table.name, c.column.name, c.key))
-                    cast_errors += 1
+        sources = self._resolve_sources(None, [table])
 
-            if cast_errors > 0:
-                raise PhaseError('Too many casting errors')
+        for source in sources:
+            self.build_source(source, force=force)
 
-    def build_post_unify_partitions(self):
+        self.unify_partitions()
+
+    def build_source(self, source, force = False):
+        """Build a single source"""
+
+        assert source.is_processable, source.name
+
+        if source.state == self.STATES.BUILT and not force:
+            self.logger.info('Source {} already built'.format(source.name))
+            return
+
+        pl = self.pipeline(source)
+
+        source.state = self.STATES.BUILDING
+        self.commit()
+
+        try:
+
+            self.logger.info('Running source {} with pipeline {}'.format(source.name, pl.name))
+
+            # Doing this before hand to get at least some information about the pipline,
+            # in case there is an error during the run. It will get overwritten with more information
+            # after asecussful run
+            self.log_pipeline(pl)
+
+            try:
+                with self.progress_logging(lambda: ('Run source {}: {} rows, {} rows/sec',
+                                                    (source.spec.name,) + pl.sink.report_progress()), 10):
+
+                    pl.run()
+            except:
+                self.log_pipeline(pl)
+                raise
+
+            self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
+
+            self.commit()
+
+            try:
+                for p in pl[ambry.etl.PartitionWriter].partitions:
+
+                    try:
+                        p.finalize()
+                    except AttributeError:
+                        print(self.table(p.table_name))
+                        raise
+
+                    # FIXME Shouldn't need to do this commit, but without it, some stats get added multiple
+                    # times, causing an error later. Probably could be avoided by adding the stats to the
+                    # collection in the dataset
+                    self.commit()
+
+            except IndexError:
+                self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
+
+            self.log_pipeline(pl)
+
+            source.state = self.STATES.BUILT
+            self.commit()
+
+            if pl.stopped:
+                # Do something when the pipe has stopped?
+                # This was supposed to kick out of the loop of building a table, probably.
+                return
+
+        except Exception as e:
+            self.error("Failed to build source '{}'; {}".format(source.name, e))
+            source.state = source.state + ('_error' if not self.state.endswith('_error') else '')
+            self.commit()
+
+            raise
+
+    def unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
         and delete the children. """
 
         from collections import defaultdict
-        from ..orm.partition import Partition
 
         # Group the segments by their parent partition name, which is the
         # same name, but without the segment.
@@ -1327,80 +1794,168 @@ Pipeline Headers
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
 
+
         for name, segments in iteritems(partitions):
+            self.unify_partition(name, segments)
 
-            self.debug('Coalescing segments for partition {} '.format(name))
+    def unify_partition(self, partition_name, segments=None):
+        from ..orm.partition import Partition
 
-            parent = self.partitions.get_or_new_partition(name, type=Partition.TYPE.UNION)
+        if segments is None:
+            segments = set()
+            for p in self.dataset.partitions:
+                if p.type == p.TYPE.SEGMENT:
+                    name = p.identity.name
+                    name.segment = None
 
-            if parent.datafile.exists:
-                self.log("Removing exising datafile {}".format(parent.datafile.path))
-                parent.datafile.remove()
+                    if name == partition_name:
+                        segments.add(p)
 
-            headers = None
-            i = 1
+        self.log('Coalescing segments for partition {} '.format(partition_name))
 
-            logger = lambda: ("Coalescing: {} {} of {}, rate: {}", parent.datafile.report_progress())
+        parent = self.partitions.get_or_new_partition(partition_name, type=Partition.TYPE.UNION)
 
-            with parent.datafile.writer as w, self.progress_logging(logger, 10):
+        if parent.datafile.exists:
+            self.log("Removing exising datafile {}".format(parent.datafile.path))
+            parent.datafile.remove()
 
-                for seg in sorted(segments, key=lambda x: b(x.name)):
+        headers = None
+        i = 1  # Row id.
 
-                    self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
+        logger = lambda: ("Coalescing: {} {} of {}, rate: {}", parent.datafile.report_progress())
 
-                    with self.wrap_partition(seg).datafile.reader as reader:
-                        for row in reader.rows:
-                            w.insert_row((i,)+row[1:])
-                            i += 1
+        with parent.datafile.writer as w, self.progress_logging(logger, 10):
 
-                self.debug(indent + "Coalesced {} rows ".format(i))
+            for seg in sorted(segments, key=lambda x: b(x.name)):
 
-            parent.finalize()
-            self.commit()
+                self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
 
-            for s in segments:
-                self.wrap_partition(s).datafile.remove()
-                self.session.delete(s)
+                with self.wrap_partition(seg).datafile.reader as reader:
+                    for row in reader.rows:
+                        w.insert_row((i,) + row[1:])
+                        i += 1
 
-    def final_finalize_segments(self, pl):
+            self.debug(indent + "Coalesced {} rows into ".format(i))
 
-        try:
-            for p in pl[ambry.etl.PartitionWriter].partitions:
-                self.debug(indent + indent + 'Finalizing {}'.format(p.identity.name))
-                # We're passing the datafile path into filanize b/c finalize is on the ORM object,
-                # and datafile is on the proxy.
-                p.finalize()
+        parent.finalize()
+        self.log("Coalesced {}".format(parent.name))
+        self.commit()
 
-                # FIXME SHouldn't need to do this commit, but without it, some stats get added multiple
-                # times, causing an error later. Probably could be avoided by adding the states to the
-                # collection in the dataset
-                self.commit()
-
-        except IndexError:
-            self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
+        for s in segments:
+            assert s.segment is not None
+            self.wrap_partition(s).datafile.remove()
+            self.session.delete(s)
 
         self.commit()
 
-    def final_cast_errors(self, pl):
-        cp = pl[ambry.etl.CasterPipe]
+    def exec_context(self, **kwargs):
+        """Base environment for evals, the stuff that is the same for all evals. Primarily used in the
+        Caster pipe"""
+        import inspect
+        import dateutil.parser
+        import datetime
+        import random
+        from functools import partial
+        from ambry.valuetype.types import parse_date, parse_time, parse_datetime
+        import ambry.valuetype.types
+        import ambry.valuetype.math
+        import ambry.valuetype.string
+        import ambry.valuetype.exceptions
+        import ambry.valuetype.test
 
-        n = 0
-        seen = set()
-        for errors in cp.errors:
-            for col, error in list(errors.items()):
+        def set_from(f, frm):
+            try:
+                try:
+                    f.ambry_from = frm
+                except AttributeError:  # for instance methods
+                    f.im_func.ambry_from = frm
+            except (TypeError, AttributeError):  # Builtins, non python code
+                pass
 
-                n += 1
+            return f
 
-                key = (col, error['value'])
-                if key not in seen:
-                    seen.add(key)
+        test_env = dict(
 
-                    self.error('Cast Error on column {}; {}'.format(col, error))
+            parse_date=parse_date,
+            parse_time=parse_time,
+            parse_datetime=parse_datetime,
+            partial=partial,
+            bundle = self,
+        )
 
-                    column = cp.source.dest_table.column(col)
-                    column.add_code(error['value'], error['value'], source='cast_error')
+        test_env.update(kwargs)
+        test_env.update(dateutil.parser.__dict__)
+        test_env.update(datetime.__dict__)
+        test_env.update(random.__dict__)
+        test_env.update(ambry.valuetype.math.__dict__)
+        test_env.update(ambry.valuetype.string.__dict__)
+        test_env.update(ambry.valuetype.types.__dict__)
+        test_env.update(ambry.valuetype.exceptions.__dict__)
+        test_env.update(ambry.valuetype.test.__dict__)
 
-    def build_post_write_bundle_file(self):
+        localvars = {}
+
+        for f_name, func in test_env.items():
+            if not isinstance(func, (str, tuple) ):
+                localvars[f_name] = set_from(func, 'env')
+
+        # The 'b' parameter of randint is assumed to be a bundle, but
+        # replacing it with a lambda prevents the param assignment
+        localvars['randint'] = lambda a,b: random.randint(a,b)
+
+        if self != Bundle:
+
+            # Functions from the bundle
+            base = set(inspect.getmembers(Bundle, predicate=inspect.isfunction))
+            mine = set(inspect.getmembers(self.__class__, predicate=inspect.isfunction))
+
+            localvars.update({f_name:set_from(func, 'bundle') for f_name, func in mine - base})
+
+            # Bound methods. In python 2, these must be called referenced from the bundle, since
+            # there is a difference between bound and unbound methods. In Python 3, there is no differnce,
+            # so the lambda functions may not be necessary.
+            base = set(inspect.getmembers(Bundle, predicate=inspect.ismethod))
+            mine = set(inspect.getmembers(self.__class__, predicate=inspect.ismethod))
+
+            # Functions are descriptors, and the __get__ call binds the function to its object to make a bound method
+            localvars.update({f_name:set_from(func.__get__(self), 'bundle') for f_name, func in (mine - base)})
+
+        # Bundle module functions
+        module_entries = inspect.getmembers(sys.modules['ambry.build'], predicate=inspect.isfunction)
+        localvars.update({f_name:set_from(func, 'module') for f_name, func in module_entries})
+
+        return localvars
+
+    def build_caster_code(self, source, source_headers, pipe = None):
+
+        from ambry.etl.codegen import make_row_processors,make_env
+
+        env_dict = self.exec_context()
+
+        code = make_row_processors(pipe.bundle, source_headers, source.dest_table, env=env_dict)
+
+        path = '/code/casters/{}.py'.format(source.name)
+
+        self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
+        self.build_fs.setcontents(path, code, encoding='utf8')
+
+        # The abs_path is just for reporting line numbers in debuggers, etc.
+        try:
+            abs_path = self.build_fs.getsyspath(path)
+        except:
+            abs_path = '<string>'
+
+        env_dict['bundle'] = self
+        env_dict['source'] = source
+        env_dict['pipe'] = pipe
+
+        assert not pipe or (pipe.source is source and pipe.bundle is self)
+
+        exec(compile(code, abs_path, 'exec'), env_dict)
+
+        return env_dict['row_processors']
+
+    def finalize_write_bundle_file(self):
 
         path = self.library.create_bundle_file(self)
 
@@ -1499,6 +2054,7 @@ Pipeline Headers
     @property
     def is_finalized(self):
         """Return True if the bundle is installed."""
+
         return self.state == self.STATES.FINALIZED or self.state == self.STATES.INSTALLED
 
     def do_finalize(self):
@@ -1508,7 +2064,105 @@ Pipeline Headers
     def finalize(self):
         self.state = self.STATES.FINALIZED
         self.commit()
+        self.finalize_write_bundle_file()
         return True
+
+    def import_tests(self):
+        bsf = self.build_source_files.file(File.BSFILE.TEST)
+        module = bsf.import_module(library=lambda: self.library,
+                                   bundle=lambda: self)
+
+        try:
+            return module.Test
+        except AttributeError:
+            return None
+
+    def run_tests(self, tests=None):
+        """Run the unit tests in the test.py file"""
+
+        import unittest
+
+        if not self.test_class:
+            self.test_class = self.import_tests()
+
+        if tests:
+            suite = unittest.TestSuite()
+            for test in tests:
+                suite.addTest(self.test_class(test))
+
+            unittest.TextTestRunner(verbosity=2).run(suite)
+        else:
+            suite = unittest.TestLoader().loadTestsFromTestCase(self.test_class)
+            unittest.TextTestRunner(verbosity=2).run(suite)
+
+    def _run_events(self, tag, stage=None):
+        """Run tests marked with a particular tag and stage"""
+
+        self._run_event_methods(tag, stage)
+
+        self._run_tests(tag, stage)
+
+
+    def _run_event_methods(self, tag, stage=None):
+        """Run code in the bundle that is marked with events. """
+        import inspect
+        from ambry.bundle.events import _runable_for_event
+
+        funcs = []
+
+        for func_name, f in inspect.getmembers(self, predicate=inspect.ismethod):
+            if _runable_for_event(f, tag, stage):
+                funcs.append(f)
+
+        for func in funcs:
+            func()
+
+    def _run_tests(self,tag, stage=None):
+        """Run test codes, defined in the test.py file, at event points"""
+        import inspect
+        import unittest
+        from ambry.bundle.events import _runable_for_event
+        import StringIO
+
+        suite = unittest.TestSuite()
+
+        if not self.test_class:
+            self.test_class = self.import_tests()
+
+        funcs = inspect.getmembers(self.test_class, predicate=inspect.ismethod)
+
+        tests = []
+
+        for func_name, f in funcs:
+            if _runable_for_event(f, tag, stage):
+                tests.append(self.test_class(f.__name__))
+
+        if tests:
+            suite.addTests(tests)
+            stream = StringIO.StringIO()
+
+            r = unittest.TextTestRunner(stream=stream,verbosity=2).run(suite)
+
+            #self.log(stream.getvalue())
+
+            self.log("Ran {} tests for tag '{}', {}{} failed, {} errors, {} skipped".format(
+                r.testsRun, tag, ' stage {}, '.format(stage) if stage else '',
+                len(r.failures), len(r.errors), len(r.skipped)
+            ))
+            for test, trace in r.failures:
+                self.error('Test Failure: {} {}'.format(test, trace))
+
+            for test, trace in r.errors:
+                self.error('Test Error: {} {}'.format(test, trace))
+
+            if len(r.failures) + len(r.errors) > 0:
+                from ambry.dbexceptions import TestError
+                self.set_error_state()
+                self.dataset.config.build.state.test_error = [
+                    (str(test), str(trc)) for test, trc in r.failures+r.errors
+                ]
+                raise TestError("Failed tests: {}"
+                                .format(', '.join([str(test) for test, trc in r.failures+r.errors])))
 
     #
     # Check in to remote
@@ -1519,7 +2173,7 @@ Pipeline Headers
         if self.is_built:
             self.finalize()
 
-        if not (self.is_finalized or self.is_prepared):
+        if not self.is_finalized :
             self.error("Can't checkin; bundle state must be either finalized or prepared")
             return False, False
 
@@ -1540,49 +2194,4 @@ Pipeline Headers
         """Delete resources associated with the bundle."""
         pass  # Remove files in the file system other resource.
 
-    def field_row(self, fields):
-        """Return a list of values to match the fielsds values"""
 
-        row = self.dataset.row(fields)
-
-        # Modify for special fields
-        for i, f in enumerate(fields):
-            if f == 'state':
-                row[i] = self.state
-            elif f == 'source_fs':
-                row[i] = self.source_fs
-            elif f.startswith('about'):
-                _,key = f.split('.')
-                row[i] = self.metadata.about[key]
-
-        return row
-
-    def clear_states(self):
-        return self.dataset.config.build.clean()
-
-    @property
-    def state(self):
-        return self.dataset.config.build.state.current
-
-    @property
-    def error_state(self):
-        """Set the error condition"""
-        self.dataset.config.build.state.lastime = time()
-        return self.dataset.config.build.state.error
-
-    @state.setter
-    def state(self, state):
-        """Set the current build state and record the tim eto maintain history"""
-
-        self.dataset.config.build.state.current = state
-        self.dataset.config.build.state.error = False
-        self.dataset.config.build.state[state] = time()
-        self.dataset.config.build.state.lastime = time()
-
-    def set_error_state(self):
-        self.dataset.config.build.state.error = time()
-
-    def set_last_access(self, tag):
-        """Mark the time that this bundle was last accessed"""
-        self.dataset.config.build.access.last = tag
-        self.dataset.commit()

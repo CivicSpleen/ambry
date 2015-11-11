@@ -3,6 +3,7 @@ Created on Jun 22, 2012
 
 @author: eric
 """
+import os
 
 import unittest
 
@@ -18,8 +19,9 @@ from ambry.orm import Database, Dataset
 from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
 from ambry.run import get_runconfig
 
+from ambry.util import memoize
 
-MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql-test '\
+MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgres-test '\
     'to the database config of the ambry config.'
 SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
 
@@ -28,7 +30,6 @@ class TestBase(unittest.TestCase):
     def setUp(self):
 
         super(TestBase, self).setUp()
-
         self.dsn = 'sqlite://'  # Memory database
 
         # Make an array of dataset numbers, so we can refer to them with a single integer
@@ -37,20 +38,84 @@ class TestBase(unittest.TestCase):
         self.db = None
 
     def tearDown(self):
-        if hasattr(self, 'library'):
-            self.library.database.close()
-
+        pass
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
-    def get_rc(self, name='ambry.yaml'):
+    @classmethod
+    def get_rc(cls):
+        """Create a new config file for test and return the RunConfig.
+
+         This method will start with the user's default Ambry configuration, but will replace the
+         filesystet.root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
+         environmental variable, it will set library.database to the DSN of either database.test-sqlite or
+         database.test-postrgres
+
+        """
+
+        from fs.opener import fsopendir
         import os
-        from test import bundlefiles
 
-        def bf_dir(fn):
-            return os.path.join(os.path.dirname(bundlefiles.__file__), fn)
+        rc = get_runconfig()
 
-        return get_runconfig(bf_dir('ambry.yaml'))
+        config = rc.config
+
+        try:
+            del config['accounts']
+        except KeyError:
+            pass
+
+        config.filesystem.root = config.filesystem.test
+
+        db = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+
+        try:
+            config.library.database = config.database['test-sqlite']
+        except KeyError:
+            sqlite_dsn = 'sqlite:///{root}/library.db'
+            config.library.database = sqlite_dsn
+            print "WARN: missing config for test database 'test-{}', using '{}' ".format(db, sqlite_dsn)
+
+        cls._db_type = db
+
+        test_root = fsopendir(rc.filesystem('test'))
+
+        with test_root.open('.ambry.yaml', 'w', encoding='utf-8') as f:
+            config.dump(f)
+
+        return get_runconfig(test_root.getsyspath('.ambry.yaml'))
+
+    @classmethod
+    def config(cls):
+        return cls.get_rc()
+
+    @classmethod
+    def library(cls):
+        from ambry.library import new_library
+        return new_library(cls.config())
+
+    @classmethod
+    def import_bundles(cls, clean = True, force_import = False):
+        """
+        Import the test bundles into the library, from the test.test_bundles directory
+        :param clean: If true, drop the library first.
+        :param force_import: If true, force importaing even if the library already has bundles.
+        :return:
+        """
+
+        from test import bundle_tests
+        import os
+
+        l = cls.library()
+
+        if clean:
+            l.drop()
+            l.create()
+
+        bundles = list(l.bundles)
+
+        if len(bundles) == 0 or force_import:
+            l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
 
     def new_dataset(self, n=1, source='source'):
         return Dataset(**self.ds_params(n, source=source))
@@ -90,6 +155,7 @@ class TestBase(unittest.TestCase):
         from fs.errors import ParentDirectoryMissingError
         from ambry.library import new_library
         import yaml
+        from ambry.util import parse_url_to_dict
 
         if not library:
             rc = self.get_rc()
@@ -99,23 +165,23 @@ class TestBase(unittest.TestCase):
         self.db = self.library._db
 
         if not source_url:
-            source_url = 'mem://{}/source'.format(name)
+            source_url = 'mem://source'.format(name)
 
         if not build_url:
-            build_url = 'mem://{}/build'.format(name)
+            build_url = 'mem://build'.format(name)
 
-        try:  # One fails for real directories, the other for mem:
-            assert fsopendir(source_url, create_dir=True).isdirempty('/')
-            assert fsopendir(build_url, create_dir=True).isdirempty('/')
-        except ParentDirectoryMissingError:
-            assert fsopendir(source_url).isdirempty('/')
-            assert fsopendir(build_url).isdirempty('/')
+        for fs_url in (source_url, build_url):
+            d = parse_url_to_dict((fs_url))
+
+            # For persistent fs types, make sure it is empty before the test.
+            if d['scheme'] not in ('temp','mem'):
+                assert fsopendir(fs_url).isdirempty('/')
 
         test_source_fs = fsopendir(join(dirname(bundles.__file__), 'example.com', name))
 
         config = yaml.load(test_source_fs.getcontents('bundle.yaml'))
-        b = self.library.new_from_bundle_config(config)
 
+        b = self.library.new_from_bundle_config(config)
         b.set_file_system(source_url=source_url, build_url=build_url)
 
         self.copy_bundle_files(test_source_fs, b.source_fs)
@@ -171,15 +237,15 @@ class PostgreSQLTestBase(TestBase):
     @classmethod
     def _create_postgres_test_db(cls, conf=None):
         if not conf:
-            conf = get_runconfig()
+            conf = TestBase.get_rc()  # get_runconfig()
 
         # we need valid postgres dsn.
-        if not ('database' in conf.dict and 'postgresql-test' in conf.dict['database']):
+        if not ('database' in conf.dict and 'postgres-test' in conf.dict['database']):
             # example of the config
             # database:
-            #     postgresql-test: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
+            #     postgres-test: postgresql+psycopg2://user:pass@127.0.0.1/ambry
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-        dsn = conf.dict['database']['postgresql-test']
+        dsn = conf.dict['database']['postgres-test']
         parsed_url = urlparse(dsn)
         postgres_user = parsed_url.username
         db_name = parsed_url.path.replace('/', '')

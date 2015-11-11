@@ -1,0 +1,5 @@
+table,position,source_header,dest_header,datatype,valuetype,start,width,size,summary,description
+simple,1,id,id,int,,,,,,
+simple,2,uuid,uuid,str,,,,,,
+simple,3,int,int,int,,,,,,
+simple,4,float,float,float,,,,,,

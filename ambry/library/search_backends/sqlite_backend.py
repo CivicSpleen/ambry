@@ -12,9 +12,10 @@ from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIn
     DatasetSearchResult, PartitionSearchResult, SearchTermParser
 
 from ambry.util import get_logger
+import logging
 
 logger = get_logger(__name__, propagate=False)
-
+#logger.setLevel(logging.DEBUG)
 
 class SQLiteSearchBackend(BaseSearchBackend):
 
@@ -58,7 +59,7 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         logger.debug('Creating dataset FTS table.')
 
         query = """\
-            CREATE VIRTUAL TABLE dataset_index USING fts3(
+            CREATE VIRTUAL TABLE IF NOT EXISTS dataset_index USING fts3(
                 vid VARCHAR(256) NOT NULL,
                 title TEXT,
                 keywords TEXT,
@@ -117,11 +118,14 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         search_phrase = search_phrase.replace('-', '_')
         query, query_params = self._make_query_from_terms(search_phrase)
 
-        raw_connection = self.backend.library.database.engine.raw_connection()
-        raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
+        connection = self.backend.library.database.connection
+        # Operate on the raw connection
+        connection.connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
 
         logger.debug('Searching datasets using `{}` query.'.format(query))
-        results = self.backend.library.database.connection.execute(query, **query_params).fetchall()
+        results = connection.execute(query,
+                                     **query_params).fetchall()  # Query on the Sqlite proxy to the raw connection
+
         datasets = defaultdict(DatasetSearchResult)
         for result in results:
             vid, score = result
@@ -135,20 +139,26 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             datasets[partition.dataset_vid].partitions.add(partition.vid)
         return list(datasets.values())
 
-    def list_documents(self, limit = None):
-        """
-        List document vids.
+    def list_documents(self, limit=None):
+        """ Generates vids of all indexed datasets.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
-        """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
 
-        query = ("SELECT vid FROM dataset_index "+limit_str)
+        Generates:
+            str: vid of the dataset.
+        """
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
+
+        query = ('SELECT vid FROM dataset_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['vid']
-
 
     def _as_document(self, dataset):
         """ Converts dataset to document indexed by to FTS index.
@@ -234,7 +244,7 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
         logger.debug('Creating identifier FTS table.')
 
         query = """\
-            CREATE VIRTUAL TABLE identifier_index USING fts3(
+            CREATE VIRTUAL TABLE IF NOT EXISTS identifier_index USING fts3(
                 identifier VARCHAR(256) NOT NULL,
                 type VARCHAR(256) NOT NULL,
                 name TEXT
@@ -260,10 +270,10 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
         query_params = {
             'part': '*{}*'.format(search_phrase)}
 
+        query_parts.append('ORDER BY name')
         if limit:
             query_parts.append('LIMIT :limit')
             query_params['limit'] = limit
-        query_parts.append('ORDER BY name')
         query_parts.append(';')
         query = text('\n'.join(query_parts))
 
@@ -275,15 +285,22 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
                 type=type, name=name)
 
     def list_documents(self, limit=None):
-        """
-        List document vids.
+        """ Generates vids of all indexed identifiers.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
-        """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
 
-        query = ("SELECT identifier FROM identifier_index " + limit_str)
+        Generates:
+            str: vid of the document.
+        """
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
+
+        query = ('SELECT identifier FROM identifier_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['identifier']
@@ -384,8 +401,9 @@ class PartitionSQLiteIndex(BasePartitionIndex):
 
         query, query_params = self._make_query_from_terms(terms)
 
-        raw_connection = self.backend.library.database.engine.raw_connection()
-        raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
+        connection = self.backend.library.database.connection
+
+        connection.connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
 
         # SQLite FTS implementation does not allow to create indexes on FTS tables.
         # see https://sqlite.org/fts3.html 1.5. Summary, p 1:
@@ -393,9 +411,7 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         #
         # So, filter years range here.
 
-        results = self.backend.library.database.connection\
-            .execute(query, query_params)\
-            .fetchall()
+        results = connection.execute(query, query_params).fetchall()
 
         for result in results:
             vid, dataset_vid, score, db_from_year, db_to_year = result
@@ -407,15 +423,23 @@ class PartitionSQLiteIndex(BasePartitionIndex):
                 vid=vid, dataset_vid=dataset_vid, score=score)
 
     def list_documents(self, limit=None):
-        """
-        List document vids.
+        """ Generates vids of all indexed partitions.
 
-        :param limit: If not empty, the maximum number of results to return
-        :return:
-        """
-        limit_str = 'LIMIT {}'.format(limit) if limit else ''
+        Args:
+            limit (int, optional): If not empty, the maximum number of results to return
 
-        query = ("SELECT vid FROM partition_index " + limit_str)
+        Generates:
+            str: vid of the document.
+        """
+
+        limit_str = ''
+        if limit:
+            try:
+                limit_str = 'LIMIT {}'.format(int(limit))
+            except (TypeError, ValueError):
+                pass
+
+        query = ('SELECT vid FROM partition_index ' + limit_str)
 
         for row in self.backend.library.database.connection.execute(query).fetchall():
             yield row['vid']

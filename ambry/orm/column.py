@@ -36,6 +36,8 @@ if sys.version_info > (3,):
 class Column(Base):
     __tablename__ = 'columns'
 
+    _parent_col = 'c_t_vid'
+
     vid = SAColumn('c_vid', String(18), primary_key=True)
     id = SAColumn('c_id', String(15))
     sequence_id = SAColumn('c_sequence_id', Integer)
@@ -55,14 +57,15 @@ class Column(Base):
     summary = SAColumn('c_summary', Text)
     description = SAColumn('c_description', Text)
     keywords = SAColumn('c_keywords', Text)
-    caster = SAColumn('c_caster', Text)
+
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
     lom = SAColumn('c_lom', String(1))
 
-    # A column vid, or possibly an equation, describing how this column was
-    # created from other columns.
     derivedfrom = SAColumn('c_derivedfrom', Text)
+
+    # New column value casters and generators
+    _transform = SAColumn('c_transform', Text)
 
     # ids of columns used for computing ratios, rates and densities
     numerator = SAColumn('c_numerator', String(20))
@@ -85,7 +88,8 @@ class Column(Base):
     )
 
     # FIXME. These types should be harmonized with   SourceColumn.DATATYPE
-    DATATYPE_STR = 'str'
+    DATATYPE_STR = six.binary_type.__name__
+    DATATYPE_UNICODE = six.text_type.__name__
     DATATYPE_INTEGER = 'int'
     DATATYPE_INTEGER64 = 'long' if six.PY2 else 'int'
     DATATYPE_FLOAT = 'float'
@@ -104,7 +108,11 @@ class Column(Base):
     types = {
         # Sqlalchemy, Python, Sql,
 
+        # Here, 'str' means ascii, 'unicode' means not ascii.
+        # FIXME: Change names to DATATYPE_ASCII, DATATYPE_NOT_ASCII because it confuses while
+        # python2/python3 porting.
         DATATYPE_STR: (sqlalchemy.types.String, six.binary_type, 'VARCHAR'),
+        DATATYPE_UNICODE: (sqlalchemy.types.String, six.text_type, 'VARCHAR'),
         DATATYPE_INTEGER: (sqlalchemy.types.Integer, int, 'INTEGER'),
         DATATYPE_INTEGER64: (BigIntegerType, int, 'INTEGER64'),
         DATATYPE_FLOAT: (sqlalchemy.types.Float, float, 'REAL'),
@@ -131,19 +139,23 @@ class Column(Base):
             # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         # Don't allow these values to be the empty string
-        self.derivedfrom = self.derivedfrom or None
+        self.transform = self.transform or None
+
+    @classmethod
+    def python_types(cls):
+        return [e[1] for e in six.itervalues(cls.types)]
 
     def type_is_int(self):
-        return self.python_type  == int
+        return self.python_type == int
 
     def type_is_real(self):
-        return self.python_type  == float
+        return self.python_type == float
 
     def type_is_number(self):
         return self.type_is_real or self.type_is_int
 
     def type_is_text(self):
-        return self.python_type == str
+        return self.datatype == Column.DATATYPE_STR or self.datatype == Column.DATATYPE_UNICODE
 
     def type_is_geo(self):
         return self.datatype in (
@@ -159,6 +171,10 @@ class Column(Base):
     def type_is_date(self):
         return self.datatype in (Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
 
+    def type_is_builtin(self):
+        """Return False if the datatype is not one of the builtin type"""
+        return self.datatype in self.types
+
     @property
     def sqlalchemy_type(self):
         return self.types[self.datatype][0]
@@ -168,10 +184,16 @@ class Column(Base):
         """Return the valuetype class, if one is defined, or a built-in type if it isn't"""
         from ambry.valuetype import import_valuetype
 
+        assert self.datatype, 'No datatype value for column {}.{}'.format(self.table.name, self.name)
+
         try:
             return import_valuetype(self.datatype)
         except AttributeError as e:
-            return self.types[self.datatype][1]
+            try:
+                return self.types[self.datatype][1]
+            except KeyError:
+                raise KeyError('Failed to find type {} in column {}.{}'
+                               .format(self.datatype, self.table.name, self.name))
 
     @property
     def python_type(self):
@@ -198,7 +220,7 @@ class Column(Base):
             if self.datatype == Column.DATATYPE_TIME:
                 dt = dt.time()
             if not isinstance(dt, self.python_type):
-                raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt),self.python_type))
+                raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt), self.python_type))
 
             return dt
         else:
@@ -295,14 +317,7 @@ class Column(Base):
         """
         return {k: v for k, v in six.iteritems(self.dict) if v and k != '_codes'}
 
-    @property
-    def insertable_dict(self):
-        """Like dict, but properties have the table prefix, so it can be
-        inserted into a row."""
-        SKIP_KEYS = ('table', 'stats', '_codes')
-        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS}
-        x = {('c_' + k).strip('_'): v for k, v in six.iteritems(d)}
-        return x
+
 
     @staticmethod
     def mangle_name(name):
@@ -347,18 +362,20 @@ class Column(Base):
         # Ignore codes we already have, but will not catch codes added earlier for this same
         # object, since the code are cached
 
+        from six import text_type
+
         for cd in self.codes:
-            if cd.key == str(key):
+            if cd.key == text_type(key):
                 return cd
 
         def cast_to_int(s):
             try:
                 return int(s)
-            except ValueError:
+            except (TypeError, ValueError):
                 return None
 
         cd = Code(c_vid=self.vid, t_vid=self.t_vid,
-                  key=str(key),
+                  key=text_type(key),
                   ikey=cast_to_int(key),
                   value=value,
                   source = source,
@@ -370,18 +387,112 @@ class Column(Base):
         return cd
 
     @property
+    def transform(self):
+        return self._transform
+
+    @transform.setter
+    def transform(self, v):
+        self._transform = self.clean_transform(v)
+
+    @staticmethod
+    def make_xform_seg(init_=None, datatype=None, transforms=None, exception=None, column=None):
+        return {
+            'init': init_,
+            'transforms': transforms if transforms else [],
+            'exception': exception,
+            'datatype': datatype,
+            'column': column
+        }
+
+    @property
+    def expanded_transform(self):
+        """Expands the transform string into segments """
+
+        segments = self._expand_transform(self.transform)
+
+        if not segments:
+            return [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
+
+        segments[0]['datatype'] = self.valuetype_class
+
+        for s in segments:
+            s['column'] = self
+
+        return segments
+
+    @staticmethod
+    def clean_transform(transform):
+        from ambry.dbexceptions import ConfigurationError
+
+        segments = Column._expand_transform(transform)
+
+        def pipeify_seg(seg):
+
+            o = []
+
+            seg['init'] and o.append('^'+seg['init'])
+            o += seg['transforms']
+            seg['exception'] and o.append('!' + seg['exception'])
+
+            return '|'.join(o)
+
+        return '||'.join(pipeify_seg(seg) for seg in segments)
+
+    @staticmethod
+    def _expand_transform(transform):
+        from ambry.dbexceptions import ConfigurationError
+
+        if not bool(transform):
+            return []
+
+        transform = transform.rstrip('|')
+
+        segments = []
+
+        for i, seg_str in enumerate(transform.split('||')):
+            pipes = seg_str.split('|')
+
+            d = Column.make_xform_seg()
+
+            for pipe in pipes:
+
+                if not pipe.strip():
+                    continue
+
+                if pipe[0] == '^':  # First, the initializer
+                    if d['init']:
+                        raise ConfigurationError("Can only have one initializer in a pipeline segment")
+                    if i != 0:
+                        raise ConfigurationError("Can only have an initializer in the first pipeline segment")
+                    d['init'] = pipe[1:]
+                elif pipe[0] == '!':  # Exception Handler
+                    if d['exception']:
+                        raise ConfigurationError("Can only have one exception handler in a pipeline segment")
+                    d['exception'] = pipe[1:]
+                else:  # Assume before the datatype
+                    d['transforms'].append(pipe)
+
+            segments.append(d)
+
+        return segments
+
+    @property
     def row(self):
         from collections import OrderedDict
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
 
-        d = OrderedDict([('table', self.table.name)] +
-                        [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                         if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
-                                          'sequence_id', 'id', 'is_primary_key']])
+        name_map = {
+            'name': 'column'
+        }
 
-        d['column'] = d['name']
-        del d['name']
+        d = OrderedDict([('table', self.table.name)] +
+                        [( name_map.get(p.key, p.key), getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
+                                          'sequence_id', 'id', 'is_primary_key','data']])
+
+        d['transform'] = d['_transform']
+        del d['_transform']
 
         if self.name == 'id':
             t = self.table
@@ -391,7 +502,9 @@ class Column(Base):
             data = self.data
 
         for k, v in six.iteritems(data):
-            d[k] = v
+            d['d_'+k] = v
+
+        assert 'data' not in d
 
         return d
 

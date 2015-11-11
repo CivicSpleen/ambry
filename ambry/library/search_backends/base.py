@@ -7,7 +7,7 @@ from math import log
 from pprint import pformat
 import re
 
-from six import iterkeys, iteritems, u, string_types
+from six import iterkeys, iteritems, u, string_types, text_type
 
 from nltk.stem.lancaster import LancasterStemmer
 
@@ -345,8 +345,8 @@ class BaseDatasetIndex(BaseIndex):
             FROM columns
             JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = :dataset_vid;""")
 
-        columns = '\n'.join(
-            [' '.join(list(str(e) for e in t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
+        columns = u('\n').join(
+            [u(' ').join(list(text_type(e) for e in t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
 
         doc = '\n'.join([u('{}').format(x) for x in [dataset.config.metadata.about.title,
                                                      dataset.config.metadata.about.summary,
@@ -482,16 +482,16 @@ class BasePartitionIndex(BaseIndex):
 
         doc_field = u('{} {} {}').format(
             values, schema, ' '.join([
-                u'{}'.format(partition.identity.vid),
-                u'{}'.format(partition.identity.id_),
-                u'{}'.format(partition.identity.name),
-                u'{}'.format(partition.identity.vname)]))
+                u('{}').format(partition.identity.vid),
+                u('{}').format(partition.identity.id_),
+                u('{}').format(partition.identity.name),
+                u('{}').format(partition.identity.vname)]))
 
         document = dict(
-            vid=u'{}'.format(partition.identity.vid),
-            dataset_vid=u'{}'.format(partition.identity.as_dataset().vid),
-            title=u'{}'.format(partition.table.description),
-            keywords=u'{}'.format(keywords),
+            vid=u('{}').format(partition.identity.vid),
+            dataset_vid=u('{}').format(partition.identity.as_dataset().vid),
+            title=u('{}').format(partition.table.description),
+            keywords=u('{}').format(keywords),
             doc=doc_field)
 
         return document

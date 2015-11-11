@@ -8,15 +8,12 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
-
+from ambry.util import deprecated
 from os.path import splitext
 
 from six import iteritems
-# noinspection PyUnresolvedReferences
-from six.moves.urllib.parse import urlparse
 
-from sqlalchemy import Column as SAColumn
-from sqlalchemy import Text, String, ForeignKey, INTEGER, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, INTEGER, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from .source_table import SourceTable
@@ -24,12 +21,52 @@ from .table import Table
 
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
+from ..util import  Constant
 
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
 
     _bundle = None  # Set externally
     _datafile = None
+
+    # reftypes for sources that should not be downloaded or injested
+    NON_DOWNLOAD_REFTYPES = ('ref', 'template', 'partition')
+
+    # reftypes for sources that should not be built or have schemas create for
+    NON_PROCESS_REFTYPES = ('ref', 'template')
+
+    STATES = Constant()
+    STATES.NEW = 'new'
+    STATES.INGESTING = 'ingest'
+    STATES.INGESTED = 'ingest_done'
+    STATES.NOTINGESTABLE = 'not_ingestable'
+    STATES.BUILDING = 'build'
+    STATES.BUILT = 'build_done'
+
+    @property
+    def urltype(self):
+        return self.reftype
+
+    @urltype.setter
+    def urltype(self, v):
+        self.reftype = v
+
+    @property
+    def url(self):
+        return self.ref
+
+    @url.setter
+    def url(self, v):
+        self.ref = v
+
+    @property
+    def generator(self):
+        return self.ref
+
+    @generator.setter
+    def generator(self, v):
+        self.reftype = 'generator'
+        self.ref = v
 
     @property
     def dict(self):
@@ -57,6 +94,7 @@ class DataSourceBase(object):
     def update(self, **kwargs):
 
         for k, v in iteritems(kwargs):
+
             if hasattr(self, k):
                 setattr(self, k, v)
 
@@ -96,13 +134,30 @@ class DataSourceBase(object):
         return self._dest_table
 
     @property
+    def partition(self):
+        """For partition urltypes, return the partition specified by the ref """
+        from ambry.orm.exc import NotFoundError
+        if self.urltype != 'partition':
+            return None
+
+        p = self._bundle.partition(self.url)
+
+        if not p:
+            p = self._bundle.library.partition(self.url)
+
+        return p
+
+
+    @property
     def datafile(self):
         """Return an MPR datafile from the /ingest directory of the build filesystem"""
         from ambry_sources import MPRowsFile
-        from os.path import join
 
         if self._datafile is None:
-            self._datafile = MPRowsFile(self._bundle.build_ingest_fs, self.name)
+            if self.urltype == 'partition':
+                self._datafile = self.partition.datafile
+            else:
+                self._datafile = MPRowsFile(self._bundle.build_ingest_fs, self.name)
 
         return self._datafile
 
@@ -111,7 +166,10 @@ class DataSourceBase(object):
         """Return a SourceSpec to describe this source"""
         from ambry_sources.sources import SourceSpec
 
-        return SourceSpec(**self.dict)
+        url = self.ref
+
+        # Will get the URL twice; once as ref and onces as URL, but the ref is ignored
+        return SourceSpec(url, **self.dict)
 
     @property
     def column_map(self):
@@ -134,22 +192,65 @@ class DataSourceBase(object):
     @property
     def is_downloadable(self):
         """Return true if the URL is probably downloadable, and is not a reference or a template"""
-        return self.urltype not in ('ref', 'template')
+
+        return self.urltype not in self.NON_DOWNLOAD_REFTYPES
+
+    @property
+    def is_processable(self):
+        """Return true if the URL is probably downloadable, and is not a reference or a template"""
+
+        return self.urltype not in self.NON_PROCESS_REFTYPES
+
+    @property
+    def is_reference(self):
+        """Return true if the URL is probably downloadable, and is not a reference or a template"""
+
+        return self.urltype in self.NON_PROCESS_REFTYPES
+
+    @property
+    def is_partition(self):
+        """Return true if the reference is to a partition"""
+
+        return self.reftype == 'partition'
+
+    @property
+    def is_finalized(self):
+
+        if not self.datafile.exists:
+            return False
+
+        return self.datafile.is_finalized
+
+    @property
+    def is_ingested(self):
+        return self.state == self.STATES.INGESTED
+
+    @property
+    def is_built(self):
+        return self.state == self.STATES.BUILT
+
 
 
     def update_table(self):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
 
-        if self.datafile.exists:
+        st = self.source_table
+
+        if self.reftype == 'partition':
+
+            for c in self.partition.table.columns:
+                st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name,datatype=c.datatype)
+
+        elif self.datafile.exists:
             with self.datafile.reader as r:
 
-                st = self.source_table
                 for col in r.columns:
 
                     c = st.column(col['name'])
 
                     if c:
+
                         c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
 
                         #self._bundle.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
@@ -168,9 +269,20 @@ class DataSourceBase(object):
             with self.datafile.reader as r:
 
                 self.header_lines = r.info['header_rows']
-                self.comment_lines =  r.info['comment_rows']
+                self.comment_lines = r.info['comment_rows']
                 self.start_line = r.info['data_start_row']
                 self.end_line = r.info['data_end_row']
+
+    @property
+    def abbrev_url(self):
+        from ..util import parse_url_to_dict, unparse_url_dict
+
+        d = parse_url_to_dict(self.url)
+
+        d['path'] = '/.../' + d['path'].split('/').pop()
+
+        return unparse_url_dict(d)
+
 
 class DataSource(DataSourceBase, Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""
@@ -181,7 +293,9 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     sequence_id = SAColumn('ds_sequence_id', INTEGER)
 
     name = SAColumn('ds_name', Text)
-    d_vid = SAColumn('ds_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False)
+    d_vid = SAColumn(
+        'ds_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False,
+        doc='Dataset vid')
 
     title = SAColumn('ds_title', Text)
 
@@ -189,11 +303,15 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     source_table_name = SAColumn('ds_st_name', Text)
     _source_table = relationship(SourceTable, backref='sources')
 
-    t_vid = SAColumn('ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True)
+    t_vid = SAColumn(
+        'ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True,
+        doc='Table vid')
     dest_table_name = SAColumn('ds_dt_name', Text)
     _dest_table = relationship(Table, backref='sources')
 
-    stage = SAColumn('ds_stage', Text)
+    stage = SAColumn('ds_stage', INTEGER, default=0)  # Order in which to process sources.
+    pipeline = SAColumn('ds_pipeline', Text)
+
     time = SAColumn('ds_time', Text)
     space = SAColumn('ds_space', Text)
     grain = SAColumn('ds_grain', Text)
@@ -204,21 +322,22 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     header_lines = SAColumn('ds_header_lines', MutationList.as_mutable(JSONEncodedObj))
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
-    urltype = SAColumn('ds_urltype', Text)  # null or zip
-    filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed
+
+    filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed, partition
     encoding = SAColumn('ds_encoding', Text)
-    url = SAColumn('ds_url', Text)
-    ref = SAColumn('ds_ref', Text)
+
     hash = SAColumn('ds_hash', Text)
 
-    generator = SAColumn('ds_generator', Text)  # class name for a Pipe to generator rows
+    reftype = SAColumn('ds_reftype', Text)  # null, zip, ref, template
+    ref = SAColumn('ds_ref', Text)
+
+    state = SAColumn('ds_state', Text)
 
     account_acessor = None
 
     __table_args__ = (
         UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_ds_d_vid'),
     )
-
 
 
 class TransientDataSource(DataSourceBase):
@@ -230,10 +349,34 @@ class TransientDataSource(DataSourceBase):
         import inspect
         from sqlalchemy.orm.attributes import InstrumentedAttribute
 
+        self.properties = []
+
         # Make sure we have all of the attributes of the DataSource class
         for name, o in inspect.getmembers(DataSource):
             if isinstance(o, InstrumentedAttribute):
+                self.properties.append(name)
                 setattr(self, name, None)
 
         for k, v in iteritems(kwargs):
             setattr(self, k, v)
+
+    @property
+    def row(self):
+        import inspect
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+        SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
+                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
+
+        return OrderedDict( [(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+
+    @property
+    def dict(self):
+        """A dict that holds key/values for all of the properties in the
+        object.
+
+        :return:
+
+        """
+        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
+        return OrderedDict([(k, getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])

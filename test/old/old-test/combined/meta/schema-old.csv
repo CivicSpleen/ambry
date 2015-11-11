@@ -1,5 +1,0 @@
-table,seq,column,is_pk,is_fk,type,size,description,id
-combined,1,id,1,,INTEGER,,"An Example table, copied from elsewhere.",tIjqPRbrGq01
-combined,2,uuid,,,VARCHAR,36,A random UUID,cIjqPRbrGq01002
-combined,3,int,,,INTEGER,3,A random integer,cIjqPRbrGq01003
-combined,4,float,,,REAL,,A random float,cIjqPRbrGq01004

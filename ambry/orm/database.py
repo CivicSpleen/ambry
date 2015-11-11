@@ -11,6 +11,7 @@ import os
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy import create_engine, event, DDL
+from sqlalchemy.engine import Engine
 from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, ConflictError
 
 from ambry.util import get_logger, parse_url_to_dict
@@ -20,7 +21,7 @@ from . import Column, Partition, Table, Dataset, Config, File,\
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 108
+SCHEMA_VERSION = 115
 
 POSTGRES_SCHEMA_NAME = 'ambrylib'
 POSTGRES_PARTITION_SCHEMA_NAME = 'partitions'
@@ -124,7 +125,6 @@ class Database(object):
 
         # init engine
         self.engine
-        rows = []
 
         try:
             # Since we are using the connection, rather than the session, need to
@@ -134,19 +134,10 @@ class Database(object):
 
             inspector = Inspector.from_engine(self.engine)
 
-            if 'config' not in inspector.get_table_names(schema=self._schema):
-                return False
-            else:
+            if 'config' in inspector.get_table_names(schema=self._schema):
                 return True
-
-        except ProgrammingError:
-            # This happens when the datasets table doesn't exist
-            pass
-        except OperationalError:
-            # TODO Should check that the error is b/c the datasets table is missing, and reraise if it is for
-            # some other reason.
-            return False
-
+            else:
+                return False
         finally:
             self.close_connection()
 
@@ -156,15 +147,6 @@ class Database(object):
 
         if not self._engine:
 
-            # There appears to be a problem related to connection pooling on Linux + Postgres, where
-            # multiprocess runs will throw exceptions when the Datasets table record can't be
-            # found. It looks like connections are losing the setting for the search path to the
-            # library schema.  Disabling connection pooling solves the problem.
-            # from sqlalchemy.pool import NullPool
-            # self._engine = create_engine(self.dsn, poolclass=NullPool, echo=False)
-            # Easier than constructing the pool
-            # self._engine.pool._use_threadlocal = True
-
             if 'postgresql' in self.driver:
                 from sqlalchemy.pool import NullPool
                 # FIXME: Find another way to initiate postgres with NullPool (it is usefull for tests only.)
@@ -172,11 +154,36 @@ class Database(object):
             else:
                 self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
 
+            #
+            # Disconnect connections that have a different PID from the one they were created in.
+            # THis protects against re-use in multi-processing.
+            #
+            @event.listens_for(self._engine, "connect")
+            def connect(dbapi_connection, connection_record):
+
+                connection_record.info['pid'] = os.getpid()
+
+            @event.listens_for(self._engine, "checkout")
+            def checkout(dbapi_connection, connection_record, connection_proxy):
+
+                from sqlalchemy.exc import DisconnectionError
+
+                pid = os.getpid()
+                if connection_record.info['pid'] != pid:
+
+                    connection_record.connection = connection_proxy.connection = None
+                    raise DisconnectionError(
+                        "Connection record belongs to pid %s, "
+                        "attempting to check out in pid %s" %
+                        (connection_record.info['pid'], pid)
+                    )
+
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
 
             with self._engine.connect() as conn:
                 _validate_version(conn)
+
         return self._engine
 
     @property
@@ -219,11 +226,12 @@ class Database(object):
 
     def close(self):
 
+
         self.close_session()
         self.close_connection()
-
         if self._engine:
             self._engine.dispose()
+
 
     def close_session(self):
 
@@ -234,12 +242,14 @@ class Database(object):
 
     def close_connection(self):
 
+
         if self._connection:
             self._connection.close()
             self._connection = None
 
     def commit(self):
         self.session.commit()
+        #self.close_session()
 
     def rollback(self):
         self.session.rollback()
@@ -255,6 +265,7 @@ class Database(object):
 
         self.create()
 
+
         self.commit()
 
     def drop(self):
@@ -262,23 +273,28 @@ class Database(object):
         # Should close connection before table drop to avoid hanging in postgres.
         # http://docs.sqlalchemy.org/en/rel_0_8/faq.html#metadata-schema
 
-        for ds in self.datasets:
-            self.logger.info('Cleaning: {}'.format(ds.name))
+        if False:
+            for ds in self.datasets:
+                self.logger.info('Cleaning: {}'.format(ds.name))
+                try:
+                    self.remove_dataset(ds)
+                except:
+                    pass
+
             try:
-                self.remove_dataset(ds)
+                self.remove_dataset(self.root_dataset)
             except:
                 pass
 
-        try:
-            self.remove_dataset(self.root_dataset)
-        except:
-            pass
+            self.commit()
 
-        self.metadata.drop_all()
+        for tbl in reversed(self.metadata.sorted_tables):
+            self.logger.info("Dropping {}".format(tbl))
+            self.engine.execute(tbl.delete())
 
         self.commit()
 
-        self.create()
+        #self.create()
 
         self.commit()
 
@@ -458,6 +474,7 @@ class Database(object):
     def remove_dataset(self, ds):
 
         if ds:
+            self.delete_tables_partitions(ds)
             self.session.delete(ds)
             self.session.commit()
 
@@ -487,7 +504,6 @@ class Database(object):
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
-
     def copy_dataset(self, ds):
         from ..util import toposort
 
@@ -495,11 +511,11 @@ class Database(object):
         ds.tables
         ds.partitions
         ds.files
-        #ds.configs
         ds.stats
         ds.codes
         ds.source_tables
         ds.source_columns
+        # ds.configs # We'll get these later
 
         # Put the partitions in dependency order so the merge won't throw a Foreign key integrity error
         # The non-segment partitions go first, then the segments.
@@ -508,7 +524,7 @@ class Database(object):
         self.session.merge(ds)
 
         # FIXME: Oh, this is horrible. Sqlalchemy inserts all of the configs as a group, but they are self-referential,
-        # so some with a reference to a parent get inserted before their parent. The topo sort solives this,
+        # so some with a reference to a parent get inserted before their parent. The topo sort solves this,
         # but there must be a better way to do it.
 
         dag = {c.id: set([c.parent_id]) for c in ds.configs}
@@ -637,14 +653,18 @@ def get_stored_version(connection):
         return version
     elif connection.engine.name == 'postgresql':
         try:
-            version = connection.execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone()[0]
+            r = connection.execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone()
+            if not r:
+                raise VersionIsNotStored
+
+            version = r[0]
+
         except ProgrammingError:
             # This happens when the user_version table doesn't exist
             raise VersionIsNotStored
         return version
     else:
-        raise DatabaseMissingError(
-            'Do not know how to get version from {} engine.'.format(connection.engine.name))
+        raise DatabaseError('Do not know how to get version from {} engine.'.format(connection.engine.name))
 
 
 def _pragma_on_connect(dbapi_con, con_record):
@@ -785,3 +805,5 @@ def _get_all_migrations():
 
     all_migrations = sorted(all_migrations, key=lambda x: x[0])
     return all_migrations
+
+

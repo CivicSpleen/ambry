@@ -1,0 +1,90 @@
+about:
+    access: test
+    footnote: This is a footnote
+    grain: county
+    groups:
+    - Examples
+    license: other-open
+    processed: Packaged for [Ambry](http://ambry.io) by {{contact_bundle.creator.org}}
+    rights: null
+    source: '{{contact_source.creator.org}}'
+    space: California
+    subject: demo
+    summary: A bundle that demonstrates many of the documentation features, with a
+        space of {{about.space}} and a time of {{about.time}}
+    tags:
+    - example
+    - demo
+    time: 2010
+    title: A Well Documented Bundle
+build:
+    dict1:
+        dict2:
+            dict3:
+                key1: value1
+                key2: value2
+            key1: value1
+            key2: value2
+        key1: value1
+        key2: value2
+    key1: value1
+contacts:
+    analyst:
+        org: Example Com
+        url: http://example.com
+    creator:
+        email: bob@bob.com
+        name: Bob Bobson
+        org: Example Com
+        url: http://example.com
+external_documentation:
+    lena:
+        description: If you are going to have the PostScript tiger, you have to have
+            Lenna too.
+        title: "Lena S\xF6derberg"
+        url: https://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png
+    sb_graphic:
+        description: An interesting graphic about something.
+        title: A pretty Picture
+        url: http://www.cde.ca.gov/ta/tg/sa/documents/sbacgraphic.pdf
+    tiger:
+        description: The classic PostScript test file.
+        title: That PostScript Tiger
+        url: http://www.sanface.com/pdf/epdtest.pdf
+identity:
+    dataset: documentation
+    id: documentat
+    revision: 1
+    source: example.com
+    version: 0.1.1
+names:
+    fqname: example.com-documentation-0.1.1~documentat001
+    name: example.com-documentation
+    vid: documentat001
+    vname: example.com-documentation-0.1.1
+pipelines:
+    build2:
+        body:
+        - 'Add({ ''year'' : lambda e,r: e.source.time, ''release'' : lambda e,r: str(e.source.grain)
+            if e.source.grain else ''all'' })'
+        - MergeHeader
+        - TypeIntuiter
+        - MangleHeader
+        - MapToSourceTable(error_on_fail = False)
+        cast:
+        - CasterPipe
+        first:
+        - PrintRows
+        last:
+        - PrintRows
+        store:
+        - SelectPartition
+        - WriteToPartition
+    test:
+    - PrintEvery(10)
+    - 'Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )'
+    test2:
+    - 'MatchPredicate(lambda r: r[2] == ''g'')'
+    - 'Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )'
+requirements:
+    xlrd: xlrd

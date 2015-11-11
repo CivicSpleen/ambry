@@ -14,14 +14,13 @@ from fs.osfs import OSFS
 from fs.opener import fsopendir
 
 from sqlalchemy import or_
-from sqlalchemy.orm import object_session, lazyload
 
 from requests.exceptions import HTTPError
 
 from ambry.bundle import Bundle
 from ambry.dbexceptions import ConfigurationError
 from ambry.identity import Identity, ObjectNumber, NotObjectNumberError, NumberServer, DatasetNumber
-from ambry.library.search import Search, BACKENDS as SEARCH_BACKENDS
+from ambry.library.search import Search
 from ambry.orm import Partition, File, Config
 from ambry.orm.database import Database
 from ambry.orm.dataset import Dataset
@@ -36,30 +35,24 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 global_library = None
 
-def new_library(config=None):
+def new_library(config=None, database_name=None):
 
     if config is None:
         config = get_runconfig()
 
     lfs = LibraryFilesystem(config)
 
-    library_config = config.library()
+    library_config = config.library(database_name)
 
     db_config = library_config['database']
 
-    db = Database(db_config)
+    db = Database(db_config, echo = False)
     warehouse = None
-
-    if 'search' in library_config:
-        search_backend = SEARCH_BACKENDS[library_config['search']]
-    else:
-        search_backend = None
 
     l = Library(config=config,
                 database=db,
                 filesystem=lfs,
-                warehouse=warehouse,
-                search = search_backend)
+                warehouse=warehouse)
 
     global global_library
 
@@ -71,17 +64,25 @@ def new_library(config=None):
 class Library(object):
 
     def __init__(self, config, database, filesystem, warehouse, search=None):
+        from sqlalchemy.exc import OperationalError
 
+        self.logger = logger
         self._config = config
         self._db = database
-        self._db.open()
+
+        try:
+            self._db.open()
+        except OperationalError as e:
+            self.logger.error("Failed to open database '{}': {} ".format(self._db.dsn, e))
+
         self._fs = filesystem
         self._warehouse = warehouse
+        self.processes = None # Number of multiprocessing proccors. Default to all of them
         if search:
-            self._search = Search(self,search)
+            self._search = Search(self, search)
         else:
             self._search = None
-        self.logger = logger
+
 
     def resolve_object_number(self, ref):
         """Resolve a variety of object numebrs to a dataset number"""
@@ -94,6 +95,15 @@ class Library(object):
         ds_on = on.as_dataset
 
         return ds_on
+
+    def drop(self):
+        return self.database.drop()
+
+    def clean(self):
+        return self.database.clean()
+
+    def create(self):
+        return self.database.create()
 
     @property
     def database(self):
@@ -163,7 +173,7 @@ class Library(object):
 
     def dataset(self, ref, load_all=False, exception=True):
         """Return all datasets"""
-        return self.database.dataset(ref, load_all=load_all, exception = exception)
+        return self.database.dataset(ref, load_all=load_all, exception=exception)
 
     def new_bundle(self, assignment_class=None, **kwargs):
         """
@@ -189,6 +199,10 @@ class Library(object):
         b.set_file_system(source_url=self._fs.source(b.identity.source_path),
                           build_url=self._fs.build(b.identity.source_path))
 
+        bs_meta = b.build_source_files.file(File.BSFILE.META)
+        bs_meta.objects_to_record()
+        bs_meta.record_to_objects()
+
         self._db.commit()
         return b
 
@@ -201,10 +215,10 @@ class Library(object):
         """
         identity = Identity.from_dict(config['identity'])
 
-        ds = self._db.dataset(identity.vid, exception = False)
+        ds = self._db.dataset(identity.vid, exception=False)
 
         if not ds:
-            ds = self._db.dataset(identity.name, exception = False)
+            ds = self._db.dataset(identity.name, exception=False)
 
         if not ds:
             ds = self._db.new_dataset(**identity.dict)
@@ -214,12 +228,12 @@ class Library(object):
         b.state = Bundle.STATES.NEW
         b.set_last_access(Bundle.STATES.NEW)
 
-        #b.set_file_system(source_url=self._fs.source(ds.name),
-        #                  build_url=self._fs.build(ds.name))
+        # b.set_file_system(source_url=self._fs.source(ds.name),
+        #                   build_url=self._fs.build(ds.name))
 
         return b
 
-    def bundle(self, ref):
+    def bundle(self, ref, capture_exceptions=False):
         """Return a bundle build on a dataset, with the given vid or id reference"""
         from ..identity import NotObjectNumberError
         from ..orm.exc import NotFoundError
@@ -233,9 +247,19 @@ class Library(object):
                 ds = None
 
         if not ds:
+            try:
+                p = self.partition(ref)
+                ds = p._bundle.dataset
+            except NotFoundError:
+                ds = None
+
+        if not ds:
             raise NotFoundError('Failed to find dataset for ref: {}'.format(ref))
 
-        return Bundle(ds, self)
+        b = Bundle(ds, self)
+        b.capture_exceptions = capture_exceptions
+
+        return b
 
     @property
     def bundles(self):
@@ -288,7 +312,10 @@ class Library(object):
         return db.path
 
     def duplicate(self, b):
-        """Duplicate a bundle, with a higher version number"""
+        """Duplicate a bundle, with a higher version number.
+
+        This only copies the files, under the theory that the bundle can be rebuilt from them.
+        """
 
         on = b.identity.on
         on.revision = on.revision + 1
@@ -313,26 +340,19 @@ class Library(object):
         ds = self.database.new_dataset(**d)
 
         nb = self.bundle(ds.vid)
+        nb.set_file_system(source_url=b.source_fs.getsyspath('/'))
         nb.state = Bundle.STATES.NEW
 
-        nb.set_last_access(Bundle.STATES.NEW)
+        nb.commit()
 
-        nb.set_file_system(source_url=self._fs.source(ds.name),
-                           build_url=self._fs.build(ds.name))
+        for f in b.dataset.files:
+            assert f.major_type == f.MAJOR_TYPE.BUILDSOURCE
+            nb.dataset.files.append(nb.dataset.bsfile(f.minor_type).update(f))
 
-        session = object_session(nb.dataset)
-
-        for f in session.query(File).filter(File.d_vid == ds.vid).options(lazyload('*')).all():
-
-            d = f.row
-
-            del d['id']
-            del d['d_vid']
-            del d['dataset']
-
-            nf = File(**d)
-
-            ds.files.append(nf)
+        # Load the metadata in to records, then back out again. The objects_to_record process will set the
+        # new identity object numbers in the metadata file
+        nb.build_source_files.file(File.BSFILE.META).record_to_objects()
+        nb.build_source_files.file(File.BSFILE.META).objects_to_record()
 
         ds.commit()
 
@@ -369,7 +389,7 @@ class Library(object):
         db_ck = b.identity.cache_key + '.db'
 
         with open(db_path) as f:
-            remote.makedir(os.path.dirname(db_ck), recursive = True, allow_recreate= True)
+            remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
             remote.setcontents(db_ck, f)
 
         os.remove(db_path)
@@ -380,6 +400,7 @@ class Library(object):
                 self.logger.info('Checking in {}'.format(p.identity.vname))
 
                 calls = [0]
+
                 def progress(bytes):
                     calls[0] += 1
                     if calls[0] % 4 == 0:
@@ -394,7 +415,6 @@ class Library(object):
         return remote_name, db_ck
 
     def sync_remote(self, remote_name):
-        from ambry.orm.exc import NotFoundError
         remote = self.remote(remote_name)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
@@ -423,7 +443,8 @@ class Library(object):
 
                 self.logger.info('Synced {}'.format(ds.vname))
             except Exception as e:
-                self.logger.error('Failed to sync {} from {}, {}: {}'.format(fn, remote_name, temp.getsyspath(fn), e))
+                self.logger.error('Failed to sync {} from {}, {}: {}'
+                                  .format(fn, remote_name, temp.getsyspath(fn), e))
                 raise
 
         self.database.commit()
@@ -496,8 +517,8 @@ class Library(object):
 
         except HTTPError as e:
             self.logger.error('Failed to get number from number server for key: {}'.format(key, e.message))
-            self.logger.error('Using self-generated number. '
-                 'There is no problem with this, but they are longer than centrally generated numbers.')
+            self.logger.error('Using self-generated number. There is no problem with this, '
+                              'but they are longer than centrally generated numbers.')
             n = str(DatasetNumber())
 
         return n
@@ -542,4 +563,74 @@ class Library(object):
             install(python_dir, module_name, pip_name)
 
 
+    def import_bundles(self, dir, detach = False, force = False):
+        """
+        Import bundles from a directory
+
+        :param dir:
+        :return:
+        """
+
+        import yaml
+
+        fs = fsopendir(dir)
+
+        bundles = []
+
+        for f in fs.walkfiles(wildcard='bundle.yaml'):
+
+            self.logger.info("Visiting {}".format(f))
+            config = yaml.load(fs.getcontents(f))
+
+            if not config:
+                self.logger.error("Failed to get a valid bundle configuration from '{}'".format(f))
+
+            bid = config['identity']['id']
+
+            try:
+                b = self.bundle(bid)
+
+            except NotFoundError:
+                b = None
+
+            if not b:
+                b = self.new_from_bundle_config(config)
+                self.logger.info('{} Loading New'.format(b.identity.fqname))
+            else:
+                self.logger.info('{} Loading Existing'.format(b.identity.fqname))
+
+            source_url = os.path.dirname(fs.getsyspath(f))
+            b.set_file_system(source_url=source_url)
+            self.logger.info('{} Loading from {}'.format(b.identity.fqname, source_url))
+            b.sync_in()
+
+            if detach:
+                self.logger.info("{} Detaching".format(b.identity.fqname))
+                b.set_file_system(source_url=None)
+
+            if force:
+                self.logger.info("{} Sync out".format(b.identity.fqname))
+                # FIXME. It won't actually sync out until re-starting the bundle.
+                # The source_file_system is probably cached
+                b = self.bundle(bid)
+                b.sync_out()
+
+            bundles.append(b)
+
+        return  bundles
+
+    @property
+    def process_pool(self):
+        """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
+
+        import multiprocessing
+        from ambry.bundle.concurrent import init_library
+
+        if self.processes:
+            cpus = self.processes
+        else:
+            cpus = multiprocessing.cpu_count()
+
+        self.logger.info("Starting MP pool with {} processors".format(cpus))
+        return multiprocessing.Pool(processes=cpus, initializer=init_library, initargs=[self.config.path, self.database.dsn])
 

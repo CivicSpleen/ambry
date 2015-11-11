@@ -4,19 +4,21 @@ environment:
 library:
 
     filesystem: '{root}/library'
-    database: 'sqlite://{root}/library.db'
+    database: 'sqlite:///{root}/library.db'
     remotes:
-        public: 'http://public.library.civicknowledge.com'
-        system: 'http://system.library.civicknowledge.com'
+        public: 's3://test.library.civicknowledge.com/public'
+        test: 's3://test.library.civicknowledge.com/test'
 
 filesystem:
     root: /var/ambry
-    downloads: '{root}/cache/downloads'
-    extracts: '{root}/cache/extracts'
-    documentation: '{root}/cache/documentation'
-    python: '{root}/cache/python'
+    downloads: '{root}/downloads'
+    extracts: '{root}/extracts'
+    python: '{root}/python'
+    documentation: '{root}/doc'
+    build: '{root}/build'
     source: '{root}/source'
-    warehouses: '{root}/warehouses'
+    search: '{root}/search'
+    logs: '{root}/logs'
 
 services:
     numbers:

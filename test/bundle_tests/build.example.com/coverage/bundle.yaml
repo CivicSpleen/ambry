@@ -1,0 +1,46 @@
+about:
+  access: restricted
+  footnote: nll
+  grain: null
+  groups: null
+  license: ckdbl
+  processed: null
+  rights: public
+  source: null
+  space: null
+  subject: null
+  summary: Ensure that converage values from  the partition names, metadata and datasets are included in the partition coverage information
+  tags: []
+  time: null
+  title: Tests of time, space and grain coverage
+contacts:
+  creator:
+    email: eric@civicknowledge.com
+    name: Eric Busboom
+    org: Civic Knowledge
+    url: http://civicknowledge.com
+dependencies: {}
+external_documentation:
+  dataset:
+    description: Web page the links to the dataset description
+    source: null
+    title: Dataset Page
+    url: http://example.com
+  download:
+    description: Web page that links to the source files.
+    source: null
+    title: Download Page
+    url: http://example.com
+identity:
+  dataset: coverage
+  id: d9wiWb8rei
+  revision: 1
+  source: build.example.com
+  version: 0.0.1
+names:
+  fqname: build.example.com-coverage-0.0.1~d9wiWb8rei001
+  name: build.example.com-coverage
+  vid: d9wiWb8rei001
+  vname: build.example.com-coverage-0.0.1
+requirements: {}
+versions: {}

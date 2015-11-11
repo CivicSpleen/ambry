@@ -28,8 +28,10 @@ import sys
 import time
 import yaml
 
+import csv
+
+import six
 from six import string_types, iteritems, u, iterkeys
-from six.moves import zip as six_izip
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import File
@@ -40,7 +42,6 @@ logger = get_logger(__name__)
 
 class FileTypeError(Exception):
     """Bad file type"""
-
 
 class BuildSourceFile(object):
 
@@ -76,6 +77,16 @@ class BuildSourceFile(object):
         return self._dataset.bsfile(self._file_const)
 
     @property
+    def record_content(self):
+        """Return the contents of the file record"""
+        return self.record.unpacked_contents
+
+    @property
+    def file_content(self):
+        """Return the contents of the file system file"""
+        return self._fs.getcontents(file_name(self._file_const))
+
+    @property
     def default(self):
         """Return default contents"""
         return file_default(self._file_const)
@@ -91,6 +102,19 @@ class BuildSourceFile(object):
     @property
     def path(self):
         return self._fs.getsyspath(file_name(self._file_const))
+
+
+    def remove(self):
+        from fs.errors import ResourceNotFoundError
+
+        try:
+            self._fs.remove(file_name(self._file_const))
+        except ResourceNotFoundError:
+            pass
+
+    @property
+    def file_name(self):
+        return file_name(self._file_const)
 
     @property
     def fs_modtime(self):
@@ -113,7 +137,7 @@ class BuildSourceFile(object):
 
         fn_path = file_name(self._file_const)
 
-        with self._fs.open(fn_path) as f:
+        with self._fs.open(fn_path, mode='rb') as f:
             return md5_for_file(f)
 
     def sync_dir(self):
@@ -148,26 +172,32 @@ class BuildSourceFile(object):
     def sync(self, force=None):
         """Synchronize between the file in the file system and the field record"""
 
-        if force:
-            sd = force
-        else:
-            sd = self.sync_dir()
+        try:
+            if force:
+                sd = force
+            else:
+                sd = self.sync_dir()
 
-        if sd == self.SYNC_DIR.FILE_TO_RECORD:
+            if sd == self.SYNC_DIR.FILE_TO_RECORD:
 
-            if force and not self.exists():
+                if force and not self.exists():
+                    return None
+
+                self.fs_to_record()
+
+            elif sd == self.SYNC_DIR.RECORD_TO_FILE:
+                self.record_to_fs()
+
+            else:
                 return None
 
-            self.fs_to_record()
 
-        elif sd == self.SYNC_DIR.RECORD_TO_FILE:
-            self.record_to_fs()
-
-        else:
-            return None
-
-        self._dataset.config.sync[self._file_const][sd] = time.time()
-        return sd
+            self._dataset.config.sync[self._file_const][sd] = time.time()
+            return sd
+        except Exception as e:
+            self._bundle.rollback()
+            self._bundle.error("Failed to sync '{}': {}".format(self._file_const, e))
+            raise
 
     def clean_objects(self):
         pass
@@ -176,10 +206,13 @@ class BuildSourceFile(object):
         """Load a file in the filesystem into the file record"""
         raise NotImplementedError
 
-    def record_to_fs(self):
+    def record_to_fh(self, f):
         """Create a filesystem file from a File"""
         raise NotImplementedError
 
+    def record_to_fs(self):
+        """Create a filesystem file from a File"""
+        raise NotImplementedError
 
 class RowBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -193,24 +226,30 @@ class RowBuildSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
         rows = []
-        with self._fs.open(fn_path) as f:
-            for row in csv.reader(f):
-                row = [e if e.strip() != '' else None for e in row]
-                if any(bool(e) for e in row):
-                    rows.append(row)
 
+        if six.PY2:
+            with self._fs.open(fn_path, 'rb') as f:
+                for row in csv.reader(f, encoding='utf-8'):
+                    row = [e if e.strip() != '' else None for e in row]
+                    if any(bool(e) for e in row):
+                        rows.append(row)
+        else:
+            # py3
+            with self._fs.open(fn_path, 'rt', encoding='utf-8') as f:
+                for row in csv.reader(f):
+                    row = [e if e.strip() != '' else None for e in row]
+                    if any(bool(e) for e in row):
+                        rows.append(row)
         try:
-            fr.update_contents(msgpack.packb(rows))
+            fr.update_contents(msgpack.packb(rows), 'application/msgpack')
         except AssertionError:
             raise
 
-        fr.mime_type = 'application/msgpack'
         fr.source_hash = self.fs_hash
 
         fr.modified = self.fs_modtime
 
-    def record_to_fs(self):
-        """Create a filesystem file from a File"""
+    def record_to_fh(self, f):
         import unicodecsv as csv
 
         fr = self._dataset.bsfile(self._file_const)
@@ -228,15 +267,29 @@ class RowBuildSourceFile(BuildSourceFile):
                 return v
 
         if fr.contents:
-            with self._fs.open(fn_path, 'wb') as f:
-                w = csv.writer(f)
-                for i, row in enumerate(fr.unpacked_contents):
 
-                    w.writerow(munge_types(e) for e in row)
+            w = csv.writer(f, encoding='utf-8')
+            for i, row in enumerate(fr.unpacked_contents):
+                w.writerow([munge_types(e) for e in row])
 
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
 
+    def record_to_fs(self):
+        """Create a filesystem file from a File"""
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        fn_path = file_name(self._file_const)
+
+        if fr.contents:
+            if six.PY2:
+                with self._fs.open(fn_path, 'wb') as f:
+                    self.record_to_fh(f)
+            else:
+                # py3
+                with self._fs.open(fn_path, 'w', newline='') as f:
+                    self.record_to_fh(f)
 
 class DictBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -248,15 +301,27 @@ class DictBuildSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
         if fn_path.endswith('.yaml'):
-            with self._fs.open(fn_path) as f:
-                fr.update_contents(msgpack.packb(yaml.safe_load(f)))
-            fr.mime_type = 'application/msgpack'
+            with self._fs.open(fn_path, mode='r', encoding='utf-8') as f:
+                fr.update_contents(msgpack.packb(yaml.safe_load(f)), 'application/msgpack')
         else:
             raise FileTypeError('Unknown file type for : %s' % fn_path)
 
         fr.source_hash = self.fs_hash
 
         fr.modified = self.fs_modtime
+
+    def record_to_fh(self, f):
+        """Write the record, in filesystem format, to a file handle or file object"""
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        fn_path = file_name(self._file_const)
+
+
+        if fr.contents:
+            yaml.safe_dump(fr.unpacked_contents, f, default_flow_style=False, encoding='utf-8')
+            fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
@@ -266,12 +331,9 @@ class DictBuildSourceFile(BuildSourceFile):
         fn_path = file_name(self._file_const)
 
         if fr.contents:
-            with self._fs.open(fn_path, 'wb') as f:
+            with self._fs.open(fn_path, 'w', encoding='utf-8') as f:
 
-                yaml.safe_dump(fr.unpacked_contents, f, default_flow_style=False, encoding='utf-8')
-            fr.source_hash = self.fs_hash
-            fr.modified = self.fs_modtime
-
+                self.record_to_fh(f)
 
 class StringSourceFile(BuildSourceFile):
     """A Source Build File that is a single file. """
@@ -293,14 +355,20 @@ class StringSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
 
-        # Not dealing with encodings in in/out here, since the recod is supposed to be a straight copy of the
-        # file.
-        with self._fs.open(fn_path, 'rb') as f:
-            fr.update_contents(f.read())
+        with self._fs.open(fn_path, 'r', encoding="utf-8") as f:
+            fr.update_contents(f.read(), 'text/plain')
 
-        fr.mime_type = 'text/plain'
         fr.source_hash = self.fs_hash
         fr.modified = self.fs_modtime
+
+
+    def record_to_fh(self, f):
+        fr = self._dataset.bsfile(self._file_const)
+
+        if fr.contents:
+            f.write(fr.unpacked_contents)
+            fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
@@ -308,12 +376,9 @@ class StringSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
 
         if fr.contents:
+            # No UTF-Encoding! Just go directly from the the database to the file.
             with self._fs.open(file_name(self._file_const), 'wb') as f:
-                f.write(fr.contents)
-
-            fr.source_hash = self.fs_hash
-            fr.modified = self.fs_modtime
-
+                self.record_to_fh(f)
 
 class MetadataFile(DictBuildSourceFile):
 
@@ -347,6 +412,8 @@ class MetadataFile(DictBuildSourceFile):
 
     def objects_to_record(self):
 
+        # FIXME: -- this looks more like records to file
+
         fr = self._dataset.bsfile(self._file_const)
 
         if fr.has_contents:
@@ -369,9 +436,12 @@ class MetadataFile(DictBuildSourceFile):
         o['identity'] = self._dataset.identity.ident_dict
         o['names'] = self._dataset.identity.names_dict
 
-        with self._fs.open(file_name(self._file_const), 'wb') as f:
+        with self._fs.open(file_name(self._file_const), 'w', encoding='utf-8') as f:
             yaml.safe_dump(o, f, default_flow_style=False, indent=4, encoding='utf-8')
 
+        fr.update_contents(msgpack.packb(o), 'application/msgpack')
+
+        return fr
 
 class PythonSourceFile(StringSourceFile):
 
@@ -386,15 +456,59 @@ class PythonSourceFile(StringSourceFile):
 
         if fr.contents:
 
-            with self._fs.open(file_name(self._file_const), 'wb') as f:
-                f.write(fr.contents)
+            with self._fs.open(file_name(self._file_const), 'w', encoding='utf-8') as f:
+                f.write(fr.unpacked_contents)
 
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
 
+    def import_module(self, **kwargs):
+        """
+        Import the contents of the file into the ambry.build module
+
+        :param kwargs: items to add to the module globals
+        :return:
+        """
+        import os
+        from fs.errors import NoSysPathError
+
+        try:
+            import ambry.build
+
+            module = sys.modules['ambry.build']
+        except ImportError:
+            module = imp.new_module('ambry.build')
+            sys.modules['ambry.build'] = module
+
+        bf = self._dataset.bsfile(self._file_const)
+
+        if not bf.contents:
+            return module
+
+        module.__dict__.update(**kwargs)
+
+        try:
+            abs_path = self._fs.getsyspath(file_name(self._file_const))
+        except NoSysPathError:
+            abs_path = '<string>'
+
+        import re
+
+        if re.search(r'-\*-\s+coding:', bf.contents):
+            # Has encoding, so don't decode
+            contents = bf.contents
+        else:
+            contents = bf.unpacked_contents # Assumes utf-8
+
+        exec(compile(contents, abs_path, 'exec'), module.__dict__)
+
+        return module
+
     def import_bundle(self):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
+        import os
+        from fs.errors import NoSysPathError
 
         try:
             import ambry.build
@@ -409,12 +523,15 @@ class PythonSourceFile(StringSourceFile):
             from ambry.bundle import Bundle
             return Bundle
 
-        exec(bf.contents, module.__dict__)
+        try:
+            abs_path = self._fs.getsyspath(file_name(self._file_const))
+        except NoSysPathError:
+            abs_path = '<string>'
 
-        #print self._file_const, bundle.__dict__.keys()
-        #print bf.contents
+        exec(compile(bf.contents, abs_path, 'exec'), module.__dict__)
 
         return module.Bundle
+
 
     def import_lib(self):
         """Import the lib.py file into the bundle module"""
@@ -433,8 +550,8 @@ class PythonSourceFile(StringSourceFile):
 
         exec(bf.contents, module.__dict__)
 
-        # print self._file_const, bundle.__dict__.keys()
-        # print bf.contents
+        # print(self._file_const, bundle.__dict__.keys())
+        # print(bf.contents)
 
         return module
 
@@ -470,7 +587,7 @@ class SourcesFile(RowBuildSourceFile):
             if i == 0:
                 header = row
             else:
-                d = dict(six_izip(header, row))
+                d = dict(six.moves.zip(header, row))
 
                 if 'widths' in d:
                     del d['widths']  # Obsolete column in old spreadsheets.
@@ -479,6 +596,10 @@ class SourcesFile(RowBuildSourceFile):
                     d['dest_table_name'] = d['table']
                     del d['table']
 
+                if 'order' in d:
+                    d['stage'] = d['order']
+                    del d['order']
+
                 if 'dest_table' in d:
                     d['dest_table_name'] = d['dest_table']
                     del d['dest_table']
@@ -486,6 +607,9 @@ class SourcesFile(RowBuildSourceFile):
                 if 'source_table' in d:
                     d['source_table_name'] = d['source_table']
                     del d['source_table']
+
+                if 'state' in d:
+                    del d['state']
 
                 d['d_vid'] = self._dataset.vid
 
@@ -496,6 +620,10 @@ class SourcesFile(RowBuildSourceFile):
                     name = d['name']
                     del d['name']
                     ds = self._dataset.new_source(name, **d)
+                except:  # Odd error with 'none' in keys for d
+                    print('!!!', header)
+                    print('!!!', row)
+                    raise
 
                 s.merge(ds)
 
@@ -503,7 +631,9 @@ class SourcesFile(RowBuildSourceFile):
 
     def objects_to_record(self):
 
-        sorter = lambda r: ('A' if r['urltype'] == 'ref' else 'z' if r['urltype'] is None else r['urltype'], r['name'])
+        sorter = lambda r: ('A' if r['reftype'] == 'ref'
+                            else 'z' if r['reftype'] is None
+                            else r['reftype'], r['name'])
 
         rows = sorted([s.row for s in self._dataset.sources], key=sorter)
 
@@ -514,14 +644,11 @@ class SourcesFile(RowBuildSourceFile):
             rows = list(drop_empty(rows))
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile = self._dataset.bsfile(self._file_const)
 
-        bsfile.mime_type = 'application/msgpack'
-        bsfile.update_contents(msgpack.packb(rows))
-
+        bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
 
 class SchemaFile(RowBuildSourceFile):
 
@@ -530,7 +657,7 @@ class SchemaFile(RowBuildSourceFile):
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
-        from ambry.orm import Column
+        from ambry.orm import Column, Table
 
         def _clean_int(i):
             if i is None:
@@ -557,25 +684,13 @@ class SchemaFile(RowBuildSourceFile):
 
         extant_tables = {t.name: t for t in self._dataset.tables}
 
-        def get_or_new_table(row):
-
-            table_name = row['table']
-
-            if table_name not in extant_tables:
-
-                t = self._dataset.new_table(
-                    table_name,
-                    description=row.get('description') if row['column'] == 'id' else '')
-
-                extant_tables[table_name] = t
-
-            return extant_tables[table_name]
-
         old_types_map = {
             'varchar': Column.DATATYPE_STR,
             'integer': Column.DATATYPE_INTEGER,
             'real': Column.DATATYPE_FLOAT,
         }
+
+        table_number = self._dataset.next_sequence_id(Table, force_query=True)
 
         for row in bsfile.dict_row_reader:
 
@@ -594,9 +709,27 @@ class SchemaFile(RowBuildSourceFile):
 
             row['datatype'] = old_types_map.get(row['datatype'].lower(), row['datatype'])
 
-            table = get_or_new_table(row)
+            table_name = row['table']
 
-            data = {k.replace('d_', '', 1): v for k, v in list(row.items()) if k and k.startswith('d_')}
+            try:
+                table = extant_tables[table_name]
+            except KeyError:
+                table = self._dataset.new_table(
+                    table_name,
+                    sequence_id=table_number,
+                    description=row.get('description') if row['column'] == 'id' else ''
+                )
+
+                table_number += 1
+                extant_tables[table_name] = table
+
+
+            data = {k.replace('d_', '', 1): v
+                    for k, v in list(row.items()) if k and k.startswith('d_') and v}
+
+            if row['column'] == 'id':
+                table.data.update(data)
+                data = {}
 
             table.add_column(
                 row['column'],
@@ -604,13 +737,13 @@ class SchemaFile(RowBuildSourceFile):
                 description=(row.get('description', '') or '').strip(),
                 datatype=row['datatype'].strip().lower() if '.' not in row['datatype'] else row['datatype'],
                 proto_vid=row.get('proto_vid'),
-                derivedfrom=row.get('derivedfrom'),
                 size=_clean_int(row.get('size', None)),
                 width=_clean_int(row.get('width', None)),
                 data=data,
                 keywords=row.get('keywords'),
                 measure=row.get('measure'),
-                caster=row.get('caster'),
+                transform=row.get('transform'),
+                derivedfrom=row.get('derivedfrom'),
                 units=row.get('units', None),
                 universe=row.get('universe'),
                 update_existing= True)
@@ -649,11 +782,11 @@ class SchemaFile(RowBuildSourceFile):
         for row in initial_rows:
 
             this_row = list()
-            for h in headers: # Every row is the same length, with combined set of headers
+            for h in headers:  # Every row is the same length, with combined set of headers
                 this_row.append(row.get(h, None))
 
             if name_index and this_row[name_index] == 'id':
-                #Blank to separate tables, but transpose trick fails if rows not all same size
+                # Blank to separate tables, but transpose trick fails if rows not all same size
                 rows.append([None for e in this_row])
 
             rows.append(this_row)
@@ -666,13 +799,10 @@ class SchemaFile(RowBuildSourceFile):
 
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile = self._dataset.bsfile(self._file_const)
-        bsfile.mime_type = 'application/msgpack'
-        bsfile.update_contents(msgpack.packb(rows))
-
+        bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
 
 class SourceSchemaFile(RowBuildSourceFile):
 
@@ -681,14 +811,31 @@ class SourceSchemaFile(RowBuildSourceFile):
 
     def record_to_objects(self):
         """Write from the stored file data to the source records"""
+        from ambry.orm import SourceTable
+
         bsfile = self._dataset.bsfile(self._file_const)
 
         failures = set()
+
+        # Clear out all of the columns from existing tables. We don't clear out the
+        # tables, since they may be referenced by sources
+
+        for row in bsfile.dict_row_reader:
+            st = self._dataset.source_table(row['table'])
+
+            if st:
+                st.columns[:] = []
+
+        self._dataset.commit()
+
+        table_number = self._dataset.next_sequence_id(SourceTable, force_query=True)
+
         for row in bsfile.dict_row_reader:
             st = self._dataset.source_table(row['table'])
 
             if not st:
-                st = self._dataset.new_source_table(row['table'])
+                st = self._dataset.new_source_table(row['table'], table_number)
+                table_number += 1
 
             if 'datatype' not in row:
                 row['datatype'] = 'unknown'
@@ -717,17 +864,15 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         else:
             # No contents, so use the default file
-            import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
-        bsfile.mime_type = 'application/msgpack'
-        bsfile.update_contents(msgpack.packb(rows))
+        bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
 
-        self._dataset.commit()
 
 file_info_map = {
     File.BSFILE.BUILD: (File.path_map[File.BSFILE.BUILD], PythonSourceFile),
     File.BSFILE.LIB: (File.path_map[File.BSFILE.LIB], PythonSourceFile),
+    File.BSFILE.TEST: (File.path_map[File.BSFILE.TEST], PythonSourceFile),
     File.BSFILE.DOC: (File.path_map[File.BSFILE.DOC], StringSourceFile),
     File.BSFILE.META: (File.path_map[File.BSFILE.META], MetadataFile),
     File.BSFILE.SCHEMA: (File.path_map[File.BSFILE.SCHEMA], SchemaFile),
@@ -735,16 +880,13 @@ file_info_map = {
     File.BSFILE.SOURCES: (File.path_map[File.BSFILE.SOURCES], SourcesFile)
 }
 
-
 def file_name(const):
     """Return the file name for a file constant"""
     return file_info_map[const][0]
 
-
 def file_class(const):
     """Return the class for a file constant"""
     return file_info_map[const][1]
-
 
 def file_default(const):
     """Return the default content for the file"""
@@ -754,9 +896,16 @@ def file_default(const):
 
     path = os.path.join(os.path.dirname(df.__file__),  file_name(const))
 
-    with open(path,'rb') as f:
-        return f.read()
+    if six.PY2:
+        with open(path, 'rb') as f:
+            return f.read()
+    else:
+        # py3
+        with open(path, 'rt', encoding='utf-8') as f:
+            return f.read()
 
+    with open(path, 'rb') as f:
+        return f.read()
 
 class BuildSourceFileAccessor(object):
 
@@ -768,7 +917,25 @@ class BuildSourceFileAccessor(object):
 
     @property
     def build_file(self):
+        raise DeprecationWarning("Use self.build_bundle")
         return self.file(File.BSFILE.BUILD)
+
+    def __getattr__(self, item):
+        """Converts the file_constants into acessor names to return bsfiles.
+
+        See File.BSFILE for the const string values. Returns a file via the self.file() method
+
+        """
+
+        if item not in file_info_map:
+            return super(BuildSourceFileAccessor, self).__getattr__(item)
+        else:
+            return self.file(item)
+
+    def __iter__(self):
+
+        for key in iterkeys(file_info_map):
+            yield(self.file(key))
 
     @property
     def meta_file(self):

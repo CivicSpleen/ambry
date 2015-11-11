@@ -20,7 +20,6 @@ class County(IntValue):
         from ambry.library import global_library
         # v is set in __new__
 
-
         self.state = None
         self.library = global_library
 
@@ -55,7 +54,7 @@ class County(IntValue):
                 states = self.library.partition('census.gov-acs-geofile-2009-geofile40-20095-40')
 
                 state_names = {}
-                for row in states.stream(as_dict=True):
+                for row in states.stream():
                     if row['component'] == '00':
                         state_names[row['state']] = row['name'].strip()
 

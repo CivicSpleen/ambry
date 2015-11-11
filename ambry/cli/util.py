@@ -6,12 +6,8 @@ included in this distribution as LICENSE.txt
 """
 from six import iteritems
 
-from ..cli import prt, err, fatal, warn, _print_info  # @UnresolvedImport
-from ambry.util import Progressor
-
 
 def util_parser(cmd):
-    import argparse
 
     #
     # Library Command
@@ -33,7 +29,8 @@ def util_parser(cmd):
     sp.set_defaults(subcommand='scrape')
     sp.add_argument('url', nargs=1)  # Get everything else.
     group = sp.add_mutually_exclusive_group(required=True)
-    group.add_argument('-d', '--doc', default=False, action='store_const', const='external_documentation', dest='group',
+    group.add_argument('-d', '--doc', default=False, action='store_const',
+                       const='external_documentation', dest='group',
                        help='Show documentation links')
     group.add_argument('-s', '--source', default=False, action='store_const', const='sources', dest='group',
                        help='Show sources links')
@@ -41,6 +38,7 @@ def util_parser(cmd):
                        help='Show other links')
 
     sp.add_argument('-c', '--csv', default=False, action='store_true', help='Output to CSV')
+
 
 def util_command(args, rc):
     from ..library import new_library
@@ -52,17 +50,18 @@ def util_command(args, rc):
 
     globals()['util_' + args.subcommand](args, l, rc)
 
+
 def util_scrape(args, l, config):
-    from ambry.util import  scrape
+    from ambry.util import scrape
     from tabulate import tabulate
     import re
 
-    d = scrape(l, args.url[0], as_html = True)[args.group]
+    d = scrape(l, args.url[0], as_html=True)[args.group]
 
     headers = 'name description url'.split()
     rows = []
-    for k, v in d.items():
-        v['description'] = re.sub(r'\s+',' ',v['description']).strip()
+    for k, v in iteritems(d):
+        v['description'] = re.sub(r'\s+', ' ', v['description']).strip()
         rows.append([k, v['description'], v['url']])
 
     if args.csv:
@@ -73,6 +72,4 @@ def util_scrape(args, l, config):
         w.writerows(rows)
         sys.stdout.flush()
     else:
-        print tabulate(rows, headers)
-
-
+        print(tabulate(rows, headers))

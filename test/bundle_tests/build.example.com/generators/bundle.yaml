@@ -1,0 +1,47 @@
+about:
+  access: restricted
+  remote: test
+  footnote: nll
+  grain: null
+  groups: null
+  license: ckdbl
+  processed: null
+  rights: public
+  source: null
+  space: null
+  subject: null
+  summary: Test use of generators as soruces
+  tags: []
+  time: null
+  title: Building with Generators
+contacts:
+  creator:
+    email: eric@civicknowledge.com
+    name: Eric Busboom
+    org: Civic Knowledge
+    url: http://civicknowledge.com
+dependencies: {}
+external_documentation:
+  dataset:
+    description: Web page the links to the dataset description
+    source: null
+    title: Dataset Page
+    url: http://example.com
+  download:
+    description: Web page that links to the source files.
+    source: null
+    title: Download Page
+    url: http://example.com
+identity:
+  dataset: generators
+  id: dERJQxWUVb
+  revision: 1
+  source: build.example.com
+  version: 0.0.1
+names:
+  fqname: build.example.com-generators-0.0.1~dERJQxWUVb001
+  name: build.example.com-generators
+  vid: dERJQxWUVb001
+  vname: build.example.com-generators-0.0.1
+requirements: {}
+versions: {}

@@ -266,14 +266,15 @@ def get_parser():
         description='Ambry {}. Management interface for ambry, libraries '
                     'and repositories. '.format(ambry._meta.__version__))
 
-    parser.add_argument('-l', '--library', dest='library_name', default='default',
-                        help='Name of library, from the library secton of the config')
+
     parser.add_argument('-c', '--config', default=os.getenv(AMBRY_CONFIG_ENV_VAR), action='append',
                         help='Path to a run config file. Alternatively, set the AMBRY_CONFIG env var')
     parser.add_argument('--single-config', default=False, action='store_true',
                         help='Load only the config file specified')
     parser.add_argument('-E', '--exceptions', default=False, action='store_true',
                         help='Show full exception trace on all exceptions')
+    parser.add_argument('-t', '--test-library', default=False, action='store_true',
+                        help='Use the test library and database')
 
     cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -340,7 +341,6 @@ def main(argsv=None, ext_logger=None):
     else:
         try:
             rc = get_runconfig(rc_path)
-            
 
         except ConfigurationError:
             fatal("Could not find configuration file \nRun 'ambry config install; to create one ")
@@ -354,7 +354,8 @@ def main(argsv=None, ext_logger=None):
             
             rc.environment['class'] = 'development'
 
-            
+    if args.test_library:
+        rc.group('filesystem')['root'] = rc.group('filesystem')['test']
 
     if f is None:
         fatal('Error: No command: ' + args.command)
