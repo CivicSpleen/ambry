@@ -306,41 +306,51 @@ class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
     """ Library database is in-memory sqlite, search backend is in-memory sqlite. """
 
     def setUp(self):
-        if 'sqlite' not in os.environ.get('AMBRY_TEST_DB', 'sqlite'):
-            raise unittest.SkipTest('SQLite tests are disabled.')
         super(self.__class__, self).setUp()
         self.rc = self.get_rc()
 
-        # switch to in-memory database.
-        self._CONFIG_TEST_DATABASE = self.rc.config.database['test-database']
-        self.rc.config.database['test-database'] = 'sqlite://'
+        self._CONFIG_DATABASE = self.rc.config.library.database
+        if self.rc.config.library.database != 'sqlite://':
+            # switch to in-memory database.
+            self.rc.config.library.database = 'sqlite://'
 
         # force to use library database for search.
         self.rc.config.services.search = None
         self.library = new_library(self.rc)
         assert isinstance(self.library.search.backend, SQLiteSearchBackend)
-        self.assertEquals(self.library.database.dsn, 'sqlite://')
+        self.assertEqual(self.library.database.dsn, 'sqlite://')
 
     def tearDown(self):
-        if 'sqlite' in os.environ.get('AMBRY_TEST_DB', ''):
-            super(self.__class__, self).tearDown()
-            self.rc.config.database['test-database'] = self._CONFIG_TEST_DATABASE
+        if self.rc.config.library.database != self._CONFIG_DATABASE:
+            self.rc.config.library.database = self._CONFIG_DATABASE
 
 
 class FileSQLiteTest(TestBase, AmbryReadyMixin):
     """ Library database is file-based sqlite, search backend is file-based sqlite. """
 
     def setUp(self):
-        if 'sqlite' not in os.environ.get('AMBRY_TEST_DB', 'sqlite'):
-            raise unittest.SkipTest('SQLite tests are disabled.')
         super(self.__class__, self).setUp()
         self.rc = self.get_rc()
 
+        self._CONFIG_DATABASE = self.rc.config.library.database
+        if self.rc.config.library.database != 'sqlite:////tmp/file-search-test.db':
+            # switch to file database.
+            self.rc.config.library.database = 'sqlite:////tmp/file-search-test.db'
+
         # force to use library database for search.
         self.rc.config.services.search = None
+
         self.library = new_library(self.rc)
         assert isinstance(self.library.search.backend, SQLiteSearchBackend)
         self.assertIn('.db', self.library.database.dsn)
+
+    def tearDown(self):
+        super(self.__class__, self).tearDown()
+        if self.rc.config.library.database != self._CONFIG_DATABASE:
+            # drop test database and restore config
+            self.library.database.close()
+            self.library.database.drop()
+            self.rc.config.library.database = self._CONFIG_DATABASE
 
 
 class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):

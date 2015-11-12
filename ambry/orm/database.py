@@ -288,15 +288,14 @@ class Database(object):
 
             self.commit()
 
-        for tbl in reversed(self.metadata.sorted_tables):
-            self.logger.info("Dropping {}".format(tbl))
-            self.engine.execute(tbl.delete())
+        if self.dsn.startswith('sqlite:') and self.exists():
+            os.remove(self.path)
+        else:
+            for tbl in reversed(self.metadata.sorted_tables):
+                self.logger.info('Dropping {}'.format(tbl))
+                self.engine.execute(tbl.delete())
 
-        self.commit()
-
-        #self.create()
-
-        self.commit()
+            self.commit()
 
     @property
     def metadata(self):
