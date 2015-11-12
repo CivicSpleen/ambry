@@ -35,7 +35,7 @@ def warehouse_command(args, rc):
 
         m = Manifest(args.term)
 
-        dsnt = "spatialite:///{}.db" if m.is_geo else "sqlite:///{}.db"
+        dsnt = 'spatialite:///{}.db' if m.is_geo else 'sqlite:///{}.db'
 
         name = args.name if args.name else m.uid
 
@@ -59,18 +59,17 @@ def warehouse_command(args, rc):
 
     elif args.subcommand not in ['list', 'new', 'install', 'test', 'parse']:
         raise ConfigurationError(
-            "Must set the id, path or dsn of the database, either on the command line or in a manifest. ")
+            'Must set the id, path or dsn of the database, either on the command line or in a manifest. ')
 
     if not w and config:
 
         w = new_warehouse(config, l, logger=global_logger)
 
         if not w.exists() and args.subcommand not in ['clean', 'delete']:
-            raise ConfigurationError("Database {} must be created first".format(w.database.dsn))
+            raise ConfigurationError('Database {} must be created first'.format(w.database.dsn))
 
     if args.subcommand == 'new':
         globals()['warehouse_' + args.subcommand](args, l, rc)
-
     else:
         globals()['warehouse_' + args.subcommand](args, w, rc)
 
@@ -124,15 +123,15 @@ def warehouse_parser(cmd):
 
 def warehouse_info(args, w, config):
 
-    prt("Warehouse Info")
-    prt("UID:    {}", w.uid)
-    prt("Title:    {}", w.title)
-    prt("Summary:  {}", w.summary)
-    prt("Class:    {}", w.__class__)
-    prt("Database: {}", w.database.dsn)
-    prt("WLibrary: {}", w.wlibrary.database.dsn)
-    prt("ELibrary: {}", w.elibrary.database.dsn)
-    prt("Cache:    {}", w.cache)
+    prt('Warehouse Info')
+    prt('UID:    {}', w.uid)
+    prt('Title:    {}', w.title)
+    prt('Summary:  {}', w.summary)
+    prt('Class:    {}', w.__class__)
+    prt('Database: {}', w.database.dsn)
+    prt('WLibrary: {}', w.wlibrary.database.dsn)
+    prt('ELibrary: {}', w.elibrary.database.dsn)
+    prt('Cache:    {}', w.cache)
 
 
 def warehouse_remove(args, w, config):
@@ -143,14 +142,11 @@ def warehouse_remove(args, w, config):
 
 
 def warehouse_delete(args, w, config):
-
     w.elibrary.remove_store(args.database)
-
     w.delete()
 
 
 def warehouse_clean(args, w, config):
-
     w.clean()
 
 
@@ -176,7 +172,7 @@ def warehouse_new(args, l, config):
 
     w = _warehouse_new_from_dbc(dbc, l)
 
-    prt("{}: created".format(w.uid))
+    prt('{}: created'.format(w.uid))
 
     return w
 
@@ -220,16 +216,16 @@ def warehouse_install(args, w, config):
     m = Manifest(args.term, logger=w.logger)
 
     if args.clean:
-        w.logger.info("Cleaning before installation")
+        w.logger.info('Cleaning before installation')
         raise Exception()
         # w.clean()
         # w.create()
 
-    w.logger.info("Installing to {}".format(w.database.dsn))
+    w.logger.info('Installing to {}'.format(w.database.dsn))
 
     w.install_manifest(m)
 
-    w.logger.info("Installed to {}, {}".format(w.uid, w.database.dsn))
+    w.logger.info('Installed to {}, {}'.format(w.uid, w.database.dsn))
 
     w.elibrary.sync_warehouse(w)
 
@@ -248,8 +244,7 @@ def warehouse_config(args, w, config):
 
         if var not in w.configurable:
             raise ConfigurationError(
-                "Value {} is not configurable. Must be one of: {}".format(args.var,
-                                                                          w.configurable))
+                'Value {} is not configurable. Must be one of: {}'.format(args.var, w.configurable))
 
         if val:
             setattr(w, var, val)
