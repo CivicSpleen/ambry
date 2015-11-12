@@ -16,17 +16,18 @@ class PostgreSQLBackendBaseTest(PostgreSQLTestBase):
 
         # create test database
         rc = self.get_rc()
-        self._real_test_database = rc.config['database']['test-database']
-        rc.config['database']['test-database'] = self.dsn
+        self._real_test_database = rc.config.library.database
+        rc.config.library.database = self.dsn
         self.library = new_library(rc)
         self.backend = PostgreSQLSearchBackend(self.library)
 
     def tearDown(self):
+        self.library.database.close()
         super(PostgreSQLBackendBaseTest, self).tearDown()
 
         # restore database config
         rc = self.get_rc()
-        rc.config['database']['test-database'] = self._real_test_database
+        rc.config.library.database = self._real_test_database
 
 
 class PostgreSQLSearchBackendTest(PostgreSQLBackendBaseTest):
