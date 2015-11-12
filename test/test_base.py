@@ -136,7 +136,7 @@ class TestBase(unittest.TestCase):
         if db is None:
             db = self.db
 
-        for row in db.connection.execute('SELECT * FROM {}'.format(table)):
+        for row in db.connection.execute('SELECT * FROM {};'.format(table)):
             print(row)
 
     def new_database(self):
@@ -223,9 +223,9 @@ class PostgreSQLTestBase(TestBase):
 
             engine = create_engine(cls.postgres_test_db_data['postgres_db_dsn'])
             connection = engine.connect()
-            connection.execute('commit')
+            connection.execute('COMMIT;')
             connection.execute('DROP DATABASE {};'.format(test_db_name))
-            connection.execute('commit')
+            connection.execute('COMMIT;')
             connection.close()
         else:
             # no database were created.
@@ -257,7 +257,7 @@ class PostgreSQLTestBase(TestBase):
         engine = create_engine(postgres_db_dsn, poolclass=NullPool)
         with engine.connect() as connection:
             # we have to close opened transaction.
-            connection.execute('commit')
+            connection.execute('COMMIT;')
 
             # drop test database created by previuos run (control + c case).
             if cls.postgres_db_exists(test_db_name, engine):
@@ -269,9 +269,9 @@ class PostgreSQLTestBase(TestBase):
                     if delete_it.lower() == 'yes':
                         try:
                             connection.execute('DROP DATABASE {};'.format(test_db_name))
-                            connection.execute('commit')
+                            connection.execute('COMMIT;')
                         except:
-                            connection.execute('rollback')
+                            connection.execute('ROLLBACK;')
                         break
 
                     elif delete_it.lower() == 'no':
@@ -291,7 +291,7 @@ class PostgreSQLTestBase(TestBase):
             query = 'CREATE DATABASE {} OWNER {} TEMPLATE {} encoding \'UTF8\';'\
                 .format(test_db_name, postgres_user, TEMPLATE_NAME)
             connection.execute(query)
-            connection.execute('commit')
+            connection.execute('COMMIT;')
             connection.close()
 
         # create db schemas needed by ambry.

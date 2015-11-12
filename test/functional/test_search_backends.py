@@ -370,6 +370,7 @@ class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
         assert isinstance(self.library.search.backend, PostgreSQLSearchBackend)
 
     def tearDown(self):
+        self.library.database.close()
         super(PostgreSQLTest, self).tearDown()
 
         # restore database config
