@@ -35,6 +35,7 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 global_library = None
 
+
 def new_library(config=None, database_name=None):
 
     if config is None:
@@ -46,7 +47,7 @@ def new_library(config=None, database_name=None):
 
     db_config = library_config['database']
 
-    db = Database(db_config, echo = False)
+    db = Database(db_config, echo=False)
     warehouse = None
 
     l = Library(config=config,
@@ -77,12 +78,11 @@ class Library(object):
 
         self._fs = filesystem
         self._warehouse = warehouse
-        self.processes = None # Number of multiprocessing proccors. Default to all of them
+        self.processes = None  # Number of multiprocessing proccors. Default to all of them
         if search:
             self._search = Search(self, search)
         else:
             self._search = None
-
 
     def resolve_object_number(self, ref):
         """Resolve a variety of object numebrs to a dataset number"""
@@ -219,7 +219,6 @@ class Library(object):
 
         if not ds:
             ds = self._db.dataset(identity.name, exception=False)
-
         if not ds:
             ds = self._db.new_dataset(**identity.dict)
 
@@ -631,6 +630,5 @@ class Library(object):
         else:
             cpus = multiprocessing.cpu_count()
 
-        self.logger.info("Starting MP pool with {} processors".format(cpus))
+        self.logger.info('Starting MP pool with {} processors'.format(cpus))
         return multiprocessing.Pool(processes=cpus, initializer=init_library, initargs=[self.config.path, self.database.dsn])
-
