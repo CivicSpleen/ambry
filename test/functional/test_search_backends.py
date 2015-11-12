@@ -364,8 +364,8 @@ class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
 
         # force to use library database for search.
         rc.config.services.search = None
-        self._real_test_database = rc.config['database']['test-database']
-        rc.config['database']['test-database'] = self.dsn
+        self._real_test_database = rc.config.library.database
+        rc.config.library.database = self.dsn
         self.library = new_library(rc)
         assert isinstance(self.library.search.backend, PostgreSQLSearchBackend)
 
@@ -374,4 +374,4 @@ class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
 
         # restore database config
         rc = self.get_rc()
-        rc.config['database']['test-database'] = self._real_test_database
+        rc.config.library.database = self._real_test_database
