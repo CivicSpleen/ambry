@@ -3,12 +3,12 @@
 
 from test.test_base import TestBase
 
+
 class Test(TestBase):
 
     @classmethod
     def setUpClass(cls):
         cls.import_bundles()
-
 
     def test_1(self):
         l = self.library()
@@ -21,8 +21,3 @@ class Test(TestBase):
 
         for bundle in l.bundles:
             print bundle.identity.name
-
-
-
-
-
