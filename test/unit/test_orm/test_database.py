@@ -9,7 +9,6 @@ except ImportError:
     # py3, mock is included
     from unittest.mock import patch, Mock
 
-
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection as SQLAlchemyConnection, Engine
 from sqlalchemy.engine.reflection import Inspector
@@ -24,7 +23,7 @@ from ambry.orm.dataset import Dataset
 
 from ambry.run import get_runconfig
 
-from test.unit.orm_factories import DatasetFactory, TableFactory,\
+from test.factories import DatasetFactory, TableFactory,\
     ColumnFactory, PartitionFactory
 
 from test.unit.asserts import assert_spec

@@ -8,7 +8,7 @@ from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
 
-from test.unit.orm_factories import PartitionFactory, DatasetFactory
+from test.factories import PartitionFactory, DatasetFactory
 
 # Description of the search system:
 # https://docs.google.com/document/d/1jLGRsYt4G6Tfo6m_Dtry6ZFRnDWpW6gXUkNPVaGxoO4/edit#

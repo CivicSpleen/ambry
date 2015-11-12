@@ -9,7 +9,7 @@ from ambry.library import new_library
 from ambry.orm.config import Config
 
 from test.test_base import TestBase
-from test.unit.orm_factories import ConfigFactory, DatasetFactory
+from test.factories import ConfigFactory, DatasetFactory
 
 
 class TestConfig(TestBase):

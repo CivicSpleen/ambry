@@ -9,7 +9,7 @@ from ambry.library import new_library
 from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult,\
     PartitionSearchResult
 
-from test.unit.orm_factories import PartitionFactory, DatasetFactory
+from test.factories import PartitionFactory, DatasetFactory
 
 
 class SQLiteSearchBackendTest(TestBase):

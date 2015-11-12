@@ -5,7 +5,7 @@ from ambry.library import new_library
 from ambry.util import AttrDict
 
 from test.test_base import PostgreSQLTestBase
-from test.unit.orm_factories import PartitionFactory
+from test.factories import PartitionFactory
 
 from sqlalchemy.exc import ProgrammingError
 
