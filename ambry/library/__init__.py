@@ -234,7 +234,6 @@ class Library(object):
 
     def bundle(self, ref, capture_exceptions=False):
         """Return a bundle build on a dataset, with the given vid or id reference"""
-        from ..identity import NotObjectNumberError
         from ..orm.exc import NotFoundError
 
         if isinstance(ref, Dataset):
@@ -262,12 +261,24 @@ class Library(object):
 
     @property
     def bundles(self):
-        """Return all datasets"""
+        """ Returns all datasets in the library as bundles. """
 
         for ds in self.datasets:
             yield self.bundle(ds)
 
     def partition(self, ref):
+        """ Finds partition by ref and converts to bundle partition.
+
+        Args:
+            ref (str): id, vid (versioned id), name or vname (versioned name) (FIXME: try all)
+
+        Raises:
+            NotFoundError: if partition with given ref not found.
+
+        Returns:
+            FIXME:
+        """
+
         try:
             on = ObjectNumber.parse(ref)
             ds_on = on.as_dataset

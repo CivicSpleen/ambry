@@ -56,10 +56,7 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_dataset_index(self):
         with self.library.database._engine.connect() as conn:
-            query = """
-                SELECT * from dataset_index;
-            """
-            result = conn.execute(query).fetchall()
+            result = conn.execute('SELECT * FROM dataset_index;').fetchall()
             self.assertEqual(result, [])
 
     # search() tests
@@ -144,10 +141,7 @@ class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_identifier_index(self):
         with self.library.database._engine.connect() as conn:
-            query = """
-                SELECT * from identifier_index;
-            """
-            result = conn.execute(query).fetchall()
+            result = conn.execute('SELECT * FROM identifier_index;').fetchall()
             self.assertEqual(result, [])
 
     # search() tests
@@ -237,10 +231,7 @@ class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_partition_index(self):
         with self.library.database._engine.connect() as conn:
-            query = """
-                SELECT * from partition_index;
-            """
-            result = conn.execute(query).fetchall()
+            result = conn.execute('SELECT * from partition_index;').fetchall()
             self.assertEqual(result, [])
 
     # search() tests

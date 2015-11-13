@@ -5,6 +5,8 @@ included in this distribution as LICENSE.txt
 
 """
 
+# FIXME: ambry.warehouse does not exist.
+
 from six import string_types, iteritems
 
 from ambry.warehouse import database_config
