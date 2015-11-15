@@ -425,7 +425,7 @@ class Partition(Base, DictableMixin):
             elif self.location == 'remote':
                 from ambry_sources import MPRowsFile
                 # Get bundle for this partition
-                # Actually ... this seems way to complex. Why note self._bundle.remote()
+                # Actually ... this seems way to complex. Why not self._bundle.remote()
                 # FIXME
                 b = self._bundle.library.bundle(self.identity.as_dataset().vid)
                 remote = self._bundle.library.remote(b)

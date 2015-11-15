@@ -29,7 +29,7 @@ def _MPBundleMethod(f, args):
     bundle_vid = args[0]
 
     try:
-
+        library.database.close()
         b = library.bundle(bundle_vid)
         b = b.cast_to_subclass()
         b.multi = True  # In parent it is a number, in child, just needs to be true to get the right logger template

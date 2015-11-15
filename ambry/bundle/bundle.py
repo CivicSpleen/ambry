@@ -1313,8 +1313,13 @@ Caster Code
                 df = s.datafile
                 try:
                     info = df.info
+                    df.close()
                 except (ResourceNotFoundError, zlib.error, IOError):
-                    s.datafile.remove()
+                    df.remove()
+
+
+
+
 
         def not_final_or_delete(s):
             import zlib

@@ -1,7 +1,7 @@
 #
 # docker build -t civick/ambry .
 
-FROM ubuntu:14.04
+FROM phusion/baseimage:0.9.17
 
 MAINTAINER Eric Busboom "eric@civicknowledge.org"
 
@@ -28,6 +28,7 @@ RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 # The pip installs allow the creation of a layer for each, so changes to the main Ambry source
 # can be isolated, resulting in faster docker builds. The list is built from the merge-requirements script
+# We probably don't want to do this long term, but it is expediant during development.
 # Start pip installs
 RUN pip install 'pyasn1>=0.1.8'
 RUN pip install 'address-parser==0.0.1'
@@ -89,8 +90,10 @@ VOLUME /var/ambry
 ADD support/ambry-docker/ambry-init.sh /var/ambry/ambry-init.sh
 
 RUN mkdir -p /var/ambry/source
-RUN ambry config install
 
+#RUN ambry config install
+
+ADD ${AMBRY_CONFIG:-ambry/support/ambry-builder.yaml} /etc/ambry.yaml
 RUN echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
 
 RUN ambry import /var/ambry/src/test/bundle_tests/

@@ -231,6 +231,7 @@ class Database(object):
         self.close_connection()
         if self._engine:
             self._engine.dispose()
+            self._engine = None
 
 
     def close_session(self):

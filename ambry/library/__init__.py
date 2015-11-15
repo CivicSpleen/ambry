@@ -452,6 +452,7 @@ class Library(object):
 
                 b = self.bundle(ds.vid)
                 b.state = Bundle.STATES.INSTALLED
+                b.commit()
 
                 self.search.index_bundle(b)
 

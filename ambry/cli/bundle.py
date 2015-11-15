@@ -1311,35 +1311,37 @@ def bundle_ampr(args, l, rc):
     b = using_bundle(args, l)
 
     arg = args.path[0]
-    path = None
+    df = None
     if os.path.exists(arg):
         path = arg
 
-    if not path:
+    if not df:
         try:
             source = b.source(arg)
-            path = source.datafile.syspath
+            df = source.datafile
         except:
             pass
 
-    if not path:
+    # Maybe it is a partition
+    if not df:
         try:
-            source = b.partition(arg)
-            path = source.datafile.syspath
+            p = b.partition(arg)
+            df = p.datafile
         except:
             pass
 
-    if not path:
+    if not df:
         try:
-            partition = l.partition(arg)
-            path = partition.datafile.syspath
+            p = l.partition(arg)
+            df = p.datafile
         except:
             pass
 
-    if not path:
+    if not df:
         fatal("Didn't get a path to an MPR file, nor a reference to a soruce or partition")
 
-    args.path = [path]
+    args.path = [df]
+
     main(args)
 
 

@@ -2,8 +2,6 @@
 
 pyasn1>=0.1.8 # Version requirement of PyOpenSSL, but earlier version installed elsewhere.
 address-parser==0.0.1
-# ambry_sources==0.1.4  FIXME: Waiting for release on pypi.
-https://github.com/CivicKnowledge/ambry_sources/archive/v0.1.4.tar.gz#egg=ambry_sources
 boto==2.38.0
 beautifulsoup4==4.3.2
 ckanapi==3.5
@@ -45,5 +43,6 @@ tabulate==0.7.5
 terminaltables==1.2.1
 watchdog==0.8.3
 filelock==2.0.4
+ambry-sources>=0.1.4
 unicodecsv==0.12.0  # using 0.13.0 breaks many tests.
 
