@@ -21,6 +21,8 @@ def root_parser(cmd):
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-t', '--tab', action='store_true',
                        help='Print field tab seperated, without pretty table and header')
+    group.add_argument('-p', '--partitions', action='store_true',
+                       help='List partitions instead of bundles')
     group.add_argument('-j', '--json', action='store_true',
                        help='Output as a list of JSON dicts')
     sp.add_argument('term', nargs='?', type=str,
@@ -163,9 +165,11 @@ def root_list(args, l, rc):
 
         display_header = len(args.fields) > 1
 
-    else:
+    elif not args.partitions:
         display_header = True
         header = ['vid', 'vname', 'state', 'about.title']
+    else:
+        header = ['vid', 'vname', 'state', 'table']
 
     records = []
 
@@ -183,8 +187,12 @@ def root_list(args, l, rc):
             if v and search_value and v.strip() == search_value.strip():
                 records.append(b.field_row(header))
 
-        else:
+        elif not args.partitions:
             records.append(b.field_row(header))
+        else:
+            for p in b.partitions:
+                records.append
+
 
     if args.sort:
         idx = header.index(args.sort)

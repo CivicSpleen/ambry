@@ -1748,7 +1748,7 @@ class NumberServer(object):
 
         self.last_response = d
 
-        self.next_time = time.time() + self.last_response['wait']
+        self.next_time = time.time() + self.last_response.get('wait',0)
 
         return ObjectNumber.parse(d['number'])
 

@@ -2,33 +2,22 @@ environment:
     category: production
 
 library:
-    default:
-        filesystem: default
-        database: default
-        remotes:
-        - 's3://devtest.sandiegodata.org/s3-remote#compress'
-
-    server:
-        port: 7979
-        host: localhost
-        filesystem: default
-        database: default
-
-database:
-    default:
-        dbname: '{root}/library.db'
-        driver: sqlite
+    filesystem: '{root}/library'
+    database: 'sqlite:///{root}/library.db'
+    remotes:
+        public: 's3://test.library.civicknowledge.com/public'
+        test: 's3://test.library.civicknowledge.com/test'
 
 filesystem:
     root: /var/ambry
-    default: '{root}/library'
-    downloads: '{root}/cache/downloads'
-    extracts: '{root}/cache/extracts'
-    python: '{root}/cache/python'
-    analysis: '{root}/source/analysis'
+    downloads: '{root}/downloads'
+    extracts: '{root}/extracts'
+    python: '{root}/python'
+    documentation: '{root}/doc'
+    build: '{root}/build'
     source: '{root}/source'
-    notebooks: '{root}/notebooks'
-    warehouses: '{root}/warehouses'
+    search: '{root}/search'
+    logs: '{root}/logs'
 
 services:
     numbers:

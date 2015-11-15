@@ -27,11 +27,11 @@ def config_parser(cmd):
         help="Force using the default config; don't re-use the existing config")
 
     sp.add_argument('args', nargs='*', help='key=value entries')  # Get everything else.
+
     sp = asp.add_parser('value', help='Return a configuration value, or all values if no key is specified')
     sp.set_defaults(subcommand='value')
-    sp.add_argument(
-        '-y', '--yaml', default=False, action='store_true',
-        help='If no key is specified, return the while configuration as yaml')
+    sp.add_argument('-y', '--yaml', default=False, action='store_true', help="Return the result as YAML")
+    sp.add_argument('-j', '--json', default=False, action='store_true', help="Return the result as JSON")
     sp.add_argument('key', nargs='*', help='Value key')  # Get everything else.
 
     sp = asp.add_parser('password', help='Set a password for a service')
@@ -40,8 +40,15 @@ def config_parser(cmd):
     sp.add_argument('service', metavar='service', nargs=1, help='Service name, usually a hostname')  # Get everything else.
     sp.add_argument('username', metavar='username', nargs=1, help='username')
 
-    sp = asp.add_parser('edit', help='Edit the config file')
+    sp = asp.add_parser('edit', help='Edit the config file by setting a value for a key. ')
     sp.set_defaults(subcommand='edit')
+    sp.add_argument('-y', '--yaml', default=False, action='store_true', help="Load the edits as a YAML string")
+    sp.add_argument('-j', '--json', default=False, action='store_true', help="Load the edits as a JSON string")
+    sp.add_argument('args', nargs='*', help='key=value entries, YAML or JSON')  # Get everything else.
+
+
+    sp = asp.add_parser('dump', help='Dump the config file')
+    sp.set_defaults(subcommand='dump')
     sp.add_argument('args', nargs='*', help='key=value entries')  # Get everything else.
 
 
@@ -61,23 +68,40 @@ def config_command(args, rc):
 
 def config_edit(args, l, rc):
     from ambry.dbexceptions import ConfigurationError
+    from ambry.util import AttrDict
 
 
     edit_args = ' '.join(args.args)
 
-    key, value = edit_args.split('=')
+    if args.yaml or args.json:
+        if args.yaml:
+            import yaml
+            v = yaml.load(edit_args)
+        elif args.json:
+            import json
+            v = json.loads(edit_args)
 
-    value = value.strip()
-    key = key.strip()
-    key_parts = key.split('.')
-    e = rc.config
-    for k in key_parts:
-        k = k.strip()
-        #print(k, str(key_parts[-1]))
-        if str(k) == str(key_parts[-1]):
-            e[k] = value
-        else:
-            e = e[k]
+        d = AttrDict()
+        d.update(v)
+
+        print d
+
+        rc.config.update_flat(d.flatten())
+
+    else:
+        key, value = edit_args.split('=')
+
+        value = value.strip()
+        key = key.strip()
+        key_parts = key.split('.')
+        e = rc.config
+        for k in key_parts:
+            k = k.strip()
+            #print(k, str(key_parts[-1]))
+            if str(k) == str(key_parts[-1]):
+                e[k] = value
+            else:
+                e = e[k]
 
 
     configs = rc.config['loaded']['configs']
@@ -195,6 +219,7 @@ def config_install(args, l, rc):
 
 
 def config_value(args, l, rc):
+    from ambry.util import AttrDict
 
     def sub_value(value, subs):
 
@@ -207,24 +232,53 @@ def config_value(args, l, rc):
                 return str(value)
 
     def dump_key(key, subs):
+        values = []
+
         for path, value in rc.config.flatten():
+
             dot_path = '.'.join(path)
             if key:
-                if key == dot_path:
-                    print(sub_value(value, subs))
-                    return
+                if key == dot_path: # Exact matches
+                    return sub_value(value, subs)
+
+                elif dot_path.startswith(key):
+                    values.append((dot_path.split('.'), sub_value(value, subs) ))
+
             else:
-                print(dot_path, '=', sub_value(value, subs))
+                return ''.join(dot_path, '=', sub_value(value, subs))
 
-    subs = dict(root=rc.filesystem('root'))
 
-    if not args.key:
-        if args.yaml:
-            print(rc.dump())
+        if not values:
+            return
+
+        d = AttrDict()
+
+        d.update_flat(values)
+
+        return d
+
+
+    subs = dict(root=rc.filesystem('root')) # Interpolations
+
+    key = args.key[0] if args.key[0] else None
+
+    if args.yaml:
+        v = dump_key(key, subs)
+        if isinstance(v, AttrDict):
+            print v.dump()
         else:
-            dump_key(None, subs)
+            import yaml
+            print yaml.dump(v)
+            print 'X', v
+    elif args.json:
+        import json
+        print json.dumps(dump_key(key, subs))
     else:
-        dump_key(args.key[0], subs)
+        print dump_key(key, subs)
+
+def config_dump(args, l, rc):
+
+    print rc.dump()
 
 def config_password(args, l, rc):
     """Set and delete passwords from the system keychain"""

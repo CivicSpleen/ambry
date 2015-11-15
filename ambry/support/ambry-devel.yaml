@@ -2,7 +2,6 @@ environment:
     category: development
 
 library:
-
     filesystem: '{root}/library'
     database: 'sqlite:///{root}/library.db'
     remotes:

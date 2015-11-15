@@ -1234,3 +1234,10 @@ def deprecated(func):
     newFunc.__doc__ = func.__doc__
     newFunc.__dict__.update(func.__dict__)
     return newFunc
+
+def int_maybe(v):
+    """Try to convert to an int and return None on failure"""
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
