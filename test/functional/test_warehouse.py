@@ -9,8 +9,7 @@ except ImportError:
 
 from test.factories import PartitionFactory
 
-from ambry.library import new_library
-from ambry.run import get_runconfig
+from ambry.library.warehouse import Warehouse
 
 from test.test_base import TestBase
 
@@ -18,13 +17,13 @@ from ambry_sources import MPRowsFile
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
 
-class Test(TestBase):
+class Mixin(object):
+    """ Requires successors to inherit from TestBase and provide _get_library method. """
 
     def test_select_query(self):
-        from ambry.library.warehouse import Warehouse
+        library = self._get_library()
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
-        library = self.__class__.library()
         bundle = self.setup_bundle('simple', source_url='temp://', library=library)
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         partition1 = PartitionFactory(dataset=bundle.dataset)
@@ -48,3 +47,13 @@ class Test(TestBase):
         partition1._datafile = datafile
         rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
         self.assertEqual(rows, [(0, 0), (1, 1)])
+
+
+class InMemorySQLiteTest(TestBase, Mixin):
+
+    def _get_library(self):
+        library = self.__class__.library()
+
+        # assert database is in-memory.
+        assert library.database.dsn == 'sqlite://'
+        return library
