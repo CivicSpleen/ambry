@@ -1,5 +1,4 @@
-"""Object-Rlational Mapping classess, based on Sqlalchemy, for representing the
-dataset, partitions, configuration, tables and columns.
+"""Object-Rlational Mapping classess, based on Sqlalchemy, for representing partitions.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -20,10 +19,10 @@ from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import relationship, object_session, backref
 
-from ambry.identity import Identity, PartitionNumber, ObjectNumber, PartialPartitionName, PartitionIdentity
+from ambry.identity import ObjectNumber, PartialPartitionName, PartitionIdentity
+from ambry.orm import DictableMixin
 from ambry.orm.columnstat import ColumnStat
 from ambry.orm.dataset import Dataset
-from ambry.orm import DictableMixin
 from ambry.util import Constant
 
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
@@ -414,7 +413,7 @@ class Partition(Base, DictableMixin):
 
     @property
     def datafile(self):
-        """Return the datafile for this partition, from the bulid directory, the remote, or the warehouse"""
+        """Return the datafile for this partition, from the build directory, the remote, or the warehouse"""
         from ambry_sources import MPRowsFile
 
         if self._datafile is None:
@@ -482,7 +481,7 @@ class Partition(Base, DictableMixin):
 
     def update_id(self, sequence_id):
         """Alter the sequence id, and all of the names and ids derived from it. This
-        often needs to be don after an IntegrityError in a multiprocessing run"""
+        often needs to be done after an IntegrityError in a multiprocessing run"""
 
         self.sequence_id = sequence_id
 
@@ -491,11 +490,11 @@ class Partition(Base, DictableMixin):
         if self.dataset:
             self._update_names()
 
-    def _set_ids(self, force = False):
+    def _set_ids(self, force=False):
         if not self.sequence_id:
             from .exc import DatabaseError
 
-            raise DatabaseError("Sequence ID must be set before insertion")
+            raise DatabaseError('Sequence ID must be set before insertion')
 
         if not self.vid or force:
 
@@ -514,11 +513,11 @@ class Partition(Base, DictableMixin):
         """Update the derived names"""
 
         d = dict(
-            table = self.table_name,
-            time = self.time,
-            space = self.space,
-            grain = self.grain,
-            segment = self.segment
+            table=self.table_name,
+            time=self.time,
+            space=self.space,
+            grain=self.grain,
+            segment=self.segment
         )
 
         assert self.dataset
@@ -530,22 +529,17 @@ class Partition(Base, DictableMixin):
         self.cache_key = name.cache_key
         self.fqname = str(self.identity.fqname)
 
-
     @staticmethod
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the sequence for this
         object and create an ObjectNumber value for the id_"""
-        from sqlalchemy import text
 
         target._set_ids()
 
         Partition.before_update(mapper, conn, target)
 
-
     @staticmethod
     def before_update(mapper, conn, target):
-        """"""
-
         target._update_names()
 
 

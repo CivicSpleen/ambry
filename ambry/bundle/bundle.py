@@ -19,7 +19,7 @@ from fs.errors import NoSysPathError
 from geoid.civick import GVid
 from geoid import NotASummaryName
 
-from ambry.dbexceptions import PhaseError, BuildError, BundleError, FatalError
+from ambry.dbexceptions import BuildError, BundleError, FatalError
 from ambry.orm import File
 import ambry.etl
 from ..util import get_logger, Constant
@@ -27,6 +27,7 @@ from ..util import get_logger, Constant
 indent = '    '  # Indent for structured log output
 
 BUILD_LOG_FILE = 'log/build_log{}.txt'
+
 
 def _CaptureException(f, *args, **kwargs):
     """Decorator implementation for capturing exceptions."""
@@ -45,9 +46,11 @@ def _CaptureException(f, *args, **kwargs):
         else:
             raise
 
+
 def CaptureException(f, *args, **kwargs):
     """Decorator to capture exceptions. and logging the error"""
     return decorator(_CaptureException, f)  # Preserves signature
+
 
 class Bundle(object):
 
@@ -100,8 +103,8 @@ class Bundle(object):
         self._library = library
         self._logger = None
 
-        self.multi = None # Number of multiprocessing processes
-        self.is_subprocess = False # Externally set in child processes.
+        self.multi = None  # Number of multiprocessing processes
+        self.is_subprocess = False  # Externally set in child processes.
 
         assert bool(library)
 
@@ -122,14 +125,14 @@ class Bundle(object):
 
         self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
 
-        self.stage = None # Set to the current ingest or build stage
+        self.stage = None  # Set to the current ingest or build stage
         self.limited_run = False  # Set to true to trigger bundle-specific limits on # of rows processed
 
         self.capture_exceptions = False  # If set to true (in CLI), will catch and log exceptions internally.
         self.exit_on_fatal = True
 
         # Test class imported from the test.py file
-        self.test_class = None;
+        self.test_class = None
 
         self.init()
 
@@ -164,13 +167,11 @@ class Bundle(object):
         :return:
         """
 
-        from sqlalchemy.exc import IntegrityError
-
         try:
-            self.commit() # To ensure the rollback() doesn't clear out anything important
+            self.commit()  # To ensure the rollback() doesn't clear out anything important
             bsf = self.build_source_files.file(File.BSFILE.BUILD)
         except:
-            self.log("Error trying to create a bundle source file ... ")
+            self.log('Error trying to create a bundle source file ... ')
             self.rollback()
             return self
 
@@ -343,19 +344,16 @@ class Bundle(object):
 
     @property
     def tables(self):
-        """
-        Return a iterator of tables in this bundle
+        """ Return a iterator of tables in this bundle
         :return:
         """
         from ambry.orm import Table
-        from sqlalchemy.orm import joinedload, noload
+        from sqlalchemy.orm import noload
 
         return (self.dataset.session.query(Table)
                 .filter(Table.d_vid == self.dataset.vid)
                 .options(noload('column'))
                 .all())
-
-        #return self.dataset.tables
 
     def new_table(self, name, add_id=True, **kwargs):
         """
@@ -391,7 +389,7 @@ class Bundle(object):
             s._bundle = self
             return s
 
-        return list(set_bundle(s) for s in self.dataset.sources )
+        return list(set_bundle(s) for s in self.dataset.sources)
 
     def _resolve_sources(self, sources, tables, stage=None, predicate=None):
         """
@@ -428,7 +426,6 @@ class Bundle(object):
 
         if stage:
             sources = [s for s in sources if s.stage == stage]
-
 
         return sources
 
@@ -484,7 +481,7 @@ class Bundle(object):
 
     @property
     def build_fs(self):
-        from fs.opener import fsopendir, opener
+        from fs.opener import fsopendir
 
         if not self._build_fs:
             build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
@@ -493,7 +490,6 @@ class Bundle(object):
                 build_url = self.library.filesystem.build(self.identity.cache_key)
                 # raise ConfigurationError(
                 #    'Must set build URL either in the constructor or the configuration')
-
 
             self._build_fs = fsopendir(build_url, create_dir=True)
 
@@ -530,7 +526,6 @@ class Bundle(object):
 
         """
         search = []
-
 
         # Create a search list of names for getting a pipline from the metadata
         if source and source.source_table_name:
@@ -569,8 +564,6 @@ class Bundle(object):
     @property
     def logger(self):
         """The bundle logger."""
-        import os
-
 
         if not self._logger:
 
@@ -605,7 +598,7 @@ class Bundle(object):
         """Log the messsage."""
         self.logger.debug(message)
 
-    def error(self, message, set_error_state = False):
+    def error(self, message, set_error_state=False):
         """Log an error messsage.
 
         :param message:  Log message.
@@ -976,10 +969,9 @@ Caster Code
     def record_stage_state(self, phase, stage):
         """Record the completion times of phases and stages"""
 
-        key = "{}-{}".format(phase, stage if stage else 1)
+        key = '{}-{}'.format(phase, stage if stage else 1)
 
         self.dataset.config.build.state[key] = time()
-
 
     def set_error_state(self):
         self.dataset.config.build.state.error = time()
@@ -1038,7 +1030,7 @@ Caster Code
             stage_sources = list(stage_sources)  # Stage_sources is an iterator, can only be traversed once
 
             self._run_events(TAG.BEFORE_STAGE, stage)
-            if not self._run_stage(stage,sources=stage_sources,  force=force, finalize=False):
+            if not self._run_stage(stage, sources=stage_sources,  force=force, finalize=False):
                 self.error('Failed to run stage {}'.format(stage))
             self._run_events(TAG.AFTER_STAGE, stage)
 
@@ -1095,7 +1087,7 @@ Caster Code
         syncs = self.build_source_files.sync(force, defaults)
 
         self.state = self.STATES.SYNCED
-        self.log("---- Synchronized ----")
+        self.log('---- Synchronized ----')
         self.dataset.commit()
 
         self.library.search.index_bundle(self, force=True)
@@ -1107,7 +1099,7 @@ Caster Code
         from ambry.bundle.files import BuildSourceFile
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
-        self.log("---- Sync In ----")
+        self.log('---- Sync In ----')
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
@@ -1116,15 +1108,15 @@ Caster Code
         self.build_source_files.record_to_objects()
 
     def sync_out(self):
-        from ambry.bundle.files import BuildSourceFile
         """Synchronize from objects to records"""
+        from ambry.bundle.files import BuildSourceFile
         self.build_source_files.objects_to_record()
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
         # self.state = self.STATES.SYNCED
 
     def sync_objects_out(self):
         """Synchronize from objects to records, and records to files"""
-        self.log("---- Sync Out ----")
+        self.log('---- Sync Out ----')
         self.build_source_files.objects_to_record()
 
     def sync_objects(self):
@@ -1136,7 +1128,7 @@ Caster Code
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
 
-        self.log("---- Sync Code ----")
+        self.log('---- Sync Code ----')
         for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
             self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
 
@@ -1234,7 +1226,7 @@ Caster Code
             try:
                 shutil.rmtree(self.build_partition_fs.getsyspath('/'))
             except NoSysPathError:
-                pass # If there isn't a syspath, probably don't need to delete.
+                pass  # If there isn't a syspath, probably don't need to delete.
 
     def clean_build(self):
         """Delete the build directory and all ingested files """
@@ -1244,7 +1236,7 @@ Caster Code
             try:
                 shutil.rmtree(self.build_fs.getsyspath('/'))
             except NoSysPathError:
-                pass # If there isn't a syspath, probably don't need to delete.
+                pass  # If there isn't a syspath, probably don't need to delete.
 
     def clean_files(self):
         """ Delete all build source files """
@@ -1298,7 +1290,7 @@ Caster Code
     #
 
     @CaptureException
-    def ingest(self, sources=None, tables=None, stage=None, force=False, update_tables = True):
+    def ingest(self, sources=None, tables=None, stage=None, force=False, update_tables=True):
         """Ingest a set of sources, specified as source objects, source names, or destination tables.
         If no stage is specified, execute the sources in groups by stage.
 
@@ -1342,9 +1334,9 @@ Caster Code
         for stage, g in groupby(sources, key):
             sources = [s for s in g if not_final_or_delete(s)]
             if len(sources):
-                self.log("Ingesting {} sources in stage {}".format(len(sources), stage))
+                self.log('Ingesting {} sources in stage {}'.format(len(sources), stage))
             else:
-                self.log("No sources left to ingest for stage {}".format(stage))
+                self.log('No sources left to ingest for stage {}'.format(stage))
                 continue
 
             self._run_events(TAG.BEFORE_INGEST, stage)
@@ -1373,7 +1365,7 @@ Caster Code
                 try:
                     pool.map(ingest_mp, args)
                 except KeyboardInterrupt:
-                    self.log("Got keyboard interrrupt; terminating workers")
+                    self.log('Got keyboard interrrupt; terminating workers')
                     pool.terminate()
             else:
                 for source in downloadable_sources:
@@ -1403,7 +1395,7 @@ Caster Code
             elif force:
                 source.datafile.remove()
             else:
-                self.log("Source {} already ingested, skipping".format(source.name))
+                self.log('Source {} already ingested, skipping'.format(source.name))
                 return
 
         if source.is_partition:
@@ -1477,7 +1469,7 @@ Caster Code
             return
 
         with self.progress_logging(lambda: ('Ingesting {}: {} {} of {}, rate: {}',
-                                              (source.spec.name,) + source.datafile.report_progress()), 10):
+                                            (source.spec.name,) + source.datafile.report_progress()), 10):
 
             source.datafile.load_rows(s)
 
@@ -1504,7 +1496,7 @@ Caster Code
     #
 
     @CaptureException
-    def schema(self, sources =None, tables=None, stage=None, clean=False, force=False, use_pipeline=False):
+    def schema(self, sources=None, tables=None, stage=None, clean=False, force=False, use_pipeline=False):
         """
         Generate destination schemas.
 
@@ -1522,7 +1514,7 @@ Caster Code
         from ambry.etl import Collect, Head
         from ambry.bundle.events import TAG
 
-        sources = self._resolve_sources(sources, tables, stage, predicate = lambda s: s.is_processable)
+        sources = self._resolve_sources(sources, tables, stage, predicate=lambda s: s.is_processable)
 
         if clean:
             self.dataset.delete_tables_partitions()
@@ -1568,7 +1560,7 @@ Caster Code
                                  for i, col in enumerate(source.source_table.columns)]))
 
                 for pos, name, datatype, desc in columns:
-                    t.add_column(name=name, datatype=datatype, description=desc, update_existing = True)
+                    t.add_column(name=name, datatype=datatype, description=desc, update_existing=True)
 
                 self.log("Populated destination table '{}' from source table '{}' with {} columns"
                          .format(t.name, source.source_table.name, len(columns)))
@@ -1578,14 +1570,14 @@ Caster Code
                 pass
                 source.update_table()  # Generate the source tables.
             except NotFoundError:
-                # Ignore not found errors here, because the ref may be to a partition that has not been built yet.
-                self.log("Skipping {}".format(source.name))
+                # Ignore not found errors here, because the ref may be to a partition
+                # that has not been built yet.
+                self.log('Skipping {}'.format(source.name))
 
         self._run_events(TAG.AFTER_SCHEMA, stage)
         self.commit()
 
         return True
-
 
     #
     # Build
@@ -1639,10 +1631,10 @@ Caster Code
             return False
 
         resolved_sources = self._resolve_sources(sources, None, stage=stage,
-                                                 predicate=lambda s : s.is_processable )
+                                                 predicate=lambda s: s.is_processable)
 
         if not resolved_sources:
-            self.log("No processable sources, skiping build stage {}".format(stage))
+            self.log('No processable sources, skiping build stage {}'.format(stage))
             return True
 
         for stage, source_group in groupby(sorted(resolved_sources, key=attrgetter('stage')), attrgetter('stage')):
@@ -1662,13 +1654,13 @@ Caster Code
                 try:
                     pool.map(build_mp, args)
                 except KeyboardInterrupt:
-                    self.log("Got keyboard interrrupt; terminating workers")
+                    self.log('Got keyboard interrrupt; terminating workers')
                     pool.terminate()
 
             else:
 
                 for source in sources:
-                    self.build_source(source, force = force)
+                    self.build_source(source, force=force)
 
                 self.record_stage_state(self.STATES.BUILDING, stage)
 
@@ -1692,11 +1684,11 @@ Caster Code
         self.state = phase + '_done'
 
         self.commit()
-        self.log("---- Finished phase {} ---- ".format(phase))
+        self.log('---- Finished phase {} ---- '.format(phase))
 
         return True
 
-    def build_table(self, table, force = False):
+    def build_table(self, table, force=False):
         """Build all of the sources for a table """
 
         sources = self._resolve_sources(None, [table])
@@ -1706,7 +1698,7 @@ Caster Code
 
         self.unify_partitions()
 
-    def build_source(self, source, force = False):
+    def build_source(self, source, force=False):
         """Build a single source"""
 
         assert source.is_processable, source.name
@@ -1794,7 +1786,6 @@ Caster Code
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
 
-
         for name, segments in iteritems(partitions):
             self.unify_partition(name, segments)
 
@@ -1816,13 +1807,13 @@ Caster Code
         parent = self.partitions.get_or_new_partition(partition_name, type=Partition.TYPE.UNION)
 
         if parent.datafile.exists:
-            self.log("Removing exising datafile {}".format(parent.datafile.path))
+            self.log('Removing exising datafile {}'.format(parent.datafile.path))
             parent.datafile.remove()
 
         headers = None
         i = 1  # Row id.
 
-        logger = lambda: ("Coalescing: {} {} of {}, rate: {}", parent.datafile.report_progress())
+        logger = lambda: ('Coalescing: {} {} of {}, rate: {}', parent.datafile.report_progress())
 
         with parent.datafile.writer as w, self.progress_logging(logger, 10):
 
@@ -1835,10 +1826,10 @@ Caster Code
                         w.insert_row((i,) + row[1:])
                         i += 1
 
-            self.debug(indent + "Coalesced {} rows into ".format(i))
+            self.debug(indent + 'Coalesced {} rows into '.format(i))
 
         parent.finalize()
-        self.log("Coalesced {}".format(parent.name))
+        self.log('Coalesced {}'.format(parent.name))
         self.commit()
 
         for s in segments:
@@ -1875,12 +1866,11 @@ Caster Code
             return f
 
         test_env = dict(
-
             parse_date=parse_date,
             parse_time=parse_time,
             parse_datetime=parse_datetime,
             partial=partial,
-            bundle = self,
+            bundle=self,
         )
 
         test_env.update(kwargs)
@@ -1896,12 +1886,12 @@ Caster Code
         localvars = {}
 
         for f_name, func in test_env.items():
-            if not isinstance(func, (str, tuple) ):
+            if not isinstance(func, (str, tuple)):
                 localvars[f_name] = set_from(func, 'env')
 
         # The 'b' parameter of randint is assumed to be a bundle, but
         # replacing it with a lambda prevents the param assignment
-        localvars['randint'] = lambda a,b: random.randint(a,b)
+        localvars['randint'] = lambda a, b: random.randint(a, b)
 
         if self != Bundle:
 
@@ -1909,7 +1899,7 @@ Caster Code
             base = set(inspect.getmembers(Bundle, predicate=inspect.isfunction))
             mine = set(inspect.getmembers(self.__class__, predicate=inspect.isfunction))
 
-            localvars.update({f_name:set_from(func, 'bundle') for f_name, func in mine - base})
+            localvars.update({f_name: set_from(func, 'bundle') for f_name, func in mine - base})
 
             # Bound methods. In python 2, these must be called referenced from the bundle, since
             # there is a difference between bound and unbound methods. In Python 3, there is no differnce,
@@ -1918,7 +1908,7 @@ Caster Code
             mine = set(inspect.getmembers(self.__class__, predicate=inspect.ismethod))
 
             # Functions are descriptors, and the __get__ call binds the function to its object to make a bound method
-            localvars.update({f_name:set_from(func.__get__(self), 'bundle') for f_name, func in (mine - base)})
+            localvars.update({f_name: set_from(func.__get__(self), 'bundle') for f_name, func in (mine - base)})
 
         # Bundle module functions
         module_entries = inspect.getmembers(sys.modules['ambry.build'], predicate=inspect.isfunction)
@@ -1926,9 +1916,9 @@ Caster Code
 
         return localvars
 
-    def build_caster_code(self, source, source_headers, pipe = None):
+    def build_caster_code(self, source, source_headers, pipe=None):
 
-        from ambry.etl.codegen import make_row_processors,make_env
+        from ambry.etl.codegen import make_row_processors, make_env
 
         env_dict = self.exec_context()
 
@@ -1977,7 +1967,7 @@ Caster Code
                 traceback.print_tb(tb)  # Fixed format
                 tb_info = traceback.extract_tb(tb)
                 filename, line, func, text = tb_info[-1]
-                self.error("Test case failed on line {} : {}".format(line, text))
+                self.error('Test case failed on line {} : {}'.format(line, text))
                 return False
 
     def post_build_time_coverage(self):
@@ -2102,7 +2092,6 @@ Caster Code
 
         self._run_tests(tag, stage)
 
-
     def _run_event_methods(self, tag, stage=None):
         """Run code in the bundle that is marked with events. """
         import inspect
@@ -2117,7 +2106,7 @@ Caster Code
         for func in funcs:
             func()
 
-    def _run_tests(self,tag, stage=None):
+    def _run_tests(self, tag, stage=None):
         """Run test codes, defined in the test.py file, at event points"""
         import inspect
         import unittest
@@ -2143,7 +2132,7 @@ Caster Code
 
             r = unittest.TextTestRunner(stream=stream,verbosity=2).run(suite)
 
-            #self.log(stream.getvalue())
+            # self.log(stream.getvalue())
 
             self.log("Ran {} tests for tag '{}', {}{} failed, {} errors, {} skipped".format(
                 r.testsRun, tag, ' stage {}, '.format(stage) if stage else '',
@@ -2161,7 +2150,7 @@ Caster Code
                 self.dataset.config.build.state.test_error = [
                     (str(test), str(trc)) for test, trc in r.failures+r.errors
                 ]
-                raise TestError("Failed tests: {}"
+                raise TestError('Failed tests: {}'
                                 .format(', '.join([str(test) for test, trc in r.failures+r.errors])))
 
     #
@@ -2173,7 +2162,7 @@ Caster Code
         if self.is_built:
             self.finalize()
 
-        if not self.is_finalized :
+        if not self.is_finalized:
             self.error("Can't checkin; bundle state must be either finalized or prepared")
             return False, False
 
@@ -2193,5 +2182,3 @@ Caster Code
     def remove(self):
         """Delete resources associated with the bundle."""
         pass  # Remove files in the file system other resource.
-
-

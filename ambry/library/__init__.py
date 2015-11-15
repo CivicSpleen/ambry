@@ -125,6 +125,10 @@ class Library(object):
     def remotes(self):
         return self.filesystem.remotes
 
+    @property
+    def warehouse(self):
+        return self._warehouse
+
     def remote(self, name_or_bundle):
         return self.filesystem.remote(self.resolve_remote(name_or_bundle))
 
