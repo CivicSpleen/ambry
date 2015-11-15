@@ -24,6 +24,7 @@ from ambry.util import drop_empty
 from ..cli import prt, fatal, warn, err
 from ..orm import File
 
+
 def bundle_command(args, rc):
 
     from ..library import new_library
@@ -53,6 +54,7 @@ def bundle_command(args, rc):
         b = e.bundle
         b.fatal(str(exc))
 
+
 def get_bundle_ref(args, l):
     """ Use a variety of methods to determine which bundle to use
 
@@ -68,7 +70,6 @@ def get_bundle_ref(args, l):
             l.bundle(args.ref)  # Exception if not exists
             return (args.ref, 'argument')
     except (AttributeError, NotFoundError, NotObjectNumberError):
-
         pass
 
     if 'AMBRY_BUNDLE' in os.environ:
@@ -107,10 +108,10 @@ def using_bundle(args, l, print_loc=True):
 
     if args.limited_run:
         b.limited_run = True
-    if print_loc: # Try to only do this once
+    if print_loc:  # Try to only do this once
         b.log_to_file('==============================')
-
     return b
+
 
 def bundle_parser(cmd):
     import multiprocessing
@@ -120,12 +121,14 @@ def bundle_parser(cmd):
     parser.set_defaults(command='bundle')
 
     parser.add_argument('-i', '--id', required=False, help='Bundle ID')
-    parser.add_argument('-D', '--debug', required=False, default=False, action="store_true",
+    parser.add_argument('-D', '--debug', required=False, default=False, action='store_true',
                         help='URS1 signal will break to interactive prompt')
-    parser.add_argument('-L', '--limited-run', default=False, action="store_true",
+    parser.add_argument('-L', '--limited-run', default=False, action='store_true',
                         help='Enable bundle-specific behavior to reduce number of rows processed')
-    parser.add_argument('-m', '--multi', default=False, action="store_true", help='Run in multiprocessing mode')
-    parser.add_argument('-p', '--processes',  type = int, help='Number of multiprocessing processors. implies -m')
+    parser.add_argument('-m', '--multi', default=False, action='store_true',
+                        help='Run in multiprocessing mode')
+    parser.add_argument('-p', '--processes',  type=int,
+                        help='Number of multiprocessing processors. implies -m')
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -138,15 +141,15 @@ def bundle_parser(cmd):
     sp.add_argument('-t', '--time', default=None, help='Time period. Use ISO Time intervals where possible. ')
     sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
     sp.add_argument('-v', '--variation', default=None, help='Name of the variation')
-    sp.add_argument('-n', '--dryrun', action="store_true", default=False, help='Dry run')
+    sp.add_argument('-n', '--dryrun', action='store_true', default=False, help='Dry run')
     sp.add_argument('-k', '--key', default='self',
                     help="Number server key. One of 'self', 'unregistered', 'registered', 'authority' "
                          ' Use \'self\' for a random, self-generated key.'
                     )
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
-    #
     # Config sub commands
+    #
 
     command_p = sub_cmd.add_parser('config', help='Operations on the bundle configuration file')
     command_p.set_defaults(subcommand='config')
@@ -154,8 +157,8 @@ def bundle_parser(cmd):
     asp = command_p.add_subparsers(title='Config subcommands',
                                    help='Subcommand for operations on a bundle file')
 
-    # Dump
-    command_p = sub_cmd.add_parser('dump', help="Dump records from the bundle database")
+    # Dump command
+    command_p = sub_cmd.add_parser('dump', help='Dump records from the bundle database')
     command_p.set_defaults(subcommand='dump')
     group = command_p.add_mutually_exclusive_group()
     group.add_argument('-c', '--config', default=False, action='store_const', const='configs', dest='table',
@@ -168,7 +171,8 @@ def bundle_parser(cmd):
                        help='Dump destination tables along with their columns')
     group.add_argument('-f', '--files', default=False, action='store_const', const='files', dest='table',
                        help='Dump bundle definition files')
-    group.add_argument('-i', '--ingested', default=False, action='store_const', const='ingested', dest='table',
+    group.add_argument('-i', '--ingested', default=False, action='store_const',
+                       const='ingested', dest='table',
                        help='List ingested data sources')
     group.add_argument('-s', '--sources', default=False, action='store_const',
                        const='datasources', dest='table',
@@ -187,13 +191,15 @@ def bundle_parser(cmd):
                        help='Dump metadata as json')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-    # Set
+    # Set command
+    #
     command_p = sub_cmd.add_parser('set', help='Set configuration and state values')
     command_p.set_defaults(subcommand='set')
     group = command_p.add_mutually_exclusive_group()
     group.add_argument('-s', '--state', default=None, help='Set the build state')
 
     # Info command
+    #
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-w', '--which', default=False, action='store_true',
@@ -211,7 +217,6 @@ def bundle_parser(cmd):
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-    #
     # Sync Command
     #
     command_p = sub_cmd.add_parser('sync', help='Sync with a source representation')
@@ -224,9 +229,6 @@ def bundle_parser(cmd):
     command_p.add_argument('-c', '--code', default=False, action='store_true',
                            help='Sync bundle.py and bundle.yaml in, but not sources or schemas.')
 
-
-
-    #
     #     duplicate Command
     #
     command_p = sub_cmd.add_parser('duplicate',
@@ -234,7 +236,6 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='duplicate')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-    #
     # Clean Command
     #
     command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
@@ -259,22 +260,20 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='clean')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-
-    #
     # Ingest Command
     #
-    command_p = sub_cmd.add_parser('ingest', help='Build or install download and convert data to internal file format')
+    command_p = sub_cmd.add_parser('ingest',
+                                   help='Build or install download and convert data to internal file format')
     command_p.set_defaults(subcommand='ingest')
 
     command_p.add_argument('-f', '--force', default=False, action='store_true',
-                            help='Force ingesting already ingested files')
+                           help='Force ingesting already ingested files')
     command_p.add_argument('-t', '--table', action='append',
                            help='Only run the schema for the named tables. ')
     command_p.add_argument('-S', '--source',  action='append',
                            help='Sources to ingest, instead of running all sources')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-    #
     # Meta Command
     #
     command_p = sub_cmd.add_parser('meta', help='Clean, ingest and build the source and destination schemas')
@@ -290,8 +289,6 @@ def bundle_parser(cmd):
                            help='Syncrhonize before and after')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-
-    #
     # Schema Command
     #
     command_p = sub_cmd.add_parser('schema', help='Generate the source and destination schemas')
@@ -309,9 +306,6 @@ def bundle_parser(cmd):
                            help='Use the build process to determine the schema, not the source tables ')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-
-
-    #
     # Build Command
     #
     command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
@@ -333,14 +327,11 @@ def bundle_parser(cmd):
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-
-    #
     # Finalize Command
     #
     command_p = sub_cmd.add_parser('finalize', help='Finalize the bundle, preventing further changes')
     command_p.set_defaults(subcommand='finalize')
 
-    #
     # Checkin Command
     #
     command_p = sub_cmd.add_parser('checkin', help='Commit the bundle to the remote store')
@@ -387,8 +378,6 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='ampr')
     from ambry_sources.cli import make_arg_parser
     make_arg_parser(command_p)
-
-
 
     #
     # repopulate
@@ -453,7 +442,8 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('colmap', help='Create or load a column map')
     command_p.set_defaults(subcommand='colmap')
     group = command_p.add_mutually_exclusive_group(required=True)
-    group.add_argument('-c', '--create', default=False, action='store_true', help='Create the individual table maps')
+    group.add_argument('-c', '--create', default=False, action='store_true',
+                       help='Create the individual table maps')
     group.add_argument('-b', '--build', default=False, action='store_true',
                        help='Build the combined map from the table maps')
     group.add_argument('-l', '--load', default=False, action='store_true',
@@ -465,6 +455,7 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('test', help='Run the bundle test code')
     command_p.set_defaults(subcommand='test')
     command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
+
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -601,18 +592,18 @@ def bundle_info(args, l, rc):
         for p in b.partitions:
             rows.append([p.vid, p.vname, p.table.name,
                          p.identity.time, p.identity.space, p.identity.grain,
-                         "({}) ".format(len(p.time_coverage))+', '.join(str(e) for e in p.time_coverage[:5]),
-                         "({}) ".format(len(p.space_coverage))+', '.join(p.space_coverage[:5]),
-                         "({}) ".format(len(p.grain_coverage))+', '.join(p.grain_coverage[:5])])
+                         '({}) '.format(len(p.time_coverage))+', '.join(str(e) for e in p.time_coverage[:5]),
+                         '({}) '.format(len(p.space_coverage))+', '.join(p.space_coverage[:5]),
+                         '({}) '.format(len(p.grain_coverage))+', '.join(p.grain_coverage[:5])])
         print('\nPartitions')
-        print(tabulate(rows, headers="Vid Name Table Time Space Grain TimeCov GeoCov GeoGrain".split()))
+        print(tabulate(rows, headers='Vid Name Table Time Space Grain TimeCov GeoCov GeoGrain'.split()))
 
 
 def check_built(b):
     """Exit if the bundle is built or finalized"""
     if b.is_built or b.is_finalized:
         fatal("Can't perform operation; state = '{}'. "
-              "Call `bambry clean` explicity or build with -f option".format(b.state))
+              "Call `bambry clean` explicitly or build with -f option".format(b.state))
 
 
 def bundle_duplicate(args, l, rc):
@@ -687,27 +678,27 @@ def bundle_download(args, l, rc):
 
 
 def bundle_sync(args, l, rc):
-    from ambry.dbexceptions import BundleError
 
     b = using_bundle(args, l)
 
-    sync_in = getattr(args,'in') or not any((getattr(args,'in'),args.code,  args.out))
+    sync_in = getattr(args, 'in') or not any((getattr(args, 'in'), args.code,  args.out))
 
     if sync_in:
         prt('Sync in')
         b.sync_in()
 
     if args.code:
-        prt("Sync code")
+        prt('Sync code')
         b.sync_code()
 
     if args.out:
-        prt("Sync out")
+        prt('Sync out')
         b.sync_out()
 
     b.set_last_access(Bundle.STATES.SYNCED)
 
     b.commit()
+
 
 def bundle_ingest(args, l, rc):
 
@@ -728,6 +719,7 @@ def bundle_ingest(args, l, rc):
 
     b.set_last_access(Bundle.STATES.INGESTED)
 
+
 def bundle_schema(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
@@ -742,7 +734,6 @@ def bundle_schema(args, l, rc):
         b.schema(sources=args.source, tables=args.table, clean=args.clean)
 
     b.set_last_access(Bundle.STATES.SCHEMA)
-
 
 
 def bundle_meta(args, l, rc):
@@ -977,7 +968,7 @@ def bundle_dump(args, l, rc):
 
             print(tabulate(records[1:], headers=records[0]))
 
-        return # Can't follow the normal process b/c we have to run each table seperately.
+        return  # Can't follow the normal process b/c we have to run each table seperately.
 
     elif args.table == 'tables':
 
@@ -1021,7 +1012,7 @@ def bundle_dump(args, l, rc):
 
         terms = args.ref
 
-        headers = ('name','state','hdr','st', 'rows','path','first 3 headers')
+        headers = ('name', 'state', 'hdr', 'st', 'rows', 'path', 'first 3 headers')
         records = []
 
         for s in b.sources:
@@ -1043,7 +1034,7 @@ def bundle_dump(args, l, rc):
 
                                 ))
 
-        records = sorted(records, key=lambda r: (r[4], r[0]) )
+        records = sorted(records, key=lambda r: (r[4], r[0]))
 
     elif args.table == 'metadata':
         import json
@@ -1055,8 +1046,6 @@ def bundle_dump(args, l, rc):
 
     if records:
         print(tabulate(records, headers=headers))
-
-
 
 
 def bundle_new(args, l, rc):
@@ -1086,7 +1075,7 @@ def bundle_new(args, l, rc):
     if not ambry_account.get('name') or not ambry_account.get('email'):
         from ambry.run import RunConfig as rc
 
-        fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
+        fatal('Must set accounts.ambry.email and accounts.ambry.name, usually in {}'.format(rc.USER_ACCOUNTS))
 
     if args.dryrun:
         from ..identity import Identity
@@ -1485,7 +1474,7 @@ def bundle_colmap(args, l, rc):
         b.commit()
 
     else:
-        fatal("No option given")
+        fatal('No option given')
 
 
 def bundle_test(args, l, rc):
