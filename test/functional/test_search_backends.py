@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import unittest
 
 from test.test_base import TestBase, PostgreSQLTestBase
@@ -8,16 +9,13 @@ from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
 
-from test.test_orm.factories import PartitionFactory, DatasetFactory
+from test.factories import PartitionFactory, DatasetFactory
 
 # Description of the search system:
 # https://docs.google.com/document/d/1jLGRsYt4G6Tfo6m_Dtry6ZFRnDWpW6gXUkNPVaGxoO4/edit#
 
-# To debug set SKIP_ALL to True and comment @skip decorator on test you want to run.
-SKIP_ALL = False
-
-
 # FIXME: Add identifier index tests.
+
 
 class AmbryReadyMixin(object):
     """ Basic functionality for all search backends. Requires self.library attribute.
@@ -38,7 +36,6 @@ class AmbryReadyMixin(object):
         self.assertIn(partition.vid, all_vids)
 
     # tests
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_add_dataset_to_the_index(self):
         DatasetFactory._meta.sqlalchemy_session = self.library.database.session
         dataset = DatasetFactory()
@@ -49,7 +46,6 @@ class AmbryReadyMixin(object):
         all_vids = [x.vid for x in datasets]
         self.assertIn(dataset.vid, all_vids)
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_vid(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         self.library.search.index_dataset(dataset)
@@ -58,48 +54,41 @@ class AmbryReadyMixin(object):
         all_vids = [x.vid for x in found]
         self.assertIn(dataset.vid, all_vids)
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_title(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         dataset.config.metadata.about.title = 'title'
         self.library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, 'title')
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_summary(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         dataset.config.metadata.about.summary = 'Some summary of the dataset'
         self.library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, 'summary of the')
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_id(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         self.library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.id_))
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_source(self):
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         assert dataset.identity.source
         self.library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, 'source example.com')
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_name(self):
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         assert str(dataset.identity.name)
         self.library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.name))
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_vname(self):
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         assert str(dataset.identity.vname)
         self.library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.vname))
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_does_not_add_dataset_twice(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
         self.library.search.index_dataset(dataset)
@@ -112,7 +101,6 @@ class AmbryReadyMixin(object):
         self.assertEqual(len(datasets), 1)
 
     # partition add
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_add_partition_to_the_index(self):
         # dataset = self.new_db_dataset(self.library.database, n=0)
         DatasetFactory._meta.sqlalchemy_session = self.library.database.session
@@ -126,7 +114,6 @@ class AmbryReadyMixin(object):
         self.assertIn(partition.vid, all_vids)
 
     # partition search
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_vid(self):
         DatasetFactory._meta.sqlalchemy_session = self.library.database.session
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
@@ -136,7 +123,6 @@ class AmbryReadyMixin(object):
         self.library.search.index_partition(partition)
         self._assert_finds_partition(partition, partition.vid)
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_id(self):
         DatasetFactory._meta.sqlalchemy_session = self.library.database.session
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
@@ -146,7 +132,6 @@ class AmbryReadyMixin(object):
         self.library.search.index_partition(partition)
         self._assert_finds_partition(partition, partition.identity.id_)
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_name(self):
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
@@ -155,7 +140,6 @@ class AmbryReadyMixin(object):
         self.library.search.index_partition(partition)
         self._assert_finds_partition(partition, str(partition.identity.name))
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_vname(self):
         # dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
         DatasetFactory._meta.sqlalchemy_session = self.library.database.session
@@ -167,7 +151,6 @@ class AmbryReadyMixin(object):
         self._assert_finds_partition(partition, str(partition.identity.vname))
 
     # search tests
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_years_range(self):
         """ search by `source example.com from 1978 to 1979` (temporal bounds) """
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
@@ -188,7 +171,6 @@ class AmbryReadyMixin(object):
         self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_about(self):
         """ search by `* about cucumber` """
         dataset = self.new_db_dataset(self.library.database, n=0)
@@ -209,7 +191,6 @@ class AmbryReadyMixin(object):
         self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_with(self):
         """ search by `* with cucumber` """
         dataset = self.new_db_dataset(self.library.database, n=0)
@@ -230,7 +211,6 @@ class AmbryReadyMixin(object):
         self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_in(self):
         """ search by `source example.com in California` (geographic bounds) """
         dataset = self.new_db_dataset(self.library.database, n=0, source='example.com')
@@ -249,7 +229,6 @@ class AmbryReadyMixin(object):
         self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_by(self):
         """ search by `source example.com by county` (granularity search) """
 
@@ -270,7 +249,6 @@ class AmbryReadyMixin(object):
         self.assertIn(partition.vid, found[0].partitions)
 
     # test some complex examples.
-    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_range_and_in(self):
         """ search by `table2 from 1978 to 1979 in california` (geographic bounds and temporal bounds) """
         dataset = self.new_db_dataset(self.library.database, n=0)
@@ -331,19 +309,20 @@ class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
         super(self.__class__, self).setUp()
         self.rc = self.get_rc()
 
-        # switch to in-memory database.
-        self._CONFIG_TEST_DATABASE = self.rc.config.database['test-database']
-        self.rc.config.database['test-database'] = 'sqlite://'
+        self._CONFIG_DATABASE = self.rc.config.library.database
+        if self.rc.config.library.database != 'sqlite://':
+            # switch to in-memory database.
+            self.rc.config.library.database = 'sqlite://'
 
         # force to use library database for search.
         self.rc.config.services.search = None
         self.library = new_library(self.rc)
         assert isinstance(self.library.search.backend, SQLiteSearchBackend)
-        self.assertEquals(self.library.database.dsn, 'sqlite://')
+        self.assertEqual(self.library.database.dsn, 'sqlite://')
 
     def tearDown(self):
-        super(self.__class__, self).tearDown()
-        self.rc.config.database['test-database'] = self._CONFIG_TEST_DATABASE
+        if self.rc.config.library.database != self._CONFIG_DATABASE:
+            self.rc.config.library.database = self._CONFIG_DATABASE
 
 
 class FileSQLiteTest(TestBase, AmbryReadyMixin):
@@ -353,11 +332,25 @@ class FileSQLiteTest(TestBase, AmbryReadyMixin):
         super(self.__class__, self).setUp()
         self.rc = self.get_rc()
 
+        self._CONFIG_DATABASE = self.rc.config.library.database
+        if self.rc.config.library.database != 'sqlite:////tmp/file-search-test.db':
+            # switch to file database.
+            self.rc.config.library.database = 'sqlite:////tmp/file-search-test.db'
+
         # force to use library database for search.
         self.rc.config.services.search = None
+
         self.library = new_library(self.rc)
         assert isinstance(self.library.search.backend, SQLiteSearchBackend)
         self.assertIn('.db', self.library.database.dsn)
+
+    def tearDown(self):
+        super(self.__class__, self).tearDown()
+        if self.rc.config.library.database != self._CONFIG_DATABASE:
+            # drop test database and restore config
+            self.library.database.close()
+            self.library.database.drop()
+            self.rc.config.library.database = self._CONFIG_DATABASE
 
 
 class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
@@ -371,14 +364,15 @@ class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
 
         # force to use library database for search.
         rc.config.services.search = None
-        self._real_test_database = rc.config['database']['test-database']
-        rc.config['database']['test-database'] = self.dsn
+        self._real_test_database = rc.config.library.database
+        rc.config.library.database = self.dsn
         self.library = new_library(rc)
         assert isinstance(self.library.search.backend, PostgreSQLSearchBackend)
 
     def tearDown(self):
+        self.library.database.close()
         super(PostgreSQLTest, self).tearDown()
 
         # restore database config
         rc = self.get_rc()
-        rc.config['database']['test-database'] = self._real_test_database
+        rc.config.library.database = self._real_test_database

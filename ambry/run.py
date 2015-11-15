@@ -7,14 +7,11 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 import copy
 import os.path
-import sys
-import traceback
 
-from six import StringIO, string_types, print_
+from six import StringIO, string_types
 
-from ambry.util import AttrDict, lru_cache
+from ambry.util import AttrDict, lru_cache, parse_url_to_dict, unparse_url_dict
 from .dbexceptions import ConfigurationError
-from .util import parse_url_to_dict, unparse_url_dict
 
 
 @lru_cache()

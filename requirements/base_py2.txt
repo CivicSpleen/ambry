@@ -1,0 +1,5 @@
+# py2 base requirements
+
+-r base.txt
+
+pdfminer==20140328

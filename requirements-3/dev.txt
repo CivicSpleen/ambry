@@ -1,7 +1,0 @@
-# developer requirements
-
--r base.txt
-
-coverage==3.7.1
-factory_boy==2.5.2
-contexttimer==0.3.1

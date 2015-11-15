@@ -13,11 +13,11 @@ except ImportError:
 import six
 
 from ambry.exporters.ckan.core import _convert_bundle, _convert_partition, export, MISSING_CREDENTIALS_MSG,\
-    UnpublishedAccessError
+    UnpublishedAccessError, CKAN_CONFIG
 from ambry.orm.database import Database
 from ambry.run import get_runconfig
 
-from test.test_orm.factories import DatasetFactory, PartitionFactory, FileFactory
+from test.factories import DatasetFactory, PartitionFactory, FileFactory
 
 
 class ConvertDatasetTest(unittest.TestCase):
@@ -110,8 +110,7 @@ class ExportTest(unittest.TestCase):
     """ Tests export(bundle) function. """
 
     def setUp(self):
-        rc = get_runconfig()
-        if 'ckan' not in rc.accounts:
+        if not CKAN_CONFIG:
             raise EnvironmentError(MISSING_CREDENTIALS_MSG)
         self.sqlite_db = Database('sqlite://')
         self.sqlite_db.create()

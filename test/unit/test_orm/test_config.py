@@ -9,7 +9,7 @@ from ambry.library import new_library
 from ambry.orm.config import Config
 
 from test.test_base import TestBase
-from test.unit.orm_factories import ConfigFactory, DatasetFactory
+from test.factories import ConfigFactory, DatasetFactory
 
 
 class TestConfig(TestBase):
@@ -47,6 +47,7 @@ class TestConfig(TestBase):
     # __repr__ tests
     def test_returns_config_repr(self):
         ds = DatasetFactory()
+        self.library.database.session.commit()
         config1 = ConfigFactory(d_vid=ds.vid)
         repr_str = config1.__repr__()
         self.assertIsInstance(repr_str, text_type)
@@ -74,8 +75,7 @@ class TestConfig(TestBase):
         self.assertTrue(config1.id.startswith('Fds'))
 
     # before_update tests
-    @fudge.patch(
-        'ambry.orm.config.time')
+    @fudge.patch('ambry.orm.config.time')
     def test_updates_modified_field(self, fake_time):
         FAKE_TIME = 111111
         fake_time\

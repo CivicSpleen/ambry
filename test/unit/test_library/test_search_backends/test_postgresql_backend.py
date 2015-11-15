@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 
-
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 from ambry.library import new_library
 from ambry.util import AttrDict
 
 from test.test_base import PostgreSQLTestBase
-from test.test_orm.factories import PartitionFactory
+from test.factories import PartitionFactory
 
 from sqlalchemy.exc import ProgrammingError
 
@@ -17,17 +16,18 @@ class PostgreSQLBackendBaseTest(PostgreSQLTestBase):
 
         # create test database
         rc = self.get_rc()
-        self._real_test_database = rc.config['database']['test-database']
-        rc.config['database']['test-database'] = self.dsn
+        self._real_test_database = rc.config.library.database
+        rc.config.library.database = self.dsn
         self.library = new_library(rc)
         self.backend = PostgreSQLSearchBackend(self.library)
 
     def tearDown(self):
+        self.library.database.close()
         super(PostgreSQLBackendBaseTest, self).tearDown()
 
         # restore database config
         rc = self.get_rc()
-        rc.config['database']['test-database'] = self._real_test_database
+        rc.config.library.database = self._real_test_database
 
 
 class PostgreSQLSearchBackendTest(PostgreSQLBackendBaseTest):
@@ -56,10 +56,7 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_dataset_index(self):
         with self.library.database._engine.connect() as conn:
-            query = """
-                SELECT * from dataset_index;
-            """
-            result = conn.execute(query).fetchall()
+            result = conn.execute('SELECT * FROM dataset_index;').fetchall()
             self.assertEqual(result, [])
 
     # search() tests
@@ -144,10 +141,7 @@ class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_identifier_index(self):
         with self.library.database._engine.connect() as conn:
-            query = """
-                SELECT * from identifier_index;
-            """
-            result = conn.execute(query).fetchall()
+            result = conn.execute('SELECT * FROM identifier_index;').fetchall()
             self.assertEqual(result, [])
 
     # search() tests
@@ -237,10 +231,7 @@ class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_partition_index(self):
         with self.library.database._engine.connect() as conn:
-            query = """
-                SELECT * from partition_index;
-            """
-            result = conn.execute(query).fetchall()
+            result = conn.execute('SELECT * from partition_index;').fetchall()
             self.assertEqual(result, [])
 
     # search() tests

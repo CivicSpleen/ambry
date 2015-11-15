@@ -22,6 +22,7 @@ ambry_meta = imp.load_source('_meta', 'ambry/_meta.py')
 
 long_description = open('README.rst').read()
 
+
 def find_package_data():
     """ Returns package_data, because setuptools is too stupid to handle nested directories.
 
@@ -46,26 +47,67 @@ def find_package_data():
 
 
 class PyTest(TestCommand):
-    user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
+    user_options = [
+        ('pytest-args=', 't', 'Arguments to pass to py.test'),
+
+        ('all', 'a', 'Run all tests.'),
+        ('unit', 'u', 'Run unit tests only.'),
+        ('functional', 'f', 'Run functional tests only.'),
+        ('bundle', 'b', 'Run bundle tests only.'),
+        ('regression', 'r', 'Run regression tests only.'),
+
+        ('sqlite', 's', 'Run tests on sqlite.'),
+        ('postgres', 'p', 'Run tests on postgres.'),
+    ]
 
     def initialize_options(self):
         TestCommand.initialize_options(self)
         self.pytest_args = ''
+        self.unit = 0
+        self.regression = 0
+        self.bundle = 0
+        self.functional = 0
+        self.all = 0
+        self.sqlite = 0
+        self.postgres = 0
 
     def finalize_options(self):
         TestCommand.finalize_options(self)
-        self.test_args = []
-        self.test_suite = True
 
     def run_tests(self):
         # import here, cause outside the eggs aren't loaded
         import pytest
+        if self.all:
+            self.pytest_args += 'test'
+        elif self.unit or self.regression or self.bundle or self.functional:
+            if self.unit:
+                self.pytest_args += 'test/unit'
+            if self.regression:
+                self.pytest_args += 'test/regression'
+            if self.bundle:
+                self.pytest_args += 'test/bundle_tests'
+            if self.functional:
+                self.pytest_args += 'test/functional'
+        else:
+            # default case - functional.
+            self.pytest_args += 'test/functional'
+
         if 'capture' not in self.pytest_args:
             # capture arg is not given. Disable capture by default.
             self.pytest_args = self.pytest_args + ' --capture=no'
 
+        if self.postgres and self.sqlite:
+            # run tests for both
+            print('ERROR: You can not run both - postgres and sqlite. Select exactly one.')
+            sys.exit(1)
+        elif self.postgres:
+            os.environ['AMBRY_TEST_DB'] = 'postgres'
+        if self.sqlite:
+            os.environ['AMBRY_TEST_DB'] = 'sqlite'
+
         errno = pytest.main(self.pytest_args)
         sys.exit(errno)
+
 
 class Docker(Command):
     user_options = []
@@ -77,13 +119,17 @@ class Docker(Command):
         pass
 
     def run(self):
-        import os
+        self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile',
+                    '-t', 'civicknowledge/ambry', '.'])
 
-        self.spawn(['docker', 'build', '-f','support/ambry-docker/Dockerfile',
-                    '-t','civicknowledge/ambry', '.'])
+tests_require = ['pytest']
 
+if sys.version_info >= (3, 0):
+    requirements = parse_requirements('requirements-3.txt', session=uuid.uuid1())
+else:
+    requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
+    tests_require.append('mock')
 
-requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
 
 d = dict(
     name='ambry',
@@ -110,7 +156,7 @@ d = dict(
     ],
     # zip_safe=False,
     install_requires=[x for x in reversed([str(x.req) for x in requirements])],
-    tests_require=['pytest'],
+    tests_require=tests_require,
     extras_require={
         'server': ['paste', 'bottle']
     }

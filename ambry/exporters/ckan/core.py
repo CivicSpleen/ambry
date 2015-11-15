@@ -32,7 +32,10 @@ logger = get_logger(__name__)
 
 rc = get_runconfig()
 
-CKAN_CONFIG = rc.accounts.get('ckan')
+if rc.accounts:
+    CKAN_CONFIG = rc.accounts.get('ckan')
+else:
+    CKAN_CONFIG = None
 
 
 if CKAN_CONFIG and set(['host', 'organization', 'apikey']).issubset(list(CKAN_CONFIG.keys())):
