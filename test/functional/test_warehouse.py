@@ -24,7 +24,7 @@ class Test(TestBase):
         from ambry.library.warehouse import Warehouse
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
-        library = self.library
+        library = self.__class__.library()
         bundle = self.setup_bundle('simple', source_url='temp://', library=library)
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         partition1 = PartitionFactory(dataset=bundle.dataset)

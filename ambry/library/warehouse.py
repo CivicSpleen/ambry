@@ -57,18 +57,20 @@ or via Sqlalchemy, to return datasets.
 
         # we need apsw connection to operate with virtual tables.
         connection = apsw.Connection(':memory:')
-        new_query = []
-        for statement in statements:
-            ref = self._get_table_name(statement)
-            self._install(ref, self._library.database, connection)
-            new_query.append(statement.to_unicode().replace(ref, table_name(ref)))
+        with connection:
+            new_query = []
+            for statement in statements:
+                ref = self._get_table_name(statement)
+                self._install(ref, self._library.database, connection)
+                new_query.append(statement.to_unicode().replace(ref, table_name(ref)))
 
-        new_query = '\n'.join(new_query)
+            new_query = '\n'.join(new_query)
 
-        # execute sql
-        # FIXME:
-        cursor = connection.cursor()
-        result = cursor.execute(new_query).fetchall()
+            # execute sql
+            # FIXME:
+            cursor = connection.cursor()
+            result = cursor.execute(new_query).fetchall()
+        connection.close()
         return result
 
     # FIXME: classmethod
