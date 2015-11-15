@@ -57,3 +57,26 @@ class InMemorySQLiteTest(TestBase, Mixin):
         # assert database is in-memory.
         assert library.database.dsn == 'sqlite://'
         return library
+
+
+class FileSQLiteTest(TestBase, Mixin):
+
+    @classmethod
+    def get_rc(cls):
+        rc = TestBase.get_rc()
+        cls._real_test_database = rc.config.library.database
+        rc.config.library.database = 'sqlite:////tmp/test-warehouse.db'
+        return rc
+
+    @classmethod
+    def tearDownClass(cls):
+        rc = TestBase.get_rc()
+        if rc.config.library.database != cls._real_test_database:
+            rc.config.library.database = cls._real_test_database
+
+    def _get_library(self):
+        library = self.__class__.library()
+
+        # assert database is file.
+        assert library.database.exists()
+        return library
