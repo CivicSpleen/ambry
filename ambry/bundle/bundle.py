@@ -1108,6 +1108,7 @@ Caster Code
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
         self.log("---- Sync In ----")
+        self.library.commit()
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
@@ -1397,11 +1398,6 @@ Caster Code
         from ambry_sources.exceptions import MissingCredentials
         from ambry.orm.exc import NotFoundError
 
-        def account_accessor(url, accounts=self.library.config.accounts):
-            # return empty dict if credentials do not exist
-            # to force ambry_sources to raise exception with required config.
-            return accounts.get(url, {})
-
         if not source.is_partition and source.datafile.exists:
             if not source.datafile.is_finalized:
                 source.datafile.remove()
@@ -1456,7 +1452,7 @@ Caster Code
                 try:
                     s = get_source(
                         source.spec, self.library.download_cache,
-                        clean=force, account_accessor=account_accessor)
+                        clean=force, account_accessor=self.library.account_acessor)
 
                 except MissingCredentials as exc:
                     formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]

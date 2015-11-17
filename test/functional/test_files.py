@@ -11,6 +11,9 @@ class Test(TestBase):
     def test_basic(self):
         """Basic operations on datasets"""
 
+        import os
+
+
         rc = self.get_rc()
         self.library = new_library(rc)
         ConfigFactory._meta.sqlalchemy_session = self.library.database.session

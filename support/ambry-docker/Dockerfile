@@ -96,6 +96,6 @@ RUN mkdir -p /var/ambry/source
 ADD ${AMBRY_CONFIG:-ambry/support/ambry-builder.yaml} /etc/ambry.yaml
 RUN echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
 
-RUN ambry import /var/ambry/src/test/bundle_tests/
+#RUN ambry import /var/ambry/src/test/bundle_tests/
 
 CMD bash ambry-init.sh

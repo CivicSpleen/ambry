@@ -18,6 +18,8 @@ from ambry.util import get_logger, parse_url_to_dict
 from . import Column, Partition, Table, Dataset, Config, File,\
     Code, ColumnStat, DataSource, SourceColumn, SourceTable
 
+from account import Account
+
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
@@ -262,10 +264,9 @@ class Database(object):
             self.logger.info('Cleaning: {}'.format(ds.name))
             self.remove_dataset(ds)
 
-        self.remove_dataset(self.root_dataset)
+        #self.remove_dataset(self.root_dataset)
 
         self.create()
-
 
         self.commit()
 
@@ -319,13 +320,16 @@ class Database(object):
     def clone(self):
         return self.__class__(self.dsn)
 
+    def create_table(self, table):
+        pass
+
     def create_tables(self):
 
         from sqlalchemy.exc import OperationalError
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
-            ColumnStat, SourceTable, SourceColumn, DataSource]
+            ColumnStat, SourceTable, SourceColumn, DataSource, Account]
 
         try:
             self.drop()
@@ -338,17 +342,12 @@ class Database(object):
         orig_schemas = {}
 
         for table in tables:
-            try:
-                it = table.__table__
-                # stored_partitions, file_link are already tables.
-            except AttributeError:
-                it = table
-
+            it = table.__table__
             # These schema shenanigans are almost certainly wrong.
             # But they are expedient. For Postgres, it puts the library
             # tables in the Library schema.
             if self._schema:
-                orig_schemas[it] = it.schema
+                orig_schemas[table] = it.schema
                 it.schema = self._schema
 
             it.create(bind=self.engine)
@@ -540,7 +539,6 @@ class Database(object):
 
         return self.dataset(ds.vid)
 
-
 class BaseMigration(object):
     """ Base class for all migrations. """
 
@@ -562,11 +560,9 @@ class BaseMigration(object):
         raise NotImplementedError(
             'subclasses of MigrationBase must provide a _migrate_postgresql() method')
 
-
 class VersionIsNotStored(Exception):
     """ Means that ambry never updated db schema. """
     pass
-
 
 def migrate(connection):
     """ Collects all migrations and applies missed.

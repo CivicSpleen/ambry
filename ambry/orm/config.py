@@ -53,12 +53,18 @@ class Config(Base):
     def __repr__(self):
         return u('<config: {},{},{} = {}>').format(self.d_vid, self.group, self.key, self.value)
 
+    def update_sequence_id(self, session, dataset):
+        assert dataset.vid == self.d_vid
+        assert session
+        self.sequence_id = next_sequence_id(session, dataset._sequence_ids, self.d_vid, Config)
+        self.id = str(GeneralNumber1('F', self.d_vid, self.sequence_id))
+
     @staticmethod
     def before_insert(mapper, conn, target):
         if not target.id:
+            from ambry.orm.exc import DatabaseError
             assert bool(target.d_vid)
-            target.sequence_id = next_sequence_id(object_session(target), {}, target.d_vid, Config)
-            target.id = str(GeneralNumber1('F', target.d_vid, target.sequence_id))
+            raise DatabaseError("Must set a sequence id before inserting")
 
         Config.before_update(mapper, conn, target)
 
@@ -122,9 +128,13 @@ class ConfigTypeGroupAccessor(object):
                 self._session.merge(self._configs[k])
             else:
                 # key does not exist in the cache, create new.
+
                 config = Config(
                     d_vid=self._dataset.vid, type=self._type_name,
                     group=self._group_name, key=k, value=v)
+
+                config.update_sequence_id(self._dataset.session, self._dataset)
+
                 self._configs[k] = config
                 self._session.add(config)
 

@@ -30,7 +30,7 @@ PyYAML==3.11
 requests>=2.6.0
 semantic-version==2.4.1
 sh==1.11
-six==1.9.0
+six>=1.9.0
 SQLAlchemy==1.0.0
 sqlparse==0.1.15
 Werkzeug==0.10.4
@@ -45,4 +45,6 @@ watchdog==0.8.3
 filelock==2.0.4
 ambry-sources>=0.1.4
 unicodecsv==0.12.0  # using 0.13.0 breaks many tests.
+pycrypto
+simple-crypt
 

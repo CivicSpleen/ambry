@@ -77,9 +77,12 @@ class RunConfig(object):
           If it is an array, load only the files in the array.
 
         """
-
+        import time
+        from os.path import getmtime
         config = AttrDict()
-        config['loaded'] = {'accounts': None, 'configs': []}
+        config['loaded'] = {'time': int(time.time()),
+                            'changed': None,
+                            'accounts': None, 'configs': []}
 
         if not path:
             pass
@@ -92,14 +95,21 @@ class RunConfig(object):
                 path if path else RunConfig.USER_CONFIG,
                 RunConfig.DIR_CONFIG]
 
+
         loaded = False
 
         for f in files:
             if f is not None and os.path.exists(f):
+
                 try:
                     config['loaded']['configs'].append(f)
                     config.update_yaml(f)
                     loaded = True
+                    mtime = getmtime(f)
+
+                    if mtime > config['loaded']['changed']:
+                        config['loaded']['changed'] = mtime
+
                 except TypeError:
                     pass  # Empty files will produce a type error
 
@@ -109,7 +119,13 @@ class RunConfig(object):
         if os.path.exists(RunConfig.USER_ACCOUNTS):
             config['loaded']['accounts'] = RunConfig.USER_ACCOUNTS
 
+            mtime = getmtime(RunConfig.USER_ACCOUNTS)
+
+            if mtime > config['loaded']['changed']:
+                config['loaded']['changed'] = int(mtime)
+
             config.update_yaml(RunConfig.USER_ACCOUNTS)
+
 
         object.__setattr__(self, 'config', config)
         object.__setattr__(self, 'files', files)
@@ -319,14 +335,17 @@ class RunConfig(object):
 
         return r
 
-    def library(self, database=None):
+    def set_library_database(self, name_or_dsn):
+
+        self.config['library']['database'] = name_or_dsn
+
+    def library(self):
 
         e = self.config['library']
 
         fs = self.group('filesystem')
 
-        if not database:
-            database = e.get('database', '').format(**fs)
+        database = e.get('database', '').format(**fs)
 
         warehouse = e.get('warehouse', '').format(**fs),
 

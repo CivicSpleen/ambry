@@ -70,6 +70,10 @@ def init_library(rc_path, database_dsn=None):
     from ..library import new_library
 
     rc = get_runconfig(rc_path)
+
+    if database_dsn:
+        rc.set_library_database(database_dsn)
+
     library = new_library(rc, database_dsn)
 
 

@@ -42,7 +42,7 @@ class TestBase(unittest.TestCase):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
     @classmethod
-    def get_rc(cls):
+    def get_rc(cls, rewrite=True):
         """Create a new config file for test and return the RunConfig.
 
          This method will start with the user's default Ambry configuration, but will replace the
@@ -78,8 +78,10 @@ class TestBase(unittest.TestCase):
 
         test_root = fsopendir(rc.filesystem('test'))
 
-        with test_root.open('.ambry.yaml', 'w', encoding='utf-8') as f:
-            config.dump(f)
+        if rewrite:
+            with test_root.open('.ambry.yaml', 'w', encoding='utf-8') as f:
+                config.loaded = None
+                config.dump(f)
 
         return get_runconfig(test_root.getsyspath('.ambry.yaml'))
 
@@ -88,9 +90,9 @@ class TestBase(unittest.TestCase):
         return cls.get_rc()
 
     @classmethod
-    def library(cls):
+    def library(cls, config = None):
         from ambry.library import new_library
-        return new_library(cls.config())
+        return new_library(config if config else cls.config())
 
     @classmethod
     def import_bundles(cls, clean=True, force_import=False):
@@ -107,11 +109,11 @@ class TestBase(unittest.TestCase):
         l = cls.library()
 
         if clean:
-            l.drop()
+            l.clean()
             l.create()
 
         bundles = list(l.bundles)
-
+        print l.database.dsn
         if len(bundles) == 0 or force_import:
             l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
 

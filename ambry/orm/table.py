@@ -104,9 +104,7 @@ class Table(Base, DictableMixin):
 
         except NotFoundError:
 
-            sequence_id = next_sequence_id(object_session(self), self._column_sequence, self.vid, Column)
-
-            assert sequence_id > len(self.columns), '{}: {} ! > {} '.format(name, sequence_id, len(self.columns))
+            sequence_id = len(self.columns) + 1
 
             c = Column(t_vid=self.vid,
                        sequence_id=sequence_id,

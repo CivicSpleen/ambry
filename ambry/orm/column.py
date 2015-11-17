@@ -317,8 +317,6 @@ class Column(Base):
         """
         return {k: v for k, v in six.iteritems(self.dict) if v and k != '_codes'}
 
-
-
     @staticmethod
     def mangle_name(name):
         """Mangles a column name to a standard form, remoing illegal
@@ -489,7 +487,7 @@ class Column(Base):
         d = OrderedDict([('table', self.table.name)] +
                         [( name_map.get(p.key, p.key), getattr(self, p.key)) for p in self.__mapper__.attrs
                          if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
-                                          'sequence_id', 'id', 'is_primary_key','data']])
+                                          'id', 'is_primary_key','data']])
 
         d['transform'] = d['_transform']
         del d['_transform']
@@ -522,6 +520,9 @@ class Column(Base):
         if target.sequence_id is None:
             from ambry.orm.exc import DatabaseError
             raise DatabaseError("Must have sequence_id before insertion")
+
+        # Check that the id column is always sequence id 1
+        assert (target.name == 'id') == (target.sequence_id == 1), (target.name, target.sequence_id)
 
         Column.before_update(mapper, conn, target)
 

@@ -13,7 +13,7 @@ class Test(TestBase):
 
     @classmethod
     def setUpClass(cls):
-        cls.import_bundles(clean=False) # If clean==true, class setup completely reloads the library
+        cls.import_bundles(clean=True) # If clean==true, class setup completely reloads the library
         cls.l = cls.library()
 
     def setUp(self):
@@ -33,7 +33,7 @@ class Test(TestBase):
         """
         from test import bundle_tests
         b = self.l.bundle(name).cast_to_subclass()
-        b.capture_exceptions = True
+        b.capture_exceptions = False
 
         if reimport:
             orig_source = os.path.join(os.path.dirname(bundle_tests.__file__), b.identity.source_path)

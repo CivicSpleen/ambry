@@ -105,16 +105,24 @@ def root_parser(cmd):
                     help='Reindex the bundles')
     sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
 
+    sp = cmd.add_parser('docker', help='Manage docker images and containers')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='docker')
+    sp.add_argument('-b', '--build', default=False, action='store_true', help='Build a new docker image')
+    sp.add_argument('-r', '--run', default=False, action='store_true', help='Run the docker image')
+
 
 def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
     from ambry.orm.exc import DatabaseError
 
-    database_name = "test" if args.test_library else None
+
+    if args.test_library:
+        rc.set_lirbary_database('test')
 
     try:
-        l = new_library(rc, database_name=database_name)
+        l = new_library(rc)
         l.logger = global_logger
     except DatabaseError as e:
         warn('No library: {}'.format(e))
@@ -369,3 +377,17 @@ def root_import(args, l, rc):
 
         if args.detach:
             b.set_file_system(source_url=None)
+
+def root_docker(args, l, rc):
+    import os
+
+
+    if args.build:
+        raise NotImplementedError()
+
+    if args.run:
+        args = ('docker run --rm -t -i -e AMBRY_DB={} -e AMBRY_ACCOUNT_PASSWORD={} civicknowledge/ambry'
+                .format(l.database.dsn, l._account_password)
+                .split())
+
+        os.execvp('docker', args)

@@ -31,9 +31,10 @@ def bundle_command(args, rc):
     from ambry.orm.exc import ConflictError
     from ambry.dbexceptions import LoggedException
 
-    database_name = "test" if args.test_library else None
+    if args.test_library:
+        rc.set_library_database('test')
 
-    l = new_library(rc, database_name=database_name)
+    l = new_library(rc)
     l.logger = global_logger
 
     if args.debug:

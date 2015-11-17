@@ -20,7 +20,7 @@ class Search(object):
 
         if not backend:
             try:
-                backend_name = library.config.services.search
+                backend_name = library.services['search']
                 if not backend_name:
                     # config contains search key without value.
                     raise KeyError

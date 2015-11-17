@@ -2,13 +2,16 @@
 
 To build the docker container, run, from the root of the distribution: 
 
-    $ python setup.py docker
+    $ python setup.py docker-build
     
 This will create a docker container tagged 'civicknowledge/ambry' using the version of the code in the distribution.
 
 To run the container:
 
-    $ docker run --rm -t -i civicknowledge/ambry 
+    $ ambry docker -r
+    
+The `ambry docker` command will set `AMBRY_DB` to the current database, so it only make sense if the library
+database is postgres. 
     
 The result will be a shell prompt, with ambry installed, using a local Sqlite database. 
 

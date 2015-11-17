@@ -34,4 +34,10 @@ def config():
 def get_library(database_name=None):
     import ambry.library as _l
     """Return the default library for this installation."""
-    return _l.new_library(config(), database_name=database_name)
+
+    rc = config()
+
+    if database_name:
+        rc.set_library_database(database_name)
+
+    return _l.new_library(rc)

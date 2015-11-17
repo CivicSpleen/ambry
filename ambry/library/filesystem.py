@@ -15,14 +15,17 @@ class LibraryFilesystem():
     directory wil lbe created with makedirs.
     """
 
-    def __init__(self,  config):
-        self._config = config # RunConfig
+    def __init__(self,  library):
+        self._library = library # RunConfig
+
 
     def _compose(self, name, args):
         """Get a named filesystem entry, and extend it into a path with additional
         path arguments"""
 
-        p = self._config.filesystem(name)
+        _config = self._library.database.root_dataset.config.library['filesystems']
+
+        p = _config[name]
 
         if args:
             p = join(p, *args)
@@ -54,27 +57,8 @@ class LibraryFilesystem():
         """For file-based search systems, like Whoosh"""
         return self._compose('search',args)
 
-    @property
-    def remotes(self):
 
-        return self._config.library().get('remotes', {})
-
-    def remote(self, name):
-        from fs.s3fs import S3FS
-        from fs.opener import fsopendir
-        from ambry.util import parse_url_to_dict
-
-        r = self.remotes[name]
-
-        # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
-        # https://github.com/boto/boto/issues/2836
-        if r.startswith('s3'):
-            return self.s3(r)
-
-        else:
-            return fsopendir(r, create_dir = True)
-
-    def s3(self, url):
+    def s3(self, url, account_acessor):
         from fs.s3fs import S3FS
         from ambry.util import parse_url_to_dict
         from ambry.dbexceptions import ConfigurationError
@@ -93,14 +77,15 @@ class LibraryFilesystem():
 
         pd = parse_url_to_dict(url)
 
+        account = account_acessor(pd['netloc'])
 
-        account = self._config.account(pd['netloc'])
+        assert account.account_id == pd['netloc']
 
         s3 = S3FS(
             bucket=pd['netloc'],
             prefix=pd['path'],
-            aws_access_key=account.get('access'),
-            aws_secret_key=account.get('secret'),
+            aws_access_key=account.access_key,
+            aws_secret_key=account.secret,
 
         )
 

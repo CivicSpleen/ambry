@@ -110,17 +110,37 @@ class PyTest(TestCommand):
 
 
 class Docker(Command):
-    user_options = []
+
+    description = "build or launch a docker image"
+
+    user_options = [
+        ('build', 'b', 'Build the docker image'),
+        ('launch', 'l', 'Run the docker image on the currently configured database'),
+    ]
 
     def initialize_options(self):
-        pass
+        self.build = None
+        self.launch = None
 
     def finalize_options(self):
         pass
 
     def run(self):
-        self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile',
-                    '-t', 'civicknowledge/ambry', '.'])
+
+        if self.build:
+            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile',
+                        '-t', 'civicknowledge/ambry', '.'])
+
+        if self.launch:
+            from ambry import get_library
+            l = get_library()
+            args = ('docker run --rm -t -i -e AMBRY_DB={} -e AMBRY_ACCOUNT_PASSWORD={} civicknowledge/ambry'
+                    .format(l.database.dsn, l._account_password)
+                    .split())
+
+            self.spawn(args)
+
+
 
 tests_require = ['pytest']
 
