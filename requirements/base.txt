@@ -30,7 +30,7 @@ PyYAML==3.11
 requests>=2.6.0
 semantic-version==2.4.1
 sh==1.11
-six>=1.9.0
+six==1.9.0 # Must be 1.9.0 b/c of requirement in later package
 SQLAlchemy==1.0.0
 sqlparse==0.1.15
 Werkzeug==0.10.4

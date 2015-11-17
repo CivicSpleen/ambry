@@ -128,14 +128,31 @@ class Docker(Command):
         pass
 
     def run(self):
+        import os
 
         if self.base:
             self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-base',
                         '-t', 'civicknowledge/ambry-base', '.'])
 
         if self.build:
-            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry',
-                        '-t', 'civicknowledge/ambry-base', '.'])
+            from ambry._meta import __version__
+            import subprocess
+            import json
+
+            args = ['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry',
+                        '-t', 'civicknowledge/ambry', '.']
+
+            self.spawn(args)
+
+            # Inspect the image to get the image id, so we can tag it.
+            proc = subprocess.Popen("docker inspect civicknowledge/ambry:latest", stdout=subprocess.PIPE, shell=True)
+            (out, err) = proc.communicate()
+
+            import json
+
+            d = json.loads(out)
+
+            self.spawn(['docker', 'tag', d[0]['Id'], 'civicknowledge/ambry:{}'.format(__version__)])
 
         if self.launch:
             from ambry import get_library

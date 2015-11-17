@@ -16,11 +16,12 @@ ADD support/ambry-docker/ambry-init.sh /var/ambry/ambry-init.sh
 
 RUN mkdir -p /var/ambry/source
 
-#RUN ambry config install
-
 ADD ${AMBRY_CONFIG:-ambry/support/ambry-builder.yaml} /etc/ambry.yaml
 RUN echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
 
-#RUN ambry import /var/ambry/src/test/bundle_tests/
+# The importing doesn't seem to work. It runs properly, it seems, but
+# there is nothing in the library when the container is run.
+# RUN ambry import /var/ambry/src/test/bundle_tests/
 
+ADD support/ambry-docker/ambry-init.sh /var/ambry/ambry-init.sh
 CMD bash ambry-init.sh

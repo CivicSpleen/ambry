@@ -394,8 +394,10 @@ def root_docker(args, l, rc):
             passwd = ''
         else:
             db = ' -e AMBRY_DB={}'.format(l.database.dsn)
-            passwd = ' -e AMBRY_ACCOUNT_PASSWORD={}'.format()
+            passwd = ' -e AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password)
 
-        args = ('docker run --rm -t -i civicknowledge/ambry'+db+passwd).split()
+        args = ('docker run --rm -t -i '+db+passwd+' civicknowledge/ambry').split()
+
+        print args
 
         os.execvp('docker', args)
