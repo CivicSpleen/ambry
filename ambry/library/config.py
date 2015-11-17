@@ -26,9 +26,6 @@ class LibraryConfigSyncProxy(object):
             import os
             self.password = os.getenv("AMBRY_ACCOUNT_PASSWORD")
 
-        #if not self.password:
-        #    raise ConfigurationError("Didn't get an account secret password")
-
     def commit(self):
         return self.library.commit()
 

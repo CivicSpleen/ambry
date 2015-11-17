@@ -110,7 +110,10 @@ def root_parser(cmd):
     sp.set_defaults(subcommand='docker')
     sp.add_argument('-b', '--build', default=False, action='store_true', help='Build a new docker image')
     sp.add_argument('-r', '--run', default=False, action='store_true', help='Run the docker image')
-
+    sp.add_argument('-l', '--local', default=False, action='store_true',
+                    help='Use the local Sqlite database, not a postgress database supplied through an environmental var')
+    sp.add_argument('-s', '--shell', default=False, action='store_true',
+                    help='Run a shell in the docker image')
 
 def root_command(args, rc):
     from ..library import new_library
@@ -381,13 +384,18 @@ def root_import(args, l, rc):
 def root_docker(args, l, rc):
     import os
 
-
     if args.build:
         raise NotImplementedError()
 
     if args.run:
-        args = ('docker run --rm -t -i -e AMBRY_DB={} -e AMBRY_ACCOUNT_PASSWORD={} civicknowledge/ambry'
-                .format(l.database.dsn, l._account_password)
-                .split())
+
+        if args.local:
+            db = ''
+            passwd = ''
+        else:
+            db = ' -e AMBRY_DB={}'.format(l.database.dsn)
+            passwd = ' -e AMBRY_ACCOUNT_PASSWORD={}'.format()
+
+        args = ('docker run --rm -t -i civicknowledge/ambry'+db+passwd).split()
 
         os.execvp('docker', args)

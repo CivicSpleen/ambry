@@ -114,12 +114,14 @@ class Docker(Command):
     description = "build or launch a docker image"
 
     user_options = [
-        ('build', 'b', 'Build the docker image'),
+        ('base', 'B', 'Build the base docker image, civicknowledge.com/ambry-base'),
+        ('build', 'b', 'Build the base docker image, civicknowledge.com/ambry'),
         ('launch', 'l', 'Run the docker image on the currently configured database'),
     ]
 
     def initialize_options(self):
         self.build = None
+        self.base = None
         self.launch = None
 
     def finalize_options(self):
@@ -127,9 +129,13 @@ class Docker(Command):
 
     def run(self):
 
+        if self.base:
+            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-base',
+                        '-t', 'civicknowledge/ambry-base', '.'])
+
         if self.build:
-            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile',
-                        '-t', 'civicknowledge/ambry', '.'])
+            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry',
+                        '-t', 'civicknowledge/ambry-base', '.'])
 
         if self.launch:
             from ambry import get_library
@@ -139,7 +145,6 @@ class Docker(Command):
                     .split())
 
             self.spawn(args)
-
 
 
 tests_require = ['pytest']

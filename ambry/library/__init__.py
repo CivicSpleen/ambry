@@ -39,7 +39,7 @@ global_library = None
 def new_library(config=None, database_name=None):
     from ambry.library.config import LibraryConfigSyncProxy
 
-    if config is None and os.getenv('AMBRY_DB', False):
+    if os.getenv('AMBRY_DB', False):
         db = Database(os.getenv('AMBRY_DB'), echo=False)
         config = None
         password = os.getenv('AMBRY_ACCOUNT_PASSWORD')
