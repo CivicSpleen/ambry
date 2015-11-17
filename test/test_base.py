@@ -152,16 +152,13 @@ class TestBase(unittest.TestCase):
         from test import bundles
         from os.path import dirname, join
         from fs.opener import fsopendir
-        from ambry.library import new_library
         import yaml
         from ambry.util import parse_url_to_dict
 
         if not library:
-            rc = self.get_rc()
-            library = new_library(rc)
-        self.library = library
+            library = self.__class__.library()
 
-        self.db = self.library._db
+        self.db = library._db
 
         if not source_url:
             source_url = 'mem://source'.format(name)
@@ -180,25 +177,12 @@ class TestBase(unittest.TestCase):
 
         config = yaml.load(test_source_fs.getcontents('bundle.yaml'))
 
-        b = self.library.new_from_bundle_config(config)
+        b = library.new_from_bundle_config(config)
         b.set_file_system(source_url=source_url, build_url=build_url)
 
         self.copy_bundle_files(test_source_fs, b.source_fs)
 
         return b
-
-    def new_bundle(self):
-        """Configure a bundle from existing sources"""
-        from ambry.library import new_library
-        from ambry.bundle import Bundle
-
-        rc = self.get_rc()
-
-        self.library = new_library(rc)
-
-        self.db = self.library._db
-
-        return Bundle(self.new_db_dataset(self.db), self.library, build_url='mem://', source_url='mem://')
 
 
 class PostgreSQLTestBase(TestBase):

@@ -8,10 +8,9 @@ from collections import namedtuple
 import pkgutil
 import os
 
-from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy import create_engine, event, DDL
-from sqlalchemy.engine import Engine
 from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, ConflictError
 
 from ambry.util import get_logger, parse_url_to_dict
@@ -99,7 +98,7 @@ class Database(object):
     def _create_path(self):
         """Create the path to hold the database, if one wwas specified."""
 
-        if self.driver == 'sqlite' and 'memory' not in self.dsn:
+        if self.driver == 'sqlite' and 'memory' not in self.dsn and self.dsn != 'sqlite://':
 
             dir_ = os.path.dirname(self.path)
 
@@ -290,14 +289,16 @@ class Database(object):
 
             self.commit()
 
+        # drop all tables.
+        for tbl in reversed(self.metadata.sorted_tables):
+            self.logger.info('Dropping {}'.format(tbl))
+            self.engine.execute(tbl.delete())
+
+        self.commit()
+
+        # remove sqlite file.
         if self.dsn.startswith('sqlite:') and self.exists():
             os.remove(self.path)
-        else:
-            for tbl in reversed(self.metadata.sorted_tables):
-                self.logger.info('Dropping {}'.format(tbl))
-                self.engine.execute(tbl.delete())
-
-            self.commit()
 
     @property
     def metadata(self):

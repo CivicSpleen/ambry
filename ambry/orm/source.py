@@ -8,8 +8,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
-from ambry.util import deprecated
-from os.path import splitext
 
 from six import iteritems
 
@@ -21,7 +19,8 @@ from .table import Table
 
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
-from ..util import  Constant
+from ..util import Constant
+
 
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
@@ -368,7 +367,7 @@ class TransientDataSource(DataSourceBase):
         SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
                      '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
 
-        return OrderedDict( [(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+        return OrderedDict([(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
 
     @property
     def dict(self):

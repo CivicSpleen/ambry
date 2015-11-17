@@ -8,12 +8,13 @@ Example:
     for row in l.warehouse.query('SELECT * FROM <partition id or vid> ... '):
         print row
 """
-
 import logging
+
+import apsw
 
 import sqlparse
 
-from ambry_sources.med.sqlite import add_partition
+from ambry_sources.med.sqlite import add_partition, table_name
 
 from ambry.util import get_logger
 
@@ -48,19 +49,32 @@ or via Sqlalchemy, to return datasets.
                         return elem.get_name()
         raise Exception('Table name not found.')
 
-    def query(self, sql=''):
+    def query(self, query=''):
 
         # create tables for all partitions found in the sql.
-        logger.debug('Finding refs and create virtual table for each. query: {}'.format(sql))
-        statements = sqlparse.parse(sql)
-        for statement in statements:
-            ref = self._get_table_name(statement)
-            self._install(ref)
+        logger.debug('Finding refs and create virtual table for each. query: {}'.format(query))
+        statements = sqlparse.parse(query)
 
-        # execute sql
-        # FIXME:
+        # we need apsw connection to operate with virtual tables.
+        connection = apsw.Connection(':memory:')
+        with connection:
+            new_query = []
+            for statement in statements:
+                ref = self._get_table_name(statement)
+                self._install(ref, self._library.database, connection)
+                new_query.append(statement.to_unicode().replace(ref, table_name(ref)))
 
-    def _install(self, ref):
+            new_query = '\n'.join(new_query)
+
+            # execute sql
+            # FIXME:
+            cursor = connection.cursor()
+            result = cursor.execute(new_query).fetchall()
+        connection.close()
+        return result
+
+    # FIXME: classmethod
+    def _install(self, ref, database, connection):
         """ Finds partition by reference and installs it.
 
         Args:
@@ -71,7 +85,7 @@ or via Sqlalchemy, to return datasets.
 
         # FIXME: add_partition requires apsw connection.
         partition = self._library.partition(ref)
-        add_partition(self._library.database.connection, partition, partition.vid)
+        add_partition(connection, partition.datafile, partition.vid)
 
     def _index(self, ref, columns):
         """ Create an index on the columns.
