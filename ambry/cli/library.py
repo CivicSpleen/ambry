@@ -104,11 +104,12 @@ def library_command(args, rc):
     from ..library import new_library
     from . import global_logger
     from ambry.orm.exc import NotFoundError
+    from sqlalchemy.exc import OperationalError
 
     try:
         l = new_library(rc)
         l.logger = global_logger
-    except NotFoundError as e:
+    except (NotFoundError, OperationalError) as e:
         l = None
         warn("Failed to construct library: {}".format(e))
 
