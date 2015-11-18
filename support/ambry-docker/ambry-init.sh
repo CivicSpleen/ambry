@@ -8,5 +8,11 @@ then
     ambry config edit -j $AMBRY_CONFIG_EDIT
 fi
 
+# Run an ambry command in the container
+if [ ! -z $AMBRY_COMMAND ]
+then
+    exec $AMBRY_COMMAND
+else
+    exec bash
+fi
 
-exec bash

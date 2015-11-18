@@ -28,7 +28,7 @@ from ambry.orm import Account
 from ambry.orm.exc import NotFoundError, ConflictError
 from ambry.run import get_runconfig
 from ambry.util import get_logger
-
+from six import string_types
 
 from .filesystem import LibraryFilesystem
 
@@ -36,10 +36,15 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 global_library = None
 
-def new_library(config=None, database_name=None):
+def new_library(config=None, database_name=None, account_password = None):
     from ambry.library.config import LibraryConfigSyncProxy
 
-    if os.getenv('AMBRY_DB', False):
+    if config is None and database_name is not None and account_password is not None:
+        db = Database(database_name)
+        config = None
+        password = account_password
+
+    elif os.getenv('AMBRY_DB', False):
         db = Database(os.getenv('AMBRY_DB'), echo=False)
         config = None
         password = os.getenv('AMBRY_ACCOUNT_PASSWORD')
@@ -58,13 +63,15 @@ def new_library(config=None, database_name=None):
 
         db = Database(db_config, echo=False)
 
+        password =None
+
     l = Library(database=db)
 
     if config:
         lcsp = LibraryConfigSyncProxy(l, config) # Also sets _account_password
         lcsp.sync()
     else:
-        l._account_password = password
+        l.password = password
 
     global global_library
 
@@ -510,6 +517,15 @@ class Library(object):
     # Accounts
     #
 
+    @property
+    def password(self):
+        """The password for decrypting the account secrets"""
+        return self._account_password
+
+    @password.setter
+    def password(self, v):
+        self._account_password = v
+
     def account(self, account_id):
         """
         Return accounts references for the given account id.
@@ -726,7 +742,7 @@ class Library(object):
 
             bundles.append(b)
 
-        return  bundles
+        return bundles
 
     @property
     def process_pool(self):
@@ -741,4 +757,5 @@ class Library(object):
             cpus = multiprocessing.cpu_count()
 
         self.logger.info('Starting MP pool with {} processors'.format(cpus))
-        return multiprocessing.Pool(processes=cpus, initializer=init_library, initargs=[self.config.path, self.database.dsn])
+        return multiprocessing.Pool(processes=cpus, initializer=init_library,
+                                    initargs=[self.database.dsn, self._account_password])
