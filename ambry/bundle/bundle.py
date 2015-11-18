@@ -167,6 +167,9 @@ class Bundle(object):
         :return:
         """
 
+        self.import_lib()
+        self.load_requirements()
+
         try:
             self.commit()  # To ensure the rollback() doesn't clear out anything important
             bsf = self.build_source_files.file(File.BSFILE.BUILD)
@@ -1133,6 +1136,8 @@ Caster Code
         for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
             self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
 
+        self.build_source_files.file(File.BSFILE.META).record_to_objects()
+
     #
     # Clean
     #
@@ -1609,8 +1614,6 @@ Caster Code
 
         self.state = self.STATES.BUILDING
 
-        self.import_lib()
-        self.load_requirements()
 
         return True
 

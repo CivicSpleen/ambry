@@ -145,11 +145,10 @@ class Docker(Command):
             self.spawn(args)
 
             # Inspect the image to get the image id, so we can tag it.
+            # FIXME. Instead of parsing the JSON, this should be:
+            # docker inspect --format='{{.Id}}' civicknowledge/ambry
             proc = subprocess.Popen("docker inspect civicknowledge/ambry:latest", stdout=subprocess.PIPE, shell=True)
             (out, err) = proc.communicate()
-
-            import json
-
             d = json.loads(out)
 
             self.spawn(['docker', 'tag', d[0]['Id'], 'civicknowledge/ambry:{}'.format(__version__)])

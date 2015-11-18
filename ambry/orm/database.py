@@ -93,6 +93,7 @@ class Database(object):
             self._create_path()
             self.create_tables()
             return True
+
         return False
 
     def _create_path(self):
@@ -148,11 +149,13 @@ class Database(object):
 
         if not self._engine:
 
-            if 'postgresql' in self.driver:
-                from sqlalchemy.pool import NullPool
+            if 'postgres' in self.driver:
+                from sqlalchemy.pool import NullPool, AssertionPool
                 # FIXME: Find another way to initiate postgres with NullPool (it is usefull for tests only.)
-                self._engine = create_engine(self.dsn, echo=self._echo,  poolclass=NullPool)
+
+                self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs) #, poolclass=AssertionPool)
             else:
+
                 self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
 
             #
@@ -287,18 +290,27 @@ class Database(object):
             except:
                 pass
 
-            self.commit()
+        self.commit()
+        self.close()
 
-        # drop all tables.
+        # Delete all of the data
         for tbl in reversed(self.metadata.sorted_tables):
-            self.logger.info('Dropping {}'.format(tbl))
+            self.logger.info('Deleting data from  {}'.format(tbl))
             self.engine.execute(tbl.delete())
 
-        self.commit()
 
         # remove sqlite file.
         if self.dsn.startswith('sqlite:') and self.exists():
             os.remove(self.path)
+        else:
+            self.commit()
+            self.close()
+
+            # On postgres, this usually just locks up.
+            for tbl in reversed(self.metadata.sorted_tables):
+                self.logger.info('Droping {}'.format(tbl))
+                tbl.drop(self.engine)
+
 
     @property
     def metadata(self):
@@ -366,6 +378,7 @@ class Database(object):
 
     def _add_config_root(self):
         """ Adds the root dataset, which holds configuration values for the database. """
+
 
         try:
             self.session.query(Dataset).filter_by(id=ROOT_CONFIG_NAME).one()

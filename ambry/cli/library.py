@@ -123,11 +123,14 @@ def library_drop(args, l, config):
     library_config = config.library()
     db_config = library_config['database']
 
-    db = Database(db_config, echo=False)
+    db = Database(db_config, echo=True)
 
+    print db.dsn
     db.drop()
-    db.create()
-
+    db.commit()
+    #db.create()
+    #db._create_path()
+    #db.create_tables()
 
 def library_clean(args, l, config):
     prt("Clean tables in {}".format(l.database.dsn))
