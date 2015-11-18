@@ -199,10 +199,20 @@ class Bundle(object):
         to the path."""
 
         for module_name, pip_name in iteritems(self.metadata.requirements):
-            self._library.install_packages(module_name, pip_name)
+            extant = self.dataset.config.requirements[module_name].url
+
+            force =  (extant and extant != pip_name)
+
+            self._library.install_packages(module_name, pip_name, force=force)
+
+            self.dataset.config.requirements[module_name].url = pip_name
+
+        self.commit()
 
         python_dir = self._library.filesystem.python()
         sys.path.append(python_dir)
+
+
 
     def commit(self):
         return self.dataset.commit()

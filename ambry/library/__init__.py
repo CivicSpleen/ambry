@@ -28,7 +28,7 @@ from ambry.orm import Account
 from ambry.orm.exc import NotFoundError, ConflictError
 from ambry.run import get_runconfig
 from ambry.util import get_logger
-from ambry.util.packages import install
+
 
 from .filesystem import LibraryFilesystem
 
@@ -647,7 +647,8 @@ class Library(object):
 
         return self._search
 
-    def install_packages(self, module_name, pip_name):
+    def install_packages(self, module_name, pip_name, force=False):
+        from ambry.util.packages import install
 
         python_dir = self._fs.python()
 
@@ -660,12 +661,16 @@ class Library(object):
 
         sys.path.append(python_dir)
 
-        try:
-            imp.find_module(module_name)
-            return  # self.log("Required package already installed: {}->{}".format(module_name, pip_name))
-        except ImportError:
-            self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
+        if force:
+            self.logger.info('Upgrading required package: {}->{}'.format(module_name, pip_name))
             install(python_dir, module_name, pip_name)
+        else:
+            try:
+                imp.find_module(module_name)
+                return  # self.log("Required package already installed: {}->{}".format(module_name, pip_name))
+            except ImportError:
+                self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
+                install(python_dir, module_name, pip_name)
 
     def import_bundles(self, dir, detach = False, force = False):
         """

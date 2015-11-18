@@ -532,6 +532,11 @@ class ConfigAccessor(object):
         return ConfigGroupAccessor(self.dataset, 'sync')
 
     @property
+    def requirements(self):
+        """Access sync configuration values as attributes. See self.process for a usage example"""
+        return ConfigGroupAccessor(self.dataset, 'requirements')
+
+    @property
     def library(self):
         """Access library configuration values as attributes. The library config
          is really only relevant to the root dataset. See self.process for a usage example"""
