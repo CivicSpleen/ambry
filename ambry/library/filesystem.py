@@ -15,14 +15,9 @@ class LibraryFilesystem():
     """
 
 
-
     def __init__(self,  config):
-        from ambry.util import AttrDict
 
-        try:
-            self._root = config.library.filesystem_root
-        except AttributeError:
-            self._root = None
+        self._root = config.library.filesystem_root
 
         self._config = config
 
@@ -33,7 +28,9 @@ class LibraryFilesystem():
         p = self._config.filesystem[name]
 
         if args:
-            p = join(p, *args).format(root=self._root)
+            p = join(p, *args)\
+
+        p = p.format(root=self._root)
 
         if not isdir(p):
             makedirs(p)

@@ -16,7 +16,55 @@ from .dbexceptions import ConfigurationError
 
 @lru_cache()
 def get_runconfig(path=None):
+    """Load the main configuration files and accounts file.
+
+    Load the main configuration files and accounts file from a variety of potential places,
+    and update the configuration with values from environmental variables.
+
+    The routine attempts to load the configuration from these locations, in this order:
+
+    - /etc/ambry.yaml
+    - ~/.ambry.yaml
+    - A path specified by the AMBRY_CONFIG environmenal variable
+    - .ambry.yaml in the directory specified by the VIRTUAL_ENV environmental variable
+    - .ambry.yaml in the current working directory
+
+    Or, if `path` is specified, it load that path and ignores the standard locations.
+
+    The routines also loads the accounts file from one of these locations:
+
+    - A path specified by the AMBRY_ACCOUNTS environmenal variable
+    - .ambry-accounts.yaml in the directory specified by the VIRTUAL_ENV environmental variable
+    - ~/.ambry-accounts.yaml
+
+    After loading the configuation, the config is updated from environmental variables:
+
+    - `config.library.database` from `AMBRY_DB`
+    - `config.library.filesystem_root` from `AMBRY_ROOT`
+    - `config.accounts.password` from `AMBRY_PASSWORD`
+
+    The config file can be empty or missing if  the config has already been loaded into the database, and the
+    database, root and password are specified in environmental variables.
+
+    The typical use cases are that for a single machine installation, or the head of a multi-machine installation,
+    there is a full configuation file and accounts file. In a multi-machine installation, on;y the environmental
+    varaibles AMBRY_DB, AMBRY_ROOT and AMBRY_PASSWORD are specified, allowing satellite machines to get information
+    about remotes and accounts from the database. Since the filesystem entries can be taken from the defaults,
+    the satellite machines  do not need a configuration file.
+
+    :param path: The path to a configuration file to use instead of the standard locataions.
+    """
+
     return load(path)
+
+def load(path = None):
+
+    config = load_config(path)
+    config.update(load_accounts())
+
+    update_config(config)
+
+    return config
 
 from ambry.util import Constant
 
@@ -212,20 +260,11 @@ def update_config(config):
     config.modtime = max([l[1] for l in  config.loaded ] + [config.accounts.loaded[1]])
 
 
-def load(path = None):
-
-    config = load_config(path)
-    config.update(load_accounts())
-
-    update_config(config)
-
-    return config
-
 
 
 
 def normalize_dsn_or_dict(d):
-
+    """Clean up a database DSN, or dict version of a DSN, returning both the cleaned DSN and dict version"""
     if isinstance(d, dict):
 
         try:

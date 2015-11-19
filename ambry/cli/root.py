@@ -7,7 +7,7 @@ included in this distribution as LICENSE.txt
 
 from ..cli import warn
 from . import prt
-
+from six import print_
 
 def root_parser(cmd):
     import argparse
@@ -46,14 +46,11 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-l', '--library', default=False, action='store_true',
-                       help='Information about the library')
+    group.add_argument('-c', '--configs', default=False, action='store_true',
+                       help=' Also dump the root config entries')
     group.add_argument('-r', '--remote', default=False, action='store_true',
                        help='Information about the remotes')
-    group.add_argument('-b', '--bundle', default=False, action='store_true',
-                       help='Information about a bundle')
-    sp.add_argument('term', type=str, nargs='?',
-                    help='Name or ID of the bundle or partition')
+
 
     sp = cmd.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(command='root')
@@ -241,11 +238,12 @@ def root_list(args, l, rc):
 def root_info(args, l, rc):
     from ..cli import prt
     from ..dbexceptions import ConfigurationError
+    from tabulate import tabulate
 
     import ambry
 
-    prt('Version:   {}, {}', ambry._meta.__version__, rc.environment.category)
-    prt('Root dir:  {}', rc.filesystem('root'))
+    prt('Version:   {}', ambry._meta.__version__)
+    prt('Root dir:  {}', rc.library.filesystem_root)
 
     try:
         if l.filesystem.source():
@@ -253,12 +251,23 @@ def root_info(args, l, rc):
     except (ConfigurationError, AttributeError) as e:
         prt('Source :   No source directory')
 
-    prt('Configs:   {}', rc.dict['loaded'])
+    prt('Configs:   {}', [e[0] for e in rc.loaded])
+    prt('Accounts:  {}', rc.accounts.loaded[0])
     if l:
         prt('Library:   {}', l.database.dsn)
         prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
     else:
         prt('No library defined!')
+
+    if args.configs:
+        ds = l.database.root_dataset
+        prt("Configs:")
+        records = []
+        for config in ds.configs:
+            # Can't use prt() b/c it tries to format the {} in the config.value
+            records.append((config.dotted_key,config.value))
+
+        print tabulate(sorted(records, key=lambda e: e[0]), headers=['key','value'])
 
 
 def root_sync(args, l, config):

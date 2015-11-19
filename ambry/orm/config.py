@@ -53,6 +53,10 @@ class Config(Base):
     def __repr__(self):
         return u('<config: {},{},{} = {}>').format(self.d_vid, self.group, self.key, self.value)
 
+    @property
+    def dotted_key(self):
+        return "{}.{}.{}".format(self.group, self.type, self.key)
+
     def update_sequence_id(self, session, dataset):
         assert dataset.vid == self.d_vid
         assert session
