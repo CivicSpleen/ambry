@@ -2,14 +2,14 @@ environment:
     category: development
 
 library:
-    filesystem: '{root}/library'
+    filesystem_root: /var/ambry
     database: 'sqlite:///{root}/library.db'
     remotes:
         public: 's3://test.library.civicknowledge.com/public'
         test: 's3://test.library.civicknowledge.com/test'
 
 filesystem:
-    root: /var/ambry
+
     downloads: '{root}/downloads'
     extracts: '{root}/extracts'
     python: '{root}/python'

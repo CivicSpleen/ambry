@@ -342,7 +342,8 @@ def main(argsv=None, ext_logger=None):
         try:
             rc = get_runconfig(rc_path)
 
-        except ConfigurationError:
+        except ConfigurationError as e:
+            print '!!!!', e
             fatal("Could not find configuration file \nRun 'ambry config install; to create one ")
 
         global global_run_config

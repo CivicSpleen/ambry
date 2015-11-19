@@ -66,9 +66,15 @@ def alt_init(l):
 def init_library(database_dsn, accounts_password):
     """Child initializer, setup in Library.process_pool"""
     global library
-    from ..library import new_library
+    from ambry.library import new_library
+    from ambry.run import get_runconfig
 
-    library = new_library(database_name=database_dsn, account_password=accounts_password)
+    import os
+
+    os.environ['AMBRY_DB'] = database_dsn
+    os.environ['AMBRY_PASSWORD'] = accounts_password
+
+    library = new_library(get_runconfig())
 
 @MPBundleMethod
 def build_mp(args):

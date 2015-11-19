@@ -1,5 +1,5 @@
 
-filesystem:
-    root: /var/ambry
+library:
+  filesystem_root: /var/ambry
 
 

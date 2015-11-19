@@ -411,6 +411,7 @@ class AttrDict(OrderedDict):
 
     def update_yaml(self, path):
         self.update_flat(self.from_yaml(path))
+        return self
 
     def clone(self):
         clone = AttrDict()

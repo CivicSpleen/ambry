@@ -1507,6 +1507,7 @@ def bundle_docker(args, l, rc):
 
     if args.detach:
         cmd_args += ['-d']
+
     else:
         cmd_args += '--rm -t -i'.split()
 
@@ -1515,7 +1516,16 @@ def bundle_docker(args, l, rc):
 
     if bambry_cmd:
         b = using_bundle(args, l)
-        cmd_args += ['-e', 'AMBRY_COMMAND=bambry -i {} {}'.format(b.identity.vid, bambry_cmd)]
+        bambry_cmd_args = []
+
+        if args.multi:
+            bambry_cmd_args.append('-m')
+
+        if args.processes:
+            bambry_cmd_args.append('-p'+str(args.processes))
+
+        cmd_args += ['-e', 'AMBRY_COMMAND=bambry -i {} {} {}'.format(
+                       b.identity.vid, ' '.join(bambry_cmd_args),  bambry_cmd)]
 
     if args.version:
         import ambry.meta

@@ -1,5 +1,5 @@
 
-from six import iterkeys
+from six import iterkeys, iteritems
 
 from ..cli import prt, fatal, warn, err
 
@@ -16,9 +16,7 @@ def config_parser(cmd):
         '-t', '--template', default='devel',
         help="Suffix of the configuration template. One of: 'devel', 'library', 'builder'. Default: 'devel' ")
     sp.add_argument('-r', '--root', default=None, help="Set the root dir")
-    sp.add_argument('-R', '--remote', default=None, help="Url of remote library")
-    sp.add_argument(
-        '-p', '--print', dest='prt', default=False, action='store_true',
+    sp.add_argument('-p', '--print', dest='prt', default=False, action='store_true',
         help='Print, rather than save, the config file')
 
     group = sp.add_mutually_exclusive_group()
@@ -127,87 +125,78 @@ def config_install(args, l, rc):
     import yaml
     import pkgutil
     import os
-    from ambry.run import RunConfig
+    from os.path import join, dirname
     import getpass
-
+    import ambry.support
+    from ambry.run import ROOT_FILE, USER_FILE, BASE_FILE, USER_ACCOUNTS_FILE
+    from ambry.util import AttrDict
 
     user = getpass.getuser()
 
-    default_contents = pkgutil.get_data("ambry.support", 'ambry-{}.yaml'.format(args.template))
+    default_config_file = join(dirname(ambry.support.__file__),
+                               'ambry-{}.yaml'.format(args.template))
+
+    d = AttrDict().update_yaml(default_config_file)
 
     if user == 'root': # Root user
-        install_file = RunConfig.ROOT_CONFIG
-        dr_d = yaml.load(default_contents)
-        default_root = dr_d['filesystem']['root']
+        install_file = ROOT_FILE
+        default_root = d.library.filesystem_root
 
     elif os.getenv('VIRTUAL_ENV'):  # Special case for python virtual environments
-        install_file = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
+        install_file = os.path.join(os.getenv('VIRTUAL_ENV'), BASE_FILE)
         default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
 
     else: # Non-root user, outside of virtualenv
-        install_file = RunConfig.USER_CONFIG
+        install_file = USER_FILE
         warn(("Installing as non-root, to '{}'\n" +
               "Run as root to install for all users.").format(install_file))
         default_root = os.path.join(os.path.expanduser('~'), 'ambry')
 
+    if args.root:
+        default_root = args.root
+
     if os.path.exists(install_file):
 
         if args.force:
-            prt("File output file exists, overwriting: {}".format(
-                install_file))
-            contents = default_contents
+            prt("File output file exists, overwriting: {}".format(install_file))
+
         else:
-            fatal(
-                "Output file {} exists. Use  -f to overwrite".format(install_file))
-    else:
-        contents = pkgutil.get_data(
-            "ambry.support", 'ambry-{}.yaml'.format(args.template))
+            fatal("Output file {} exists. Use  -f to overwrite".format(install_file))
 
-    d = yaml.load(contents)
+    d['library']['filesystem_root'] = default_root
 
-
-    if args.root:
-        d['filesystem']['root'] = args.root
-    elif default_root:
-        d['filesystem']['root'] = default_root
-
-    if args.remote:
-        try:
-            d['library']['default']['remotes'] = [args.remote]
-        except Exception as e:
-            err("Failed to set remote: {} ".format(e))
-
-    s = yaml.dump(d, indent=4, default_flow_style=False)
+    s = d.dump()
 
     if args.prt:
         prt(s.replace("{", "{{").replace("}", "}}"))
+        return
 
-    else:
+    #Create an empty accounts file, if it does not exist
+    user_accounts_file = os.path.expanduser(USER_ACCOUNTS_FILE)
 
-        dirname = os.path.dirname(install_file)
-
-        if not os.path.isdir(dirname):
-            os.makedirs(dirname)
-
-        with open(install_file, 'w') as f:
-            prt('Writing config file: {}'.format(install_file))
-            f.write(s)
-
-    if not os.path.exists(RunConfig.USER_ACCOUNTS):
-        with open(RunConfig.USER_ACCOUNTS, 'w') as f:
-
+    if not os.path.exists(user_accounts_file):
+        with open(user_accounts_file, 'w') as f:
             d = dict(accounts=dict(ambry=dict(name=None, email=None)))
 
-            prt('Writing config file: {}'.format(RunConfig.USER_ACCOUNTS))
+            prt('Writing accounts file: {}'.format(user_accounts_file))
             f.write(yaml.dump(d, indent=4, default_flow_style=False))
+
+    dirname = os.path.dirname(install_file)
+
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
+
+    with open(install_file, 'w') as f:
+        prt('Writing config file: {}'.format(install_file))
+        f.write(s)
 
     # Make the directories.
 
     from ..run import get_runconfig
     rc = get_runconfig(install_file)
 
-    for name in iterkeys(rc.group('filesystem')):
-        dr = rc.filesystem(name)
+    for name, v in iteritems(rc.filesystem):
+        dr = v.format(root=rc.library.filesystem_root)
 
         try:
 

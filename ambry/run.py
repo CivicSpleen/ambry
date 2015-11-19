@@ -77,6 +77,12 @@ ENVAR.ROOT =  'AMBRY_ROOT'
 ENVAR.EDIT = 'AMBRY_CONFIG_EDIT'
 ENVAR.VIRT = 'VIRTUAL_ENV'
 
+BASE_FILE = '.ambry.yaml'
+ROOT_FILE = '/etc/ambry.yaml'
+USER_FILE = '~/'+BASE_FILE
+ACCOUNTS_FILE = '.ambry-accounts.yaml'
+USER_ACCOUNTS_FILE = '~/'+ACCOUNTS_FILE
+
 filesystem_defaults = {
     'build': '{root}/build',
     'documentation': '{root}/doc',
@@ -102,11 +108,11 @@ def load_accounts():
     if os.getenv(ENVAR.ACCT):
         accts_file = os.getenv(ENVAR.ACCT)
 
-    elif os.getenv(ENVAR.VIRT) and os.path.exists(join(os.getenv(ENVAR.VIRT), '.ambry-accounts.yaml')):
-        accts_file = join(os.getenv(ENVAR.VIRT), '.ambry-accounts.yaml')
+    elif os.getenv(ENVAR.VIRT) and os.path.exists(join(os.getenv(ENVAR.VIRT), ACCOUNTS_FILE)):
+        accts_file = join(os.getenv(ENVAR.VIRT), ACCOUNTS_FILE)
 
     else:
-        accts_file = os.path.expanduser('~/.ambry-accounts.yaml')
+        accts_file = os.path.expanduser(USER_ACCOUNTS_FILE)
 
     if os.path.exists(accts_file):
         config.update_yaml(accts_file)
@@ -141,24 +147,21 @@ def load_config(path=None):
 
     config = AttrDict()
 
-
     files = []
 
     if not path:
-        files.append('/etc/ambry.yaml')
+        files.append(ROOT_FILE)
 
-        files.append(os.path.expanduser('~/.ambry.yaml'))
+        files.append(os.path.expanduser(USER_FILE))
 
         if os.getenv(ENVAR.CONFIG):
             files.append(os.getenv(ENVAR.CONFIG))
 
         if os.getenv(ENVAR.VIRT):
-            files.append(join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml'))
-
-        files.append(join(os.getenv(ENVAR.VIRT), '.ambry.yaml'))
+            files.append(join(os.getenv(ENVAR.VIRT), BASE_FILE))
 
         try:
-            files.append(join(os.getcwd(), 'ambry.yaml'))
+            files.append(join(os.getcwd(), BASE_FILE))
         except OSError:
             pass # In webservers, there is no cwd
 
