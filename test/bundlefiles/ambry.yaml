@@ -3,7 +3,6 @@ environment:
     category: development
 
 filesystem:
-    root: '/tmp/ambry'
     downloads: '{root}/downloads'
     extracts: '{root}/extracts'
     python: '{root}/python'
@@ -14,6 +13,7 @@ filesystem:
     test: /tmp/ambry
 
 library:
+  filesystem_root: '/tmp/ambry'
   database: test-database
   warehouse: sqlite://
   remotes:

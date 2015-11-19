@@ -348,11 +348,6 @@ def main(argsv=None, ext_logger=None):
         global global_run_config
         global_run_config = rc
 
-        if not rc.environment.get('category', False):
-            
-            warn("environment.class isn't set in config '{}' ; assuming 'development' ".format(rc_path))
-            
-            rc.environment['class'] = 'development'
 
     if args.test_library:
         rc.group('filesystem')['root'] = rc.group('filesystem')['test']

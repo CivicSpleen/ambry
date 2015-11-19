@@ -9,16 +9,15 @@ from ambry.dbexceptions import ConfigurationError
 
 class LibraryConfigSyncProxy(object):
 
-    def __init__(self, library, config, password = None):
+    def __init__(self, library):
         self.library = library
-        self.config = config
+        self.config = library.config
         self.database = self.library.database
 
         try:
-            self.password = config.accounts.password
+            self.password = self.config.accounts.password
         except AttributeError:
             self.password = None
-
 
         self.root_dir = None # Set when file systems are synced
 
@@ -37,7 +36,8 @@ class LibraryConfigSyncProxy(object):
         import time
         import platform
 
-        change_time = self.config.loaded['changed']
+        change_time = self.config.modtime
+
         load_time = self.database.root_dataset.config.library.config['load_time']
 
         self.library._account_password = self.password
@@ -46,25 +46,14 @@ class LibraryConfigSyncProxy(object):
 
         if change_time > load_time and ( node is None or node == platform.node()):
             self.sync_accounts(self.config.accounts)
-            self.sync_remotes(self.config.library()['remotes'])
-            self.sync_filesystem(self.config.group('filesystem'))
-            self.sync_services(self.config.group('services'))
+            self.sync_remotes(self.config.library.remotes)
+
+            if self.config.get('services'):
+                self.sync_services(self.config.services)
+
             self.database.root_dataset.config.library.config['load_time'] = int(time.time())
             self.database.root_dataset.config.library.config['config_node'] = platform.node()
             self.commit()
-
-    def sync_filesystem(self, filesystems):
-        root = self.database.root_dataset
-        rc = root.config.library.filesystems
-
-        self.root_dir = filesystems.get('root','NO_ROOT_DIR')
-
-        self.commit()
-
-        for name, url in filesystems.items():
-            rc[name] = url.format(root=self.root_dir)
-
-        self.commit()
 
     def sync_services(self, services):
         root = self.database.root_dataset

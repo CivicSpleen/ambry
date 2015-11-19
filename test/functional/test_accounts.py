@@ -22,9 +22,9 @@ class Test(TestBase):
 
         db = self.library().database
 
-        rc = self.config()
 
-        lcsp = LibraryConfigSyncProxy(l, rc)
+
+        lcsp = LibraryConfigSyncProxy(l)
         lcsp.sync()
 
         #for v in l.database.root_dataset.config.library:
@@ -47,11 +47,11 @@ class Test(TestBase):
 
         # Delete the config and get the library again, this time from the
         # library DSN.
+        rc = self.config()
+        print "Removing", rc.loaded[0][0]
+        os.remove(rc.loaded[0][0])
 
-        print "Removing", rc.loaded['configs'][0]
-        os.remove(rc.loaded['configs'][0])
-
-        self.assertFalse(os.path.exists(rc.loaded['configs'][0]))
+        self.assertFalse(os.path.exists( rc.loaded[0][0]))
         get_runconfig.clear() # Clear the LRU cache on the function
 
         os.environ['AMBRY_DB'] = l.database.dsn

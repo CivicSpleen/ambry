@@ -458,6 +458,19 @@ def bundle_parser(cmd):
     command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
 
 
+    #
+    # Docker
+    #
+
+    command_p = sub_cmd.add_parser('docker', help='Run bambry commands in a docker container')
+    command_p.set_defaults(subcommand='docker')
+    command_p.add_argument('-d', '--detach', default=False, action='store_true',
+                       help='Detach from the terminal. Otherwise, run a shell')
+    command_p.add_argument('-v', '--version', default=False, action='store_true',
+                       help='Select a docker version that is the same as this Ambry installation')
+
+    command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
+
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
 
@@ -1482,3 +1495,34 @@ def bundle_test(args, l, rc):
     b = using_bundle(args, l).cast_to_subclass()
 
     b.run_tests(args.tests)
+
+
+def bundle_docker(args, l, rc):
+    import os
+
+    bambry_cmd = ' '.join(args.args)
+
+
+    cmd_args = ['docker', 'run']
+
+    if args.detach:
+        cmd_args += ['-d']
+    else:
+        cmd_args += '--rm -t -i'.split()
+
+    cmd_args += ['-e', 'AMBRY_DB={}'.format(l.database.dsn)]
+    cmd_args += ['-e', 'AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password)]
+
+    if bambry_cmd:
+        b = using_bundle(args, l)
+        cmd_args += ['-e', 'AMBRY_COMMAND=bambry -i {} {}'.format(b.identity.vid, bambry_cmd)]
+
+    if args.version:
+        import ambry.meta
+        cmd_args += ['civicknowledge/ambry:{}'.format(ambry.meta.__version__)]
+    else:
+        cmd_args += ['civicknowledge/ambry']
+
+    print cmd_args
+
+    os.execvp('docker', cmd_args)

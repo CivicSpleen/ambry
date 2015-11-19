@@ -61,10 +61,14 @@ class Config(Base):
 
     @staticmethod
     def before_insert(mapper, conn, target):
-        if not target.id:
+
+        if not target.sequence_id:
             from ambry.orm.exc import DatabaseError
             assert bool(target.d_vid)
             raise DatabaseError("Must set a sequence id before inserting")
+
+        if not target.id:
+            target.id = str(GeneralNumber1('F', target.d_vid, target.sequence_id))
 
         Config.before_update(mapper, conn, target)
 

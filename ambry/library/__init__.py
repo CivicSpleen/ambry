@@ -36,42 +36,12 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 global_library = None
 
-def new_library(config=None, database_name=None, account_password = None):
-    from ambry.library.config import LibraryConfigSyncProxy
+def new_library(config=None):
 
-    if config is None and database_name is not None and account_password is not None:
-        db = Database(database_name)
-        config = None
-        password = account_password
+    if config is None:
+        config = get_runconfig()
 
-    elif os.getenv('AMBRY_DB', False):
-        db = Database(os.getenv('AMBRY_DB'), echo=False)
-        config = None
-        password = os.getenv('AMBRY_ACCOUNT_PASSWORD')
-
-    else:
-
-        if config is None:
-            config = get_runconfig()
-
-        if database_name and config:
-            config.set_library_database(database_name)
-
-        library_config = config.library()
-
-        db_config = library_config['database']
-
-        db = Database(db_config, echo=False)
-
-        password =None
-
-    l = Library(database=db)
-
-    if config:
-        lcsp = LibraryConfigSyncProxy(l, config) # Also sets _account_password
-        lcsp.sync()
-    else:
-        l.password = password
+    l = Library(config)
 
     global global_library
 
@@ -82,22 +52,31 @@ def new_library(config=None, database_name=None, account_password = None):
 
 class Library(object):
 
-    def __init__(self,  database, search=None):
+    def __init__(self,  config=None, search=None):
         from sqlalchemy.exc import OperationalError
+        from ambry.library.config import LibraryConfigSyncProxy
+
+        if config:
+            self._config = config
+        else:
+            self._config = get_runconfig()
 
 
         self.logger = logger
 
-        self._db = database
+        self._fs = LibraryFilesystem(config)
 
-        self._account_password = None # Password for decrypting account secrets
+        self._db = Database(self._fs.database_dsn)
+
+        self._account_password = self.config.accounts.password
 
         try:
             self._db.open()
         except OperationalError as e:
             self.logger.error("Failed to open database '{}': {} ".format(self._db.dsn, e))
 
-        self._fs = LibraryFilesystem(self)
+        lcsp = LibraryConfigSyncProxy(self)
+        lcsp.sync()
 
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
         if search:
@@ -124,7 +103,11 @@ class Library(object):
         return self.database.clean()
 
     def create(self):
-        return self.database.create()
+        from config import LibraryConfigSyncProxy
+        self.database.create()
+
+        lcsp = LibraryConfigSyncProxy(self)
+        lcsp.sync()
 
     @property
     def database(self):
@@ -136,7 +119,6 @@ class Library(object):
 
     @property
     def config(self):
-        raise NotImplementedError("config property has been removed from Library")
         return self._config
 
     @property
@@ -613,7 +595,7 @@ class Library(object):
 
         else:
             try:
-                nsconfig = self._config.service('numbers')
+                nsconfig = self.services['numbers']
 
             except ConfigurationError:
                 raise ConfigurationError('No number server configuration')

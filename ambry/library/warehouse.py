@@ -10,7 +10,7 @@ Example:
 """
 import logging
 
-import apsw
+
 
 import sqlparse
 
@@ -50,6 +50,7 @@ or via Sqlalchemy, to return datasets.
         raise Exception('Table name not found.')
 
     def query(self, query=''):
+        import apsw
 
         # create tables for all partitions found in the sql.
         logger.debug('Finding refs and create virtual table for each. query: {}'.format(query))

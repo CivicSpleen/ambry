@@ -14,17 +14,22 @@ class Test(TestBase):
 
         super(Test, self).setUp()
 
-        self.uuid = str(uuid.uuid4())
-        self.tmpdir = tempfile.mkdtemp(self.uuid)
+        self.db_path = "/tmp/ambry-test-{}.db".format(str(uuid.uuid4()))
+        self.dsn = "sqlite:///{}".format(self.db_path)
 
-        self.delete_tmpdir = True
-
-        #self.dsn = "sqlite:///{}/test.db".format(self.tmpdir)
-
-        self.dsn = 'sqlite://'
+        self.dsn = "sqlite://"
 
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
+
+    def tearDown(self):
+        super(Test, self).tearDown()
+
+        import os
+
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+
 
     def test_dataset_basic(self):
         """Basic operations on datasets"""
@@ -32,9 +37,11 @@ class Test(TestBase):
         from ambry.orm.exc import ConflictError
         from ambry.identity import DatasetNumber
 
-        db = Database(self.dsn)
+        print 'AAAA'
+        db = Database(self.dsn, echo = False)
+        print 'BBB'
         db.open()
-
+        print 'CCCC'
         ##
         ## Creating and conflicts
         ##

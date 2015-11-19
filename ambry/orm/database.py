@@ -222,7 +222,7 @@ class Database(object):
     def open(self):
         """ Ensure the database exists and is ready to use. """
 
-        # Creates the session
+        # Creates the session, connection and engine
         self.session
 
         if not self.exists():
@@ -291,7 +291,6 @@ class Database(object):
                 pass
 
         self.commit()
-        self.close()
 
         # Delete all of the data
         for tbl in reversed(self.metadata.sorted_tables):
@@ -304,7 +303,8 @@ class Database(object):
             os.remove(self.path)
         else:
             self.commit()
-            self.close()
+            self.close_session()
+            self.close_connection()
 
             # On postgres, this usually just locks up.
             for tbl in reversed(self.metadata.sorted_tables):
@@ -360,12 +360,10 @@ class Database(object):
             # But they are expedient. For Postgres, it puts the library
             # tables in the Library schema.
             if self._schema:
-                orig_schemas[table] = it.schema
+                orig_schemas[it] = it.schema
                 it.schema = self._schema
 
             it.create(bind=self.engine)
-
-        self.commit()
 
         # We have to put the schemas back because when installing to a warehouse.
         # the same library classes can be used to access a Sqlite database, which
@@ -378,7 +376,6 @@ class Database(object):
 
     def _add_config_root(self):
         """ Adds the root dataset, which holds configuration values for the database. """
-
 
         try:
             self.session.query(Dataset).filter_by(id=ROOT_CONFIG_NAME).one()

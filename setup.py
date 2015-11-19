@@ -151,7 +151,7 @@ class Docker(Command):
             (out, err) = proc.communicate()
             d = json.loads(out)
 
-            self.spawn(['docker', 'tag', d[0]['Id'], 'civicknowledge/ambry:{}'.format(__version__)])
+            self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/ambry:{}'.format(__version__)])
 
         if self.launch:
             from ambry import get_library
