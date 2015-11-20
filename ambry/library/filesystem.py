@@ -7,7 +7,7 @@
 from os.path import join, isdir
 from os import makedirs
 
-class LibraryFilesystem():
+class LibraryFilesystem(object):
     """Build directory names from the filesystem entries in the run configuration
 
     Each of the method will return a directory based on an entry in the configuration. The

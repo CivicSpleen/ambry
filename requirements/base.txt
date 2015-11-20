@@ -19,7 +19,7 @@ lockfile==0.10.2
 Markdown==2.6.2
 MarkupSafe==0.23
 meta==0.2.4
-nltk==3.0.2
+nltk==3.1
 numpy==1.9.2
 oauth2client==1.4.12
 pandas<=0.15.1

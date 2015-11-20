@@ -2,9 +2,9 @@
 import logging
 from ambry.util import get_logger
 
-from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend, PostgreSQLSearchBackend
-
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
+
+from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend,PostgreSQLSearchBackend
 
 # All backends.
 BACKENDS = {
@@ -12,6 +12,11 @@ BACKENDS = {
     'sqlite': SQLiteSearchBackend,
     'postgresql+psycopg2': PostgreSQLSearchBackend
 }
+
+
+
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
+
 
 
 class Search(object):

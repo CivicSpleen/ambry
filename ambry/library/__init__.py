@@ -20,6 +20,7 @@ from requests.exceptions import HTTPError
 from ambry.bundle import Bundle
 from ambry.dbexceptions import ConfigurationError
 from ambry.identity import Identity, ObjectNumber, NotObjectNumberError, NumberServer, DatasetNumber
+
 from ambry.library.search import Search
 from ambry.orm import Partition, File, Config
 from ambry.orm.database import Database
@@ -33,7 +34,6 @@ from six import string_types
 from .filesystem import LibraryFilesystem
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
-
 global_library = None
 
 def new_library(config=None):
