@@ -55,7 +55,7 @@ class Config(Base):
 
     @property
     def dotted_key(self):
-        return "{}.{}.{}".format(self.group, self.type, self.key)
+        return "{}.{}.{}".format(self.type,self.group,self.key)
 
     def update_sequence_id(self, session, dataset):
         assert dataset.vid == self.d_vid

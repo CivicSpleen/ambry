@@ -68,7 +68,6 @@ def config_edit(args, l, rc):
     from ambry.dbexceptions import ConfigurationError
     from ambry.util import AttrDict
 
-
     edit_args = ' '.join(args.args)
 
     if args.yaml or args.json:

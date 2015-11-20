@@ -1334,9 +1334,6 @@ Caster Code
                     df.remove()
 
 
-
-
-
         def not_final_or_delete(s):
             import zlib
 
@@ -1383,8 +1380,15 @@ Caster Code
                 args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
 
                 pool = self.library.process_pool
+
                 try:
-                    pool.map(ingest_mp, args)
+                    result = pool.map_async(ingest_mp, args)
+
+                    pool.close()
+                    pool.join()
+
+                    print '!!!', result.get()
+
                 except KeyboardInterrupt:
                     self.log('Got keyboard interrrupt; terminating workers')
                     pool.terminate()
@@ -1457,6 +1461,7 @@ Caster Code
 
             with self.progress_logging(lambda: ('Downloading {}', (source.url,)), 10):
                 try:
+
                     s = get_source(
                         source.spec, self.library.download_cache,
                         clean=force, account_accessor=self.library.account_acessor)
@@ -1495,6 +1500,8 @@ Caster Code
         self.log('Ingested: {}'.format(source.datafile.path))
         source.state = source.STATES.INGESTED
         self.commit()
+
+        return source.name
 
     def _ingest_update_tables(self, sources):
         # Do these updates, even if we skipped ingestion, so that the source tables will be generated if they

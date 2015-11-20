@@ -79,6 +79,7 @@ class Library(object):
         lcsp.sync()
 
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
+
         if search:
             self._search = Search(self, search)
         else:

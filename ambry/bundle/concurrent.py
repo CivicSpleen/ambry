@@ -7,6 +7,17 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 library = None  # GLobal library object
+import atexit
+import os
+
+def concurrent_at_exit():
+    print 'HERE!!! EXITING',os.getpid()
+
+def sigterm_handler(_signo, _stack_frame):
+    import sys
+    print "TERMINATE", os.getpid()
+
+    return sys.exit(0)
 
 
 def _MPBundleMethod(f, args):
@@ -19,11 +30,6 @@ def _MPBundleMethod(f, args):
     :return:
     """
     import traceback
-    import signal
-
-    # Have the child processes ignore the keyboard interrupt, and other signals. Instead, the parent will
-    # catch these, and clean up the children.
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     args = list(args)
     bundle_vid = args[0]
@@ -45,7 +51,7 @@ def _MPBundleMethod(f, args):
     except Exception as e:
 
         tb = traceback.format_exc()
-        b.error('Subprocess raised an exception: {}'.format(e), False)
+        b.error('Subprocess {} raised an exception: {}'.format(os.getpid(), e), False)
         b.error(tb, False)
 
         raise
@@ -57,11 +63,9 @@ def MPBundleMethod(f, *args, **kwargs):
 
     return decorator(_MPBundleMethod, f)  # Preserves signature
 
-
 def alt_init(l):
     global library
     library = l
-
 
 def init_library(database_dsn, accounts_password):
     """Child initializer, setup in Library.process_pool"""
@@ -70,6 +74,15 @@ def init_library(database_dsn, accounts_password):
     from ambry.run import get_runconfig
 
     import os
+    import signal
+
+    #atexit.register(concurrent_at_exit)
+
+    # Have the child processes ignore the keyboard interrupt, and other signals. Instead, the parent will
+    # catch these, and clean up the children.
+    #signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    #signal.signal(signal.SIGTERM, sigterm_handler)
 
     os.environ['AMBRY_DB'] = database_dsn
     os.environ['AMBRY_PASSWORD'] = accounts_password

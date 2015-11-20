@@ -4,7 +4,7 @@
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
-from os.path import join, dirname, isdir
+from os.path import join, isdir
 from os import makedirs
 
 class LibraryFilesystem():
@@ -13,7 +13,6 @@ class LibraryFilesystem():
     Each of the method will return a directory based on an entry in the configuration. The
     directory will be created with makedirs.
     """
-
 
     def __init__(self,  config):
 

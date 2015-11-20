@@ -45,6 +45,7 @@ def bundle_command(args, rc):
 
     if args.processes:
         args.multi = args.processes
+        l.processes = args.processes
 
     try:
         globals()['bundle_' + args.subcommand](args, l, rc)
@@ -717,9 +718,6 @@ def bundle_sync(args, l, rc):
 def bundle_ingest(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
-
-    # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l, print_loc=False).cast_to_subclass()
 
     if not args.force and not args.table and not args.source:
         check_built(b)
@@ -1508,7 +1506,7 @@ def bundle_docker(args, l, rc):
     if args.detach:
         cmd_args += ['-d']
 
-    else:
+    if not args.detach and not bambry_cmd:
         cmd_args += '--rm -t -i'.split()
 
     cmd_args += ['-e', 'AMBRY_DB={}'.format(l.database.dsn)]
