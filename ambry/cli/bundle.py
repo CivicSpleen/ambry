@@ -1529,8 +1529,8 @@ def bundle_docker(args, l, rc):
                        b.identity.vid, ' '.join(bambry_cmd_args),  bambry_cmd)]
 
     if args.version:
-        import ambry.meta
-        cmd_args += ['civicknowledge/ambry:{}'.format(ambry.meta.__version__)]
+        import ambry._meta
+        cmd_args += ['civicknowledge/ambry:{}'.format(ambry._meta.__version__)]
     else:
         cmd_args += ['civicknowledge/ambry']
 
