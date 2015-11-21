@@ -1494,12 +1494,10 @@ def bundle_test(args, l, rc):
 
     b.run_tests(args.tests)
 
-
 def bundle_docker(args, l, rc):
     import os
 
     bambry_cmd = ' '.join(args.args)
-
 
     cmd_args = ['docker', 'run']
 
@@ -1508,6 +1506,11 @@ def bundle_docker(args, l, rc):
 
     if not args.detach and not bambry_cmd:
         cmd_args += '--rm -t -i'.split()
+
+    try:
+        cmd_args += (rc.docker.args).split()
+    except KeyError:
+        pass
 
     cmd_args += ['-e', 'AMBRY_DB={}'.format(l.database.dsn)]
     cmd_args += ['-e', 'AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password)]

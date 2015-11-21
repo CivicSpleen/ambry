@@ -27,3 +27,18 @@ The AMBRY_DB value can be any valid Ambry database DSN.
 We usually use the [official postgres release.](https://hub.docker.com/_/postgres/), which can be run with:
 
     docker run --name ambry_db -p 5432:5432 -e POSTGRES_PASSWORD=ambry -e POSTGRES_USER=ambry -d postgres
+    
+## Caches
+
+It is valuable to cache downloads, and in a docker environment, doing so requires a persistent storage for the download
+cache. 
+
+Create a docker volume container:
+
+    $ docker create -v  /var/ambry/downloads -v /data/downloads:/var/ambry/downloads \
+      --name downloads ubuntu /bin/true
+  
+Where "/data/downloads" is a directory on the docker host. This command will create a new container names 
+'downloads' to hold the data. 
+
+Then, when running a container, include `--volumes-from downloads` to attach the volume into the new container. 
