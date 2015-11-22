@@ -40,6 +40,7 @@ def _CaptureException(f, *args, **kwargs):
     try:
         return f(*args, **kwargs)
     except Exception as e:
+        raise
         orig_exc = e
         print "Got exception: ", e
         if b.capture_exceptions:
@@ -1391,6 +1392,7 @@ Caster Code
         self.state = self.STATES.INGESTED
         self.commit()
 
+        self.log("Done ingesting")
         return True
 
     def _ingest_sources(self, sources, force=False):
@@ -1662,6 +1664,7 @@ Caster Code
             return False
 
         self.state = self.STATES.BUILDING
+        self.commit()
 
 
         return True
@@ -1727,17 +1730,15 @@ Caster Code
 
         return True
 
-    def post_run(self, phase='build'):
+    def post_run(self):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
 
-        self.library.search.index_bundle(self, force=True)
-
-        self.state = phase + '_done'
-
+        self.state = self.STATES.BUILT
         self.commit()
-        self.log('---- Finished phase {} ---- '.format(phase))
+
+        self.log('---- Finished Building ---- ')
 
         return True
 
@@ -1775,15 +1776,18 @@ Caster Code
             self.log_pipeline(pl)
 
             try:
+
+                source_name = source.spec.name # In case the source drops out of the session, which is does.
                 with self.progress_logging(lambda: ('Run source {}: {} rows, {} rows/sec',
-                                                    (source.spec.name,) + pl.sink.report_progress()), 10):
+                                                    (source_name,) + pl.sink.report_progress()), 10):
 
                     pl.run()
             except:
                 self.log_pipeline(pl)
                 raise
 
-            self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
+            if self.multi:
+                self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
 
             self.commit()
 
@@ -1815,6 +1819,7 @@ Caster Code
                 return
 
         except Exception as e:
+            raise
             self.error("Failed to build source '{}'; {}".format(source.name, e))
             source.state = source.state + ('_error' if not self.state.endswith('_error') else '')
             self.commit()
@@ -2105,6 +2110,9 @@ Caster Code
         return self.finalize()
 
     def finalize(self):
+
+        self.library.search.index_bundle(self, force=True)
+
         self.state = self.STATES.FINALIZED
         self.commit()
         self.finalize_write_bundle_file()

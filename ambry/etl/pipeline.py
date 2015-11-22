@@ -1633,7 +1633,6 @@ class WriteToPartition(Pipe, PartitionWriter):
 
     def process_body(self, row):
 
-
         self._count += 1
 
         pname = row[self.p_name_index]
@@ -1667,7 +1666,8 @@ class WriteToPartition(Pipe, PartitionWriter):
             self.bundle.commit()
 
             if p.datafile.exists:
-                print 'HERE!!!!'
+                p.datafile.remove()
+                p.datafile.close()
 
             writer = p.datafile.writer
 
