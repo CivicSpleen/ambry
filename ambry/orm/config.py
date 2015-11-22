@@ -141,7 +141,7 @@ class ConfigTypeGroupAccessor(object):
                     d_vid=self._dataset.vid, type=self._type_name,
                     group=self._group_name, key=k, value=v)
 
-                config.update_sequence_id(self._dataset.session, self._dataset)
+                config.update_sequence_id(self._session, self._dataset)
 
                 self._configs[k] = config
                 self._session.add(config)
@@ -247,3 +247,50 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
             return datetime.fromtimestamp(self.state.lasttime)
         except TypeError:
             return None
+
+class ProcessConfigGroupAccessor(ConfigGroupAccessor):
+    """A config group acessor for the build group, which can calculate values and format times"""
+
+    def __init__(self, dataset, type_name):
+        from ambry.orm import Dataset
+        import os
+
+        self._vid = dataset.vid
+        self._db  = dataset._database
+        self._conn, self._session = self._db.alt_session()
+        self._d_vid = dataset.vid
+
+        ds = self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
+
+        super(ProcessConfigGroupAccessor, self).__init__(ds, type_name)
+
+        self._pid = os.getpid()
+
+    def __del__(self):
+        pass
+        #self._session.close()
+        if self._connection:
+            self._connection.close()
+
+    def commit(self):
+        from ambry.orm import Dataset
+        self._session.commit()
+
+        if True: # Maybe don't need to do this?
+            self._session.close()
+            _, self._session = self._db.alt_session(self._conn)
+            self._dataset = self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
+
+
+    def exception(self, e):
+        pass
+
+    @property
+    def activity(self):
+        return self[self._pid].activity
+
+
+    def set_activity(self, v):
+        self[self._pid].activity = v
+        self.commit()
+

@@ -40,29 +40,10 @@ def _CaptureException(f, *args, **kwargs):
     try:
         return f(*args, **kwargs)
     except Exception as e:
-        raise
-        orig_exc = e
-        print "Got exception: ", e
+
         if b.capture_exceptions:
-            try:
-                b.commit()
-            except Exception as e:
-                # Hell, I don't know ... There seem to be a
-                print "Got exception trying to clear the exception: ", e
-                try:
-                    b.close()
-                except Exception as e:
-                    # Really, this is horrible.
-                    print "Oh fer #$#$ sakes: ", e
-                    pass
-
-            try:
-                b.exception(e)
-                b.commit()
-            except Exception:
-                print 'Got another: ', e
-
-            raise LoggedException(orig_exc, b)
+            b.exception(e)
+            raise LoggedException(e, b)
         else:
             raise
 
@@ -229,11 +210,9 @@ class Bundle(object):
 
             self.dataset.config.requirements[module_name].url = pip_name
 
-        self.commit()
 
         python_dir = self._library.filesystem.python()
         sys.path.append(python_dir)
-
 
 
     def commit(self):
@@ -1129,7 +1108,7 @@ Caster Code
 
         self.state = self.STATES.SYNCED
         self.log('---- Synchronized ----')
-        self.dataset.commit()
+        self.commit()
 
         self.library.search.index_bundle(self, force=True)
 
@@ -1349,7 +1328,6 @@ Caster Code
         import zlib
 
         self.state = self.STATES.INGESTING
-        self.commit()
 
         # Clear out all ingested files that are malformed
         for s in self.sources:
@@ -1391,7 +1369,6 @@ Caster Code
             self.record_stage_state(self.STATES.INGESTING, stage)
 
         self.state = self.STATES.INGESTED
-        self.commit()
 
         self.log("Done ingesting")
         return True
@@ -1399,36 +1376,32 @@ Caster Code
     def _ingest_sources(self, sources, force=False):
         """Ingest a set of sources, usually for one stage"""
         from concurrent import ingest_mp
-        try:
-            self.state = self.STATES.INGESTING
 
-            downloadable_sources = [s for s in sources if force or
-                                    (s.is_processable and not s.is_ingested and not s.is_built)]
+        self.state = self.STATES.INGESTING
 
-            if self.multi:
-                args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
+        downloadable_sources = [s for s in sources if force or
+                                (s.is_processable and not s.is_ingested and not s.is_built)]
 
-                pool = self.library.process_pool(limited_run=self.limited_run)
+        if self.multi:
+            args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
 
-                try:
-                    result = pool.map_async(ingest_mp, args)
+            pool = self.library.process_pool(limited_run=self.limited_run)
 
-                    pool.close()
-                    pool.join()
+            try:
+                result = pool.map_async(ingest_mp, args)
+
+                pool.close()
+                pool.join()
 
 
-                except KeyboardInterrupt:
-                    self.log('Got keyboard interrrupt; terminating workers')
-                    pool.terminate()
-            else:
-                for source in downloadable_sources:
-                    self._ingest_source(source, force)
+            except KeyboardInterrupt:
+                self.log('Got keyboard interrrupt; terminating workers')
+                pool.terminate()
+        else:
+            for source in downloadable_sources:
+                self._ingest_source(source, force)
 
-            return True
-
-        except Exception as e:
-            self.commit()
-            raise
+        return True
 
     def _ingest_source(self, source, force=None):
         """Ingest a single source"""
@@ -1458,7 +1431,6 @@ Caster Code
 
         self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
         source.state = source.STATES.INGESTING
-        self.commit()
 
         s = None
 
@@ -1466,7 +1438,6 @@ Caster Code
             source.update_table()  # Generate the source tables.
             self.log('Ingested partition: {}'.format(source.datafile.path))
             source.state = source.STATES.INGESTED
-            self.commit()
 
             return
 
@@ -1514,7 +1485,7 @@ Caster Code
         else:
             self.log('Not an ingestiable source: {}'.format(source.name))
             source.state = source.STATES.NOTINGESTABLE
-            self.commit()
+
             return
 
         with self.progress_logging(lambda: ('Ingesting {}: {} {} of {}, rate: {}',
@@ -1527,7 +1498,6 @@ Caster Code
 
         self.log('Ingested: {}'.format(source.datafile.path))
         source.state = source.STATES.INGESTED
-        self.commit()
 
         return source.name
 
@@ -1665,8 +1635,6 @@ Caster Code
             return False
 
         self.state = self.STATES.BUILDING
-        self.commit()
-
 
         return True
 
@@ -1737,7 +1705,6 @@ Caster Code
         during the build."""
 
         self.state = self.STATES.BUILT
-        self.commit()
 
         self.log('---- Finished Building ---- ')
 
@@ -1765,7 +1732,6 @@ Caster Code
         pl = self.pipeline(source)
 
         source.state = self.STATES.BUILDING
-        self.commit()
 
         try:
 
@@ -1812,7 +1778,6 @@ Caster Code
             self.log_pipeline(pl)
 
             source.state = self.STATES.BUILT
-            self.commit()
 
             if pl.stopped:
                 # Do something when the pipe has stopped?
@@ -1823,7 +1788,6 @@ Caster Code
             raise
             self.error("Failed to build source '{}'; {}".format(source.name, e))
             source.state = source.state + ('_error' if not self.state.endswith('_error') else '')
-            self.commit()
 
             raise
 
@@ -2115,7 +2079,6 @@ Caster Code
         self.library.search.index_bundle(self, force=True)
 
         self.state = self.STATES.FINALIZED
-        self.commit()
         self.finalize_write_bundle_file()
         return True
 

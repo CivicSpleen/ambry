@@ -219,6 +219,13 @@ class Database(object):
 
         return self._session
 
+    def alt_session(self, conn=None):
+        """Create an alternate session from a new connection"""
+
+        conn = self.engine.connect() if not conn else conn
+
+        return conn, self.Session(bind=conn)
+
     def open(self):
         """ Ensure the database exists and is ready to use. """
 
@@ -271,6 +278,9 @@ class Database(object):
         self.create()
 
         self.commit()
+
+    def clean_root(self):
+        pass
 
     def drop(self):
 

@@ -508,9 +508,9 @@ class ConfigAccessor(object):
         >>> ds.process.build.bar = [5,6,7,8]
         """
 
-        from .config import ConfigGroupAccessor
+        from .config import ProcessConfigGroupAccessor
 
-        return ConfigGroupAccessor(self.dataset, 'process')
+        return ProcessConfigGroupAccessor(self.dataset, 'process')
 
     @property
     def metadata(self):
