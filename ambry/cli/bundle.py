@@ -1560,6 +1560,9 @@ def bundle_docker(args, l, rc):
 
             bambry_cmd_args = []
 
+            if args.limited_run:
+                bambry_cmd_args.append('-L')
+
             if args.multi:
                 bambry_cmd_args.append('-m')
 
@@ -1569,9 +1572,15 @@ def bundle_docker(args, l, rc):
             envs.append('AMBRY_COMMAND=bambry -i {} {} {}'.format(
                 b.identity.vid, ' '.join(bambry_cmd_args), bambry_cmd))
 
+            prt("Docker Run: {}", envs[-1])
+
             detach = True
         else:
             detach = False
+
+        if args.limited_run:
+            envs.append('AMBRY_LIMITED_RUN=1')
+
 
         if args.version:
             import ambry._meta
@@ -1596,6 +1605,8 @@ def bundle_docker(args, l, rc):
             environment=envs,
             host_config=host_config
         )
+
+        print kwargs
 
         r = client.create_container(**kwargs)
 

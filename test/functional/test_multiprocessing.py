@@ -88,7 +88,7 @@ class Test(TestBase):
 
         N = 40
 
-        pool = self.library.process_pool
+        pool = self.library.process_pool()
         args = [ (ds.vid, i) for i in range(1,N+1)]
 
         names = pool.map(run_mp, args)
@@ -129,7 +129,7 @@ class Test(TestBase):
         self.assertIsNotNone(db.dataset(self.d_vid))
         self.assertIsNotNone(self.library.bundle(self.d_vid))
 
-        pool = self.library.process_pool
+        pool = self.library.process_pool()
 
         for mp_f, ds_attr in ((run_mp_tables, 'tables'),
                               (run_mp_sourcetables, 'source_tables'),
@@ -173,7 +173,7 @@ class Test(TestBase):
         b = b.cast_to_subclass()
         b.commit()
 
-        pool = self.library.process_pool
+        pool = self.library.process_pool()
 
         names = pool.map(run_mp_combined, [(ds.vid, i) for i in range(1, N + 1)])
 

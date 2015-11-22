@@ -125,8 +125,9 @@ class Bundle(object):
 
         self.multi = None  # Number of multiprocessing processes
         self.is_subprocess = False  # Externally set in child processes.
-        self.is_remote_process = os.getenv('AMBRY_IS_REMOTE', False) # Set externally when run as a slave process.
 
+        # AMBRY_IS_REMOTE is set in the docker file for the builder container
+        self.is_remote_process = os.getenv('AMBRY_IS_REMOTE', False)
         assert bool(library)
 
         self._log_level = logging.INFO
@@ -147,8 +148,8 @@ class Bundle(object):
         self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
 
         self.stage = None  # Set to the current ingest or build stage
-        self.limited_run = False  # Set to true to trigger bundle-specific limits on # of rows processed
 
+        self.limited_run = False
         self.capture_exceptions = False  # If set to true (in CLI), will catch and log exceptions internally.
         self.exit_on_fatal = True
 
@@ -1407,7 +1408,7 @@ Caster Code
             if self.multi:
                 args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
 
-                pool = self.library.process_pool
+                pool = self.library.process_pool(limited_run=self.limited_run)
 
                 try:
                     result = pool.map_async(ingest_mp, args)
@@ -1705,7 +1706,7 @@ Caster Code
             if self.multi:
                 args = [(self.identity.vid, source.vid, force) for source in sources]
 
-                pool = self.library.process_pool
+                pool = self.library.process_pool(limited_run=self.limited_run)
 
                 try:
                     pool.map(build_mp, args)

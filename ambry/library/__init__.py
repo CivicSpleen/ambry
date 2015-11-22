@@ -727,8 +727,8 @@ class Library(object):
 
         return bundles
 
-    @property
-    def process_pool(self):
+
+    def process_pool(self, limited_run = False):
         """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
 
         import multiprocessing
@@ -741,4 +741,4 @@ class Library(object):
 
         self.logger.info('Starting MP pool with {} processors'.format(cpus))
         return multiprocessing.Pool(processes=cpus, initializer=init_library,
-                                    initargs=[self.database.dsn, self._account_password])
+                                    initargs=[self.database.dsn, self._account_password, limited_run])

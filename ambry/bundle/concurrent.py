@@ -10,15 +10,6 @@ library = None  # GLobal library object
 import atexit
 import os
 
-def concurrent_at_exit():
-    print 'HERE!!! EXITING',os.getpid()
-
-def sigterm_handler(_signo, _stack_frame):
-    import sys
-    print "TERMINATE", os.getpid()
-
-    return sys.exit(0)
-
 
 def _MPBundleMethod(f, args):
     """
@@ -40,6 +31,7 @@ def _MPBundleMethod(f, args):
         b = b.cast_to_subclass()
         b.multi = True  # In parent it is a number, in child, just needs to be true to get the right logger template
         b.is_subprocess = True
+        b.limited_run = os.getenv('AMBRY_LIMITED_RUN', False)
         args[0] = b
     except:
         print('Exception in feching bundle in multiprocessing run.')
@@ -67,7 +59,7 @@ def alt_init(l):
     global library
     library = l
 
-def init_library(database_dsn, accounts_password):
+def init_library(database_dsn, accounts_password, limited_run = False):
     """Child initializer, setup in Library.process_pool"""
     global library
     from ambry.library import new_library
@@ -86,6 +78,7 @@ def init_library(database_dsn, accounts_password):
 
     os.environ['AMBRY_DB'] = database_dsn
     os.environ['AMBRY_PASSWORD'] = accounts_password
+    os.environ['AMBRY_LIMITED_RUN'] = 1 if limited_run else 0
 
     library = new_library(get_runconfig())
 
