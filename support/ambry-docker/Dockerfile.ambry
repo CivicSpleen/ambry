@@ -3,8 +3,10 @@ FROM civicknowledge/ambry-base
 
 MAINTAINER Eric Busboom "eric@civicknowledge.org"
 
-COPY . /var/ambry/src
-WORKDIR /var/ambry/src
+ENV AMBRY_IS_REMOTE 1
+
+COPY . /opt/ambry/
+WORKDIR /opt/ambry/
 
 RUN python setup.py install
 
@@ -12,7 +14,6 @@ WORKDIR /var/ambry
 
 VOLUME /var/ambry
 
-ADD support/ambry-docker/ambry-init.sh /var/ambry/ambry-init.sh
 
 RUN mkdir -p /var/ambry/source
 
@@ -21,8 +22,9 @@ RUN echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
 
 # The importing doesn't seem to work. It runs properly, it seems, but
 # there is nothing in the library when the container is run.
-# RUN ambry import /var/ambry/src/test/bundle_tests/
+# RUN ambry import /opt/ambry/test/bundle_tests/
 
+# Could probabaly run this out of the surrport directory too.
+ADD support/ambry-docker/ambry-init.sh /opt/ambry/ambry-init.sh
 
-ADD support/ambry-docker/ambry-init.sh /var/ambry/ambry-init.sh
-CMD bash ambry-init.sh
+CMD bash /opt/ambry/ambry-init.sh

@@ -1,5 +1,4 @@
 
-
 To build the docker container, run, from the root of the distribution: 
 
     $ python setup.py docker-build
@@ -21,7 +20,6 @@ If you want to run another database, use `-e AMBRY_DB`
 
 The AMBRY_DB value can be any valid Ambry database DSN. 
 
-
 ## Database
 
 We usually use the [official postgres release.](https://hub.docker.com/_/postgres/), which can be run with:
@@ -35,10 +33,11 @@ cache.
 
 Create a docker volume container:
 
-    $ docker create -v  /var/ambry/downloads -v /data/downloads:/var/ambry/downloads \
-      --name downloads ubuntu /bin/true
+    $ docker create -v /data/ambry:/var/ambry --name ambry_fs ubuntu /bin/true
+  
+
   
 Where "/data/downloads" is a directory on the docker host. This command will create a new container names 
 'downloads' to hold the data. 
 
-Then, when running a container, include `--volumes-from downloads` to attach the volume into the new container. 
+Then, when running a container, include `--volumes-from ambry_fs` to attach the volume into the new container. 

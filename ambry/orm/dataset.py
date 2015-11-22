@@ -110,6 +110,9 @@ class Dataset(Base):
     def rollback(self):
         self._database.rollback()
 
+    def rollback(self):
+        self._database.close()
+
     @property
     def session(self):
         return self._database.session

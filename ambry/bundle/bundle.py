@@ -32,17 +32,36 @@ BUILD_LOG_FILE = 'log/build_log{}.txt'
 def _CaptureException(f, *args, **kwargs):
     """Decorator implementation for capturing exceptions."""
     from ambry.dbexceptions import LoggedException
+    from sqlalchemy.exc import InvalidRequestError
+    from sqlalchemy.orm.exc import DetachedInstanceError
 
     b = args[0]  # The 'self' argument
 
     try:
         return f(*args, **kwargs)
     except Exception as e:
-
+        orig_exc = e
+        print "Got exception: ", e
         if b.capture_exceptions:
-            b.exception(e)
-            b.commit()
-            raise LoggedException(e, b)
+            try:
+                b.commit()
+            except Exception as e:
+                # Hell, I don't know ... There seem to be a
+                print "Got exception trying to clear the exception: ", e
+                try:
+                    b.close()
+                except Exception as e:
+                    # Really, this is horrible.
+                    print "Oh fer #$#$ sakes: ", e
+                    pass
+
+            try:
+                b.exception(e)
+                b.commit()
+            except Exception:
+                print 'Got another: ', e
+
+            raise LoggedException(orig_exc, b)
         else:
             raise
 
@@ -105,6 +124,7 @@ class Bundle(object):
 
         self.multi = None  # Number of multiprocessing processes
         self.is_subprocess = False  # Externally set in child processes.
+        self.is_remote_process = os.getenv('AMBRY_IS_REMOTE', False) # Set externally when run as a slave process.
 
         assert bool(library)
 
@@ -216,6 +236,9 @@ class Bundle(object):
 
     def commit(self):
         return self.dataset.commit()
+
+    def close(self):
+        return self.dataset.close()
 
     @property
     def session(self):
@@ -483,10 +506,10 @@ class Bundle(object):
                 source_url = self.library.filesystem.source(self.identity.cache_key)
 
             try:
-
                 self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
-                self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
+                if not self.is_remote_process:
+                    self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
                 source_url = self.library.filesystem.source(self.identity.cache_key)
                 self._source_fs = fsopendir(source_url)
 
@@ -1047,7 +1070,10 @@ Caster Code
                 self.error('Failed to run stage {}'.format(stage))
             self._run_events(TAG.AFTER_STAGE, stage)
 
-        self.post_run()
+        # Don't run if the caller specified a subset of sources or tables
+
+        if not sources and not tables:
+            self.post_run()
 
         if not sources and not tables:
             self._run_events(TAG.AFTER_RUN)
@@ -1387,7 +1413,6 @@ Caster Code
                     pool.close()
                     pool.join()
 
-                    print '!!!', result.get()
 
                 except KeyboardInterrupt:
                     self.log('Got keyboard interrrupt; terminating workers')
@@ -1582,11 +1607,18 @@ Caster Code
                 columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in sources
                                  for i, col in enumerate(source.source_table.columns)]))
 
+                initial_count = len(t.columns)
+
                 for pos, name, datatype, desc in columns:
                     t.add_column(name=name, datatype=datatype, description=desc, update_existing=True)
 
-                self.log("Populated destination table '{}' from source table '{}' with {} columns"
-                         .format(t.name, source.source_table.name, len(columns)))
+                final_count = len(t.columns)
+
+                if final_count > initial_count:
+                    diff = final_count - initial_count
+
+                    self.log("Populated destination table '{}' from source table '{}' with {} columns"
+                             .format(t.name, source.source_table.name, diff))
 
         for i, source in enumerate(self.refs):
             try:

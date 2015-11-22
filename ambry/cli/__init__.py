@@ -29,6 +29,10 @@ global_logger = None  # Set in main()
 AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
 
 
+def prt_no_format(template, *args, **kwargs):
+    # global global_logger
+    print_(template)
+
 def prt(template, *args, **kwargs):
     # global global_logger
     print_(template.format(*args, **kwargs))
