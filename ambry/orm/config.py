@@ -289,7 +289,8 @@ class ProcessConfigGroupAccessor(ConfigGroupAccessor):
     def activity(self):
         return self[self._pid].activity
 
-
+    # I really want this to be a setter, but it doesn't seem to work with the overloaded __setattr__
+    # in ConfigGroupAcessor
     def set_activity(self, v):
         self[self._pid].activity = v
         self.commit()

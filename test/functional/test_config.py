@@ -200,6 +200,8 @@ library:
         ds.session.refresh(ds)
         self.assertEqual('foo', [ c.value for c in ds.configs if c.key == 'activity' ][0])
 
+        self.assertEqual('foo', pc.activity)
+
         pc.set_activity('bar')
 
         ds.session.refresh(ds)
