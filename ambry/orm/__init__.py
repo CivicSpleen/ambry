@@ -416,3 +416,4 @@ from ambry.orm.source_table import SourceColumn, SourceTable
 from ambry.orm.source import DataSource, TransientDataSource
 from ambry.orm.database import Database
 from ambry.orm.account import Account
+from ambry.orm.process import Process

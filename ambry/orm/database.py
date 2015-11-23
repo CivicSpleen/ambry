@@ -16,6 +16,7 @@ from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, Co
 from ambry.util import get_logger, parse_url_to_dict
 from . import Column, Partition, Table, Dataset, Config, File,\
     Code, ColumnStat, DataSource, SourceColumn, SourceTable
+from ambry.orm.process import Process
 
 from account import Account
 
@@ -219,12 +220,7 @@ class Database(object):
 
         return self._session
 
-    def alt_session(self, conn=None):
-        """Create an alternate session from a new connection"""
 
-        conn = self.engine.connect() if not conn else conn
-
-        return conn, self.Session(bind=conn)
 
     def open(self):
         """ Ensure the database exists and is ready to use. """
@@ -352,7 +348,7 @@ class Database(object):
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
-            ColumnStat, SourceTable, SourceColumn, DataSource, Account]
+            ColumnStat, SourceTable, SourceColumn, DataSource, Account, Process]
 
         try:
             self.drop()

@@ -228,8 +228,6 @@ class DataSourceBase(object):
     def is_built(self):
         return self.state == self.STATES.BUILT
 
-
-
     def update_table(self):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
@@ -288,7 +286,7 @@ class DataSource(DataSourceBase, Base, DictableMixin):
 
     __tablename__ = 'datasources'
 
-    vid = SAColumn('st_vid', String(17), primary_key=True)
+    vid = SAColumn('ds_vid', String(17), primary_key=True)
     sequence_id = SAColumn('ds_sequence_id', INTEGER)
 
     name = SAColumn('ds_name', Text)

@@ -1,4 +1,4 @@
-"""Object-Rlational Mapping classess, based on Sqlalchemy, for representing the
+"""Object-Relational Mapping classess, based on Sqlalchemy, for representing the
 dataset, partitions, configuration, tables and columns.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the

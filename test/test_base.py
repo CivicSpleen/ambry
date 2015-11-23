@@ -25,11 +25,15 @@ SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
 
 
 class TestBase(unittest.TestCase):
+
     def setUp(self):
         import uuid
 
         super(TestBase, self).setUp()
 
+        # WAARNING! This path and dsn is only used if it is explicitly referenced.
+        # Otherwise, the get_rc() will use a database specified in the
+        # test rc file.
         self.db_path = "/tmp/ambry-test-{}.db".format(str(uuid.uuid4()))
 
         self.dsn = "sqlite:///{}".format(self.db_path)
@@ -69,7 +73,7 @@ class TestBase(unittest.TestCase):
         orig_root = config.library.filesystem_root
         root_dir  = config.filesystem.test.format(root=orig_root)
 
-        dsn = config.database.get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
+        dsn = config.get('database',{}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
 
         cls._db_type = dbname
 
@@ -83,7 +87,6 @@ class TestBase(unittest.TestCase):
             with test_root.open('.ambry.yaml', 'w', encoding='utf-8', ) as f:
                 config.loaded = None
                 config.dump(f)
-
 
         return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
 

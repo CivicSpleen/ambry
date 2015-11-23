@@ -23,6 +23,7 @@ from ambry.dbexceptions import BuildError, BundleError, FatalError
 from ambry.orm import File
 import ambry.etl
 from ..util import get_logger, Constant
+from .process import ProcessLogger
 
 indent = '    '  # Indent for structured log output
 
@@ -104,13 +105,6 @@ class Bundle(object):
         self._library = library
         self._logger = None
 
-        self.multi = None  # Number of multiprocessing processes
-        self.is_subprocess = False  # Externally set in child processes.
-
-        # AMBRY_IS_REMOTE is set in the docker file for the builder container
-        self.is_remote_process = os.getenv('AMBRY_IS_REMOTE', False)
-        assert bool(library)
-
         self._log_level = logging.INFO
 
         self._errors = []
@@ -133,9 +127,16 @@ class Bundle(object):
         self.limited_run = False
         self.capture_exceptions = False  # If set to true (in CLI), will catch and log exceptions internally.
         self.exit_on_fatal = True
+        self.multi = None  # Number of multiprocessing processes
+        self.is_subprocess = False  # Externally set in child processes.
+        # AMBRY_IS_REMOTE is set in the docker file for the builder container
+        self.is_remote_process = os.getenv('AMBRY_IS_REMOTE', False)
+        assert bool(library)
 
         # Test class imported from the test.py file
         self.test_class = None
+
+        self.progress = ProgressLogger(self)
 
         self.init()
 
@@ -209,7 +210,6 @@ class Bundle(object):
             self._library.install_packages(module_name, pip_name, force=force)
 
             self.dataset.config.requirements[module_name].url = pip_name
-
 
         python_dir = self._library.filesystem.python()
         sys.path.append(python_dir)
@@ -667,88 +667,6 @@ class Bundle(object):
             sys.exit(1)
         else:
             raise FatalError(message)
-
-    def progress_logging(self, f, interval=2):
-        """Context manager to start and stop context logging.
-
-        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args)
-        :param interval: Frequency to call the function, in seconds.
-        :return:
-
-        """
-
-        bundle = self
-
-        class _ProgressLogger(object):
-
-            def __enter__(self):
-                bundle.start_progress_logging(f, interval)
-
-            def __exit__(self, exc_type, exc_val, exc_tb):
-
-                bundle.stop_progress_logging()
-
-                if exc_val:
-                    return False
-                else:
-                    return True
-
-        return _ProgressLogger()
-
-    def start_progress_logging(self, f, interval=2):
-        """
-        Call the function ``f`` every ``interval`` seconds to produce a logging message to be passed
-        to self.log().
-
-        NOTE: This may cause problems with IO operations:
-
-            When a signal arrives during an I/O operation, it is possible that the I/O operation raises an exception
-            after the signal handler returns. This is dependent on the underlying Unix system's
-            semantics regarding interrupted system calls.
-
-        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args)
-        :param interval: Frequence to call the function, in seconds.
-        :return:
-        """
-
-        import signal
-
-        def handler(signum, frame):
-
-            r = f()
-
-            if isinstance(r, (tuple, list)):
-                try:
-                    self.log(r[0].format(*r[1]))
-                except IndexError:
-                    self.log(str(r) + ' (Bad log format)')  # Well, at least log something
-            else:
-                self.log(str(r) + ' ' + str(type(r)))
-
-            # Or, use signal.itimer()? Maybe, but this way, the handler will stop if there is
-            # an exception, rather than getting regular exceptions.
-            signal.alarm(interval)
-
-        old_handler = signal.signal(signal.SIGALRM, handler)
-
-        if not self._orig_alarm_handler:  # Only want the handlers from other outside sources
-            self._orig_alarm_handler = old_handler
-
-        signal.alarm(interval)
-
-    def stop_progress_logging(self):
-        """
-        Stop progress logging by removing the Alarm signal handler and canceling the alarm.
-        :return:
-        """
-
-        import signal
-
-        if self._orig_alarm_handler:
-            signal.signal(signal.SIGALRM, self._orig_alarm_handler)
-            self._orig_alarm_handler = None
-
-            signal.alarm(0)  # Cancel any currently active alarm.
 
     def init_log_rate(self, N=None, message='', print_rate=None):
         from ..util import init_log_rate as ilr
@@ -1458,7 +1376,7 @@ Caster Code
 
         elif source.is_downloadable:
 
-            with self.progress_logging(lambda: ('Downloading {}', (source.url,)), 10):
+            with self.progress.context(lambda: ('Downloading {}', (source.url,)), 10):
                 try:
 
                     s = get_source(
@@ -1745,7 +1663,7 @@ Caster Code
             try:
 
                 source_name = source.spec.name # In case the source drops out of the session, which is does.
-                with self.progress_logging(lambda: ('Run source {}: {} rows, {} rows/sec',
+                with self.progress.context(lambda: ('Run source {}: {} rows, {} rows/sec',
                                                     (source_name,) + pl.sink.report_progress()), 10):
 
                     pl.run()
@@ -1838,7 +1756,7 @@ Caster Code
 
         logger = lambda: ('Coalescing: {} {} of {}, rate: {}', parent.datafile.report_progress())
 
-        with parent.datafile.writer as w, self.progress_logging(logger, 10):
+        with parent.datafile.writer as w, self.progress.context(logger, 10):
 
             for seg in sorted(segments, key=lambda x: b(x.name)):
 
