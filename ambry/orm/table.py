@@ -257,7 +257,8 @@ class Table(Base, DictableMixin):
         # Use an Ordered Dict to make it friendly to creating CSV files.
 
         d = OrderedDict([( p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                         if p.key not in ['id','d_id','d_vid','dataset','columns','data', 'partitions', 'sources']])
+                         if p.key not in ['id','d_id','d_vid','dataset','columns','data',
+                                          'partitions', 'sources','process_records']])
 
         for k, v in six.iteritems(self.data):
             d['d_' + k] = v

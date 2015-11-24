@@ -22,7 +22,6 @@ class Test(TestBase):
     def tearDown(self):
         pass
 
-
     def run_bundle(self, name, reimport = False):
         """
         Ingest and build a bundle
@@ -49,7 +48,7 @@ class Test(TestBase):
         self.run_bundle('ingest.example.com-basic')
 
     def test_ingest_stages(self):
-        self.run_bundle('ingest.example.com-stages')
+        self.run_bundle('ingest.example.com-stages', reimport = True)
 
     def test_ingest_headerstypes(self):
         self.run_bundle('ingest.example.com-headerstypes')

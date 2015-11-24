@@ -120,8 +120,6 @@ class Bundle(object):
 
         self._identity = None
 
-        self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
-
         self.stage = None  # Set to the current ingest or build stage
 
         self.limited_run = False
@@ -136,8 +134,8 @@ class Bundle(object):
         # Test class imported from the test.py file
         self.test_class = None
 
-        self.progress = ProgressLogger(self)
-
+        self._progress = None
+        self._ps = None # Progress logger section, created as needed.
         self.init()
 
     def init(self):
@@ -289,6 +287,16 @@ class Bundle(object):
         # metadata substitution using Jinja
 
         return self.metadata.scalar_term(self.build_source_files.documentation.record_content)
+
+    @property
+    def progress(self):
+        """Returned a cached ProcessLogger to record build progress """
+
+        if not self._progress:
+            self._progress = ProcessLogger(self.dataset, self.logger)
+
+        return self._progress
+
 
     @property
     def partitions(self):
@@ -1257,7 +1265,6 @@ Caster Code
                 except (ResourceNotFoundError, zlib.error, IOError):
                     df.remove()
 
-
         def not_final_or_delete(s):
             import zlib
 
@@ -1275,14 +1282,13 @@ Caster Code
 
         for stage, g in groupby(sources, key):
             sources = [s for s in g if not_final_or_delete(s)]
-            if len(sources):
-                self.log('Ingesting {} sources in stage {}'.format(len(sources), stage))
-            else:
-                self.log('No sources left to ingest for stage {}'.format(stage))
+
+            if not len(sources):
+                self._ps.done('No sources remaining')
                 continue
 
             self._run_events(TAG.BEFORE_INGEST, stage)
-            self._ingest_sources(sources, force=force)
+            self._ingest_sources(sources, stage, force=force)
             self._run_events(TAG.AFTER_INGEST, stage)
             self.record_stage_state(self.STATES.INGESTING, stage)
 
@@ -1291,7 +1297,7 @@ Caster Code
         self.log("Done ingesting")
         return True
 
-    def _ingest_sources(self, sources, force=False):
+    def _ingest_sources(self, sources, stage, force=False ):
         """Ingest a set of sources, usually for one stage"""
         from concurrent import ingest_mp
 
@@ -1300,28 +1306,33 @@ Caster Code
         downloadable_sources = [s for s in sources if force or
                                 (s.is_processable and not s.is_ingested and not s.is_built)]
 
-        if self.multi:
-            args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
+        with self.progress.start('ingest',stage, item_total = len(sources)) as ps:
 
-            pool = self.library.process_pool(limited_run=self.limited_run)
+            if self.multi:
+                args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
 
-            try:
-                result = pool.map_async(ingest_mp, args)
+                pool = self.library.process_pool(limited_run=self.limited_run)
 
-                pool.close()
-                pool.join()
+                try:
+                    ps.add('ingesting multi process')
+                    result = pool.map_async(ingest_mp, args)
 
+                    pool.close()
+                    pool.join()
 
-            except KeyboardInterrupt:
-                self.log('Got keyboard interrrupt; terminating workers')
-                pool.terminate()
-        else:
-            for source in downloadable_sources:
-                self._ingest_source(source, force)
+                except KeyboardInterrupt:
+                    self.log('Got keyboard interrrupt; terminating workers')
+                    pool.terminate()
+                    raise
+            else:
+                ps.add('ingesting single process')
+                for i, source in enumerate(downloadable_sources):
+                    ps.add(source = source, item_count = i, state = 'running')
+                    self._ingest_source(source, ps, force)
 
-        return True
+            return True
 
-    def _ingest_source(self, source, force=None):
+    def _ingest_source(self, source, ps, force=None):
         """Ingest a single source"""
         from ambry_sources.sources import FixedSource, GeneratorSource
         from ambry_sources import get_source
@@ -1334,7 +1345,8 @@ Caster Code
             elif force:
                 source.datafile.remove()
             else:
-                self.log('Source {} already ingested, skipping'.format(source.name))
+                ps.update(message = 'Source {} already ingested, skipping'.format(source.name),
+                          state = 'skipped')
                 return
 
         if source.is_partition:
@@ -1344,19 +1356,19 @@ Caster Code
             except NotFoundError:
                 # Maybe it is an internal reference, in which case we can just delay
                 # until the partition is built
-                self.log("Not Ingesting {}: referenced partition '{}' does not exist".format(source.name, source.ref))
+                ps.update(message="Not Ingesting {}: referenced partition '{}' does not exist"
+                          .format(source.name, source.ref), state='skipped')
                 return
 
-        self.log('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
+        ps.update('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
         source.state = source.STATES.INGESTING
 
         s = None
 
         if source.reftype == 'partition':
             source.update_table()  # Generate the source tables.
-            self.log('Ingested partition: {}'.format(source.datafile.path))
+            ps.update(message='Ingested partition: {}'.format(source.datafile.path), state='done')
             source.state = source.STATES.INGESTED
-
             return
 
         elif source.reftype == 'generator':
@@ -1376,7 +1388,7 @@ Caster Code
 
         elif source.is_downloadable:
 
-            with self.progress.context(lambda: ('Downloading {}', (source.url,)), 10):
+            with self.progress.interval(lambda: ps.add_update('Downloading {}'.format(source.url),state='downloading'), 10):
                 try:
 
                     s = get_source(
@@ -1401,20 +1413,23 @@ Caster Code
                                   for c in source.source_table.columns]
 
         else:
-            self.log('Not an ingestiable source: {}'.format(source.name))
+            self.update(message='Not an ingestiable source: {}'.format(source.name),state='skipped')
             source.state = source.STATES.NOTINGESTABLE
 
             return
 
-        with self.progress_logging(lambda: ('Ingesting {}: {} {} of {}, rate: {}',
-                                            (source.spec.name,) + source.datafile.report_progress()), 10):
+        def dl_progress_f():
+            (desc, n_records, total, rate) = source.datafile.report_progress()
+            ps.update(message='Ingesting {}: {} {} of {}, rate: {}'
+                      .format(source.spec.name,desc, n_records, total, rate))
 
+        with self.progress.interval(lambda: ps.add_update(dl_progress_f,state='downloading'), 10):
             source.datafile.load_rows(s)
 
         source.update_table()  # Generate the source tables.
         source.update_spec()  # Update header_lines, start_line, etc.
 
-        self.log('Ingested: {}'.format(source.datafile.path))
+        ps.update(message='Ingested: {}'.format(source.datafile.path), state='done')
         source.state = source.STATES.INGESTED
 
         return source.name
@@ -1663,10 +1678,10 @@ Caster Code
             try:
 
                 source_name = source.spec.name # In case the source drops out of the session, which is does.
-                with self.progress.context(lambda: ('Run source {}: {} rows, {} rows/sec',
-                                                    (source_name,) + pl.sink.report_progress()), 10):
+                #with self.progress.context(lambda: ('Run source {}: {} rows, {} rows/sec',
+                #                                    (source_name,) + pl.sink.report_progress()), 10):
 
-                    pl.run()
+                pl.run()
             except:
                 self.log_pipeline(pl)
                 raise
@@ -1754,10 +1769,10 @@ Caster Code
         headers = None
         i = 1  # Row id.
 
-        logger = lambda: ('Coalescing: {} {} of {}, rate: {}', parent.datafile.report_progress())
+        #logger = lambda: ('Coalescing: {} {} of {}, rate: {}', parent.datafile.report_progress())
+        #, self.progress.context(logger, 10):
 
-        with parent.datafile.writer as w, self.progress.context(logger, 10):
-
+        with parent.datafile.writer as w:
             for seg in sorted(segments, key=lambda x: b(x.name)):
 
                 self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
@@ -1767,7 +1782,7 @@ Caster Code
                         w.insert_row((i,) + row[1:])
                         i += 1
 
-            self.debug(indent + 'Coalesced {} rows into '.format(i))
+                self.debug(indent + 'Coalesced {} rows into '.format(i))
 
         parent.finalize()
         self.log('Coalesced {}'.format(parent.name))

@@ -11,48 +11,94 @@ import platform
 from ambry.orm import Process
 from six import string_types
 
+class ProgressLoggingError(Exception):
+    pass
+
 class ProgressSection(object):
     """A handler of the records for a single routine or phase"""
 
-    def __init__(self, parent, session, **kwargs):
+    def __init__(self, parent, session, phase, stage, logger,  **kwargs):
+        import signal
+
         self._parent = parent
         self._pid = os.getpid()
         self._hostname = platform.node()
 
         self._session = session
+        self._logger = logger
 
-        self.add(log_action='start',**kwargs)
+        self._phase = phase
+        self._stage = stage
+
+        self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
+
+        self.rec = None
+
+        self._ai_rec_id = None # record for add_update
+
+        self._group = None
+        self._group = self.add(log_action='start',state='running', **kwargs)
 
     def __del__(self):
-        self._session.close()
+        if self._session:
+            self._session.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        from ambry.util import qualified_name
+        if exc_val:
+            self.add(
+                message = str(exc_val),
+                exception_class = qualified_name(exc_type),
+                exception_trace = str(exc_tb),
+
+            )
+            self.done("Failed in context with exception")
+            return False
+        else:
+            self.done("Successful context exit")
+            return True
 
     def augment_args(self,args, kwargs):
+
+        kwargs['pid'] = self._pid
+        kwargs['d_vid'] = self._parent._d_vid
+        kwargs['hostname'] = self._hostname
+        kwargs['phase'] = self._phase
+        kwargs['stage'] = self._stage
+        kwargs['group'] = self._group
+
+        if self._session is None:
+            raise ProgressLoggingError("Progress logging section is already closed")
+
         for arg in args:
             if isinstance(arg, string_types):
                 kwargs['message'] = arg
-
 
     def add(self, *args, **kwargs):
         """Add a new record to the section"""
 
         self.augment_args(args, kwargs)
 
-        kwargs['pid'] = self._pid
-        kwargs['d_vid'] = self._parent._d_vid
-        kwargs['hostname'] = self._hostname
         kwargs['log_action'] = kwargs.get('log_action', 'add')
+
         self.rec = Process(**kwargs)
+
         self._session.add(self.rec)
+        if self._logger:
+            self._logger.info(str(self.rec))
         self._session.commit()
+        self._ai_rec_id = None
+
+        return self.rec.id
 
     def update(self, *args, **kwargs):
         """Update the last section record"""
 
         self.augment_args(args, kwargs)
 
-        kwargs['pid'] = self._pid
-        kwargs['d_vid'] = self._parent._d_vid
-        kwargs['hostname'] = self._hostname
         kwargs['log_action'] = kwargs.get('log_action', 'update')
 
         if not self.rec:
@@ -62,37 +108,38 @@ class ProgressSection(object):
                 setattr(self.rec, k, v)
 
             self._session.merge(self.rec)
+            if self._logger:
+                self._logger.info(str(self.rec))
             self._session.commit()
 
+            self._ai_rec_id = None
+            return self.rec.id
 
-class ProcessLogger(object):
+    def add_update(self, *args, **kwargs):
+        """A records is added, then on subsequent calls, updated"""
 
-    def __init__(self, dataset):
+        if not self._ai_rec_id:
+            self._ai_rec_id = self.add(*args, **kwargs)
+        else:
+            au_save = self._ai_rec_id
+            self.update(*args,**kwargs)
+            self._ai_rec_id = au_save
 
-        self._vid = dataset.vid
-        self._db = dataset._database
-        self._d_vid = dataset.vid
+        return self._ai_rec_id
 
-        self._connection = self._db.engine.connect()
+    def done(self, *args, **kwargs):
 
-        self.Session = self._db.Session
+        start = self._session.query(Process).filter(Process.id == self._group).one()
+        start.state = 'Done'
 
-    def __del__(self):
-        if self._connection:
-            self._connection.close()
+        pr_id = self.add(*args, log_action='done', **kwargs)
 
-    def dataset(self):
-        from ambry.orm import Dataset
-        return self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
+        self._session = None
+        return pr_id
 
-    def _new_session(self):
-        return self._db.alt_session()
+class ProcessIntervals(object):
 
-    def start(self, **kwargs):
-        """Start a new routine, stage or phase"""
-        return ProgressSection(self, self.Session(bind=self._connection), **kwargs)
-
-    def context(self, f, interval=2):
+    def __init__(self, f, interval=2):
         """Context manager to start and stop context logging.
 
         :param f: A function to call. Returns either a string, or a tuple (format_string, format_args)
@@ -100,24 +147,21 @@ class ProcessLogger(object):
         :return:
 
         """
+        self._interval = interval
+        self._interval_f = f
+        self._orig_alarm_handler = None
 
-        bundle = self
+    def __enter__(self):
+        self.start_progress_logging(self._interval_f, self._interval)
 
-        class _ProgressLogger(object):
+    def __exit__(self, exc_type, exc_val, exc_tb):
 
-            def __enter__(self):
-                bundle.start_progress_logging(f, interval)
+        self.stop_progress_logging()
 
-            def __exit__(self, exc_type, exc_val, exc_tb):
-
-                bundle.stop_progress_logging()
-
-                if exc_val:
-                    return False
-                else:
-                    return True
-
-        return _ProgressLogger()
+        if exc_val:
+            return False
+        else:
+            return True
 
     def start_progress_logging(self, f, interval=2):
         """
@@ -130,7 +174,8 @@ class ProcessLogger(object):
             after the signal handler returns. This is dependent on the underlying Unix system's
             semantics regarding interrupted system calls.
 
-        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args)
+        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args).
+                  The function takes no args
         :param interval: Frequence to call the function, in seconds.
         :return:
         """
@@ -139,15 +184,7 @@ class ProcessLogger(object):
 
         def handler(signum, frame):
 
-            r = f()
-
-            if isinstance(r, (tuple, list)):
-                try:
-                    self.log(r[0].format(*r[1]))
-                except IndexError:
-                    self.log(str(r) + ' (Bad log format)')  # Well, at least log something
-            else:
-                self.log(str(r) + ' ' + str(type(r)))
+            f()
 
             # Or, use signal.itimer()? Maybe, but this way, the handler will stop if there is
             # an exception, rather than getting regular exceptions.
@@ -173,3 +210,46 @@ class ProcessLogger(object):
             self._orig_alarm_handler = None
 
             signal.alarm(0)  # Cancel any currently active alarm.
+
+
+class ProcessLogger(object):
+
+    def __init__(self, dataset, logger = None):
+        import signal
+
+        self._vid = dataset.vid
+        self._db = dataset._database
+        self._d_vid = dataset.vid
+        self._logger = logger
+
+        if False:
+            self._connection = self._db.engine.connect()
+            self._session = self._db.Session(bind=self._connection)
+        else:
+            self._connection = None
+            self._session = self._db.session
+
+    def __del__(self):
+        if self._connection:
+            self._connection.close()
+
+    @property
+    def dataset(self):
+        from ambry.orm import Dataset
+        return self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
+
+    def start(self, phase, stage, **kwargs):
+        """Start a new routine, stage or phase"""
+        return ProgressSection(self, self._session, phase, stage, self._logger, **kwargs)
+
+    def interval(self, func, interval=2):
+        return ProcessIntervals(func, interval)
+
+    @property
+    def records(self):
+        """Return all start records for this the dataset, grouped by the start record"""
+
+        return (self._session.query(Process)
+                .filter(Process.d_vid==self._d_vid)
+                .filter(Process.log_action == 'start')
+                ).all()

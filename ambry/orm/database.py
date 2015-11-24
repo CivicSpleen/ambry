@@ -206,7 +206,7 @@ class Database(object):
         from sqlalchemy.event import listen
 
         if not self.Session:
-            self.Session = sessionmaker(bind=self.engine, expire_on_commit=True)
+            self.Session = sessionmaker(bind=self.engine)
 
         if not self._session:
             self._session = self.Session()
@@ -496,10 +496,11 @@ class Database(object):
 
     def delete_tables_partitions(self, ds):
         """Fast delete of all of a datasets codes, columns, partitions and tables"""
-        from ambry.orm import Code, Column, Table, Partition, ColumnStat
+        from ambry.orm import Code, Column, Table, Partition, ColumnStat, Process
 
         ssq = self.session.query
 
+        ssq(Process).filter(Process.d_vid == ds.vid).delete()
         ssq(Code).filter(Code.d_vid == ds.vid).delete()
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Column).filter(Column.d_vid == ds.vid).delete()
@@ -516,6 +517,7 @@ class Database(object):
 
         ssq = self.session.query
 
+        ssq(Process).filter(Process.d_vid == ds.vid).delete()
         ssq(Code).filter(Code.d_vid == ds.vid).delete()
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()

@@ -166,6 +166,7 @@ class Dataset(Base):
 
         # This is horrible, but it's the only thing that has worked for both
         # Sqlite and Postgres in both single processes and multiprocesses.
+        d_vid = self.vid
         while True:
             try:
                 self.session.add(o)
@@ -173,8 +174,12 @@ class Dataset(Base):
                 return o
 
             except (IntegrityError, FlushError) as e:
+
                 self.rollback()
-                sequence_id = self.next_sequence_id(table_class, force_query=True)
+                self.session.expunge_all()
+                ds = self._database.dataset(d_vid)
+                sequence_id = ds.next_sequence_id(table_class, force_query=True)
+
                 o.update_id(sequence_id)
 
             except Exception:

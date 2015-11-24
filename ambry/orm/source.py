@@ -82,9 +82,11 @@ class DataSourceBase(object):
     @property
     def row(self):
 
+        # WARNING There is another .row() in TransientSource
+
         # Use an Ordered Dict to make it friendly to creating CSV files.
         SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
-                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
+                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset', 'process_records')
 
         d = OrderedDict(
             [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS])
@@ -361,11 +363,17 @@ class TransientDataSource(DataSourceBase):
     def row(self):
         import inspect
 
+        # WARNING! There is another .row() in DataSourceBase which gets uses for non persistent records
+
         # Use an Ordered Dict to make it friendly to creating CSV files.
         SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
-                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
+                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset', 'process_records')
 
-        return OrderedDict([(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+        d =  OrderedDict([(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+
+        assert 'process_records' not in d
+
+        return d
 
     @property
     def dict(self):
@@ -375,5 +383,5 @@ class TransientDataSource(DataSourceBase):
         :return:
 
         """
-        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
+        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash', 'process_records')
         return OrderedDict([(k, getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])

@@ -118,7 +118,7 @@ class TestBase(unittest.TestCase):
             l.create()
 
         bundles = list(l.bundles)
-        print l.database.dsn
+
         if len(bundles) == 0 or force_import:
             l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
 

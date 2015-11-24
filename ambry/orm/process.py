@@ -22,6 +22,9 @@ class Process(Base):
 
     id = SAColumn('pr_id', Integer, primary_key=True)
 
+    group = SAColumn('pr_group', Integer, ForeignKey('processes.pr_id'), nullable=True, index=True)
+    parent = relationship('Process',  remote_side=[id], backref='children')
+
     stage = SAColumn('pr_stage', Integer, default=0)
     phase = SAColumn('pr_phase', Text, doc='Process phase: such as ingest or build')
 
@@ -50,13 +53,20 @@ class Process(Base):
 
     message = SAColumn('pr_message', Text)
 
+    state = SAColumn('pr_state', Text)
+
     exception_class = SAColumn('pr_ex_class', Text)
-    exception_message = SAColumn('pr_ex_message', Text)
     exception_trace = SAColumn('pr_ex_trace', Text)
 
     log_action = SAColumn('pr_action', Text)
 
     data = SAColumn('pr_data', MutationDict.as_mutable(JSONEncodedObj))
+
+    def __str__(self):
+
+        return "<process {} {} {}/{} {}:{} {} {}>".format(
+            self.id, self.d_vid, self.hostname, self.pid, self.phase if self.phase else '?', self.stage ,
+            self.log_action, self.message)
 
     @staticmethod
     def before_insert(mapper, conn, target):
