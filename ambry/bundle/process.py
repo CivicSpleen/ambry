@@ -88,7 +88,7 @@ class ProgressSection(object):
 
         self._session.add(self.rec)
         if self._logger:
-            self._logger.info(str(self.rec))
+            self._logger.info(self.rec.log_str)
         self._session.commit()
         self._ai_rec_id = None
 
@@ -109,7 +109,7 @@ class ProgressSection(object):
 
             self._session.merge(self.rec)
             if self._logger:
-                self._logger.info(str(self.rec))
+                self._logger.info(self.rec.log_str)
             self._session.commit()
 
             self._ai_rec_id = None

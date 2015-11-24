@@ -62,11 +62,42 @@ class Process(Base):
 
     data = SAColumn('pr_data', MutationDict.as_mutable(JSONEncodedObj))
 
+    def __repr__(self):
+
+        return "{} {}/{} {}:{} {} {}".format(
+            self.d_vid, self.hostname, self.pid, self.phase if self.phase else '?', self.stage ,
+            self.log_action, self.message)
+
     def __str__(self):
 
-        return "<process {} {} {}/{} {}:{} {} {}>".format(
-            self.id, self.d_vid, self.hostname, self.pid, self.phase if self.phase else '?', self.stage ,
+        return "{} {}/{} {}:{} {} {}".format(
+            self.d_vid, self.hostname, self.pid, self.phase if self.phase else '?', self.stage ,
             self.log_action, self.message)
+
+    @property
+    def log_str(self):
+        import platform
+        import os
+
+        parts = []
+        if self.hostname != platform.node() or self.pid!= os.getpid():
+            hostpid = "({}@{})".format(self.pid, self.hostname)
+            parts.append(hostpid)
+
+        am = {
+            'start': ">",
+            'add': '+',
+            'update': '.',
+            'done': "<",
+            '': '?',
+            None: '?'
+        }
+
+        parts.append("{}:{}".format(self.phase if self.phase else '?', self.stage))
+
+        parts.append(am.get(self.log_action,'')+' '+(self.message if self.message else ''))
+
+        return ' '.join(parts)
 
     @staticmethod
     def before_insert(mapper, conn, target):
