@@ -122,6 +122,23 @@ class TestBase(unittest.TestCase):
         if len(bundles) == 0 or force_import:
             l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
 
+    def import_single_bundle(self, cache_path, clean=True):
+        from test import bundle_tests
+
+        l = self.library()
+
+        if clean:
+            l.clean()
+            l.create()
+
+        orig_source = os.path.join(os.path.dirname(bundle_tests.__file__),cache_path)
+        l.import_bundles(orig_source, detach=True, force=True)
+
+        b = next(b for b in l.bundles).cast_to_subclass()
+        b.clean()
+        b.sync_in()
+        return b
+
     def new_dataset(self, n=1, source='source'):
         return Dataset(**self.ds_params(n, source=source))
 

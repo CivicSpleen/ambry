@@ -741,11 +741,11 @@ class MapSourceHeaders(Pipe):
 
     def process_header(self, headers):
 
-        if len(list(self.source.source_table.columns)) == 0:
-            raise ConfigurationError("Source table '{}' has no columns".format(self.source.source_table.name))
-
-        self.map = {c.source_header: c.dest_header for c in self.source.source_table.columns
-                    if c.dest_header and c.source_header != c.dest_header}
+        if len(list(self.source.source_table.columns)) > 0:
+            self.map = {c.source_header: c.dest_header for c in self.source.source_table.columns
+                        if c.dest_header and c.source_header != c.dest_header}
+        else:
+            self.map = {}
 
         if len(headers) == 0:
             raise ConfigurationError("Didn't get any source headers from source table '{}' "
@@ -1190,7 +1190,10 @@ class CastColumns(Pipe):
         self.orig_headers = headers
         self.row_proxy_1 = RowProxy(self.orig_headers)
 
+        assert len(self.source.dest_table.columns) > 1
+
         # Return the table header, rather than the original row header.
+
         self.new_headers = [c.name for c in self.source.dest_table.columns]
 
         self.row_proxy_2 = RowProxy(self.new_headers)

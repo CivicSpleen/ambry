@@ -119,11 +119,11 @@ def library_command(args, rc):
 def library_drop(args, l, config):
     prt("Drop tables")
     from ambry.orm import Database
+    from ambry.library import LibraryFilesystem
 
-    library_config = config.library()
-    db_config = library_config['database']
+    fs = LibraryFilesystem(config)
 
-    db = Database(db_config, echo=True)
+    db = Database(fs.database_dsn)
 
     print db.dsn
     db.drop()

@@ -148,7 +148,6 @@ class DataSourceBase(object):
 
         return p
 
-
     @property
     def datafile(self):
         """Return an MPR datafile from the /ingest directory of the build filesystem"""
@@ -249,16 +248,12 @@ class DataSourceBase(object):
                     c = st.column(col['name'])
 
                     if c:
-
                         c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
-
-                        #self._bundle.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
                     else:
 
                         c = st.add_column(col['pos'], source_header=col['name'], dest_header=col['name'],
                                           datatype=col['resolved_type'])
 
-                        #self._bundle.log('Created column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
 
     def update_spec(self):
         """Update the source specification with information from the row intuiter, but only if the spec values

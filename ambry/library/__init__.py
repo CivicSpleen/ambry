@@ -61,7 +61,6 @@ class Library(object):
         else:
             self._config = get_runconfig()
 
-
         self.logger = logger
 
         self._fs = LibraryFilesystem(config)
@@ -232,7 +231,7 @@ class Library(object):
         """ Returns all datasets in the library as bundles. """
 
         for ds in self.datasets:
-            yield self.bundle(ds)
+            yield self.bundle(ds.vid)
 
     def partition(self, ref):
         """ Finds partition by ref and converts to bundle partition.

@@ -175,8 +175,9 @@ class Bundle(object):
         try:
             self.commit()  # To ensure the rollback() doesn't clear out anything important
             bsf = self.build_source_files.file(File.BSFILE.BUILD)
-        except:
-            self.log('Error trying to create a bundle source file ... ')
+        except Exception as e:
+            self.log('Error trying to create a bundle source file ... {} '.format(e))
+            raise
             self.rollback()
             return self
 
@@ -212,7 +213,6 @@ class Bundle(object):
         python_dir = self._library.filesystem.python()
         sys.path.append(python_dir)
 
-
     def commit(self):
         return self.dataset.commit()
 
@@ -233,6 +233,8 @@ class Bundle(object):
         if inspect(self._dataset).detached:
             vid = self._dataset.vid
             self._dataset = self._dataset._database.dataset(vid)
+
+        assert self._dataset, vid
 
         return self._dataset
 
@@ -1081,6 +1083,17 @@ Caster Code
 
         self.build_source_files.file(File.BSFILE.META).record_to_objects()
 
+    def sync_schema(self):
+        """Sync in code files and the meta file, avoiding syncing the larger files"""
+        from ambry.orm.file import File
+        from ambry.bundle.files import BuildSourceFile
+
+        self.log('---- Sync Schema ----')
+        for fc in [File.BSFILE.SCHEMA, File.BSFILE.SOURCESCHEMA]:
+            self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+
+        self.build_source_files.file(File.BSFILE.META).record_to_objects()
+
     #
     # Clean
     #
@@ -1284,7 +1297,6 @@ Caster Code
             sources = [s for s in g if not_final_or_delete(s)]
 
             if not len(sources):
-                self._ps.done('No sources remaining')
                 continue
 
             self._run_events(TAG.BEFORE_INGEST, stage)
@@ -1526,19 +1538,26 @@ Caster Code
                     self.log("Populated destination table '{}' from source table '{}' with {} columns"
                              .format(t.name, source.source_table.name, diff))
 
-        for i, source in enumerate(self.refs):
-            try:
-                pass
-                source.update_table()  # Generate the source tables.
-            except NotFoundError:
-                # Ignore not found errors here, because the ref may be to a partition
-                # that has not been built yet.
-                self.log('Skipping {}'.format(source.name))
-
         self._run_events(TAG.AFTER_SCHEMA, stage)
         self.commit()
 
         return True
+
+    def source_schema(self, sources=None, tables=None):
+        """Process a collection of ingested sources to make source tables. """
+        from ambry.bundle.files import BuildSourceFile
+        sources = self._resolve_sources(sources, tables, None,
+                                        predicate=lambda s: s.is_processable and not s.is_partition)
+
+        for source in sources:
+            if source.datafile.exists:
+                source.update_table()
+
+        self.commit()
+
+        bsf = self.build_source_files.file(File.BSFILE.SOURCESCHEMA)
+        bsf.objects_to_record()
+        bsf.record_to_fs()
 
     #
     # Build
