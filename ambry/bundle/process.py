@@ -73,13 +73,14 @@ class ProgressSection(object):
             if isinstance(arg, string_types):
                 kwargs['message'] = arg
 
-        if self._parent._db.driver == 'sqlite':
-            # The sqlite driver has a seperate database, it can't deal with the objects
-            # from a different database, so we convert them to vids
-            for table,vid in (('source','s_vid'), ('table','t_vid'),('partition','p_vid')):
-                if table in kwargs:
-                    kwargs[vid] = kwargs[table].vid
-                    del kwargs[table]
+        # The sqlite driver has a seperate database, it can't deal with the objects
+        # from a different database, so we convert them to vids. For postgres,
+        # the pojects are in the same database, but they would have been attached to another
+        # session, so we'd have to either detach them, or do the following anyway
+        for table,vid in (('source','s_vid'), ('table','t_vid'),('partition','p_vid')):
+            if table in kwargs:
+                kwargs[vid] = kwargs[table].vid
+                del kwargs[table]
 
     def add(self, *args, **kwargs):
         """Add a new record to the section"""
@@ -230,6 +231,7 @@ class ProcessLogger(object):
         self._logger = logger
 
         db = dataset._database
+        schema = db._schema
 
         if db.driver == 'sqlite':
             # Create an entirely new database. Sqlite does not like concurrent access,
@@ -249,6 +251,9 @@ class ProcessLogger(object):
             self._db = db
             self._connection = self._db.engine.connect()
             self._session = self._db.Session(bind=self._connection)
+
+        if schema:
+            self._session.execute('SET search_path TO {}'.format(schema))
 
     def __del__(self):
         if self._db.driver == 'sqlite':

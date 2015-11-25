@@ -81,7 +81,7 @@ class Database(object):
         self._echo = echo
         self._foreign_keys = foreign_keys
 
-        if self.driver in ['postgres', 'postgresql+psycopg2', 'postgis']:
+        if self.driver in ['postgres', 'postgresql', 'postgresql+psycopg2', 'postgis']:
             self._schema = POSTGRES_SCHEMA_NAME
         else:
             self._schema = None
