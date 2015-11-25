@@ -1122,6 +1122,7 @@ Caster Code
         self.clean_files()
         self.clean_ingested()
         self.clean_build_state()
+        self.clean_progress()
 
         self.state = self.STATES.CLEANED
 
@@ -1167,6 +1168,9 @@ Caster Code
 
         self.dataset.sources[:] = []
         self.dataset.source_tables[:] = []
+
+    def clean_progress(self):
+        self.dataset.progress_records[:] = []
 
     def clean_tables(self):
         """Like clean, but also clears out schema tables and the partitions that depend on them. . """
@@ -1321,7 +1325,7 @@ Caster Code
         with self.progress.start('ingest',stage, item_total = len(sources)) as ps:
 
             # Create all of the source tables first, so we can't get contention for creating them
-            # in MP. 
+            # in MP.
             for source in sources:
                 _ = source.source_table
 
@@ -1342,7 +1346,7 @@ Caster Code
                     pool.terminate()
                     raise
             else:
-                ps.add('ingesting single process')
+                ps.add('ingesting single process', item_type='source', item_count=len(downloadable_sources))
                 for i, source in enumerate(downloadable_sources):
                     ps.add(message='ingesting', source = source, item_count = i, state = 'running')
                     self._ingest_source(source, ps, force)
@@ -1362,8 +1366,7 @@ Caster Code
             elif force:
                 source.datafile.remove()
             else:
-                ps.update(message = 'Source {} already ingested, skipping'.format(source.name),
-                          state = 'skipped')
+                ps.update(message = 'Source {} already ingested, skipping'.format(source.name),state = 'skipped')
                 return
 
         if source.is_partition:
@@ -1405,7 +1408,8 @@ Caster Code
 
         elif source.is_downloadable:
 
-            with self.progress.interval(lambda: ps.add_update('Downloading {}'.format(source.url),state='downloading'), 10):
+            with self.progress.interval(lambda: ps.add_update('Downloading {}'.format(source.url),source=source,
+                                                              state='downloading'), 10):
                 try:
 
                     s = get_source(
@@ -1430,7 +1434,7 @@ Caster Code
                                   for c in source.source_table.columns]
 
         else:
-            self.update(message='Not an ingestiable source: {}'.format(source.name),state='skipped')
+            self.update(message='Not an ingestiable source: {}'.format(source.name),state='skipped', source=source)
             source.state = source.STATES.NOTINGESTABLE
 
             return
@@ -1440,7 +1444,7 @@ Caster Code
             ps.update(message='Ingesting {}: {} {} of {}, rate: {}'
                       .format(source.spec.name,desc, n_records, total, rate))
 
-        with self.progress.interval(lambda: ps.add_update(dl_progress_f,state='downloading'), 10):
+        with self.progress.interval(lambda: ps.add_update(dl_progress_f,state='loading', source=source), 10):
             source.datafile.load_rows(s)
 
         source.update_table()  # Generate the source tables.
@@ -1709,7 +1713,7 @@ Caster Code
                 ps.update(message='Running pipeline {}: {} {} of {}, rate: {}'
                           .format(source.spec.name,desc, n_records, total, rate))
 
-            with self.progress.interval(lambda: ps.add_update(run_progress_f,state='running'), 10):
+            with self.progress.interval(run_progress_f, 10):
                 pl.run()
 
         except:
@@ -1795,7 +1799,7 @@ Caster Code
                 ps.update(message='Coalescing {}: {} {} of {}, rate: {}'
                           .format(parent.identity.name, n_records, total, rate))
 
-        with self.progress.interval(lambda: ps.add_update(coalesce_progress_f,state='running'), 10):
+        with self.progress.interval(coalesce_progress_f, 10):
 
             with parent.datafile.writer as w:
                 for seg in sorted(segments, key=lambda x: b(x.name)):

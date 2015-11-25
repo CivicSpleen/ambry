@@ -90,7 +90,7 @@ def build_mp(args):
 
     source = b.source(source_name)
 
-    ps = b.progress.start('build',stage,message="MP build")
+    ps = b.progress.start('build',stage,message="MP build", source=source)
 
     return b.build_source(source, ps, force)
 
@@ -103,6 +103,6 @@ def ingest_mp(args):
 
     source = b.source(source_name)
 
-    ps = b.progress.start('ingest',0,message="MP ingestion")
+    ps = b.progress.start('ingest',0,message="MP ingestion", source=source)
 
     return b._ingest_source(source, ps, clean_files)

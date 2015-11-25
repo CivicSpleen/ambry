@@ -113,7 +113,10 @@ class ProgressSection(object):
             return self.add(**kwargs)
         else:
             for k, v in kwargs.items():
-                setattr(self.rec, k, v)
+
+                # Don't update object; use whatever was set in the original record
+                if k not in ('source','s_vid','table','t_vid','partition','p_vid'):
+                    setattr(self.rec, k, v)
 
             self._session.merge(self.rec)
             if self._logger:
