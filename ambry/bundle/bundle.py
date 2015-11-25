@@ -1339,7 +1339,7 @@ Caster Code
             else:
                 ps.add('ingesting single process')
                 for i, source in enumerate(downloadable_sources):
-                    ps.add(source = source, item_count = i, state = 'running')
+                    ps.add(message='ingesting', source = source, item_count = i, state = 'running')
                     self._ingest_source(source, ps, force)
 
             return True
@@ -1604,50 +1604,53 @@ Caster Code
         from .concurrent import build_mp
         from ambry.bundle.events import TAG
 
-        if not self.pre_build(force):
-            return False
+        with self.progress.start('build',stage, item_total = len(sources)) as ps:
+            if not self.pre_build(force):
+                ps.done(message='Pre-build failed', state='skipped')
+                return False
 
-        resolved_sources = self._resolve_sources(sources, None, stage=stage,
-                                                 predicate=lambda s: s.is_processable)
+            resolved_sources = self._resolve_sources(sources, None, stage=stage,
+                                                     predicate=lambda s: s.is_processable)
 
-        if not resolved_sources:
-            self.log('No processable sources, skiping build stage {}'.format(stage))
-            return True
+            if not resolved_sources:
+                ps.done(message='No sources', state='skipped')
+                self.log('No processable sources, skipping build stage {}'.format(stage))
+                return True
 
-        for stage, source_group in groupby(sorted(resolved_sources, key=attrgetter('stage')), attrgetter('stage')):
+            for stage, source_group in groupby(sorted(resolved_sources, key=attrgetter('stage')), attrgetter('stage')):
 
-            sources = list(source_group)
+                sources = list(source_group)
 
-            self.log('Processing {} sources, stage {} ; first 10: {}'
-                     .format(len(sources), stage, [x.name for x in sources[:10]]))
+                self.log('Processing {} sources, stage {} ; first 10: {}'
+                         .format(len(sources), stage, [x.name for x in sources[:10]]))
+                self._run_events(TAG.BEFORE_BUILD, stage)
 
-            self._run_events(TAG.BEFORE_BUILD, stage)
+                if self.multi:
+                    args = [(self.identity.vid, stage, source.vid, force) for source in sources]
 
-            if self.multi:
-                args = [(self.identity.vid, source.vid, force) for source in sources]
+                    pool = self.library.process_pool(limited_run=self.limited_run)
 
-                pool = self.library.process_pool(limited_run=self.limited_run)
+                    try:
+                        pool.map(build_mp, args)
+                    except KeyboardInterrupt:
+                        self.log('Got keyboard interrrupt; terminating workers')
+                        pool.terminate()
 
-                try:
-                    pool.map(build_mp, args)
-                except KeyboardInterrupt:
-                    self.log('Got keyboard interrrupt; terminating workers')
-                    pool.terminate()
+                else:
 
-            else:
+                    for i, source in enumerate(sources):
+                        ps.add(source = source, item_count = i, state = 'running')
+                        self.build_source(source, ps, force=force)
 
-                for source in sources:
-                    self.build_source(source, force=force)
+                    self.record_stage_state(self.STATES.BUILDING, stage)
 
-                self.record_stage_state(self.STATES.BUILDING, stage)
+                self.dataset.commit()
 
-            self.dataset.commit()
+                self.unify_partitions()
 
-            self.unify_partitions()
+                self.dataset.commit()
 
-            self.dataset.commit()
-
-            self._run_events(TAG.AFTER_BUILD, stage)
+                self._run_events(TAG.AFTER_BUILD, stage)
 
         return True
 
@@ -1672,76 +1675,67 @@ Caster Code
 
         self.unify_partitions()
 
-    def build_source(self, source, force=False):
+    def build_source(self, source, ps, force=False):
         """Build a single source"""
 
         assert source.is_processable, source.name
 
         if source.state == self.STATES.BUILT and not force:
-            self.logger.info('Source {} already built'.format(source.name))
+            ps.update(message='Source {} already built'.format(source.name), state='skipped')
             return
 
         pl = self.pipeline(source)
 
         source.state = self.STATES.BUILDING
 
+        ps.update(message='Running source {} with pipeline {}'.format(source.name, pl.name))
+
+        # Doing this before hand to get at least some information about the pipline,
+        # in case there is an error during the run. It will get overwritten with more information
+        # after successful run
+        self.log_pipeline(pl)
+
         try:
 
-            self.logger.info('Running source {} with pipeline {}'.format(source.name, pl.name))
+            source_name = source.spec.name # In case the source drops out of the session, which is does.
 
-            # Doing this before hand to get at least some information about the pipline,
-            # in case there is an error during the run. It will get overwritten with more information
-            # after asecussful run
-            self.log_pipeline(pl)
+            def run_progress_f():
+                (desc, n_records, total, rate) = pl.sink.report_progress.report_progress()
+                ps.update(message='Running pipeline {}: {} {} of {}, rate: {}'
+                          .format(source.spec.name,desc, n_records, total, rate))
 
-            try:
-
-                source_name = source.spec.name # In case the source drops out of the session, which is does.
-                #with self.progress.context(lambda: ('Run source {}: {} rows, {} rows/sec',
-                #                                    (source_name,) + pl.sink.report_progress()), 10):
-
+            with self.progress.interval(lambda: ps.add_update(run_progress_f,state='running'), 10):
                 pl.run()
-            except:
-                self.log_pipeline(pl)
-                raise
 
-            if self.multi:
-                self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
-
-            self.commit()
-
-            try:
-                for p in pl[ambry.etl.PartitionWriter].partitions:
-
-                    try:
-                        p.finalize()
-                    except AttributeError:
-                        print(self.table(p.table_name))
-                        raise
-
-                    # FIXME Shouldn't need to do this commit, but without it, some stats get added multiple
-                    # times, causing an error later. Probably could be avoided by adding the stats to the
-                    # collection in the dataset
-                    self.commit()
-
-            except IndexError:
-                self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
-
+        except:
             self.log_pipeline(pl)
-
-            source.state = self.STATES.BUILT
-
-            if pl.stopped:
-                # Do something when the pipe has stopped?
-                # This was supposed to kick out of the loop of building a table, probably.
-                return
-
-        except Exception as e:
             raise
-            self.error("Failed to build source '{}'; {}".format(source.name, e))
-            source.state = source.state + ('_error' if not self.state.endswith('_error') else '')
 
-            raise
+        if self.multi:
+            self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
+
+        self.commit()
+
+        try:
+            for p in pl[ambry.etl.PartitionWriter].partitions:
+
+                try:
+                    p.finalize()
+                except AttributeError:
+                    print(self.table(p.table_name))
+                    raise
+
+                # FIXME Shouldn't need to do this commit, but without it, some stats get added multiple
+                # times, causing an error later. Probably could be avoided by adding the stats to the
+                # collection in the dataset
+                self.commit()
+
+        except IndexError:
+            self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
+
+        self.log_pipeline(pl)
+
+        source.state = self.STATES.BUILT
 
     def unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
@@ -1761,10 +1755,14 @@ Caster Code
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
 
-        for name, segments in iteritems(partitions):
-            self.unify_partition(name, segments)
+        ps = self.progress.start('coalesce',0, message='Coalescing partition segments')
 
-    def unify_partition(self, partition_name, segments=None):
+        for name, segments in iteritems(partitions):
+            ps.add('', item_type='partitions', item_count=len(segments),
+                       message='Colescing partition {}'.format(name))
+            self.unify_partition(name, segments, ps)
+
+    def unify_partition(self, partition_name, segments, ps):
         from ..orm.partition import Partition
 
         if segments is None:
@@ -1777,34 +1775,34 @@ Caster Code
                     if name == partition_name:
                         segments.add(p)
 
-        self.log('Coalescing segments for partition {} '.format(partition_name))
-
         parent = self.partitions.get_or_new_partition(partition_name, type=Partition.TYPE.UNION)
 
         if parent.datafile.exists:
-            self.log('Removing exising datafile {}'.format(parent.datafile.path))
+            ps.add("Removing exisiting datafile", partition=parent)
             parent.datafile.remove()
 
         headers = None
         i = 1  # Row id.
 
-        #logger = lambda: ('Coalescing: {} {} of {}, rate: {}', parent.datafile.report_progress())
-        #, self.progress.context(logger, 10):
 
-        with parent.datafile.writer as w:
-            for seg in sorted(segments, key=lambda x: b(x.name)):
+        def coalesce_progress_f():
+                (desc, n_records, total, rate) = parent.datafile.report_progress()
+                ps.update(message='Coalescing {}: {} {} of {}, rate: {}'
+                          .format(parent.identity.name, n_records, total, rate))
 
-                self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
+        with self.progress.interval(lambda: ps.add_update(coalesce_progress_f,state='running'), 10):
 
-                with self.wrap_partition(seg).datafile.reader as reader:
-                    for row in reader.rows:
-                        w.insert_row((i,) + row[1:])
-                        i += 1
+            with parent.datafile.writer as w:
+                for seg in sorted(segments, key=lambda x: b(x.name)):
+                    ps.add("Removing exisiting datafile", partition=parent)
+                    self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
 
-                self.debug(indent + 'Coalesced {} rows into '.format(i))
+                    with self.wrap_partition(seg).datafile.reader as reader:
+                        for row in reader.rows:
+                            w.insert_row((i,) + row[1:])
+                            i += 1
 
         parent.finalize()
-        self.log('Coalesced {}'.format(parent.name))
         self.commit()
 
         for s in segments:

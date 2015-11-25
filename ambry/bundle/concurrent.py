@@ -31,7 +31,7 @@ def _MPBundleMethod(f, args):
         b = b.cast_to_subclass()
         b.multi = True  # In parent it is a number, in child, just needs to be true to get the right logger template
         b.is_subprocess = True
-        b.limited_run = os.getenv('AMBRY_LIMITED_RUN', False)
+        b.limited_run = bool(int(os.getenv('AMBRY_LIMITED_RUN', 0)))
         args[0] = b
     except:
         print('Exception in feching bundle in multiprocessing run.')
@@ -78,14 +78,14 @@ def init_library(database_dsn, accounts_password, limited_run = False):
 
     os.environ['AMBRY_DB'] = database_dsn
     os.environ['AMBRY_PASSWORD'] = accounts_password
-    os.environ['AMBRY_LIMITED_RUN'] = 1 if limited_run else 0
+    os.environ['AMBRY_LIMITED_RUN'] = '1' if limited_run else '0'
 
     library = new_library(get_runconfig())
 
 @MPBundleMethod
 def build_mp(args):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
-    b, source_name, force = args
+    b, source_name, stage, force = args
 
     source = b.source(source_name)
 
@@ -100,4 +100,4 @@ def ingest_mp(args):
 
     source = b.source(source_name)
 
-    return b._ingest_source(source, clean_files)
+    return b._ingest_source(source, ps, clean_files)

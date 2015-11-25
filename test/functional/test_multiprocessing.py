@@ -21,8 +21,6 @@ class Test(TestBase):
             raise ConfigurationError("Failed to load config. You probably need to setup a "
                                      "VIRTUAL_ENV env var, or create $HOME/.ambry.yaml")
 
-        rc.set_library_database('postgresql-test')
-
         self.library = new_library(rc)
 
         self.dsn = self.library.database.dsn
@@ -54,7 +52,7 @@ class Test(TestBase):
         db.open()
         return db
 
-    @unittest.skipIf("not os.getenv('VIRTUAL_ENV')", 'Must have a VIRTUAL_ENV value set to get the config')
+    #@unittest.skipIf("not os.getenv('VIRTUAL_ENV')", 'Must have a VIRTUAL_ENV value set to get the config')
     def test_multi_partitions(self):
         """Test creating multip partitions in a multiprocessing run"""
         from ambry.orm.exc import NotFoundError

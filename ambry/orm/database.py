@@ -56,7 +56,7 @@ logger = get_logger(__name__)
 class Database(object):
     """ Stores local database of the datasets. """
 
-    def __init__(self, dsn, echo=False, engine_kwargs=None):
+    def __init__(self, dsn, echo=False, foreign_keys=True, engine_kwargs=None):
         """ Initializes database.
 
         Args:
@@ -79,6 +79,7 @@ class Database(object):
         self._engine = None
         self._connection = None
         self._echo = echo
+        self._foreign_keys = foreign_keys
 
         if self.driver in ['postgres', 'postgresql+psycopg2', 'postgis']:
             self._schema = POSTGRES_SCHEMA_NAME
@@ -165,26 +166,34 @@ class Database(object):
             #
             @event.listens_for(self._engine, "connect")
             def connect(dbapi_connection, connection_record):
-
                 connection_record.info['pid'] = os.getpid()
 
             @event.listens_for(self._engine, "checkout")
             def checkout(dbapi_connection, connection_record, connection_proxy):
 
                 from sqlalchemy.exc import DisconnectionError
-
                 pid = os.getpid()
                 if connection_record.info['pid'] != pid:
 
                     connection_record.connection = connection_proxy.connection = None
                     raise DisconnectionError(
-                        "Connection record belongs to pid %s, "
-                        "attempting to check out in pid %s" %
-                        (connection_record.info['pid'], pid)
-                    )
+                        "Connection record belongs to pid %s, attempting to check out in pid %s" %
+                        (connection_record.info['pid'], pid))
 
             if self.driver == 'sqlite':
-                event.listen(self._engine, 'connect', _pragma_on_connect)
+                @event.listens_for(self._engine, "connect")
+                def pragma_on_connect(dbapi_con, con_record):
+                    """ISSUE some Sqlite pragmas when the connection is created."""
+
+                    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
+                    # Not clear that there is a performance improvement.
+
+                    dbapi_con.execute('PRAGMA journal_mode = WAL')
+                    dbapi_con.execute('PRAGMA synchronous = OFF')
+                    dbapi_con.execute('PRAGMA temp_store = MEMORY')
+                    dbapi_con.execute('PRAGMA cache_size = 500000')
+                    if self._foreign_keys:
+                        dbapi_con.execute('PRAGMA foreign_keys=ON')
 
             with self._engine.connect() as conn:
                 _validate_version(conn)
@@ -220,8 +229,6 @@ class Database(object):
 
         return self._session
 
-
-
     def open(self):
         """ Ensure the database exists and is ready to use. """
 
@@ -233,13 +240,11 @@ class Database(object):
 
     def close(self):
 
-
         self.close_session()
         self.close_connection()
         if self._engine:
             self._engine.dispose()
             self._engine = None
-
 
     def close_session(self):
 
@@ -249,7 +254,6 @@ class Database(object):
             self._session = None
 
     def close_connection(self):
-
 
         if self._connection:
             self._connection.close()
@@ -682,47 +686,7 @@ def get_stored_version(connection):
         raise DatabaseError('Do not know how to get version from {} engine.'.format(connection.engine.name))
 
 
-def _pragma_on_connect(dbapi_con, con_record):
-    """ISSUE some Sqlite pragmas when the connection is created."""
 
-    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
-    # Not clear that there is a performance improvement.
-
-    dbapi_con.execute('PRAGMA journal_mode = WAL')
-    dbapi_con.execute('PRAGMA synchronous = OFF')
-    dbapi_con.execute('PRAGMA temp_store = MEMORY')
-    dbapi_con.execute('PRAGMA cache_size = 500000')
-    dbapi_con.execute('pragma foreign_keys=ON')
-
-
-def _on_connect_bundle(dbapi_con, con_record):
-    """ISSUE some Sqlite pragmas when the connection is created.
-
-    Bundles have different parameters because they are more likely to be
-    accessed concurrently.
-
-    """
-
-    # NOTE ABOUT journal_mode = WAL: it improves concurrency, but has some downsides.
-    # See http://sqlite.org/wal.html
-
-    try:
-        # Can't change journal mode in a transaction.
-        dbapi_con.execute('COMMIT')
-    except:
-        pass
-
-    try:
-        dbapi_con.execute('PRAGMA journal_mode = WAL')
-        dbapi_con.execute('PRAGMA page_size = 8192')
-        dbapi_con.execute('PRAGMA temp_store = MEMORY')
-        dbapi_con.execute('PRAGMA cache_size = 50000')
-        dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    except Exception:
-        raise
-
-    # dbapi_con.execute('PRAGMA busy_timeout = 10000')
-    # dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
 def _validate_version(connection):

@@ -40,6 +40,9 @@ class Process(Base):
     s_vid = SAColumn('pr_s_vid', String(17), ForeignKey('datasources.ds_vid'), nullable=True, index=True)
     source = relationship('DataSource', backref='process_records')
 
+    p_vid = SAColumn('pr_p_vid', String(17), ForeignKey('partitions.p_vid'), nullable=True, index=True)
+    partition = relationship('Partition', backref='process_records')
+
     created = SAColumn('pr_created', Float,
                         doc='Creation date: time in seconds since the epoch as a integer.')
 

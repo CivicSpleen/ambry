@@ -20,7 +20,7 @@ class MigrationTest(TestBase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.sqlite_db_file = 'test_migration.db'
+        self.sqlite_db_file = '/tmp/test_migration.db'
 
     def tearDown(self):
         super(self.__class__, self).tearDown()

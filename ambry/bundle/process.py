@@ -39,10 +39,6 @@ class ProgressSection(object):
         self._group = None
         self._group = self.add(log_action='start',state='running', **kwargs)
 
-    def __del__(self):
-        if self._session:
-            self._session.close()
-
     def __enter__(self):
         return self
 
@@ -77,6 +73,14 @@ class ProgressSection(object):
             if isinstance(arg, string_types):
                 kwargs['message'] = arg
 
+        if self._parent._db.driver == 'sqlite':
+            # The sqlite driver has a seperate database, it can't deal with the objects
+            # from a different database, so we convert them to vids
+            for table,vid in (('source','s_vid'), ('table','t_vid'),('partition','p_vid')):
+                if table in kwargs:
+                    kwargs[vid] = kwargs[table].vid
+                    del kwargs[table]
+
     def add(self, *args, **kwargs):
         """Add a new record to the section"""
 
@@ -84,9 +88,12 @@ class ProgressSection(object):
 
         kwargs['log_action'] = kwargs.get('log_action', 'add')
 
-        self.rec = Process(**kwargs)
+        rec = Process(**kwargs)
 
-        self._session.add(self.rec)
+        self._session.add(rec)
+
+        self.rec = rec
+
         if self._logger:
             self._logger.info(self.rec.log_str)
         self._session.commit()
@@ -216,22 +223,39 @@ class ProcessLogger(object):
 
     def __init__(self, dataset, logger = None):
         import signal
+        import os.path
 
         self._vid = dataset.vid
-        self._db = dataset._database
         self._d_vid = dataset.vid
         self._logger = logger
 
-        if False:
-            self._connection = self._db.engine.connect()
-            self._session = self._db.Session(bind=self._connection)
-        else:
-            self._connection = None
+        db = dataset._database
+
+        if db.driver == 'sqlite':
+            # Create an entirely new database. Sqlite does not like concurrent access,
+            # even from multiple connections in the same process.
+            from ambry.orm import Database
+            parts = os.path.split(db.dsn)
+            dsn = '/'.join(parts[:-1]+('progress.db',))
+
+            self._db = Database(dsn, foreign_keys=False)
+            self._db.create() # falls through if already exists
+            self._engine = self._db.engine
+            self._connection = self._db.connection
             self._session = self._db.session
 
+        else:
+            # Make a new connection to the existing database
+            self._db = db
+            self._connection = self._db.engine.connect()
+            self._session = self._db.Session(bind=self._connection)
+
     def __del__(self):
-        if self._connection:
-            self._connection.close()
+        if self._db.driver == 'sqlite':
+            self._db.close()
+        else:
+            if self._connection:
+                self._connection.close()
 
     @property
     def dataset(self):
