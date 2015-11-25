@@ -40,4 +40,5 @@ Create a docker volume container:
 Where "/data/downloads" is a directory on the docker host. This command will create a new container names 
 'downloads' to hold the data. 
 
-Then, when running a container, include `--volumes-from ambry_fs` to attach the volume into the new container. 
+Then, when running a container, include `--volumes-from ambry_fs` to attach the volume into the new container.
+ 
