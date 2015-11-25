@@ -32,6 +32,7 @@ def _MPBundleMethod(f, args):
         b.multi = True  # In parent it is a number, in child, just needs to be true to get the right logger template
         b.is_subprocess = True
         b.limited_run = bool(int(os.getenv('AMBRY_LIMITED_RUN', 0)))
+        assert b._progress == None # DOn't want to share connections across processes
         args[0] = b
     except:
         print('Exception in feching bundle in multiprocessing run.')
@@ -85,19 +86,23 @@ def init_library(database_dsn, accounts_password, limited_run = False):
 @MPBundleMethod
 def build_mp(args):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
-    b, source_name, stage, force = args
+    b, stage, source_name, force = args
 
     source = b.source(source_name)
 
-    return b.build_source(source, force)
+    ps = b.progress.start('build',stage,message="MP build")
+
+    return b.build_source(source, ps, force)
 
 
 @MPBundleMethod
 def ingest_mp(args):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
 
-    b, source_name, clean_files = args
+    b, stage, source_name, clean_files = args
 
     source = b.source(source_name)
+
+    ps = b.progress.start('ingest',0,message="MP ingestion")
 
     return b._ingest_source(source, ps, clean_files)

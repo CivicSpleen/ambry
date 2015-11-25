@@ -41,7 +41,7 @@ def _CaptureException(f, *args, **kwargs):
     try:
         return f(*args, **kwargs)
     except Exception as e:
-
+        raise
         if b.capture_exceptions:
             b.exception(e)
             raise LoggedException(e, b)
@@ -1320,8 +1320,13 @@ Caster Code
 
         with self.progress.start('ingest',stage, item_total = len(sources)) as ps:
 
+            # Create all of the source tables first, so we can't get contention for creating them
+            # in MP. 
+            for source in sources:
+                _ = source.source_table
+
             if self.multi:
-                args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
+                args = [(self.identity.vid, stage,  source.vid, force) for source in downloadable_sources]
 
                 pool = self.library.process_pool(limited_run=self.limited_run)
 

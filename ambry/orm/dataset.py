@@ -141,16 +141,17 @@ class Dataset(Base):
 
         return next_sequence_id(object_session(self), self._sequence_ids, self.vid, table_class, force_query=force_query)
 
-    def new_unique_object(self, table_class, sequence_id=None, **kwargs):
+    def new_unique_object(self, table_class, sequence_id=None, force_query=False, **kwargs):
         """Use next_sequence_id to create a new child of the dataset, with a unique id"""
         from sqlalchemy.exc import IntegrityError
         from sqlalchemy.orm.exc import FlushError
+        from ambry.orm import SourceTable
 
         # If a sequence ID was specified, the caller is certan  that there is no potential for conflicts,
         # so there is no need to commit here.
         if not sequence_id:
             commit = True
-            sequence_id = self.next_sequence_id(table_class)
+            sequence_id = self.next_sequence_id(table_class, force_query=force_query)
         else:
             commit = False
 
@@ -158,8 +159,16 @@ class Dataset(Base):
             d_vid=self.vid,
             **kwargs
         )
+
         o.update_id(sequence_id)
-        o.dataset = self
+
+        # If there are conflicts below, the rollback invalidates the dataset, then everything goes to hell.
+        # Not setting the dataset keeps it out of the session, and it doesn't get a bad state. However, the
+        # partition before_insert hook requires the dataset to be set.
+        if table_class == SourceTable:
+            o.d_vid = self.vid
+        else:
+            o.dataset = self
 
         if commit is False:
             return o
@@ -182,14 +191,16 @@ class Dataset(Base):
 
                 o.update_id(sequence_id)
 
-            except Exception:
+            except Exception as e:
+
+                print('Completely failed to get a new {} sequence_id; {}'.format(table_class, e))
                 self.rollback()
                 import traceback
 
                 # This bit is helpful in a multiprocessing run.
                 tb = traceback.format_exc()
-                print('Really Bad Error!', tb)
 
+                print(tb)
                 raise
 
     def table(self, ref):
