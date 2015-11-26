@@ -16,7 +16,7 @@ class Mixin(object):
     """ Requires successors to inherit from TestBase and provide _get_library method. """
 
     def test_select_query(self):
-        assert_shares_group('postgres')
+        assert_shares_group(user='postgres')
         library = self._get_library()
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
@@ -102,12 +102,6 @@ class FileSQLiteTest(TestBase, Mixin):
 
 class PostgreSQLTest(PostgreSQLTestBase, Mixin):
 
-    #def setUp(self):
-    #    super(self.__class__, self).setUp()
-
-        # Postgres foreign table implemented with multicorn requires filesystem, not memory.
-        # FIXME:
-
     @classmethod
     def get_rc(cls):
         rc = TestBase.get_rc()
@@ -133,7 +127,7 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
         return library
 
 
-def assert_shares_group(user):
+def assert_shares_group(user=''):
     """ Checks that the given user shares group with user who executes tests.
 
     Args:
@@ -143,6 +137,7 @@ def assert_shares_group(user):
         AssertionError: if given user is not the member of the tests executor group.
 
     """
+    assert user, 'user is required attribute.'
     import getpass
     import grp
     import pwd
@@ -151,7 +146,7 @@ def assert_shares_group(user):
 
     other_user_groups = [g.gr_name for g in grp.getgrall() if user in g.gr_mem]
     if current_user_group not in other_user_groups:
-        details_link = 'http://example.com/FIXME:'
+        details_link = 'https://github.com/CivicKnowledge/ambry_sources#making-mpr-files-readable-by-postgres-user'
         raise AssertionError(
             'This test requires postgres user to be in the {} group.\n'
             'Hint: see {} for details.'.format(current_user_group, details_link))
