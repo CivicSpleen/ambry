@@ -19,7 +19,7 @@ lockfile==0.10.2
 Markdown==2.6.2
 MarkupSafe==0.23
 meta==0.2.4
-nltk==3.0.2
+nltk==3.1
 numpy==1.9.2
 oauth2client==1.4.12
 pandas<=0.15.1
@@ -30,7 +30,7 @@ PyYAML==3.11
 requests>=2.6.0
 semantic-version==2.4.1
 sh==1.11
-six==1.9.0
+six==1.9.0 # Must be 1.9.0 b/c of requirement in later package
 SQLAlchemy==1.0.0
 sqlparse==0.1.15
 Werkzeug==0.10.4
@@ -43,6 +43,8 @@ tabulate==0.7.5
 terminaltables==1.2.1
 watchdog==0.8.3
 filelock==2.0.4
-ambry-sources>=0.1.4
+ambry-sources>=0.1.5
 unicodecsv==0.12.0  # using 0.13.0 breaks many tests.
+pycrypto
+simple-crypt
 

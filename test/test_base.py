@@ -17,7 +17,7 @@ from six.moves import input as six_input
 from ambry.identity import DatasetNumber
 from ambry.orm import Database, Dataset
 from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
-from ambry.run import get_runconfig
+import ambry.run
 
 MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add test-postgres '\
     'to the database section of the ambry config.'
@@ -26,9 +26,13 @@ SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
 
 class TestBase(unittest.TestCase):
     def setUp(self):
+        import uuid
 
         super(TestBase, self).setUp()
-        self.dsn = 'sqlite://'  # Memory database
+
+        self.db_path = "/tmp/ambry-test-{}.db".format(str(uuid.uuid4()))
+
+        self.dsn = "sqlite:///{}".format(self.db_path)
 
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
@@ -36,17 +40,21 @@ class TestBase(unittest.TestCase):
         self.db = None
 
     def tearDown(self):
-        pass
+
+        import os
+
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
 
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
     @classmethod
-    def get_rc(cls):
+    def get_rc(cls, rewrite=True):
         """Create a new config file for test and return the RunConfig.
 
          This method will start with the user's default Ambry configuration, but will replace the
-         filesystet.root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
+         library.filesystem_root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
          environmental variable, it will set library.database to the DSN of either database.test-sqlite or
          database.test-postrgres
 
@@ -54,43 +62,39 @@ class TestBase(unittest.TestCase):
 
         from fs.opener import fsopendir
 
-        rc = get_runconfig()
+        config = ambry.run.load() # not cached; get_config is
 
-        config = rc.config
+        dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
 
-        try:
-            del config['accounts']
-        except KeyError:
-            pass
+        orig_root = config.library.filesystem_root
+        root_dir  = config.filesystem.test.format(root=orig_root)
 
-        config.filesystem.root = config.filesystem.test
+        dsn = config.database.get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
 
-        db = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+        cls._db_type = dbname
 
-        try:
-            config.library.database = config.database['test-sqlite']
-        except KeyError:
-            sqlite_dsn = 'sqlite:///{root}/library.db'
-            config.library.database = sqlite_dsn
-            print("WARN: missing config for test database 'test-{}', using '{}' ".format(db, sqlite_dsn))
+        config.library.filesystem_root = root_dir
+        config.library.database = dsn
+        config.accounts = None
 
-        cls._db_type = db
+        test_root = fsopendir(root_dir, create_dir=True)
 
-        test_root = fsopendir(rc.filesystem('test'))
+        if rewrite:
+            with test_root.open('.ambry.yaml', 'w', encoding='utf-8', ) as f:
+                config.loaded = None
+                config.dump(f)
 
-        with test_root.open('.ambry.yaml', 'w', encoding='utf-8') as f:
-            config.dump(f)
 
-        return get_runconfig(test_root.getsyspath('.ambry.yaml'))
+        return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
 
     @classmethod
     def config(cls):
         return cls.get_rc()
 
     @classmethod
-    def library(cls):
+    def library(cls, config = None):
         from ambry.library import new_library
-        return new_library(cls.config())
+        return new_library(config if config else cls.config())
 
     @classmethod
     def import_bundles(cls, clean=True, force_import=False):
@@ -107,11 +111,11 @@ class TestBase(unittest.TestCase):
         l = cls.library()
 
         if clean:
-            l.drop()
+            l.clean()
             l.create()
 
         bundles = list(l.bundles)
-
+        print l.database.dsn
         if len(bundles) == 0 or force_import:
             l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
 

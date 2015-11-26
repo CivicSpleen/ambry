@@ -293,7 +293,7 @@ class WhooshTest(TestBase, AmbryReadyMixin):
     def setUp(self):
         super(self.__class__, self).setUp()
         rc = self.get_rc()
-        rc.config.services.search = 'whoosh'
+        rc.services.search = 'whoosh'
 
         # we need clean backend for test
         self.library = new_library(config=rc)
@@ -309,20 +309,20 @@ class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
         super(self.__class__, self).setUp()
         self.rc = self.get_rc()
 
-        self._CONFIG_DATABASE = self.rc.config.library.database
-        if self.rc.config.library.database != 'sqlite://':
+        self._CONFIG_DATABASE = self.rc.library.database
+        if self.rc.library.database != 'sqlite://':
             # switch to in-memory database.
-            self.rc.config.library.database = 'sqlite://'
+            self.rc.library.database = 'sqlite://'
 
         # force to use library database for search.
-        self.rc.config.services.search = None
+        self.rc.services.search = None
         self.library = new_library(self.rc)
         assert isinstance(self.library.search.backend, SQLiteSearchBackend)
         self.assertEqual(self.library.database.dsn, 'sqlite://')
 
     def tearDown(self):
-        if self.rc.config.library.database != self._CONFIG_DATABASE:
-            self.rc.config.library.database = self._CONFIG_DATABASE
+        if self.rc.library.database != self._CONFIG_DATABASE:
+            self.rc.library.database = self._CONFIG_DATABASE
 
 
 class FileSQLiteTest(TestBase, AmbryReadyMixin):
@@ -332,13 +332,13 @@ class FileSQLiteTest(TestBase, AmbryReadyMixin):
         super(self.__class__, self).setUp()
         self.rc = self.get_rc()
 
-        self._CONFIG_DATABASE = self.rc.config.library.database
-        if self.rc.config.library.database != 'sqlite:////tmp/file-search-test.db':
+        self._CONFIG_DATABASE = self.rc.library.database
+        if self.rc.library.database != 'sqlite:////tmp/file-search-test.db':
             # switch to file database.
-            self.rc.config.library.database = 'sqlite:////tmp/file-search-test.db'
+            self.rc.library.database = 'sqlite:////tmp/file-search-test.db'
 
         # force to use library database for search.
-        self.rc.config.services.search = None
+        self.rc.services.search = None
 
         self.library = new_library(self.rc)
         assert isinstance(self.library.search.backend, SQLiteSearchBackend)
@@ -346,11 +346,11 @@ class FileSQLiteTest(TestBase, AmbryReadyMixin):
 
     def tearDown(self):
         super(self.__class__, self).tearDown()
-        if self.rc.config.library.database != self._CONFIG_DATABASE:
+        if self.rc.library.database != self._CONFIG_DATABASE:
             # drop test database and restore config
             self.library.database.close()
             self.library.database.drop()
-            self.rc.config.library.database = self._CONFIG_DATABASE
+            self.rc.library.database = self._CONFIG_DATABASE
 
 
 class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
@@ -363,9 +363,9 @@ class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
         rc = self.get_rc()
 
         # force to use library database for search.
-        rc.config.services.search = None
-        self._real_test_database = rc.config.library.database
-        rc.config.library.database = self.dsn
+        rc.services.search = None
+        self._real_test_database = rc.library.database
+        rc.library.database = self.dsn
         self.library = new_library(rc)
         assert isinstance(self.library.search.backend, PostgreSQLSearchBackend)
 
@@ -375,4 +375,4 @@ class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
 
         # restore database config
         rc = self.get_rc()
-        rc.config.library.database = self._real_test_database
+        rc.library.database = self._real_test_database

@@ -1,1 +1,7 @@
 *.pyc
+.cache
+.eggs
+build
+ambry.egg-info
+dist
+.git

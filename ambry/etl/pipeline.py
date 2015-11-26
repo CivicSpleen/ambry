@@ -1663,6 +1663,12 @@ class WriteToPartition(Pipe, PartitionWriter):
 
             header_mapper, body_mapper = make_table_map(p.table, self._headers[self.source.name])
 
+            self.bundle.commit()
+
+            if p.datafile.exists:
+                p.datafile.remove()
+                p.datafile.close()
+
             writer = p.datafile.writer
 
             self._datafiles[df_key] = (p, header_mapper, body_mapper, writer)

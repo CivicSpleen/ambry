@@ -20,40 +20,28 @@ from requests.exceptions import HTTPError
 from ambry.bundle import Bundle
 from ambry.dbexceptions import ConfigurationError
 from ambry.identity import Identity, ObjectNumber, NotObjectNumberError, NumberServer, DatasetNumber
+
 from ambry.library.search import Search
 from ambry.orm import Partition, File, Config
 from ambry.orm.database import Database
 from ambry.orm.dataset import Dataset
+from ambry.orm import Account
 from ambry.orm.exc import NotFoundError, ConflictError
 from ambry.run import get_runconfig
 from ambry.util import get_logger
-from ambry.util.packages import install
+from six import string_types
 
 from .filesystem import LibraryFilesystem
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
-
 global_library = None
 
-
-def new_library(config=None, database_name=None):
+def new_library(config=None):
 
     if config is None:
         config = get_runconfig()
 
-    lfs = LibraryFilesystem(config)
-
-    library_config = config.library(database_name)
-
-    db_config = library_config['database']
-
-    db = Database(db_config, echo=False)
-    warehouse = None
-
-    l = Library(config=config,
-                database=db,
-                filesystem=lfs,
-                warehouse=warehouse)
+    l = Library(config)
 
     global global_library
 
@@ -64,21 +52,34 @@ def new_library(config=None, database_name=None):
 
 class Library(object):
 
-    def __init__(self, config, database, filesystem, warehouse, search=None):
+    def __init__(self,  config=None, search=None):
         from sqlalchemy.exc import OperationalError
+        from ambry.library.config import LibraryConfigSyncProxy
+
+        if config:
+            self._config = config
+        else:
+            self._config = get_runconfig()
+
 
         self.logger = logger
-        self._config = config
-        self._db = database
+
+        self._fs = LibraryFilesystem(config)
+
+        self._db = Database(self._fs.database_dsn)
+
+        self._account_password = self.config.accounts.password
 
         try:
             self._db.open()
         except OperationalError as e:
             self.logger.error("Failed to open database '{}': {} ".format(self._db.dsn, e))
 
-        self._fs = filesystem
-        self._warehouse = warehouse
+        lcsp = LibraryConfigSyncProxy(self)
+        lcsp.sync()
+
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
+
         if search:
             self._search = Search(self, search)
         else:
@@ -103,7 +104,11 @@ class Library(object):
         return self.database.clean()
 
     def create(self):
-        return self.database.create()
+        from config import LibraryConfigSyncProxy
+        self.database.create()
+
+        lcsp = LibraryConfigSyncProxy(self)
+        lcsp.sync()
 
     @property
     def database(self):
@@ -120,47 +125,6 @@ class Library(object):
     @property
     def download_cache(self):
         return OSFS(self._fs.downloads())
-
-    @property
-    def remotes(self):
-        return self.filesystem.remotes
-
-    @property
-    def warehouse(self):
-        return self._warehouse
-
-    def remote(self, name_or_bundle):
-        return self.filesystem.remote(self.resolve_remote(name_or_bundle))
-
-    def resolve_remote(self, name_or_bundle):
-
-        fails = []
-
-        remote_names = list(self.filesystem.remotes.keys())
-
-        try:
-            if name_or_bundle in remote_names:
-                return name_or_bundle
-        except KeyError:
-            fails.append(name_or_bundle)
-
-        try:
-            if name_or_bundle.metadata.about.remote in remote_names:
-                return name_or_bundle.metadata.about.remote
-        except AttributeError:
-            pass
-        except KeyError:
-            fails.append(name_or_bundle.metadata.about.access)
-
-        try:
-            if name_or_bundle.metadata.about.access in remote_names:
-                return name_or_bundle.metadata.about.access
-        except AttributeError:
-            pass
-        except KeyError:
-            fails.append(name_or_bundle.metadata.about.access)
-
-        raise ConfigurationError('Failed to find remote for key values: {}'.format(fails))
 
     def commit(self):
         self._db.commit()
@@ -304,6 +268,13 @@ class Library(object):
         b = self.bundle(p.d_vid)
         return b.wrap_partition(p)
 
+    def remove(self, bundle):
+        """ Removes a bundle from the library and deletes the configuration for
+        it from the library database."""
+
+        bundle.remove()
+        self.database.remove_dataset(bundle.dataset)
+
     #
     # Storing
     #
@@ -428,6 +399,10 @@ class Library(object):
 
         return remote_name, db_ck
 
+    #
+    # Remotes
+    #
+
     def sync_remote(self, remote_name):
         remote = self.remote(remote_name)
 
@@ -464,12 +439,126 @@ class Library(object):
 
         self.database.commit()
 
-    def remove(self, bundle):
-        """ Removes a bundle from the library and deletes the configuration for
-        it from the library database."""
+    @property
+    def remotes(self):
+        """Return the names and URLs of the remotes"""
+        root = self.database.root_dataset
+        rc = root.config.library.remotes
 
-        bundle.remove()
-        self.database.remove_dataset(bundle.dataset)
+        return dict(rc.items())
+
+    def remote(self, name_or_bundle):
+
+        from fs.s3fs import S3FS
+        from fs.opener import fsopendir
+        from ambry.util import parse_url_to_dict
+
+        r = self.remotes[self.resolve_remote(name_or_bundle)]
+
+        # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
+        # https://github.com/boto/boto/issues/2836
+        if r.startswith('s3'):
+            return self.filesystem.s3(r, self.account_acessor)
+
+        else:
+            return fsopendir(r, create_dir=True)
+
+        return self.filesystem.remote(self.resolve_remote(name_or_bundle))
+
+    def resolve_remote(self, name_or_bundle):
+        """Determine the remote name for a name that is either a remote name, or the name
+        of a bundle, which references a remote"""
+        fails = []
+
+        remote_names = self.remotes.keys()
+
+        try:
+            if name_or_bundle in remote_names:
+                return name_or_bundle
+        except KeyError:
+            fails.append(name_or_bundle)
+
+        try:
+            if name_or_bundle.metadata.about.remote in remote_names:
+                return name_or_bundle.metadata.about.remote
+        except AttributeError:
+            pass
+        except KeyError:
+            fails.append(name_or_bundle.metadata.about.access)
+
+        try:
+            if name_or_bundle.metadata.about.access in remote_names:
+                return name_or_bundle.metadata.about.access
+        except AttributeError:
+            pass
+        except KeyError:
+            fails.append(name_or_bundle.metadata.about.access)
+
+        raise ConfigurationError('Failed to find remote for key values: {}'.format(fails))
+
+    #
+    # Accounts
+    #
+
+    @property
+    def password(self):
+        """The password for decrypting the account secrets"""
+        return self._account_password
+
+    @password.setter
+    def password(self, v):
+        self._account_password = v
+
+    def account(self, account_id):
+        """
+        Return accounts references for the given account id.
+        :param account_id:
+        :param accounts_password: The password for decrypting the secret
+        :return:
+        """
+
+        act = self.database.session.query(Account).filter(Account.account_id == account_id).one()
+        act.password = self._account_password
+        return act
+
+    @property
+    def account_acessor(self):
+
+        def _accessor(account_id):
+            return self.account(account_id)
+
+        return _accessor
+
+    @property
+    def accounts(self):
+        """
+        Return an account reference
+        :param account_id:
+        :param accounts_password: The password for decrypting the secret
+        :return:
+        """
+        d = {}
+
+
+        if not self._account_password:
+            from ambry.dbexceptions import ConfigurationError
+            raise ConfigurationError("Can't access accounts without setting an account password"
+                                     " either in the accounts.password config, or in the AMBRY_ACCOUNT_PASSWORD"
+                                     " env var.")
+
+        for act in self.database.session.query(Account).all():
+            act.password = self._account_password
+            e = act.dict
+            a_id = e['account_id']
+            del e['account_id']
+            d[a_id] = e
+
+        return d
+
+    @property
+    def services(self):
+        return self.database.root_dataset.config.library['services']
+
 
     def number(self, assignment_class=None, namespace='d'):
         """
@@ -490,7 +579,7 @@ class Library(object):
         elif assignment_class is None:
 
             try:
-                nsconfig = self._config.service('numbers')
+                nsconfig = self.services['numbers']
 
             except ConfigurationError:
                 # A missing configuration is equivalent to 'self'
@@ -507,7 +596,7 @@ class Library(object):
 
         else:
             try:
-                nsconfig = self._config.service('numbers')
+                nsconfig = self.services['numbers']
 
             except ConfigurationError:
                 raise ConfigurationError('No number server configuration')
@@ -557,7 +646,8 @@ class Library(object):
 
         return self._search
 
-    def install_packages(self, module_name, pip_name):
+    def install_packages(self, module_name, pip_name, force=False):
+        from ambry.util.packages import install
 
         python_dir = self._fs.python()
 
@@ -570,13 +660,16 @@ class Library(object):
 
         sys.path.append(python_dir)
 
-        try:
-            imp.find_module(module_name)
-            return  # self.log("Required package already installed: {}->{}".format(module_name, pip_name))
-        except ImportError:
-            self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
+        if force:
+            self.logger.info('Upgrading required package: {}->{}'.format(module_name, pip_name))
             install(python_dir, module_name, pip_name)
-
+        else:
+            try:
+                imp.find_module(module_name)
+                return  # self.log("Required package already installed: {}->{}".format(module_name, pip_name))
+            except ImportError:
+                self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
+                install(python_dir, module_name, pip_name)
 
     def import_bundles(self, dir, detach = False, force = False):
         """
@@ -632,7 +725,7 @@ class Library(object):
 
             bundles.append(b)
 
-        return  bundles
+        return bundles
 
     @property
     def process_pool(self):
@@ -647,4 +740,5 @@ class Library(object):
             cpus = multiprocessing.cpu_count()
 
         self.logger.info('Starting MP pool with {} processors'.format(cpus))
-        return multiprocessing.Pool(processes=cpus, initializer=init_library, initargs=[self.config.path, self.database.dsn])
+        return multiprocessing.Pool(processes=cpus, initializer=init_library,
+                                    initargs=[self.database.dsn, self._account_password])

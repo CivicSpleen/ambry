@@ -25,43 +25,9 @@ class Test(TestBase):
 
     def test_run_config_filesystem(self):
         rc = self.get_rc()
-        self.assertEqual('/tmp/ambry/downloads', rc.filesystem('downloads'))
-        self.assertEqual('/tmp/ambry/extracts', rc.filesystem('extracts'))
+        self.assertEqual('{root}/downloads', rc.filesystem.downloads)
+        self.assertEqual('{root}/extracts', rc.filesystem.extracts)
 
-    def test_run_config_library(self):
-        lib = self.get_rc().library()
-        self.assertIn('warehouse', lib)
-        self.assertIn('database', lib)
-
-    def test_database(self):
-        rc = self.get_rc()
-
-        def bf_dir(fn):
-            return os.path.join(os.path.dirname(bundlefiles.__file__), fn)
-
-        with open(os.path.join(bf_dir('ambry-accounts.yaml'))) as f:
-            rc.accounts = yaml.load(f)['accounts']
-
-        # See the ambry.yaml and ambry-accounts.yaml files in test/bundlefiles
-
-        self.assertEqual(
-            {'username': None, 'password': None, 'driver': 'sqlite', 'dbname': '/foo/bar', 'server': None},
-            rc.database('database1'))
-
-        self.assertEqual(
-            {'username': 'user', 'password': 'pass', 'driver': 'postgres', 'dbname': 'dbname',
-             'server': 'host'},
-            rc.database('database2'))
-
-        self.assertEqual(rc.database('database2'), rc.database('database3'))
-
-        self.assertEqual('creduser1', rc.database('database4')['user'])
-        self.assertEqual('credpass1', rc.database('database4')['password'])
-
-        self.assertEqual(
-            {'username': 'user2', '_name': 'host2-user2-dbname', 'password': 'credpass2',
-             'driver': 'postgres', 'dbname': 'dbname', 'server': 'host2'},
-            rc.database('database5'))
 
     def test_dsn_config(self):
         from ambry.dbexceptions import ConfigurationError
@@ -103,3 +69,108 @@ class Test(TestBase):
 
         with self.assertRaises(ConfigurationError):
             n('sqlite3://foobar')
+
+    def test_basic_config(self):
+
+        from ambry.util import temp_file_name
+        import ambry.run
+        from ambry.dbexceptions import ConfigurationError
+        import os
+        from ambry.library.filesystem import LibraryFilesystem
+
+        tf = temp_file_name()
+
+        with open(tf, 'w') as f:
+            f.write("""
+library:
+    category: development
+    remotes:
+        census: s3://test.library.civicknowledge.com/census
+        public: s3://test.library.civicknowledge.com/public
+        restricted: s3://test.library.civicknowledge.com/restricted
+        test: s3://test.library.civicknowledge.com/test
+                    """)
+
+        with self.assertRaises(ConfigurationError):
+            config = ambry.run.load(tf)
+
+        if 'AMBRY_DB' in os.environ:
+            del os.environ['AMBRY_DB']
+
+        with open(tf,'w') as f:
+            f.write("""
+library:
+    category: development
+    filesystem_root: /tmp/foo/bar
+    database: postgres://foo:bar@baz:5432/ambry
+    remotes:
+        census: s3://test.library.civicknowledge.com/census
+        public: s3://test.library.civicknowledge.com/public
+        restricted: s3://test.library.civicknowledge.com/restricted
+        test: s3://test.library.civicknowledge.com/test
+            """)
+
+        config = ambry.run.load(tf)
+        config.account = None
+
+        self.assertEquals('postgres://foo:bar@baz:5432/ambry', config.library.database)
+        self.assertEquals('/tmp/foo/bar',config.library.filesystem_root)
+
+        self.assertEqual(1, len(config.loaded))
+        self.assertEqual(tf, config.loaded[0][0])
+
+        with open(tf, 'w') as f:
+            f.write("""
+library:
+    filesystem_root: /foo/root
+            """)
+
+        os.environ['AMBRY_DB'] = 'sqlite:////library.db'
+
+        with open(tf, 'w') as f:
+            f.write("""""")
+
+        os.environ['AMBRY_DB'] = 'sqlite:////{root}/library.db'
+        os.environ['AMBRY_ROOT'] = '/tmp/foo/bar'
+
+        config = ambry.run.load(tf)
+
+        lf = LibraryFilesystem(config)
+
+        self.assertEqual('sqlite://///tmp/foo/bar/library.db', lf.database_dsn)
+        self.assertEqual('/tmp/foo/bar/downloads/a/b',lf.downloads('a','b'))
+
+    def test_library(self):
+        from ambry.util import temp_file_name
+        import ambry.run
+        from ambry.library import Library
+        from shutil import rmtree
+        from ambry.library.filesystem import LibraryFilesystem
+
+        db_path = '/tmp/foo/bar/library.db'
+        import os
+        if os.path.exists(db_path):
+            os.remove(db_path)
+
+        tf = temp_file_name()
+
+        with open(tf, 'w') as f:
+            f.write("""
+library:
+    category: development
+    filesystem_root: /tmp/foo/bar
+    remotes:
+        census: s3://test.library.civicknowledge.com/census
+        public: s3://test.library.civicknowledge.com/public
+        restricted: s3://test.library.civicknowledge.com/restricted
+        test: s3://test.library.civicknowledge.com/test""")
+
+        config = ambry.run.load(tf)
+
+        lf = LibraryFilesystem(config)
+
+        self.assertTrue('/tmp/foo/bar', lf.root)
+
+        l = Library(config)
+
+        self.assertEqual(['test', 'restricted', 'census', 'public'], l.remotes.keys())

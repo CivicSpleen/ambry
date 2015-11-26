@@ -21,7 +21,9 @@ class Test(TestBase):
             raise ConfigurationError("Failed to load config. You probably need to setup a "
                                      "VIRTUAL_ENV env var, or create $HOME/.ambry.yaml")
 
-        self.library = new_library(rc, 'postgresql-test')
+        rc.set_library_database('postgresql-test')
+
+        self.library = new_library(rc)
 
         self.dsn = self.library.database.dsn
 

@@ -29,6 +29,10 @@ global_logger = None  # Set in main()
 AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
 
 
+def prt_no_format(template, *args, **kwargs):
+    # global global_logger
+    print_(template)
+
 def prt(template, *args, **kwargs):
     # global global_logger
     print_(template.format(*args, **kwargs))
@@ -342,17 +346,13 @@ def main(argsv=None, ext_logger=None):
         try:
             rc = get_runconfig(rc_path)
 
-        except ConfigurationError:
+        except ConfigurationError as e:
+            print '!!!!', e
             fatal("Could not find configuration file \nRun 'ambry config install; to create one ")
 
         global global_run_config
         global_run_config = rc
 
-        if not rc.environment.get('category', False):
-            
-            warn("environment.class isn't set in config '{}' ; assuming 'development' ".format(rc_path))
-            
-            rc.environment['class'] = 'development'
 
     if args.test_library:
         rc.group('filesystem')['root'] = rc.group('filesystem')['test']

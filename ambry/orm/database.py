@@ -17,6 +17,8 @@ from ambry.util import get_logger, parse_url_to_dict
 from . import Column, Partition, Table, Dataset, Config, File,\
     Code, ColumnStat, DataSource, SourceColumn, SourceTable
 
+from account import Account
+
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
@@ -91,6 +93,7 @@ class Database(object):
             self._create_path()
             self.create_tables()
             return True
+
         return False
 
     def _create_path(self):
@@ -146,11 +149,13 @@ class Database(object):
 
         if not self._engine:
 
-            if 'postgresql' in self.driver:
-                from sqlalchemy.pool import NullPool
+            if 'postgres' in self.driver:
+                from sqlalchemy.pool import NullPool, AssertionPool
                 # FIXME: Find another way to initiate postgres with NullPool (it is usefull for tests only.)
-                self._engine = create_engine(self.dsn, echo=self._echo,  poolclass=NullPool)
+
+                self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs) #, poolclass=AssertionPool)
             else:
+
                 self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
 
             #
@@ -217,7 +222,7 @@ class Database(object):
     def open(self):
         """ Ensure the database exists and is ready to use. """
 
-        # Creates the session
+        # Creates the session, connection and engine
         self.session
 
         if not self.exists():
@@ -261,7 +266,7 @@ class Database(object):
             self.logger.info('Cleaning: {}'.format(ds.name))
             self.remove_dataset(ds)
 
-        self.remove_dataset(self.root_dataset)
+        #self.remove_dataset(self.root_dataset)
 
         self.create()
 
@@ -285,18 +290,27 @@ class Database(object):
             except:
                 pass
 
-            self.commit()
+        self.commit()
 
-        # drop all tables.
+        # Delete all of the data
         for tbl in reversed(self.metadata.sorted_tables):
-            self.logger.info('Dropping {}'.format(tbl))
+            self.logger.info('Deleting data from  {}'.format(tbl))
             self.engine.execute(tbl.delete())
 
-        self.commit()
 
         # remove sqlite file.
         if self.dsn.startswith('sqlite:') and self.exists():
             os.remove(self.path)
+        else:
+            self.commit()
+            self.close_session()
+            self.close_connection()
+
+            # On postgres, this usually just locks up.
+            for tbl in reversed(self.metadata.sorted_tables):
+                self.logger.info('Droping {}'.format(tbl))
+                tbl.drop(self.engine)
+
 
     @property
     def metadata(self):
@@ -319,13 +333,16 @@ class Database(object):
     def clone(self):
         return self.__class__(self.dsn)
 
+    def create_table(self, table):
+        pass
+
     def create_tables(self):
 
         from sqlalchemy.exc import OperationalError
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
-            ColumnStat, SourceTable, SourceColumn, DataSource]
+            ColumnStat, SourceTable, SourceColumn, DataSource, Account]
 
         try:
             self.drop()
@@ -338,12 +355,7 @@ class Database(object):
         orig_schemas = {}
 
         for table in tables:
-            try:
-                it = table.__table__
-                # stored_partitions, file_link are already tables.
-            except AttributeError:
-                it = table
-
+            it = table.__table__
             # These schema shenanigans are almost certainly wrong.
             # But they are expedient. For Postgres, it puts the library
             # tables in the Library schema.
@@ -352,8 +364,6 @@ class Database(object):
                 it.schema = self._schema
 
             it.create(bind=self.engine)
-
-        self.commit()
 
         # We have to put the schemas back because when installing to a warehouse.
         # the same library classes can be used to access a Sqlite database, which
@@ -540,7 +550,6 @@ class Database(object):
 
         return self.dataset(ds.vid)
 
-
 class BaseMigration(object):
     """ Base class for all migrations. """
 
@@ -562,11 +571,9 @@ class BaseMigration(object):
         raise NotImplementedError(
             'subclasses of MigrationBase must provide a _migrate_postgresql() method')
 
-
 class VersionIsNotStored(Exception):
     """ Means that ambry never updated db schema. """
     pass
-
 
 def migrate(connection):
     """ Collects all migrations and applies missed.

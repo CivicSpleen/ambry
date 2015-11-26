@@ -12,10 +12,9 @@ from ..util import memoize
 
 def install(install_dir, egg, url):
 
-    initial_args = ['install',
+    initial_args = ['install', '-U',
         '--install-option=--install-purelib={}'.format(install_dir),
         url]
-
 
     try:
         # This version works for Pip 6.
@@ -24,7 +23,9 @@ def install(install_dir, egg, url):
         cmd_name, options = pip.parseopts(initial_args)
 
         command = InstallCommand()
+
         return command.main(options)
+
     except:
         pass
 
@@ -40,7 +41,21 @@ def install(install_dir, egg, url):
 
         cmd_name, cmd_args = pip.parseopts(initial_args)
         command = commands[cmd_name]()
+
         return command.main(cmd_args)
+
+
+def uninstall(install_dir, egg):
+
+    from pip.commands import UninstallCommand
+
+    initial_args = ['uninstall', egg]
+
+    cmd_name, options = pip.parseopts(initial_args)
+
+    command = UninstallCommand()
+
+    return command.main(options)
 
 
 def qualified_name(o):

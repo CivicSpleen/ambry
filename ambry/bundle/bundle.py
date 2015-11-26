@@ -32,17 +32,37 @@ BUILD_LOG_FILE = 'log/build_log{}.txt'
 def _CaptureException(f, *args, **kwargs):
     """Decorator implementation for capturing exceptions."""
     from ambry.dbexceptions import LoggedException
+    from sqlalchemy.exc import InvalidRequestError
+    from sqlalchemy.orm.exc import DetachedInstanceError
 
     b = args[0]  # The 'self' argument
 
     try:
         return f(*args, **kwargs)
     except Exception as e:
-
+        raise
+        orig_exc = e
+        print "Got exception: ", e
         if b.capture_exceptions:
-            b.exception(e)
-            b.commit()
-            raise LoggedException(e, b)
+            try:
+                b.commit()
+            except Exception as e:
+                # Hell, I don't know ... There seem to be a
+                print "Got exception trying to clear the exception: ", e
+                try:
+                    b.close()
+                except Exception as e:
+                    # Really, this is horrible.
+                    print "Oh fer #$#$ sakes: ", e
+                    pass
+
+            try:
+                b.exception(e)
+                b.commit()
+            except Exception:
+                print 'Got another: ', e
+
+            raise LoggedException(orig_exc, b)
         else:
             raise
 
@@ -105,6 +125,7 @@ class Bundle(object):
 
         self.multi = None  # Number of multiprocessing processes
         self.is_subprocess = False  # Externally set in child processes.
+        self.is_remote_process = os.getenv('AMBRY_IS_REMOTE', False) # Set externally when run as a slave process.
 
         assert bool(library)
 
@@ -167,6 +188,9 @@ class Bundle(object):
         :return:
         """
 
+        self.import_lib()
+        self.load_requirements()
+
         try:
             self.commit()  # To ensure the rollback() doesn't clear out anything important
             bsf = self.build_source_files.file(File.BSFILE.BUILD)
@@ -196,13 +220,26 @@ class Bundle(object):
         to the path."""
 
         for module_name, pip_name in iteritems(self.metadata.requirements):
-            self._library.install_packages(module_name, pip_name)
+            extant = self.dataset.config.requirements[module_name].url
+
+            force =  (extant and extant != pip_name)
+
+            self._library.install_packages(module_name, pip_name, force=force)
+
+            self.dataset.config.requirements[module_name].url = pip_name
+
+        self.commit()
 
         python_dir = self._library.filesystem.python()
         sys.path.append(python_dir)
 
+
+
     def commit(self):
         return self.dataset.commit()
+
+    def close(self):
+        return self.dataset.close()
 
     @property
     def session(self):
@@ -470,10 +507,10 @@ class Bundle(object):
                 source_url = self.library.filesystem.source(self.identity.cache_key)
 
             try:
-
                 self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
-                self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
+                if not self.is_remote_process:
+                    self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
                 source_url = self.library.filesystem.source(self.identity.cache_key)
                 self._source_fs = fsopendir(source_url)
 
@@ -1034,7 +1071,10 @@ Caster Code
                 self.error('Failed to run stage {}'.format(stage))
             self._run_events(TAG.AFTER_STAGE, stage)
 
-        self.post_run()
+        # Don't run if the caller specified a subset of sources or tables
+
+        if not sources and not tables:
+            self.post_run()
 
         if not sources and not tables:
             self._run_events(TAG.AFTER_RUN)
@@ -1100,6 +1140,7 @@ Caster Code
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
         self.log('---- Sync In ----')
+        self.library.commit()
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
@@ -1131,6 +1172,8 @@ Caster Code
         self.log('---- Sync Code ----')
         for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
             self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+
+        self.build_source_files.file(File.BSFILE.META).record_to_objects()
 
     #
     # Clean
@@ -1318,9 +1361,6 @@ Caster Code
                     df.remove()
 
 
-
-
-
         def not_final_or_delete(s):
             import zlib
 
@@ -1352,6 +1392,7 @@ Caster Code
         self.state = self.STATES.INGESTED
         self.commit()
 
+        self.log("Done ingesting")
         return True
 
     def _ingest_sources(self, sources, force=False):
@@ -1367,8 +1408,14 @@ Caster Code
                 args = [(self.identity.vid, source.vid, force) for source in downloadable_sources]
 
                 pool = self.library.process_pool
+
                 try:
-                    pool.map(ingest_mp, args)
+                    result = pool.map_async(ingest_mp, args)
+
+                    pool.close()
+                    pool.join()
+
+
                 except KeyboardInterrupt:
                     self.log('Got keyboard interrrupt; terminating workers')
                     pool.terminate()
@@ -1388,11 +1435,6 @@ Caster Code
         from ambry_sources import get_source
         from ambry_sources.exceptions import MissingCredentials
         from ambry.orm.exc import NotFoundError
-
-        def account_accessor(url, accounts=self.library.config.accounts):
-            # return empty dict if credentials do not exist
-            # to force ambry_sources to raise exception with required config.
-            return accounts.get(url, {})
 
         if not source.is_partition and source.datafile.exists:
             if not source.datafile.is_finalized:
@@ -1446,9 +1488,10 @@ Caster Code
 
             with self.progress_logging(lambda: ('Downloading {}', (source.url,)), 10):
                 try:
+
                     s = get_source(
                         source.spec, self.library.download_cache,
-                        clean=force, account_accessor=account_accessor)
+                        clean=force, account_accessor=self.library.account_acessor)
 
                 except MissingCredentials as exc:
                     formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
@@ -1484,6 +1527,8 @@ Caster Code
         self.log('Ingested: {}'.format(source.datafile.path))
         source.state = source.STATES.INGESTED
         self.commit()
+
+        return source.name
 
     def _ingest_update_tables(self, sources):
         # Do these updates, even if we skipped ingestion, so that the source tables will be generated if they
@@ -1564,11 +1609,18 @@ Caster Code
                 columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in sources
                                  for i, col in enumerate(source.source_table.columns)]))
 
+                initial_count = len(t.columns)
+
                 for pos, name, datatype, desc in columns:
                     t.add_column(name=name, datatype=datatype, description=desc, update_existing=True)
 
-                self.log("Populated destination table '{}' from source table '{}' with {} columns"
-                         .format(t.name, source.source_table.name, len(columns)))
+                final_count = len(t.columns)
+
+                if final_count > initial_count:
+                    diff = final_count - initial_count
+
+                    self.log("Populated destination table '{}' from source table '{}' with {} columns"
+                             .format(t.name, source.source_table.name, diff))
 
         for i, source in enumerate(self.refs):
             try:
@@ -1612,9 +1664,8 @@ Caster Code
             return False
 
         self.state = self.STATES.BUILDING
+        self.commit()
 
-        self.import_lib()
-        self.load_requirements()
 
         return True
 
@@ -1679,17 +1730,15 @@ Caster Code
 
         return True
 
-    def post_run(self, phase='build'):
+    def post_run(self):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
 
-        self.library.search.index_bundle(self, force=True)
-
-        self.state = phase + '_done'
-
+        self.state = self.STATES.BUILT
         self.commit()
-        self.log('---- Finished phase {} ---- '.format(phase))
+
+        self.log('---- Finished Building ---- ')
 
         return True
 
@@ -1727,15 +1776,18 @@ Caster Code
             self.log_pipeline(pl)
 
             try:
+
+                source_name = source.spec.name # In case the source drops out of the session, which is does.
                 with self.progress_logging(lambda: ('Run source {}: {} rows, {} rows/sec',
-                                                    (source.spec.name,) + pl.sink.report_progress()), 10):
+                                                    (source_name,) + pl.sink.report_progress()), 10):
 
                     pl.run()
             except:
                 self.log_pipeline(pl)
                 raise
 
-            self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
+            if self.multi:
+                self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
 
             self.commit()
 
@@ -1767,6 +1819,7 @@ Caster Code
                 return
 
         except Exception as e:
+            raise
             self.error("Failed to build source '{}'; {}".format(source.name, e))
             source.state = source.state + ('_error' if not self.state.endswith('_error') else '')
             self.commit()
@@ -2057,6 +2110,9 @@ Caster Code
         return self.finalize()
 
     def finalize(self):
+
+        self.library.search.index_bundle(self, force=True)
+
         self.state = self.STATES.FINALIZED
         self.commit()
         self.finalize_write_bundle_file()

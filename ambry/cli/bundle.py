@@ -21,7 +21,7 @@ from ambry.bundle import Bundle
 from ambry.orm.exc import NotFoundError
 from ambry.util import drop_empty
 
-from ..cli import prt, fatal, warn, err
+from ..cli import prt, fatal, warn, err, prt_no_format
 from ..orm import File
 
 
@@ -32,9 +32,10 @@ def bundle_command(args, rc):
     from ambry.orm.exc import ConflictError
     from ambry.dbexceptions import LoggedException
 
-    database_name = "test" if args.test_library else None
+    if args.test_library:
+        rc.set_library_database('test')
 
-    l = new_library(rc, database_name=database_name)
+    l = new_library(rc)
     l.logger = global_logger
 
     if args.debug:
@@ -44,6 +45,7 @@ def bundle_command(args, rc):
 
     if args.processes:
         args.multi = args.processes
+        l.processes = args.processes
 
     try:
         globals()['bundle_' + args.subcommand](args, l, rc)
@@ -457,6 +459,28 @@ def bundle_parser(cmd):
     command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
 
 
+    #
+    # Docker
+    #
+
+    command_p = sub_cmd.add_parser('docker', help='Run bambry commands in a docker container')
+    command_p.set_defaults(subcommand='docker')
+    command_p.add_argument('-i', '--docker_id', default=False, action='store_true',
+                           help='Print the id of the running container')
+    command_p.add_argument('-k', '--kill', default=False, action='store_true',
+                           help='Kill the running container')
+    command_p.add_argument('-n', '--docker_name', default=False, action='store_true',
+                           help='Print the name of the running container')
+    command_p.add_argument('-l', '--logs', default=False, action='store_true',
+                           help='Get the logs (stdout) from a runnings container')
+
+    command_p.add_argument('-s', '--stats', default=False, action='store_true',
+                           help='Report stats from the currently running container')
+    command_p.add_argument('-v', '--version', default=False, action='store_true',
+                       help='Select a docker version that is the same as this Ambry installation')
+
+    command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
+
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
 
@@ -703,9 +727,6 @@ def bundle_sync(args, l, rc):
 def bundle_ingest(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
-
-    # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l, print_loc=False).cast_to_subclass()
 
     if not args.force and not args.table and not args.source:
         check_built(b)
@@ -1481,3 +1502,169 @@ def bundle_test(args, l, rc):
     b = using_bundle(args, l).cast_to_subclass()
 
     b.run_tests(args.tests)
+
+def docker_client():
+    from docker.client import Client
+    from docker.utils import kwargs_from_env
+
+    kwargs = kwargs_from_env()
+    kwargs['tls'].assert_hostname = False
+
+    client = Client(**kwargs)
+
+    return client
+
+def bundle_docker(args, l, rc):
+    import os
+    import sys
+    from docker.errors import NotFound, NullResource
+
+    b = using_bundle(args, l, print_loc=False)
+    client = docker_client()
+
+    try:
+        last_container = b.config.build.docker.last_container
+    except KeyError:
+        last_container = None
+
+    try:
+        inspect = client.inspect_container(last_container)
+
+    except NotFound:
+        # OK; the last_container is dead
+        b.config.build.docker.last_container = None
+        b.commit()
+        inspect  = None
+    except NullResource:
+        inspect = None
+        pass  # OK; no container specified in the last_container value
+
+    #
+    # Command args
+    #
+
+    bambry_cmd = ' '.join(args.args).strip()
+
+
+    def run_container(bambry_cmd=None):
+        """Run a new docker container"""
+
+        envs = []
+        envs.append('AMBRY_DB={}'.format(l.database.dsn))
+        envs.append('AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password))
+
+        if bambry_cmd:
+
+            if last_container:
+                fatal("Bundle already has a running container: {}\n{}".format(inspect['Name'], inspect['Id']))
+
+            bambry_cmd_args = []
+
+            if args.multi:
+                bambry_cmd_args.append('-m')
+
+            if args.processes:
+                bambry_cmd_args.append('-p' + str(args.processes))
+
+            envs.append('AMBRY_COMMAND=bambry -i {} {} {}'.format(
+                b.identity.vid, ' '.join(bambry_cmd_args), bambry_cmd))
+
+            detach = True
+        else:
+            detach = False
+
+        if args.version:
+            import ambry._meta
+            image = 'civicknowledge/ambry:{}'.format(ambry._meta.__version__)
+        else:
+            image = 'civicknowledge/ambry'
+
+        try:
+            volumes_from = rc.docker.volumes_from
+        except KeyError:
+            volumes_from = None
+
+        host_config = client.create_host_config(
+            volumes_from=volumes_from
+        )
+
+        kwargs = dict(
+            image=image,
+            detach=detach,
+            tty=not detach,
+            stdin_open=not detach,
+            environment=envs,
+            host_config=host_config
+        )
+
+        r = client.create_container(**kwargs)
+
+        client.start(r['Id'])
+
+        return r['Id']
+
+    if args.kill:
+
+        if last_container:
+
+            if inspect and inspect['State']['Running']:
+                client.kill(last_container)
+
+            client.remove_container(last_container)
+
+            prt("Killed {}", last_container)
+
+            b.config.build.docker.last_container = None
+            b.commit()
+            last_container = None
+        else:
+            warn('No container to kill')
+
+
+    if bambry_cmd:
+        # If there is command, run the container first so the subsequent arguments can operate on it
+        last_container = run_container(bambry_cmd)
+        b.config.build.docker.last_container = last_container
+        b.commit()
+
+
+    if args.docker_id:
+        if last_container:
+            prt(last_container)
+
+        return
+
+    elif args.docker_name:
+
+        if last_container:
+            prt(inspect['Name'])
+
+        return
+
+
+    elif args.logs:
+
+        if last_container:
+            for line in client.logs(last_container, stream=True):
+                print line,
+        else:
+            fatal("No running container")
+
+    elif args.stats:
+
+        for s in client.stats(last_container, decode=True):
+
+            sys.stderr.write("\x1b[2J\x1b[H")
+            prt_no_format(s.keys())
+            prt_no_format(s['memory_stats'])
+            prt_no_format(s['cpu_stats'])
+
+    elif not bambry_cmd and not args.kill:
+        # Run a container and then attach to it.
+        cid = run_container()
+
+        os.execlp('docker', 'docker', 'attach', cid)
+
+
+
+

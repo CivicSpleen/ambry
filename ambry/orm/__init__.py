@@ -395,13 +395,11 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class, force_query
         # There was no session set. This should only happen when the parent object is new, and therefore,
         # there are no child number, so the appropriate starting number is 1. If the object is not new,
         # there will be conflicts.
-
         sequence_ids[key] = 1
 
     else:
         # There were no previous numbers, so start with 1
         sequence_ids[key] += 1
-
 
     return sequence_ids[key]
 
@@ -417,3 +415,4 @@ from ambry.orm.columnstat import ColumnStat
 from ambry.orm.source_table import SourceColumn, SourceTable
 from ambry.orm.source import DataSource, TransientDataSource
 from ambry.orm.database import Database
+from ambry.orm.account import Account

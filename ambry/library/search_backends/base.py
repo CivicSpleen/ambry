@@ -9,7 +9,6 @@ import re
 
 from six import iterkeys, iteritems, u, string_types, text_type
 
-from nltk.stem.lancaster import LancasterStemmer
 
 from sqlalchemy.orm import object_session
 from sqlalchemy.sql import text
@@ -638,6 +637,12 @@ class SearchTermParser(object):
         return SearchTermParser.YEAR, int(token.lower().strip())
 
     def __init__(self):
+
+        # If we use NLTK, it must be imported here, since importing it at the
+        # global level interferres with making web requests in sub processes
+        # http://stackoverflow.com/questions/30766419/python-child-process-silently-crashes-when-issuing-an-http-request
+        from nltk.stem.lancaster import LancasterStemmer
+
         mt = '|'.join(
             [r'\b' + x.upper() + r'\b' for x in iterkeys(self.marker_terms)])
 

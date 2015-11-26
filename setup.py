@@ -110,17 +110,58 @@ class PyTest(TestCommand):
 
 
 class Docker(Command):
-    user_options = []
+
+    description = "build or launch a docker image"
+
+    user_options = [
+        ('base', 'B', 'Build the base docker image, civicknowledge.com/ambry-base'),
+        ('build', 'b', 'Build the base docker image, civicknowledge.com/ambry'),
+        ('launch', 'l', 'Run the docker image on the currently configured database'),
+    ]
 
     def initialize_options(self):
-        pass
+        self.build = None
+        self.base = None
+        self.launch = None
 
     def finalize_options(self):
         pass
 
     def run(self):
-        self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile',
-                    '-t', 'civicknowledge/ambry', '.'])
+        import os
+
+        if self.base:
+            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-base',
+                        '-t', 'civicknowledge/ambry-base', '.'])
+
+        if self.build:
+            from ambry._meta import __version__
+            import subprocess
+            import json
+
+            args = ['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry',
+                        '-t', 'civicknowledge/ambry', '.']
+
+            self.spawn(args)
+
+            # Inspect the image to get the image id, so we can tag it.
+            # FIXME. Instead of parsing the JSON, this should be:
+            # docker inspect --format='{{.Id}}' civicknowledge/ambry
+            proc = subprocess.Popen("docker inspect civicknowledge/ambry:latest", stdout=subprocess.PIPE, shell=True)
+            (out, err) = proc.communicate()
+            d = json.loads(out)
+
+            self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/ambry:{}'.format(__version__)])
+
+        if self.launch:
+            from ambry import get_library
+            l = get_library()
+            args = ('docker run --rm -t -i -e AMBRY_DB={} -e AMBRY_ACCOUNT_PASSWORD={} civicknowledge/ambry'
+                    .format(l.database.dsn, l._account_password)
+                    .split())
+
+            self.spawn(args)
+
 
 tests_require = ['pytest']
 

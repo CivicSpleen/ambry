@@ -110,6 +110,9 @@ class Dataset(Base):
     def rollback(self):
         self._database.rollback()
 
+    def rollback(self):
+        self._database.close()
+
     @property
     def session(self):
         return self._database.session
@@ -530,6 +533,11 @@ class ConfigAccessor(object):
     def sync(self):
         """Access sync configuration values as attributes. See self.process for a usage example"""
         return ConfigGroupAccessor(self.dataset, 'sync')
+
+    @property
+    def requirements(self):
+        """Access sync configuration values as attributes. See self.process for a usage example"""
+        return ConfigGroupAccessor(self.dataset, 'requirements')
 
     @property
     def library(self):

@@ -95,19 +95,17 @@ class BuildPropertyTreeFromDatabaseTest(TestBase):
         """
         db = self.db
         dataset = self.dataset
-        top_config = Config(
-            d_vid=dataset.vid, parent=None, type='metadata')
+        top_config = Config(d_vid=dataset.vid, parent=None, type='metadata', sequence_id = 1)
         db.session.add(top_config)
         db.session.commit()
-        names_config = Config(
-            d_vid=dataset.vid, key='names', group='names',
-            parent=top_config, type='metadata')
+        names_config = Config(d_vid=dataset.vid, key='names', group='names',
+            parent=top_config, type='metadata', sequence_id = 2)
         db.session.add(names_config)
         db.session.commit()
 
         vid_value_config = Config(
             d_vid=dataset.vid, key='vid', value=dataset.vid,
-            parent=names_config, type='metadata')
+            parent=names_config, type='metadata', sequence_id = 3)
         db.session.add(vid_value_config)
         db.session.commit()
 

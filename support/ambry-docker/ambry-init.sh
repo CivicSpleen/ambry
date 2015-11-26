@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
 # Initialize the Ambry config with environmental vars.
-# AMBRY_DB: a DSN for a library database
-
-# Edit just the database
-if [ ! -z $AMBRY_DB ]
-then
-    ambry config edit library.database=$AMBRY_DB
-fi
 
 # Edit the entire file, using a JSON input
 
@@ -16,4 +9,12 @@ then
 fi
 
 
-exec bash
+
+# Run an ambry command in the container
+if [ ! -z "$AMBRY_COMMAND" ]
+then
+    exec $AMBRY_COMMAND
+else
+    exec bash
+fi
+

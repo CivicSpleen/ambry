@@ -16,419 +16,258 @@ from .dbexceptions import ConfigurationError
 
 @lru_cache()
 def get_runconfig(path=None):
-    return RunConfig(path)
+    """Load the main configuration files and accounts file.
 
+    Load the main configuration files and accounts file from a variety of potential places,
+    and update the configuration with values from environmental variables.
 
-class RunConfig(object):
-    """Runtime configuration object.
+    The routine attempts to load the configuration from these locations, in this order:
 
-    The RunConfig object will search for a ambry.yaml file in multiple locations
-    including::
+    - /etc/ambry.yaml
+    - ~/.ambry.yaml
+    - A path specified by the AMBRY_CONFIG environmenal variable
+    - .ambry.yaml in the directory specified by the VIRTUAL_ENV environmental variable
+    - .ambry.yaml in the current working directory
 
-      /etc/ambry.yaml
-      ~user/.ambry.yaml
-      ./ambry.yaml
-      A named path ( --config option )
+    Or, if `path` is specified, it load that path and ignores the standard locations.
 
-    It will start from the first directory, and for each one, try to load the
-    file and copy the values into an accumulator, with later values overwritting
-    earlier ones.
+    The routines also loads the accounts file from one of these locations:
 
+    - A path specified by the AMBRY_ACCOUNTS environmenal variable
+    - .ambry-accounts.yaml in the directory specified by the VIRTUAL_ENV environmental variable
+    - ~/.ambry-accounts.yaml
+
+    After loading the configuation, the config is updated from environmental variables:
+
+    - `config.library.database` from `AMBRY_DB`
+    - `config.library.filesystem_root` from `AMBRY_ROOT`
+    - `config.accounts.password` from `AMBRY_PASSWORD`
+
+    The config file can be empty or missing if  the config has already been loaded into the database, and the
+    database, root and password are specified in environmental variables.
+
+    The typical use cases are that for a single machine installation, or the head of a multi-machine installation,
+    there is a full configuation file and accounts file. In a multi-machine installation, on;y the environmental
+    varaibles AMBRY_DB, AMBRY_ROOT and AMBRY_PASSWORD are specified, allowing satellite machines to get information
+    about remotes and accounts from the database. Since the filesystem entries can be taken from the defaults,
+    the satellite machines  do not need a configuration file.
+
+    :param path: The path to a configuration file to use instead of the standard locataions.
     """
 
-    # Name of the evironmental var for the config file.
-    AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
-    AMBRY_ACCT_ENV_VAR = 'AMBRY_ACCOUNTS'
+    return load(path)
 
-    ROOT_CONFIG = '/etc/ambry.yaml'
-    USER_CONFIG = (os.getenv(AMBRY_CONFIG_ENV_VAR)
-                   if os.getenv(AMBRY_CONFIG_ENV_VAR) else os.path.expanduser('~/.ambry.yaml'))
+def load(path = None):
 
-    pjoin = os.path.join  # Shortcut for simplification.
+    config = load_config(path)
+    config.update(load_accounts())
 
-    # A special case for virtual environments -- look for a user config file there first.
-    if os.getenv(AMBRY_CONFIG_ENV_VAR):
-        USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR)
-    elif os.getenv('VIRTUAL_ENV') and os.path.exists(pjoin(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')):
-        USER_CONFIG = pjoin(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
+    update_config(config)
+
+    return config
+
+from ambry.util import Constant
+
+ENVAR = Constant()
+ENVAR.CONFIG = 'AMBRY_CONFIG'
+ENVAR.ACCT = 'AMBRY_ACCOUNTS'
+ENVAR.PASSWORD = 'AMBRY_ACCOUNT_PASSWORD'
+ENVAR.DB =  'AMBRY_DB'
+ENVAR.ROOT =  'AMBRY_ROOT'
+ENVAR.EDIT = 'AMBRY_CONFIG_EDIT'
+ENVAR.VIRT = 'VIRTUAL_ENV'
+
+BASE_FILE = '.ambry.yaml'
+ROOT_FILE = '/etc/ambry.yaml'
+USER_FILE = '~/'+BASE_FILE
+ACCOUNTS_FILE = '.ambry-accounts.yaml'
+USER_ACCOUNTS_FILE = '~/'+ACCOUNTS_FILE
+
+filesystem_defaults = {
+    'build': '{root}/build',
+    'documentation': '{root}/doc',
+    'downloads': '{root}/downloads',
+    'extracts': '{root}/extracts',
+    'logs': '{root}/logs',
+    'python': '{root}/python',
+    'search': '{root}/search',
+    'source': '{root}/source',
+    'test': '{root}/test',
+}
+
+def load_accounts():
+    """Load one Yaml file of account information.
+
+    :return: An `AttrDict`
+    """
+    from os.path import join
+    from os.path import getmtime
+
+    config = AttrDict()
+
+    if os.getenv(ENVAR.ACCT):
+        accts_file = os.getenv(ENVAR.ACCT)
+
+    elif os.getenv(ENVAR.VIRT) and os.path.exists(join(os.getenv(ENVAR.VIRT), ACCOUNTS_FILE)):
+        accts_file = join(os.getenv(ENVAR.VIRT), ACCOUNTS_FILE)
+
     else:
-        USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
+        accts_file = os.path.expanduser(USER_ACCOUNTS_FILE)
 
-    if os.getenv(AMBRY_ACCT_ENV_VAR):
-        USER_ACCOUNTS = os.getenv(AMBRY_ACCT_ENV_VAR)
-    elif os.getenv('VIRTUAL_ENV') and os.path.exists(pjoin(os.getenv('VIRTUAL_ENV'), '.ambry-accounts.yaml')):
-        USER_ACCOUNTS = pjoin(os.getenv('VIRTUAL_ENV'), '.ambry-accounts.yaml')
+    if os.path.exists(accts_file):
+        config.update_yaml(accts_file)
+
+        config.accounts.loaded = [accts_file, getmtime(accts_file)]
+
     else:
-        USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
+        config.accounts = AttrDict()
+        config.accounts.loaded = [None, 0]
+
+
+
+    return config
+
+def load_config(path=None):
+    """
+    Load configuration information from one or more files. Tries to load from, in this order:
+
+    - /etc/ambry.yaml
+    - ~/.ambry.yaml
+    - A path specified by the AMBRY_CONFIG environmenal variable
+    - .ambry.yaml in the directory specified by the VIRTUAL_ENV environmental variable
+    - .ambry.yaml in the current working directory
+
+
+    :param path: An iterable of additional paths to load.
+    :return: An `AttrDict` of configuration information
+    """
+
+    from os.path import join
+    from os.path import getmtime
+
+    config = AttrDict()
+
+    files = []
+
+    if not path:
+        files.append(ROOT_FILE)
+
+        files.append(os.path.expanduser(USER_FILE))
+
+        if os.getenv(ENVAR.CONFIG):
+            files.append(os.getenv(ENVAR.CONFIG))
+
+        if os.getenv(ENVAR.VIRT):
+            files.append(join(os.getenv(ENVAR.VIRT), BASE_FILE))
+
+        try:
+            files.append(join(os.getcwd(), BASE_FILE))
+        except OSError:
+            pass # In webservers, there is no cwd
+
+    if isinstance(path, (list, tuple, set)):
+        for p in path:
+            files.append(p)
+    else:
+        files.append(path)
+
+    files = list(set(files))
+    loaded = []
+
+    for f in files:
+        if f is not None and os.path.exists(f):
+
+            try:
+                config.update_yaml(f)
+                loaded.append((f,getmtime(f) ))
+
+            except TypeError:
+                pass  # Empty files will produce a type error
+
+    #if not config:
+    #    raise ConfigurationError("Failed to load any config from: {}".format(files))
+
+    config.loaded = loaded
+
+    return config
+
+def update_config(config):
+    """Update the configuration from environmental variables. Updates:
+
+    - config.library.database from the AMBRY_DB environmental variable.
+    - config.library.filesystem_root from the AMBRY_ROOT environmental variable.
+    - config.accounts.password from the AMBRY_PASSWORD  environmental variable.
+
+    :param config: An `attrDict` of configuration information.
+    """
+
 
     try:
-        DIR_CONFIG = pjoin(os.getcwd(), 'ambry.yaml')  # In webservers, there is no cwd
-    except OSError:
-        DIR_CONFIG = None
+        _ = config.accounts
+    except KeyError:
+        config.accounts = AttrDict()
 
-    config = None
-    files = None
+    try:
+        _ = config.library
+    except KeyError:
+        config.library = AttrDict()
 
-    def __init__(self, path=None):
-        """Create a new RunConfig object.
+    try:
+        _ = config.filesystem
+    except KeyError:
+        config.filesystem = AttrDict()
 
-        Arguments
-        path -- If present, a yaml file to load last, overwriting earlier values
-          If it is an array, load only the files in the array.
+    try:
+        _ = config.accounts.password
+    except KeyError:
+        config.accounts.password = None
 
-        """
+    if os.getenv(ENVAR.DB):
+        config.library.database = os.getenv(ENVAR.DB)
 
-        config = AttrDict()
-        config['loaded'] = {'accounts': None, 'configs': []}
+    if os.getenv(ENVAR.ROOT):
+        config.library.filesystem_root = os.getenv(ENVAR.ROOT)
 
-        if not path:
-            pass
+    if os.getenv(ENVAR.PASSWORD):
+        config.accounts.password = os.getenv(ENVAR.PASSWORD)
 
-        if isinstance(path, (list, tuple, set)):
-            files = path
-        else:
-            files = [
-                RunConfig.ROOT_CONFIG,
-                path if path else RunConfig.USER_CONFIG,
-                RunConfig.DIR_CONFIG]
+    try:
+        _ = config.library.remotes
+    except KeyError:
+        config.library.remotes = AttrDict() # Default empty
 
-        loaded = False
+    # Set a default for the library database
+    try:
+        _ = config.library.database
+    except KeyError:
+        config.library.database = 'sqlite:///{root}/library.db'
 
-        for f in files:
-            if f is not None and os.path.exists(f):
-                try:
-                    config['loaded']['configs'].append(f)
-                    config.update_yaml(f)
-                    loaded = True
-                except TypeError:
-                    pass  # Empty files will produce a type error
+    # Raise exceptions on missing items
+    checks = [
+        'config.library.filesystem_root',
+    ]
 
-        if not loaded:
-            raise ConfigurationError("Failed to load any config from: {}".format(files))
-
-        if os.path.exists(RunConfig.USER_ACCOUNTS):
-            config['loaded']['accounts'] = RunConfig.USER_ACCOUNTS
-
-            config.update_yaml(RunConfig.USER_ACCOUNTS)
-
-        object.__setattr__(self, 'config', config)
-        object.__setattr__(self, 'files', files)
-        object.__setattr__(self, 'path', path)
-
-    def __getattr__(self, group):
-        """Fetch a configuration group and return the contents as an
-        attribute-accessible dict"""
-
-        return self.config.get(group, {})
-
-    def __setattr__(self, group, v):
-        """Fetch a configuration group and return the contents as an
-        attribute-accessible dict"""
-
-        self.config[group] = v
-
-    def get(self, k, default=None):
-
-        if not default:
-            default = None
-
-        return self.config.get(k, default)
-
-    def group(self, name):
-        """return a dict for a group of configuration items."""
-
-        if name not in self.config:
-            raise ConfigurationError(
-                "No group '{}' in configuration.\n"
-                "Config has: {}\nLoaded: {}".format(name, list(self.config.keys()), self.loaded))
-
-        return self.config.get(name, {})
-
-    def group_item(self, group, name):
-
-        g = self.group(group)
-
-        if name not in g:
-            raise ConfigurationError(
-                "Could not find name '{}' in group '{}'. \n"
-                "Config has: {}\nLoaded: {}".format(name, group, list(g.keys()), self.loaded))
-
-        return copy.deepcopy(g[name])
-
-    def _yield_string(self, e):
-        """Recursively descend a data structure to find string values.
-
-        This will locate values that should be expanded by reference.
-
-        """
-        from .util import walk_dict
-
-        for path, subdicts, values in walk_dict(e):
-            for k, v in values:
-
-                if v is None:
-                    continue
-
-                path_parts = path.split('/')
-                path_parts.pop()
-                path_parts.pop(0)
-                path_parts.append(k)
-
-                def setter(nv):
-                    sd = e
-                    for pp in path_parts:
-                        if not isinstance(sd[pp], dict):
-                            break
-                        sd = sd[pp]
-
-                    # Save the Original value as a name
-
-                    sd[pp] = nv
-
-                    if isinstance(sd[pp], dict):
-                        sd[pp]['_name'] = v
-
-                yield k, v, setter
-
-    def _sub_strings(self, e, subs):
-        """Substitute keys in the dict e with functions defined in subs."""
-
-        iters = 0
-        while iters < 100:
-            sub_count = 0
-
-            for k, v, setter in self._yield_string(e):
-
-                if k in subs:
-                    setter(subs[k](k, v))
-                    sub_count += 1
-
-            if sub_count == 0:
-                break
-
-            iters += 1
-
-        return e
-
-    def dump(self, stream=None):
-
-        to_string = False
-        if stream is None:
-            stream = StringIO()
-            to_string = True
-
-        self.config.dump(stream)
-
-        if to_string:
-            stream.seek(0)
-            return stream.read()
-        else:
-            return stream
-
-    def filesystem(self, name, missing_is_dir=False):
-
-        fs = self.group('filesystem')
-
-        e = self.group_item('filesystem', name)
-
-        # Substititue in any of the other items in the filesystem group.
-        # this is particularly useful for the 'root' value
-        return e.format(**fs)
-
-    def service(self, name):
-        """For configuring the client side of services."""
-
-        e = self.group_item('services', name)
-
-        # If the value is a string, rather than a dict, it is for a
-        # FsCache. Re-write it to be the expected type.
-
-        if isinstance(e, string_types):
-            e = parse_url_to_dict(e)
-
-        if e.get('url', False):
-            e.update(parse_url_to_dict(e['url']))
-
-        hn = e.get('hostname', e.get('host', None))
-
+    for check in checks:
         try:
-            account = self.account(hn)
-            e['account'] = account
-            e['password'] = account.get('password', e['password'])
-            e['username'] = account.get('username', e['username'])
-        except ConfigurationError:
-            e['account'] = None
+            _ = eval(check)
+        except KeyError:
+            raise ConfigurationError("Configuration is missing '{}'; loaded from {} "
+                                     .format(check, [l[0] for l in config.loaded]))
 
-        e['hostname'] = e['host'] = hn
+    _, config.library.database =  normalize_dsn_or_dict(config.library.database)
 
-        e['url'] = unparse_url_dict(e)
+    for k, v in filesystem_defaults.items():
+        if k not in config.filesystem:
+            config.filesystem[k] = v
 
-        return e
+    config.modtime = max([l[1] for l in  config.loaded ] + [config.accounts.loaded[1]])
 
-    def servers(self, name, default=None):
-        """For configuring the server side of services."""
 
-        try:
-            e = self.group_item('servers', name)
-        except ConfigurationError:
-            if not default:
-                raise
-            e = default
 
-        # If the value is a string, rather than a dict, it is for a
-        # FsCache. Re-write it to be the expected type.
-
-        try:
-            account = self.account(e['host'])
-            e['account'] = account
-            e['password'] = account.get('password', e['password'])
-            e['username'] = account.get('username', e['username'])
-        except ConfigurationError:
-            e['account'] = None
-
-        return e
-
-    def account(self, name):
-
-        e = self.group_item('accounts', name)
-
-        e = self._sub_strings(e, {'store': lambda k, v: self.filesystem(v)})
-
-        e['_name'] = name
-
-        return e
-
-    def remotes(self, remotes):
-        # Re-format the string remotes from strings to dicts.
-
-        fs = self.group('filesystem')
-        root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
-
-        r = {}
-
-        try:
-            pairs = list(remotes.items())
-        except AttributeError:
-            pairs = list(enumerate(remotes))
-
-        for name, remote in pairs:
-
-            remote = remote.format(root=root_dir)
-
-            r[str(name)] = remote
-
-        return r
-
-    def library(self, database=None):
-
-        e = self.config['library']
-
-        fs = self.group('filesystem')
-
-        if not database:
-            database = e.get('database', '').format(**fs)
-
-        warehouse = e.get('warehouse', '').format(**fs),
-
-        try:
-            database = self.database(database, missing_is_dsn=True, return_dsn=True)
-        except:
-            raise
-
-        database = database.format(**fs)
-
-        try:
-            warehouse = self.database(warehouse, missing_is_dsn=True, return_dsn=True)
-        except:
-            pass
-
-        d = dict(
-            database=database,
-            warehouse=warehouse,
-            remotes=self.remotes(e.get('remotes', {})))
-
-        return d
-
-    def warehouse(self, name):
-        from .warehouse import database_config
-
-        e = self.group_item('warehouse', name)
-
-        # The warehouse can be specified as a single database string.
-        if isinstance(e, string_types):
-            return database_config(e)
-
-        else:
-
-            e = self._sub_strings(e, {
-                'account': lambda k, v: self.account(v),
-                'library': lambda k, v: self.database(v),
-            })
-
-            if 'database' in e and isinstance(e['database'], string_types):
-                e.update(database_config(e['database']))
-
-        return e
-
-    def database(self, name, missing_is_dsn=False, return_dsn=False):
-
-        fs = self.group('filesystem')
-        root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
-
-        try:
-            e = self.group_item('database', name)
-        except ConfigurationError:
-            if missing_is_dsn:
-                e = name.format(root=root_dir.rstrip('/'))
-            else:
-                raise
-
-        # If the value is a string rather than a dict, it is a DSN string
-
-        try:
-            e = e.to_dict()
-        except AttributeError:
-            pass  # Already a dict b/c converted from string
-
-        config, dsn = normalize_dsn_or_dict(e)
-
-        if config.get('server') and not config.get('password'):
-
-            account = None
-            fails = []
-            account_templates = (
-                '{server}-{username}-{dbname}',
-                '{server}-{dbname}',
-                '{server}-{username}',
-                '{server}')
-            for tmpl in account_templates:
-                try:
-                    account_key = tmpl.format(**config)
-                    account = self.account(account_key)
-                    if account:
-                        break
-                except KeyError:
-                    pass
-                except ConfigurationError as exc:
-                    fails.append((account_key, str(exc)))
-
-            if account:
-                config.update(account)
-
-            config, dsn = normalize_dsn_or_dict(config)
-
-        if return_dsn:
-            return dsn
-        else:
-            return config
-
-    @property
-    def dict(self):
-        return self.config.to_dict()
 
 
 def normalize_dsn_or_dict(d):
-
+    """Clean up a database DSN, or dict version of a DSN, returning both the cleaned DSN and dict version"""
     if isinstance(d, dict):
 
         try:
