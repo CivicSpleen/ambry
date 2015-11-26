@@ -43,6 +43,8 @@ class Table(Base, DictableMixin):
 
     data = SAColumn('t_data', MutationDict.as_mutable(JSONEncodedObj))
 
+    c_sequence_id = SAColumn('t_c_sequence_id', Integer, default=1)
+
     __table_args__ = (
         UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
@@ -105,6 +107,8 @@ class Table(Base, DictableMixin):
         except NotFoundError:
 
             sequence_id = len(self.columns) + 1
+
+            assert sequence_id
 
             c = Column(t_vid=self.vid,
                        sequence_id=sequence_id,
@@ -215,12 +219,13 @@ class Table(Base, DictableMixin):
 
             c.lom = stat.lom
 
-    def update_id(self, sequence_id, force=True):
+    def update_id(self, sequence_id=None, force=True):
         """Alter the sequence id, and all of the names and ids derived from it. This
         often needs to be don after an IntegrityError in a multiprocessing run"""
         from ..identity import ObjectNumber
 
-        self.sequence_id = sequence_id
+        if sequence_id:
+            self.sequence_id = sequence_id
 
         assert self.d_vid
 

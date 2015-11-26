@@ -562,6 +562,54 @@ class Database(object):
 
         return self.dataset(ds.vid)
 
+    def next_sequence_id(self, parent_table_class, parent_vid, child_table_class):
+        from sqlalchemy import text
+
+        # Name of sequence id column in the child
+        c_seq_col = child_table_class.sequence_id.property.columns[0].name
+
+        p_seq_col = getattr(parent_table_class,c_seq_col).property.columns[0].name
+
+        p_vid_col = parent_table_class.vid.property.columns[0].name
+
+        try:
+            parent_col = child_table_class._parent_col
+        except AttributeError:
+            parent_col = child_table_class.d_vid.property.columns[0].name
+
+        sql=text("""
+        UPDATE {p_table} SET {p_seq_col} = {p_seq_col} + 1 WHERE {p_vid_col} = '{parent_vid}' RETURNING {p_seq_col}
+        """.format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
+                   parent_vid=parent_vid))
+
+        self.connection.execute('SET search_path TO {}'.format(self._schema))
+        v = next(iter(self.connection.execute(sql)))[0]
+        return v-1
+
+    def update_sequence_id(self, parent_table_class, parent_vid, child_table_class):
+        from sqlalchemy import text
+
+        # Name of sequence id column in the child
+        c_seq_col = child_table_class.sequence_id.property.columns[0].name
+
+        p_seq_col = getattr(parent_table_class,c_seq_col).property.columns[0].name
+
+        try:
+            parent_col = child_table_class._parent_col
+        except AttributeError:
+            parent_col = child_table_class.d_vid.property.columns[0].name
+
+        sql = text("SELECT max({c_seq_col})+1 FROM {table} WHERE {parent_col} = '{parent_vid}'"
+                   .format(table=child_table_class.__tablename__, parent_col=parent_col,
+                           c_seq_col=c_seq_col, parent_vid=parent_vid))
+
+        max_id, = self.connection.execute(sql).fetchone()
+
+        if not max_id:
+            max_id = 1
+
+        return max_id
+
 class BaseMigration(object):
     """ Base class for all migrations. """
 

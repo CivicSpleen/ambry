@@ -1310,7 +1310,6 @@ Caster Code
 
         self.state = self.STATES.INGESTED
 
-        self.log("Done ingesting")
         return True
 
     def _ingest_sources(self, sources, stage, force=False ):
@@ -1452,7 +1451,7 @@ Caster Code
 
         ps.update(message='Ingested: {}'.format(source.datafile.path), state='done')
         source.state = source.STATES.INGESTED
-
+        self.commit()
         return source.name
 
     def _ingest_update_tables(self, sources):
@@ -1460,7 +1459,7 @@ Caster Code
         # had been cleaned from the database, but the ingested files still exists.
         for i, source in enumerate(sources):
             source.update_table()  # Generate the source tables.
-            source.update_spec()  # Update header_lines, start_line, etc.
+            source.udate_spec()  # Update header_lines, start_line, etc.
 
         self.commit()
 
@@ -1475,7 +1474,7 @@ Caster Code
         """
         Generate destination schemas.
 
-        :param sources: If specified, build only destination tables for these soruces
+        :param table_sources: If specified, build only destination tables for these soruces
         :param tables: If specified, build only these tables
         :param clean: Delete tables and partitions first
         :param force: Population tables even if the table isn't empty
@@ -1489,7 +1488,7 @@ Caster Code
         from ambry.etl import Collect, Head
         from ambry.bundle.events import TAG
 
-        sources = self._resolve_sources(sources, tables, stage, predicate=lambda s: s.is_processable)
+        resolved_sources = self._resolve_sources(sources, tables, stage, predicate=lambda s: s.is_processable)
 
         if clean:
             self.dataset.delete_tables_partitions()
@@ -1499,13 +1498,13 @@ Caster Code
 
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
-        for t, sources in groupby(sorted(sources, key=keyfunc), keyfunc):
+        for t, table_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
 
             if not force and not t.is_empty:
                 continue
 
             if use_pipeline:
-                for source in sources:
+                for source in table_sources:
                     pl = self.pipeline(source)
 
                     pl.cast = [ambry.etl.CastSourceColumns]
@@ -1531,8 +1530,9 @@ Caster Code
                 # with the header, then sort on the postition. This will produce a stream of header names
                 # that may have duplicates, but which is generally in the order the headers appear in the
                 # sources. The duplicates are properly handled when we add the columns in add_column()
-                columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in sources
+                columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in table_sources
                                  for i, col in enumerate(source.source_table.columns)]))
+
 
                 initial_count = len(t.columns)
 

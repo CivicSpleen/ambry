@@ -8,18 +8,10 @@ from ambry.orm import Database, Dataset
 class Test(TestBase):
 
     def setUp(self):
-        from fs.opener import fsopendir
         from ambry.run import get_runconfig
         from ambry.library import new_library
-        from ambry.dbexceptions import ConfigurationError
 
-        # NOTE! When working in an IDE, get_runconfig()  get your .ambry.yaml unless you either have it in
-        # $HOME/.ambry.yaml, or have the VIRTUAL_ENV variable set to your virtenv
-        try:
-            rc = get_runconfig()
-        except ConfigurationError:
-            raise ConfigurationError("Failed to load config. You probably need to setup a "
-                                     "VIRTUAL_ENV env var, or create $HOME/.ambry.yaml")
+        rc = get_runconfig()
 
         self.library = new_library(rc)
 
@@ -43,7 +35,6 @@ class Test(TestBase):
         return get_runconfig(bf_dir('ambry.yaml'))
 
     def new_db_dataset(self, db,  source='source'):
-
         return db.new_dataset(vid=self.d_vid, source='example.com', dataset='dataset')
 
     def new_database(self):
@@ -97,7 +88,6 @@ class Test(TestBase):
 
         self.assertEquals(sorted(names), records)
 
-    @unittest.skipIf("not os.getenv('VIRTUAL_ENV')", 'Must have a VIRTUAL_ENV value set to get the config')
     def test_unique_object_gen(self):
         """Test creating multip partitions in a multiprocessing run"""
         from ambry.orm.exc import NotFoundError
@@ -129,20 +119,45 @@ class Test(TestBase):
 
         pool = self.library.process_pool()
 
+        b.new_table('pre1')
+        b.new_table('pre2')
+        b.commit()
+
+        self.assertEqual(2, len(ds.tables))
+
+        b.dataset.new_source_table('pre1')
+        b.dataset.new_source_table('pre2')
+        b.commit()
+
+        self.assertEqual(2, len(ds.source_tables))
+
+        b.dataset.new_partition(table=b.table('pre1'))
+        b.dataset.new_partition(table=b.table('pre2'))
+        b.commit()
+
+        self.assertEqual(2, len(ds.source_tables))
+
         for mp_f, ds_attr in ((run_mp_tables, 'tables'),
                               (run_mp_sourcetables, 'source_tables'),
                               (run_mp_partitions, 'partitions')
                               ):
 
-            # print('Running: ', ds_attr)
+            print('Running: ', ds_attr)
 
             names = pool.map(mp_f, [(ds.vid, i) for i in range(1, N+1)])
 
-            self.assertEqual(N, len(getattr(ds, ds_attr)))
+            b.session.refresh(ds)
+            self.assertEqual(N+2, len(getattr(ds, ds_attr)))
 
-            records = list(sorted(o.name for o in getattr(ds, ds_attr)))
+            records = list(sorted([o.name for o in getattr(ds, ds_attr)]))
 
-            self.assertEquals(sorted(names), records)
+            if ds_attr == 'partitions':
+                extra_names = ['example.com-dataset-pre1','example.com-dataset-pre2']
+            else:
+                extra_names = ['pre1','pre2']
+
+            self.assertEquals(sorted(names+extra_names), records)
+
 
     @unittest.skipIf("not os.getenv('VIRTUAL_ENV')", 'Must have a VIRTUAL_ENV value set to get the config')
     def test_top_levels(self):
@@ -213,7 +228,7 @@ def run_mp_partitions(args):
 
     table = b.table('obj01') # The run_mp_tables test must come before partitions to make the obj01 table
 
-    p = b.dataset.new_unique_object(Partition, t_vid=table.vid, segment=i, type=Partition.TYPE.SEGMENT)
+    p = b.dataset.new_partition(table, segment=i, type=Partition.TYPE.SEGMENT)
 
     b.commit()
 
@@ -227,29 +242,29 @@ def run_mp_tables(args):
     b, i = args
 
     b.commit()
-    t = b.dataset.new_unique_object(Table, name="obj{:02d}".format(i))
-
+    t = b.dataset.new_table(name="obj{:02d}".format(i))
     b.commit()
 
-    return t.name
+    if t:
+        return t.name
+    else:
+        return None
 
 
 @MPBundleMethod
 def run_mp_sourcetables(args):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
-    import os
-    from ambry.identity import PartialPartitionName
-    from ambry.orm import Partition, Table, SourceTable
-    from ambry.identity import ObjectNumber
 
     b, i = args
 
-    t = b.dataset.new_unique_object(SourceTable, name="obj{:02d}".format(i))
-
+    b.commit()
+    t = b.dataset.new_source_table(name="obj{:02d}".format(i))
     b.commit()
 
-    return t.name
-
+    if t:
+        return t.name
+    else:
+        return None
 @MPBundleMethod
 def run_mp_combined(args):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""

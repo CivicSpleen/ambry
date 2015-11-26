@@ -44,11 +44,7 @@ class TestBase(unittest.TestCase):
         self.db = None
 
     def tearDown(self):
-
-        import os
-
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
+        pass
 
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')

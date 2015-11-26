@@ -32,22 +32,26 @@ def _MPBundleMethod(f, args):
         b.multi = True  # In parent it is a number, in child, just needs to be true to get the right logger template
         b.is_subprocess = True
         b.limited_run = bool(int(os.getenv('AMBRY_LIMITED_RUN', 0)))
-        assert b._progress == None # DOn't want to share connections across processes
+        assert b._progress == None # Don't want to share connections across processes
         args[0] = b
     except:
-        print('Exception in feching bundle in multiprocessing run.')
+        print('Exception in fetching bundle in multiprocessing run.')
         traceback.print_exc()
         raise
 
     try:
         return f(args)
+
     except Exception as e:
 
         tb = traceback.format_exc()
+        print tb
         b.error('Subprocess {} raised an exception: {}'.format(os.getpid(), e), False)
         b.error(tb, False)
 
         raise
+    finally:
+        library.database.close()
 
 
 def MPBundleMethod(f, *args, **kwargs):

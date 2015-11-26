@@ -1,0 +1,44 @@
+about:
+  access: restricted
+  footnote: nll
+  grain: null
+  groups: null
+  license: ckdbl
+  processed: null
+  rights: public
+  source: null
+  space: null
+  subject: null
+  summary: A whole lot of sources, for testing multiprocessing
+  tags: []
+  time: null
+  title: Long and Low
+contacts:
+  creator:
+    email: eric@civicknowledge.com
+    name: Eric Busboom
+dependencies: {}
+external_documentation:
+  dataset:
+    description: Web page the links to the dataset description
+    source: null
+    title: Dataset Page
+    url: http://example.com
+  download:
+    description: Web page that links to the source files.
+    source: null
+    title: Download Page
+    url: http://example.com
+identity:
+  dataset: slowlarge
+  id: dJ5gs2ihS2
+  revision: 1
+  source: example.com
+  version: 0.0.1
+names:
+  fqname: example.com-slowlarge-0.0.1~dJ5gs2ihS2001
+  name: example.com-slowlarge
+  vid: dJ5gs2ihS2001
+  vname: example.com-slowlarge-0.0.1
+requirements: {}
+versions: {}

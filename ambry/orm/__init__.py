@@ -346,7 +346,8 @@ def _clean_flag(in_flag):
 
     return bool(in_flag)
 
-
+# DEPRECATED
+# The two remaining uses of this should be replaced with dataset.next_sequence_id
 def next_sequence_id(session, sequence_ids, parent_vid, table_class, force_query = False):
     """
     Return the next sequence id for a object, identified by the vid of the parent object, and the database prefix
@@ -380,8 +381,8 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class, force_query
 
     if (not number and session) or force_query:
 
-        sql = text("SELECT max({seq_col})+1 FROM {table} WHERE {dvid_col} = '{vid}'"
-                   .format(table=table_class.__tablename__, dvid_col=parent_col,
+        sql = text("SELECT max({seq_col})+1 FROM {table} WHERE {parent_col} = '{vid}'"
+                   .format(table=table_class.__tablename__, parent_col=parent_col,
                            seq_col=seq_col, vid=parent_vid))
 
         max_id, = session.execute(sql).fetchone()

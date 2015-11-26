@@ -60,6 +60,8 @@ class Config(Base):
     def update_sequence_id(self, session, dataset):
         assert dataset.vid == self.d_vid
         assert session
+        # NOTE: This next_sequence_id uses a different algorithm than dataset.next_sequence_id
+        # FIXME replace this one with dataset.next_sequence_id
         self.sequence_id = next_sequence_id(session, dataset._sequence_ids, self.d_vid, Config)
         self.id = str(GeneralNumber1('F', self.d_vid, self.sequence_id))
 

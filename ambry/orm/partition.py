@@ -84,6 +84,7 @@ class Partition(Base, DictableMixin):
     installed = SAColumn('p_installed', String(100))
     _location = SAColumn('p_location', String(100))  # Location of the data file
 
+
     __table_args__ = (
         # ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
         UniqueConstraint('p_sequence_id', 'p_d_vid', name='_uc_partitions_1'),
@@ -479,11 +480,12 @@ class Partition(Base, DictableMixin):
 
     # ============================
 
-    def update_id(self, sequence_id):
+    def update_id(self, sequence_id=None):
         """Alter the sequence id, and all of the names and ids derived from it. This
         often needs to be done after an IntegrityError in a multiprocessing run"""
 
-        self.sequence_id = sequence_id
+        if sequence_id:
+            self.sequence_id = sequence_id
 
         self._set_ids(force=True)
 
@@ -491,6 +493,7 @@ class Partition(Base, DictableMixin):
             self._update_names()
 
     def _set_ids(self, force=False):
+
         if not self.sequence_id:
             from .exc import DatabaseError
 
