@@ -200,8 +200,8 @@ class PostgreSQLTestBase(TestBase):
 
     @classmethod
     def _drop_postgres_test_db(cls):
-        # drop test database
         if hasattr(cls, 'postgres_test_db_data'):
+            # drop test database
             test_db_name = cls.postgres_test_db_data['test_db_name']
             assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
 
@@ -212,7 +212,7 @@ class PostgreSQLTestBase(TestBase):
             connection.execute('COMMIT;')
             connection.close()
         else:
-            # no database were created.
+            # database was not created.
             pass
 
     @classmethod
