@@ -25,11 +25,15 @@ SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
 
 
 class TestBase(unittest.TestCase):
+
     def setUp(self):
         import uuid
 
         super(TestBase, self).setUp()
 
+        # WAARNING! This path and dsn is only used if it is explicitly referenced.
+        # Otherwise, the get_rc() will use a database specified in the
+        # test rc file.
         self.db_path = "/tmp/ambry-test-{}.db".format(str(uuid.uuid4()))
 
         self.dsn = "sqlite:///{}".format(self.db_path)
@@ -38,13 +42,12 @@ class TestBase(unittest.TestCase):
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
         self.db = None
+        self._library = None
 
     def tearDown(self):
 
-        import os
-
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
+        if self._library:
+            self._library.close()
 
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
@@ -69,7 +72,7 @@ class TestBase(unittest.TestCase):
         orig_root = config.library.filesystem_root
         root_dir  = config.filesystem.test.format(root=orig_root)
 
-        dsn = config.database.get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
+        dsn = config.get('database',{}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
 
         cls._db_type = dbname
 
@@ -84,20 +87,23 @@ class TestBase(unittest.TestCase):
                 config.loaded = None
                 config.dump(f)
 
-
+        print "Database: ", dsn
         return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
 
     @classmethod
     def config(cls):
         return cls.get_rc()
 
-    @classmethod
-    def library(cls, config = None):
-        from ambry.library import new_library
-        return new_library(config if config else cls.config())
+    def library(self, config=None):
 
-    @classmethod
-    def import_bundles(cls, clean=True, force_import=False):
+        from ambry.library import new_library
+
+        if not self._library:
+            self._library = new_library(config if config else self.config())
+
+        return self._library
+
+    def import_bundles(self, clean=True, force_import=False):
         """
         Import the test bundles into the library, from the test.test_bundles directory
         :param clean: If true, drop the library first.
@@ -108,16 +114,33 @@ class TestBase(unittest.TestCase):
         from test import bundle_tests
         import os
 
-        l = cls.library()
+        l = self.library()
 
         if clean:
             l.clean()
             l.create()
 
         bundles = list(l.bundles)
-        print l.database.dsn
+
         if len(bundles) == 0 or force_import:
             l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
+
+    def import_single_bundle(self, cache_path, clean=True):
+        from test import bundle_tests
+
+        l = self.library()
+
+        if clean:
+            l.clean()
+            l.create()
+
+        orig_source = os.path.join(os.path.dirname(bundle_tests.__file__),cache_path)
+        l.import_bundles(orig_source, detach=True, force=True)
+
+        b = next(b for b in l.bundles).cast_to_subclass()
+        b.clean()
+        b.sync_in()
+        return b
 
     def new_dataset(self, n=1, source='source'):
         return Dataset(**self.ds_params(n, source=source))

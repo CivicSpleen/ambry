@@ -11,17 +11,6 @@ from test.test_base import TestBase
 
 class Test(TestBase):
 
-    def get_rc(self, name='ambry.yaml'):
-
-        def bf_dir(fn):
-            return os.path.join(os.path.dirname(bundlefiles.__file__), fn)
-
-        rc = get_runconfig(bf_dir(name))
-
-        # RunConfig makes it hard to change where the accounts data comes from, which might actually
-        # be good, but it makes testing hard.
-
-        return rc
 
     def test_run_config_filesystem(self):
         rc = self.get_rc()
@@ -174,3 +163,47 @@ library:
         l = Library(config)
 
         self.assertEqual(['test', 'restricted', 'census', 'public'], l.remotes.keys())
+
+
+    def test_alt_session_not_reused(self):
+
+        l = self.library()
+
+        db = l.database
+        session = l.database.session
+        conn, alt_session = db.alt_session()
+
+        self.assertNotEqual(id(session), id(alt_session))
+
+        ds = db.root_dataset
+
+        pc = ds.config.process
+        pc.clean()
+        pc.commit()
+
+        pc.foo.bar = 'baz'
+
+        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
+
+        ds.session.refresh(ds)
+        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
+
+        pc.commit()
+
+        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
+
+        ds.session.refresh(ds)
+        self.assertIn('process.foo.bar', [c.dotted_key for c in ds.configs])
+
+        pc.set_activity('foo')
+
+        ds.session.refresh(ds)
+        self.assertEqual('foo', [ c.value for c in ds.configs if c.key == 'activity' ][0])
+
+        self.assertEqual('foo', pc.activity)
+
+        pc.set_activity('bar')
+
+        ds.session.refresh(ds)
+        self.assertEqual('bar', [c.value for c in ds.configs if c.key == 'activity'][0])
+

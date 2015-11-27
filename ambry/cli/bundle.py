@@ -747,10 +747,10 @@ def bundle_schema(args, l, rc):
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l, print_loc=False).cast_to_subclass()
-    b.ingest(tables=args.table, force=args.force)
+    b.ingest(sources=args.source,tables=args.table, force=args.force)
 
     if args.build:
-        b.build_schema(sources=args.source, tables=args.table, clean=args.clean)
+        b.schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=True)
     else:
         b.schema(sources=args.source, tables=args.table, clean=args.clean)
 
@@ -1085,18 +1085,15 @@ def bundle_new(args, l, rc):
         variation=args.variation)
 
     try:
-        ambry_account = rc.group('accounts').get('ambry', {})
+        ambry_account = rc.accounts.get('ambry', {})
     except:
         ambry_account = None
 
     if not ambry_account:
-        fatal("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(
-              rc.USER_ACCOUNTS))
+        fatal("Failed to get an accounts.ambry entry from the configuration. ")
 
     if not ambry_account.get('name') or not ambry_account.get('email'):
-        from ambry.run import RunConfig as rc
-
-        fatal('Must set accounts.ambry.email and accounts.ambry.name, usually in {}'.format(rc.USER_ACCOUNTS))
+        fatal('Must set accounts.ambry.email and accounts.ambry.name n account config file')
 
     if args.dryrun:
         from ..identity import Identity
@@ -1560,6 +1557,9 @@ def bundle_docker(args, l, rc):
 
             bambry_cmd_args = []
 
+            if args.limited_run:
+                bambry_cmd_args.append('-L')
+
             if args.multi:
                 bambry_cmd_args.append('-m')
 
@@ -1569,9 +1569,15 @@ def bundle_docker(args, l, rc):
             envs.append('AMBRY_COMMAND=bambry -i {} {} {}'.format(
                 b.identity.vid, ' '.join(bambry_cmd_args), bambry_cmd))
 
+            prt("Docker Run: {}", envs[-1])
+
             detach = True
         else:
             detach = False
+
+        if args.limited_run:
+            envs.append('AMBRY_LIMITED_RUN=1')
+
 
         if args.version:
             import ambry._meta
@@ -1596,6 +1602,8 @@ def bundle_docker(args, l, rc):
             environment=envs,
             host_config=host_config
         )
+
+        print kwargs
 
         r = client.create_container(**kwargs)
 

@@ -16,6 +16,7 @@ from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, Co
 from ambry.util import get_logger, parse_url_to_dict
 from . import Column, Partition, Table, Dataset, Config, File,\
     Code, ColumnStat, DataSource, SourceColumn, SourceTable
+from ambry.orm.process import Process
 
 from account import Account
 
@@ -55,7 +56,7 @@ logger = get_logger(__name__)
 class Database(object):
     """ Stores local database of the datasets. """
 
-    def __init__(self, dsn, echo=False, engine_kwargs=None):
+    def __init__(self, dsn, echo=False, foreign_keys=True, engine_kwargs=None):
         """ Initializes database.
 
         Args:
@@ -78,8 +79,9 @@ class Database(object):
         self._engine = None
         self._connection = None
         self._echo = echo
+        self._foreign_keys = foreign_keys
 
-        if self.driver in ['postgres', 'postgresql+psycopg2', 'postgis']:
+        if self.driver in ['postgres', 'postgresql', 'postgresql+psycopg2', 'postgis']:
             self._schema = POSTGRES_SCHEMA_NAME
         else:
             self._schema = None
@@ -164,26 +166,34 @@ class Database(object):
             #
             @event.listens_for(self._engine, "connect")
             def connect(dbapi_connection, connection_record):
-
                 connection_record.info['pid'] = os.getpid()
 
             @event.listens_for(self._engine, "checkout")
             def checkout(dbapi_connection, connection_record, connection_proxy):
 
                 from sqlalchemy.exc import DisconnectionError
-
                 pid = os.getpid()
                 if connection_record.info['pid'] != pid:
 
                     connection_record.connection = connection_proxy.connection = None
                     raise DisconnectionError(
-                        "Connection record belongs to pid %s, "
-                        "attempting to check out in pid %s" %
-                        (connection_record.info['pid'], pid)
-                    )
+                        "Connection record belongs to pid %s, attempting to check out in pid %s" %
+                        (connection_record.info['pid'], pid))
 
             if self.driver == 'sqlite':
-                event.listen(self._engine, 'connect', _pragma_on_connect)
+                @event.listens_for(self._engine, "connect")
+                def pragma_on_connect(dbapi_con, con_record):
+                    """ISSUE some Sqlite pragmas when the connection is created."""
+
+                    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
+                    # Not clear that there is a performance improvement.
+
+                    dbapi_con.execute('PRAGMA journal_mode = WAL')
+                    dbapi_con.execute('PRAGMA synchronous = OFF')
+                    dbapi_con.execute('PRAGMA temp_store = MEMORY')
+                    dbapi_con.execute('PRAGMA cache_size = 500000')
+                    if self._foreign_keys:
+                        dbapi_con.execute('PRAGMA foreign_keys=ON')
 
             with self._engine.connect() as conn:
                 _validate_version(conn)
@@ -205,7 +215,7 @@ class Database(object):
         from sqlalchemy.event import listen
 
         if not self.Session:
-            self.Session = sessionmaker(bind=self.engine, expire_on_commit=True)
+            self.Session = sessionmaker(bind=self.engine)
 
         if not self._session:
             self._session = self.Session()
@@ -230,13 +240,11 @@ class Database(object):
 
     def close(self):
 
-
         self.close_session()
         self.close_connection()
         if self._engine:
             self._engine.dispose()
             self._engine = None
-
 
     def close_session(self):
 
@@ -246,7 +254,6 @@ class Database(object):
             self._session = None
 
     def close_connection(self):
-
 
         if self._connection:
             self._connection.close()
@@ -271,6 +278,9 @@ class Database(object):
         self.create()
 
         self.commit()
+
+    def clean_root(self):
+        pass
 
     def drop(self):
 
@@ -342,7 +352,7 @@ class Database(object):
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
-            ColumnStat, SourceTable, SourceColumn, DataSource, Account]
+            ColumnStat, SourceTable, SourceColumn, DataSource, Account, Process]
 
         try:
             self.drop()
@@ -490,10 +500,11 @@ class Database(object):
 
     def delete_tables_partitions(self, ds):
         """Fast delete of all of a datasets codes, columns, partitions and tables"""
-        from ambry.orm import Code, Column, Table, Partition, ColumnStat
+        from ambry.orm import Code, Column, Table, Partition, ColumnStat, Process
 
         ssq = self.session.query
 
+        ssq(Process).filter(Process.d_vid == ds.vid).delete()
         ssq(Code).filter(Code.d_vid == ds.vid).delete()
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Column).filter(Column.d_vid == ds.vid).delete()
@@ -510,6 +521,7 @@ class Database(object):
 
         ssq = self.session.query
 
+        ssq(Process).filter(Process.d_vid == ds.vid).delete()
         ssq(Code).filter(Code.d_vid == ds.vid).delete()
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
@@ -549,6 +561,74 @@ class Database(object):
         self.session.commit()
 
         return self.dataset(ds.vid)
+
+    def next_sequence_id(self, parent_table_class, parent_vid, child_table_class):
+        """Get the next sequence id for child objects for a parent object that has a child sequence
+        field"""
+
+        from sqlalchemy import text
+
+        # Name of sequence id column in the child
+        c_seq_col = child_table_class.sequence_id.property.columns[0].name
+
+        p_seq_col = getattr(parent_table_class,c_seq_col).property.columns[0].name
+
+        p_vid_col = parent_table_class.vid.property.columns[0].name
+
+        try:
+            parent_col = child_table_class._parent_col
+        except AttributeError:
+            parent_col = child_table_class.d_vid.property.columns[0].name
+
+        if self.driver == 'sqlite':
+            # The Sqlite version is not atomic, but Sqlite also doesn't support concurrency
+            sql=text("SELECT  {p_seq_col} FROM {p_table} WHERE {p_vid_col} = '{parent_vid}' "
+                     .format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
+                       parent_vid=parent_vid))
+
+            v = next(iter(self.session.execute(sql)))[0]
+            sql=text("UPDATE {p_table} SET {p_seq_col} = {p_seq_col} + 1 WHERE {p_vid_col} = '{parent_vid}' "
+                     .format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
+                       parent_vid=parent_vid))
+
+            self.session.execute(sql)
+            self.commit()
+            return v
+
+        else:
+            # Must be postges, or something else that supports "RETURNING"
+            sql=text("""
+            UPDATE {p_table} SET {p_seq_col} = {p_seq_col} + 1 WHERE {p_vid_col} = '{parent_vid}' RETURNING {p_seq_col}
+            """.format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
+                       parent_vid=parent_vid))
+
+            self.connection.execute('SET search_path TO {}'.format(self._schema))
+            v = next(iter(self.connection.execute(sql)))[0]
+            return v-1
+
+    def update_sequence_id(self, parent_table_class, parent_vid, child_table_class):
+        from sqlalchemy import text
+
+        # Name of sequence id column in the child
+        c_seq_col = child_table_class.sequence_id.property.columns[0].name
+
+        p_seq_col = getattr(parent_table_class,c_seq_col).property.columns[0].name
+
+        try:
+            parent_col = child_table_class._parent_col
+        except AttributeError:
+            parent_col = child_table_class.d_vid.property.columns[0].name
+
+        sql = text("SELECT max({c_seq_col})+1 FROM {table} WHERE {parent_col} = '{parent_vid}'"
+                   .format(table=child_table_class.__tablename__, parent_col=parent_col,
+                           c_seq_col=c_seq_col, parent_vid=parent_vid))
+
+        max_id, = self.connection.execute(sql).fetchone()
+
+        if not max_id:
+            max_id = 1
+
+        return max_id
 
 class BaseMigration(object):
     """ Base class for all migrations. """
@@ -674,47 +754,7 @@ def get_stored_version(connection):
         raise DatabaseError('Do not know how to get version from {} engine.'.format(connection.engine.name))
 
 
-def _pragma_on_connect(dbapi_con, con_record):
-    """ISSUE some Sqlite pragmas when the connection is created."""
 
-    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
-    # Not clear that there is a performance improvement.
-
-    dbapi_con.execute('PRAGMA journal_mode = WAL')
-    dbapi_con.execute('PRAGMA synchronous = OFF')
-    dbapi_con.execute('PRAGMA temp_store = MEMORY')
-    dbapi_con.execute('PRAGMA cache_size = 500000')
-    dbapi_con.execute('pragma foreign_keys=ON')
-
-
-def _on_connect_bundle(dbapi_con, con_record):
-    """ISSUE some Sqlite pragmas when the connection is created.
-
-    Bundles have different parameters because they are more likely to be
-    accessed concurrently.
-
-    """
-
-    # NOTE ABOUT journal_mode = WAL: it improves concurrency, but has some downsides.
-    # See http://sqlite.org/wal.html
-
-    try:
-        # Can't change journal mode in a transaction.
-        dbapi_con.execute('COMMIT')
-    except:
-        pass
-
-    try:
-        dbapi_con.execute('PRAGMA journal_mode = WAL')
-        dbapi_con.execute('PRAGMA page_size = 8192')
-        dbapi_con.execute('PRAGMA temp_store = MEMORY')
-        dbapi_con.execute('PRAGMA cache_size = 50000')
-        dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    except Exception:
-        raise
-
-    # dbapi_con.execute('PRAGMA busy_timeout = 10000')
-    # dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
 def _validate_version(connection):
