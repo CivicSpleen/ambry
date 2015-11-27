@@ -22,8 +22,6 @@ class Test(TestBase):
 
         db = self.library().database
 
-
-
         lcsp = LibraryConfigSyncProxy(l)
         lcsp.sync()
 

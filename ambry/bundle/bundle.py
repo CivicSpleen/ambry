@@ -1170,7 +1170,7 @@ Caster Code
         self.dataset.source_tables[:] = []
 
     def clean_progress(self):
-        self.dataset.progress_records[:] = []
+        self.dataset.process_records[:] = []
 
     def clean_tables(self):
         """Like clean, but also clears out schema tables and the partitions that depend on them. . """

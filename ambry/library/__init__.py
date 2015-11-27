@@ -102,6 +102,9 @@ class Library(object):
     def clean(self):
         return self.database.clean()
 
+    def close(self):
+        return self.database.close()
+
     def create(self):
         from config import LibraryConfigSyncProxy
         self.database.create()

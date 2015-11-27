@@ -42,9 +42,12 @@ class TestBase(unittest.TestCase):
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
         self.db = None
+        self._library = None
 
     def tearDown(self):
-        pass
+
+        if self._library:
+            self._library.close()
 
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
@@ -84,19 +87,23 @@ class TestBase(unittest.TestCase):
                 config.loaded = None
                 config.dump(f)
 
+        print "Database: ", dsn
         return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
 
     @classmethod
     def config(cls):
         return cls.get_rc()
 
-    @classmethod
-    def library(cls, config = None):
-        from ambry.library import new_library
-        return new_library(config if config else cls.config())
+    def library(self, config=None):
 
-    @classmethod
-    def import_bundles(cls, clean=True, force_import=False):
+        from ambry.library import new_library
+
+        if not self._library:
+            self._library = new_library(config if config else self.config())
+
+        return self._library
+
+    def import_bundles(self, clean=True, force_import=False):
         """
         Import the test bundles into the library, from the test.test_bundles directory
         :param clean: If true, drop the library first.
@@ -107,7 +114,7 @@ class TestBase(unittest.TestCase):
         from test import bundle_tests
         import os
 
-        l = cls.library()
+        l = self.library()
 
         if clean:
             l.clean()
