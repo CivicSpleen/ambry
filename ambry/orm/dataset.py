@@ -42,6 +42,10 @@ class Dataset(Base):
     time_coverage = SAColumn('d_tcov', MutationList.as_mutable(JSONEncodedObj))
     grain_coverage = SAColumn('d_gcov', MutationList.as_mutable(JSONEncodedObj))
 
+    p_sequence_id = SAColumn('ds_p_sequence_id', Integer, default=1)
+    t_sequence_id = SAColumn('ds_t_sequence_id', Integer, default=1)
+    st_sequence_id = SAColumn('ds_st_sequence_id', Integer, default=1)
+
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
     path = None  # Set by the Library and other queries.
@@ -110,6 +114,9 @@ class Dataset(Base):
     def rollback(self):
         self._database.rollback()
 
+    def rollback(self):
+        self._database.close()
+
     @property
     def session(self):
         return self._database.session
@@ -136,18 +143,22 @@ class Dataset(Base):
         from . import next_sequence_id
         from sqlalchemy.orm import object_session
 
+        # NOTE: This next_sequence_id uses a different algorithm than dataset.next_sequence_id
+        # FIXME replace this one with dataset.next_sequence_id
         return next_sequence_id(object_session(self), self._sequence_ids, self.vid, table_class, force_query=force_query)
 
-    def new_unique_object(self, table_class, sequence_id=None, **kwargs):
+    def new_unique_object(self, table_class, sequence_id=None, force_query=False, **kwargs):
         """Use next_sequence_id to create a new child of the dataset, with a unique id"""
         from sqlalchemy.exc import IntegrityError
         from sqlalchemy.orm.exc import FlushError
+        from ambry.orm import SourceTable
 
-        # If a sequence ID was specified, the caller is certan  that there is no potential for conflicts,
+        # If a sequence ID was specified, the caller is certain
+        #  that there is no potential for conflicts,
         # so there is no need to commit here.
         if not sequence_id:
             commit = True
-            sequence_id = self.next_sequence_id(table_class)
+            sequence_id = self.next_sequence_id(table_class, force_query=force_query)
         else:
             commit = False
 
@@ -155,14 +166,39 @@ class Dataset(Base):
             d_vid=self.vid,
             **kwargs
         )
+
         o.update_id(sequence_id)
-        o.dataset = self
 
         if commit is False:
             return o
 
+        self.commit()
+
+        if self._database.driver == 'sqlite':
+            # The Sqlite database can't have concurrency, so there no problem.
+            self.session.add(o)
+            self.commit()
+            return o
+        else: # Postgres. Concurrency is a bitch.
+            table_name = table_class.__tablename__
+            child_sequence_id = table_class.sequence_id.property.columns[0].name
+
+        try:
+
+            self.session.add(o)
+            self.commit()
+            return o
+
+        except (IntegrityError, FlushError) as e:
+            self.rollback()
+            self.session.merge(self)
+            print 'Failed'
+            return None
+
+        return
         # This is horrible, but it's the only thing that has worked for both
         # Sqlite and Postgres in both single processes and multiprocesses.
+        d_vid = self.vid
         while True:
             try:
                 self.session.add(o)
@@ -170,18 +206,25 @@ class Dataset(Base):
                 return o
 
             except (IntegrityError, FlushError) as e:
+
                 self.rollback()
-                sequence_id = self.next_sequence_id(table_class, force_query=True)
+
+                self.session.expunge_all()
+                ds = self._database.dataset(d_vid)
+                sequence_id = ds.next_sequence_id(table_class, force_query=True)
+
                 o.update_id(sequence_id)
 
-            except Exception:
+            except Exception as e:
+
+                print('Completely failed to get a new {} sequence_id; {}'.format(table_class, e))
                 self.rollback()
                 import traceback
 
                 # This bit is helpful in a multiprocessing run.
                 tb = traceback.format_exc()
-                print('Really Bad Error!', tb)
 
+                print(tb)
                 raise
 
     def table(self, ref):
@@ -211,7 +254,12 @@ class Dataset(Base):
 
             extant = False
 
-            table = self.new_unique_object(Table,name=name,**kwargs)
+            if 'sequence_id' not in kwargs:
+                kwargs['sequence_id'] = self._database.next_sequence_id(Dataset, self.vid, Table)
+
+            table = Table(name=name,d_vid=self.vid,**kwargs)
+
+            table.update_id()
 
         # Update possibly extant data
         table.data = dict( (list(table.data.items()) if table.data else []) + list(kwargs.get('data', {}).items()) )
@@ -247,13 +295,18 @@ class Dataset(Base):
             sequence_id  = kwargs['sequence_id']
             del kwargs['sequence_id']
         else:
-            sequence_id = self.next_sequence_id(Partition, force_query = True)
+            sequence_id = self._database.next_sequence_id(Dataset, self.vid, Partition)
 
-        p = self.new_unique_object(Partition,
+        p = Partition(
             t_vid=table.vid,
             table_name=table.name,
+            sequence_id=sequence_id,
+            dataset=self,
+            d_vid=self.vid,
             **kwargs
         )
+
+        p.update_id()
 
         return p
 
@@ -399,9 +452,18 @@ class Dataset(Base):
         if extant:
             return extant
 
-        table = self.new_unique_object(SourceTable, sequence_id = sequence_id, name=name)
+        if not sequence_id:
+            sequence_id = self._database.next_sequence_id(Dataset, self.vid, SourceTable)
+
+        assert sequence_id
+
+        table = SourceTable(name=name, d_vid=self.vid, sequence_id = sequence_id)
+
+        table.update_id()
 
         self.source_tables.append(table)
+
+        assert table.sequence_id
 
         return table
 
@@ -505,9 +567,9 @@ class ConfigAccessor(object):
         >>> ds.process.build.bar = [5,6,7,8]
         """
 
-        from .config import ConfigGroupAccessor
+        from .config import ProcessConfigGroupAccessor
 
-        return ConfigGroupAccessor(self.dataset, 'process')
+        return ProcessConfigGroupAccessor(self.dataset, 'process')
 
     @property
     def metadata(self):
@@ -530,6 +592,11 @@ class ConfigAccessor(object):
     def sync(self):
         """Access sync configuration values as attributes. See self.process for a usage example"""
         return ConfigGroupAccessor(self.dataset, 'sync')
+
+    @property
+    def requirements(self):
+        """Access sync configuration values as attributes. See self.process for a usage example"""
+        return ConfigGroupAccessor(self.dataset, 'requirements')
 
     @property
     def library(self):

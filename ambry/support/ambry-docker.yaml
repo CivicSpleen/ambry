@@ -1,0 +1,5 @@
+
+library:
+  filesystem_root: /var/ambry
+
+

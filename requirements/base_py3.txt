@@ -1,0 +1,5 @@
+# py3 base requirements
+
+-r base.txt
+
+pdfminer3k==1.3.0

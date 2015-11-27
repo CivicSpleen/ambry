@@ -1,7 +1,8 @@
 # project requirements
+
 pyasn1>=0.1.8 # Version requirement of PyOpenSSL, but earlier version installed elsewhere.
 address-parser==0.0.1
-boto>=2.38.0
+boto==2.38.0
 beautifulsoup4==4.3.2
 ckanapi==3.5
 ckcache>=0.1.6
@@ -9,7 +10,7 @@ decorator>=4
 Flask-Compress==1.2.1
 Flask==0.10.1
 Flask-Session==0.1.1
-geoid>=0.1.1
+geoid>=0.1.2
 ipython==3.1.0
 isodate==0.5.1
 itsdangerous==0.24
@@ -18,7 +19,7 @@ lockfile==0.10.2
 Markdown==2.6.2
 MarkupSafe==0.23
 meta==0.2.4
-nltk==3.0.2
+nltk==3.1
 numpy==1.9.2
 oauth2client==1.4.12
 pandas<=0.15.1
@@ -29,13 +30,12 @@ PyYAML==3.11
 requests>=2.6.0
 semantic-version==2.4.1
 sh==1.11
-simplejson==3.6.5
-six==1.9.0
+six==1.9.0 # Must be 1.9.0 b/c of requirement in later package
 SQLAlchemy==1.0.0
 sqlparse==0.1.15
 Werkzeug==0.10.4
 whoosh==2.7.0
-psycopg2==2.6
+psycopg2==2.6.1
 fs>=0.5.2
 msgpack-python==0.4.6
 livestats==1.0
@@ -43,6 +43,9 @@ tabulate==0.7.5
 terminaltables==1.2.1
 watchdog==0.8.3
 filelock==2.0.4
-ambry-sources>=0.1.1
+ambry-sources>=0.1.5
 unicodecsv==0.12.0  # using 0.13.0 breaks many tests.
+pycrypto==2.6.1
+simple-crypt==4.1.7
+docker-py==1.5.0
 

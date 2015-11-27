@@ -13,7 +13,8 @@ class Test(TestBase):
 
     @classmethod
     def setUpClass(cls):
-        cls.import_bundles(clean=False) # If clean==true, class setup completely reloads the library
+
+        cls.import_bundles(clean=True) # If clean==true, class setup completely reloads the library
         cls.l = cls.library()
 
     def setUp(self):
@@ -22,8 +23,7 @@ class Test(TestBase):
     def tearDown(self):
         pass
 
-
-    def run_bundle(self, name, reimport = False):
+    def run_bundle(self, name, reimport=False):
         """
         Ingest and build a bundle
 
@@ -33,11 +33,11 @@ class Test(TestBase):
         """
         from test import bundle_tests
         b = self.l.bundle(name).cast_to_subclass()
-        b.capture_exceptions = True
+        b.capture_exceptions = False
 
         if reimport:
             orig_source = os.path.join(os.path.dirname(bundle_tests.__file__), b.identity.source_path)
-            self.l.import_bundles(orig_source, detach=True, force = True)
+            self.l.import_bundles(orig_source, detach=True, force=True)
 
         b.clean_except_files() # Clean objects, but leave the import files
         b.sync_objects_in() # Sync from file records to objects.
@@ -49,7 +49,7 @@ class Test(TestBase):
         self.run_bundle('ingest.example.com-basic')
 
     def test_ingest_stages(self):
-        self.run_bundle('ingest.example.com-stages')
+        self.run_bundle('ingest.example.com-stages', reimport = True)
 
     def test_ingest_headerstypes(self):
         self.run_bundle('ingest.example.com-headerstypes')

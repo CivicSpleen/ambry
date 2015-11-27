@@ -1045,8 +1045,7 @@ class ColumnNumber(ObjectNumber):
 
     def __init__(self, table, column, revision=None):
         if not isinstance(table, TableNumber):
-            raise ValueError(
-                "Constructor requires a TableNumber. got: " + str(type(table)))
+            raise ValueError("Constructor requires a TableNumber. got: " + str(type(table)))
 
         column = int(column)
 
@@ -1748,7 +1747,7 @@ class NumberServer(object):
 
         self.last_response = d
 
-        self.next_time = time.time() + self.last_response['wait']
+        self.next_time = time.time() + self.last_response.get('wait',0)
 
         return ObjectNumber.parse(d['number'])
 

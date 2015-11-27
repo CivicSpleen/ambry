@@ -38,6 +38,7 @@ class Code(Base):
 
     data = SAColumn('cd_data', MutationDict.as_mutable(JSONEncodedObj))
 
+
     def __init__(self, **kwargs):
 
         for p in self.__mapper__.attrs:

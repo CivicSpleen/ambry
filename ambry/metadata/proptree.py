@@ -292,9 +292,7 @@ class StructuredPropertyTree(object):
         logger.debug(
             'Binding top level config to the db. dataset: {}, type: {}'.format(dataset.vid, self._type))
         self._config, created = _get_config_instance(
-            self, session,
-            parent_id=None, d_vid=dataset.vid,
-            type=self._type)
+            self, session,parent_id=None, d_vid=dataset.vid,type=self._type, dataset=dataset)
 
         if created:
             logger.debug(
@@ -455,7 +453,7 @@ class Group(object):
         self._config, created = _get_config_instance(
             self, session,
             parent_id=self._parent._config.id, d_vid=dataset.vid,
-            group=self._key, key=self._key, type=self._top._type)
+            group=self._key, key=self._key, type=self._top._type, dataset = dataset)
         if created:
             self._top._cached_configs[self._get_path()] = self._config
         self._top._add_valid(self._config)
@@ -735,13 +733,13 @@ class VarDictGroup(DictGroup):
             session, Config,
             d_vid=dataset.vid, type=self._top._type,
             parent=self._parent._config, group=self._key,
-            key=self._key)
+            key=self._key,dataset=dataset)
         self._top._add_valid(self._config)
 
         # create or update value config
         config, created = get_or_create(
             session, Config, parent=self._config, d_vid=dataset.vid,
-            type=self._top._type, key=key)
+            type=self._top._type, key=key,dataset=dataset)
 
         if config.value != value:
             # sync db value with term value.
@@ -805,7 +803,7 @@ class Term(object):
         self._config, created = _get_config_instance(
             self, session,
             parent=self._parent._config, d_vid=dataset.vid,
-            type=self._top._type, key=self._key)
+            type=self._top._type, key=self._key, dataset=dataset)
         if created:
             self._top._cached_configs[self._get_path()] = self._config
 
@@ -1208,6 +1206,7 @@ def get_or_create(session, model, **kwargs):
         return instance, False
     else:
         instance = model(**kwargs)
+        instance.update_sequence_id(session, kwargs['dataset'])
         session.add(instance)
         session.commit()
         return instance, True

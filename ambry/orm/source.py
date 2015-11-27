@@ -8,8 +8,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
-from ambry.util import deprecated
-from os.path import splitext
 
 from six import iteritems
 
@@ -21,7 +19,8 @@ from .table import Table
 
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
-from ..util import  Constant
+from ..util import Constant
+
 
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
@@ -83,9 +82,11 @@ class DataSourceBase(object):
     @property
     def row(self):
 
+        # WARNING There is another .row() in TransientSource
+
         # Use an Ordered Dict to make it friendly to creating CSV files.
         SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
-                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
+                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset', 'process_records')
 
         d = OrderedDict(
             [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS])
@@ -146,7 +147,6 @@ class DataSourceBase(object):
             p = self._bundle.library.partition(self.url)
 
         return p
-
 
     @property
     def datafile(self):
@@ -229,8 +229,6 @@ class DataSourceBase(object):
     def is_built(self):
         return self.state == self.STATES.BUILT
 
-
-
     def update_table(self):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
@@ -250,16 +248,12 @@ class DataSourceBase(object):
                     c = st.column(col['name'])
 
                     if c:
-
                         c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
-
-                        #self._bundle.log('Update column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
                     else:
 
                         c = st.add_column(col['pos'], source_header=col['name'], dest_header=col['name'],
                                           datatype=col['resolved_type'])
 
-                        #self._bundle.log('Created column: ({}) {}.{}'.format(c.position, st.name, c.source_header))
 
     def update_spec(self):
         """Update the source specification with information from the row intuiter, but only if the spec values
@@ -289,7 +283,7 @@ class DataSource(DataSourceBase, Base, DictableMixin):
 
     __tablename__ = 'datasources'
 
-    vid = SAColumn('st_vid', String(17), primary_key=True)
+    vid = SAColumn('ds_vid', String(17), primary_key=True)
     sequence_id = SAColumn('ds_sequence_id', INTEGER)
 
     name = SAColumn('ds_name', Text)
@@ -364,11 +358,17 @@ class TransientDataSource(DataSourceBase):
     def row(self):
         import inspect
 
+        # WARNING! There is another .row() in DataSourceBase which gets uses for non persistent records
+
         # Use an Ordered Dict to make it friendly to creating CSV files.
         SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
-                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset')
+                     '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset', 'process_records')
 
-        return OrderedDict( [(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+        d =  OrderedDict([(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+
+        assert 'process_records' not in d
+
+        return d
 
     @property
     def dict(self):
@@ -378,5 +378,5 @@ class TransientDataSource(DataSourceBase):
         :return:
 
         """
-        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
+        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash', 'process_records')
         return OrderedDict([(k, getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])

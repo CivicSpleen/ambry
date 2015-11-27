@@ -411,6 +411,7 @@ class AttrDict(OrderedDict):
 
     def update_yaml(self, path):
         self.update_flat(self.from_yaml(path))
+        return self
 
     def clone(self):
         clone = AttrDict()
@@ -1234,3 +1235,10 @@ def deprecated(func):
     newFunc.__doc__ = func.__doc__
     newFunc.__dict__.update(func.__dict__)
     return newFunc
+
+def int_maybe(v):
+    """Try to convert to an int and return None on failure"""
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None

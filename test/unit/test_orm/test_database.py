@@ -9,7 +9,6 @@ except ImportError:
     # py3, mock is included
     from unittest.mock import patch, Mock
 
-
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection as SQLAlchemyConnection, Engine
 from sqlalchemy.engine.reflection import Inspector
@@ -24,12 +23,13 @@ from ambry.orm.dataset import Dataset
 
 from ambry.run import get_runconfig
 
-from test.unit.orm_factories import DatasetFactory, TableFactory,\
+from test.factories import DatasetFactory, TableFactory,\
     ColumnFactory, PartitionFactory
 
 from test.unit.asserts import assert_spec
 
 from test.test_base import TestBase, PostgreSQLTestBase
+
 
 class DatabaseTest(TestBase):
 
@@ -533,13 +533,13 @@ class MigrateTest(unittest.TestCase):
         self.connection = engine.connect()
 
     @patch('ambry.orm.database._is_missed')
-    @patch('test.test_orm.functional.migrations.0100_init.Migration.migrate')
+    @patch('test.functional.migrations.0100_init.Migration.migrate')
     @patch('ambry.orm.database._get_all_migrations')
     def test_runs_missed_migration_and_changes_version(self, fake_get, fake_migrate, fake_is_missed):
         # prepare state.
         fake_is_missed.return_value = True
         test_migrations = [
-            (100, 'test.test_orm.functional.migrations.0100_init')
+            (100, 'test.functional.migrations.0100_init')
         ]
         fake_get.return_value = test_migrations
 

@@ -112,7 +112,7 @@ def make_row_processors(bundle, source_headers, dest_table, env):
             col_name = column.name
             preamble, try_lines, exception = make_stack(env, i, segment)
 
-            assert col_num == column.sequence_id, (col_num , column.sequence_id)
+            assert col_num == column.sequence_id, (dest_table.name, col_num , column.sequence_id)
 
             try:
                 i_s = source_headers.index(column.name)

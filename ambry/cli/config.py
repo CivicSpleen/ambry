@@ -1,5 +1,5 @@
 
-from six import iterkeys
+from six import iterkeys, iteritems
 
 from ..cli import prt, fatal, warn, err
 
@@ -16,9 +16,7 @@ def config_parser(cmd):
         '-t', '--template', default='devel',
         help="Suffix of the configuration template. One of: 'devel', 'library', 'builder'. Default: 'devel' ")
     sp.add_argument('-r', '--root', default=None, help="Set the root dir")
-    sp.add_argument('-R', '--remote', default=None, help="Url of remote library")
-    sp.add_argument(
-        '-p', '--print', dest='prt', default=False, action='store_true',
+    sp.add_argument('-p', '--print', dest='prt', default=False, action='store_true',
         help='Print, rather than save, the config file')
 
     group = sp.add_mutually_exclusive_group()
@@ -27,11 +25,11 @@ def config_parser(cmd):
         help="Force using the default config; don't re-use the existing config")
 
     sp.add_argument('args', nargs='*', help='key=value entries')  # Get everything else.
+
     sp = asp.add_parser('value', help='Return a configuration value, or all values if no key is specified')
     sp.set_defaults(subcommand='value')
-    sp.add_argument(
-        '-y', '--yaml', default=False, action='store_true',
-        help='If no key is specified, return the while configuration as yaml')
+    sp.add_argument('-y', '--yaml', default=False, action='store_true', help="Return the result as YAML")
+    sp.add_argument('-j', '--json', default=False, action='store_true', help="Return the result as JSON")
     sp.add_argument('key', nargs='*', help='Value key')  # Get everything else.
 
     sp = asp.add_parser('password', help='Set a password for a service')
@@ -40,8 +38,15 @@ def config_parser(cmd):
     sp.add_argument('service', metavar='service', nargs=1, help='Service name, usually a hostname')  # Get everything else.
     sp.add_argument('username', metavar='username', nargs=1, help='username')
 
-    sp = asp.add_parser('edit', help='Edit the config file')
+    sp = asp.add_parser('edit', help='Edit the config file by setting a value for a key. ')
     sp.set_defaults(subcommand='edit')
+    sp.add_argument('-y', '--yaml', default=False, action='store_true', help="Load the edits as a YAML string")
+    sp.add_argument('-j', '--json', default=False, action='store_true', help="Load the edits as a JSON string")
+    sp.add_argument('args', nargs='*', help='key=value entries, YAML or JSON')  # Get everything else.
+
+
+    sp = asp.add_parser('dump', help='Dump the config file')
+    sp.set_defaults(subcommand='dump')
     sp.add_argument('args', nargs='*', help='key=value entries')  # Get everything else.
 
 
@@ -61,23 +66,39 @@ def config_command(args, rc):
 
 def config_edit(args, l, rc):
     from ambry.dbexceptions import ConfigurationError
-
+    from ambry.util import AttrDict
 
     edit_args = ' '.join(args.args)
 
-    key, value = edit_args.split('=')
+    if args.yaml or args.json:
+        if args.yaml:
+            import yaml
+            v = yaml.load(edit_args)
+        elif args.json:
+            import json
+            v = json.loads(edit_args)
 
-    value = value.strip()
-    key = key.strip()
-    key_parts = key.split('.')
-    e = rc.config
-    for k in key_parts:
-        k = k.strip()
-        #print(k, str(key_parts[-1]))
-        if str(k) == str(key_parts[-1]):
-            e[k] = value
-        else:
-            e = e[k]
+        d = AttrDict()
+        d.update(v)
+
+        print d
+
+        rc.config.update_flat(d.flatten())
+
+    else:
+        key, value = edit_args.split('=')
+
+        value = value.strip()
+        key = key.strip()
+        key_parts = key.split('.')
+        e = rc.config
+        for k in key_parts:
+            k = k.strip()
+            #print(k, str(key_parts[-1]))
+            if str(k) == str(key_parts[-1]):
+                e[k] = value
+            else:
+                e = e[k]
 
 
     configs = rc.config['loaded']['configs']
@@ -103,87 +124,78 @@ def config_install(args, l, rc):
     import yaml
     import pkgutil
     import os
-    from ambry.run import RunConfig
+    from os.path import join, dirname
     import getpass
-
+    import ambry.support
+    from ambry.run import ROOT_FILE, USER_FILE, BASE_FILE, USER_ACCOUNTS_FILE
+    from ambry.util import AttrDict
 
     user = getpass.getuser()
 
-    default_contents = pkgutil.get_data("ambry.support", 'ambry-{}.yaml'.format(args.template))
+    default_config_file = join(dirname(ambry.support.__file__),
+                               'ambry-{}.yaml'.format(args.template))
+
+    d = AttrDict().update_yaml(default_config_file)
 
     if user == 'root': # Root user
-        install_file = RunConfig.ROOT_CONFIG
-        dr_d = yaml.load(default_contents)
-        default_root = dr_d['filesystem']['root']
+        install_file = ROOT_FILE
+        default_root = d.library.filesystem_root
 
     elif os.getenv('VIRTUAL_ENV'):  # Special case for python virtual environments
-        install_file = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
+        install_file = os.path.join(os.getenv('VIRTUAL_ENV'), BASE_FILE)
         default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
 
     else: # Non-root user, outside of virtualenv
-        install_file = RunConfig.USER_CONFIG
+        install_file = USER_FILE
         warn(("Installing as non-root, to '{}'\n" +
               "Run as root to install for all users.").format(install_file))
         default_root = os.path.join(os.path.expanduser('~'), 'ambry')
 
+    if args.root:
+        default_root = args.root
+
     if os.path.exists(install_file):
 
         if args.force:
-            prt("File output file exists, overwriting: {}".format(
-                install_file))
-            contents = default_contents
+            prt("File output file exists, overwriting: {}".format(install_file))
+
         else:
-            fatal(
-                "Output file {} exists. Use  -f to overwrite".format(install_file))
-    else:
-        contents = pkgutil.get_data(
-            "ambry.support", 'ambry-{}.yaml'.format(args.template))
+            fatal("Output file {} exists. Use  -f to overwrite".format(install_file))
 
-    d = yaml.load(contents)
+    d['library']['filesystem_root'] = default_root
 
-
-    if args.root:
-        d['filesystem']['root'] = args.root
-    elif default_root:
-        d['filesystem']['root'] = default_root
-
-    if args.remote:
-        try:
-            d['library']['default']['remotes'] = [args.remote]
-        except Exception as e:
-            err("Failed to set remote: {} ".format(e))
-
-    s = yaml.dump(d, indent=4, default_flow_style=False)
+    s = d.dump()
 
     if args.prt:
         prt(s.replace("{", "{{").replace("}", "}}"))
+        return
 
-    else:
+    #Create an empty accounts file, if it does not exist
+    user_accounts_file = os.path.expanduser(USER_ACCOUNTS_FILE)
 
-        dirname = os.path.dirname(install_file)
-
-        if not os.path.isdir(dirname):
-            os.makedirs(dirname)
-
-        with open(install_file, 'w') as f:
-            prt('Writing config file: {}'.format(install_file))
-            f.write(s)
-
-    if not os.path.exists(RunConfig.USER_ACCOUNTS):
-        with open(RunConfig.USER_ACCOUNTS, 'w') as f:
-
+    if not os.path.exists(user_accounts_file):
+        with open(user_accounts_file, 'w') as f:
             d = dict(accounts=dict(ambry=dict(name=None, email=None)))
 
-            prt('Writing config file: {}'.format(RunConfig.USER_ACCOUNTS))
+            prt('Writing accounts file: {}'.format(user_accounts_file))
             f.write(yaml.dump(d, indent=4, default_flow_style=False))
+
+    dirname = os.path.dirname(install_file)
+
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
+
+    with open(install_file, 'w') as f:
+        prt('Writing config file: {}'.format(install_file))
+        f.write(s)
 
     # Make the directories.
 
     from ..run import get_runconfig
     rc = get_runconfig(install_file)
 
-    for name in iterkeys(rc.group('filesystem')):
-        dr = rc.filesystem(name)
+    for name, v in iteritems(rc.filesystem):
+        dr = v.format(root=rc.library.filesystem_root)
 
         try:
 
@@ -195,6 +207,7 @@ def config_install(args, l, rc):
 
 
 def config_value(args, l, rc):
+    from ambry.util import AttrDict
 
     def sub_value(value, subs):
 
@@ -207,24 +220,53 @@ def config_value(args, l, rc):
                 return str(value)
 
     def dump_key(key, subs):
+        values = []
+
         for path, value in rc.config.flatten():
+
             dot_path = '.'.join(path)
             if key:
-                if key == dot_path:
-                    print(sub_value(value, subs))
-                    return
+                if key == dot_path: # Exact matches
+                    return sub_value(value, subs)
+
+                elif dot_path.startswith(key):
+                    values.append((dot_path.split('.'), sub_value(value, subs) ))
+
             else:
-                print(dot_path, '=', sub_value(value, subs))
+                return ''.join(dot_path, '=', sub_value(value, subs))
 
-    subs = dict(root=rc.filesystem('root'))
 
-    if not args.key:
-        if args.yaml:
-            print(rc.dump())
+        if not values:
+            return
+
+        d = AttrDict()
+
+        d.update_flat(values)
+
+        return d
+
+
+    subs = dict(root=rc.filesystem('root')) # Interpolations
+
+    key = args.key[0] if args.key[0] else None
+
+    if args.yaml:
+        v = dump_key(key, subs)
+        if isinstance(v, AttrDict):
+            print v.dump()
         else:
-            dump_key(None, subs)
+            import yaml
+            print yaml.dump(v)
+            print 'X', v
+    elif args.json:
+        import json
+        print json.dumps(dump_key(key, subs))
     else:
-        dump_key(args.key[0], subs)
+        print dump_key(key, subs)
+
+def config_dump(args, l, rc):
+
+    print rc.dump()
 
 def config_password(args, l, rc):
     """Set and delete passwords from the system keychain"""

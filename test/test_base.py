@@ -17,85 +17,93 @@ from six.moves import input as six_input
 from ambry.identity import DatasetNumber
 from ambry.orm import Database, Dataset
 from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
-from ambry.run import get_runconfig
+import ambry.run
 
-from ambry.util import memoize
-
-MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgres-test '\
-    'to the database config of the ambry config.'
+MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add test-postgres '\
+    'to the database section of the ambry config.'
 SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
 
 
 class TestBase(unittest.TestCase):
+
     def setUp(self):
+        import uuid
 
         super(TestBase, self).setUp()
-        self.dsn = 'sqlite://'  # Memory database
+
+        # WAARNING! This path and dsn is only used if it is explicitly referenced.
+        # Otherwise, the get_rc() will use a database specified in the
+        # test rc file.
+        self.db_path = "/tmp/ambry-test-{}.db".format(str(uuid.uuid4()))
+
+        self.dsn = "sqlite:///{}".format(self.db_path)
 
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
         self.db = None
+        self._library = None
 
     def tearDown(self):
-        pass
+
+        if self._library:
+            self._library.close()
+
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
     @classmethod
-    def get_rc(cls):
+    def get_rc(cls, rewrite=True):
         """Create a new config file for test and return the RunConfig.
 
          This method will start with the user's default Ambry configuration, but will replace the
-         filesystet.root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
+         library.filesystem_root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
          environmental variable, it will set library.database to the DSN of either database.test-sqlite or
          database.test-postrgres
 
         """
 
         from fs.opener import fsopendir
-        import os
 
-        rc = get_runconfig()
+        config = ambry.run.load() # not cached; get_config is
 
-        config = rc.config
+        dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
 
-        try:
-            del config['accounts']
-        except KeyError:
-            pass
+        orig_root = config.library.filesystem_root
+        root_dir  = config.filesystem.test.format(root=orig_root)
 
-        config.filesystem.root = config.filesystem.test
+        dsn = config.get('database',{}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
 
-        db = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+        cls._db_type = dbname
 
-        try:
-            config.library.database = config.database['test-sqlite']
-        except KeyError:
-            sqlite_dsn = 'sqlite:///{root}/library.db'
-            config.library.database = sqlite_dsn
-            print "WARN: missing config for test database 'test-{}', using '{}' ".format(db, sqlite_dsn)
+        config.library.filesystem_root = root_dir
+        config.library.database = dsn
+        config.accounts = None
 
-        cls._db_type = db
+        test_root = fsopendir(root_dir, create_dir=True)
 
-        test_root = fsopendir(rc.filesystem('test'))
+        if rewrite:
+            with test_root.open('.ambry.yaml', 'w', encoding='utf-8', ) as f:
+                config.loaded = None
+                config.dump(f)
 
-        with test_root.open('.ambry.yaml', 'w', encoding='utf-8') as f:
-            config.dump(f)
-
-        return get_runconfig(test_root.getsyspath('.ambry.yaml'))
+        print "Database: ", dsn
+        return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
 
     @classmethod
     def config(cls):
         return cls.get_rc()
 
-    @classmethod
-    def library(cls):
-        from ambry.library import new_library
-        return new_library(cls.config())
+    def library(self, config=None):
 
-    @classmethod
-    def import_bundles(cls, clean = True, force_import = False):
+        from ambry.library import new_library
+
+        if not self._library:
+            self._library = new_library(config if config else self.config())
+
+        return self._library
+
+    def import_bundles(self, clean=True, force_import=False):
         """
         Import the test bundles into the library, from the test.test_bundles directory
         :param clean: If true, drop the library first.
@@ -106,16 +114,33 @@ class TestBase(unittest.TestCase):
         from test import bundle_tests
         import os
 
-        l = cls.library()
+        l = self.library()
 
         if clean:
-            l.drop()
+            l.clean()
             l.create()
 
         bundles = list(l.bundles)
 
         if len(bundles) == 0 or force_import:
             l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
+
+    def import_single_bundle(self, cache_path, clean=True):
+        from test import bundle_tests
+
+        l = self.library()
+
+        if clean:
+            l.clean()
+            l.create()
+
+        orig_source = os.path.join(os.path.dirname(bundle_tests.__file__),cache_path)
+        l.import_bundles(orig_source, detach=True, force=True)
+
+        b = next(b for b in l.bundles).cast_to_subclass()
+        b.clean()
+        b.sync_in()
+        return b
 
     def new_dataset(self, n=1, source='source'):
         return Dataset(**self.ds_params(n, source=source))
@@ -138,7 +163,7 @@ class TestBase(unittest.TestCase):
         if db is None:
             db = self.db
 
-        for row in db.connection.execute('SELECT * FROM {}'.format(table)):
+        for row in db.connection.execute('SELECT * FROM {};'.format(table)):
             print(row)
 
     def new_database(self):
@@ -152,17 +177,13 @@ class TestBase(unittest.TestCase):
         from test import bundles
         from os.path import dirname, join
         from fs.opener import fsopendir
-        from fs.errors import ParentDirectoryMissingError
-        from ambry.library import new_library
         import yaml
         from ambry.util import parse_url_to_dict
 
         if not library:
-            rc = self.get_rc()
-            library = new_library(rc)
-        self.library = library
+            library = self.__class__.library()
 
-        self.db = self.library._db
+        self.db = library._db
 
         if not source_url:
             source_url = 'mem://source'.format(name)
@@ -174,32 +195,19 @@ class TestBase(unittest.TestCase):
             d = parse_url_to_dict((fs_url))
 
             # For persistent fs types, make sure it is empty before the test.
-            if d['scheme'] not in ('temp','mem'):
+            if d['scheme'] not in ('temp', 'mem'):
                 assert fsopendir(fs_url).isdirempty('/')
 
         test_source_fs = fsopendir(join(dirname(bundles.__file__), 'example.com', name))
 
         config = yaml.load(test_source_fs.getcontents('bundle.yaml'))
 
-        b = self.library.new_from_bundle_config(config)
+        b = library.new_from_bundle_config(config)
         b.set_file_system(source_url=source_url, build_url=build_url)
 
         self.copy_bundle_files(test_source_fs, b.source_fs)
 
         return b
-
-    def new_bundle(self):
-        """Configure a bundle from existing sources"""
-        from ambry.library import new_library
-        from ambry.bundle import Bundle
-
-        rc = self.get_rc()
-
-        self.library = new_library(rc)
-
-        self.db = self.library._db
-
-        return Bundle(self.new_db_dataset(self.db), self.library, build_url='mem://', source_url='mem://')
 
 
 class PostgreSQLTestBase(TestBase):
@@ -226,9 +234,9 @@ class PostgreSQLTestBase(TestBase):
 
             engine = create_engine(cls.postgres_test_db_data['postgres_db_dsn'])
             connection = engine.connect()
-            connection.execute('commit')
+            connection.execute('COMMIT;')
             connection.execute('DROP DATABASE {};'.format(test_db_name))
-            connection.execute('commit')
+            connection.execute('COMMIT;')
             connection.close()
         else:
             # no database were created.
@@ -236,16 +244,19 @@ class PostgreSQLTestBase(TestBase):
 
     @classmethod
     def _create_postgres_test_db(cls, conf=None):
+        db = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+        if db != 'postgres':
+            raise unittest.SkipTest('Postgres tests are disabled.')
         if not conf:
             conf = TestBase.get_rc()  # get_runconfig()
 
         # we need valid postgres dsn.
-        if not ('database' in conf.dict and 'postgres-test' in conf.dict['database']):
+        if not ('database' in conf.dict and 'test-postgres' in conf.dict['database']):
             # example of the config
             # database:
-            #     postgres-test: postgresql+psycopg2://user:pass@127.0.0.1/ambry
+            #     test-postgres: postgresql+psycopg2://user:pass@127.0.0.1/ambry
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-        dsn = conf.dict['database']['postgres-test']
+        dsn = conf.dict['database']['test-postgres']
         parsed_url = urlparse(dsn)
         postgres_user = parsed_url.username
         db_name = parsed_url.path.replace('/', '')
@@ -257,20 +268,21 @@ class PostgreSQLTestBase(TestBase):
         engine = create_engine(postgres_db_dsn, poolclass=NullPool)
         with engine.connect() as connection:
             # we have to close opened transaction.
-            connection.execute('commit')
+            connection.execute('COMMIT;')
 
             # drop test database created by previuos run (control + c case).
             if cls.postgres_db_exists(test_db_name, engine):
                 assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
                 while True:
                     delete_it = six_input(
-                        '\nTest database with {} name already exists. Can I delete it (Yes|No): '.format(test_db_name))
+                        '\nTest database with {} name already exists. Can I delete it (Yes|No): '
+                        .format(test_db_name))
                     if delete_it.lower() == 'yes':
                         try:
                             connection.execute('DROP DATABASE {};'.format(test_db_name))
-                            connection.execute('commit')
+                            connection.execute('COMMIT;')
                         except:
-                            connection.execute('rollback')
+                            connection.execute('ROLLBACK;')
                         break
 
                     elif delete_it.lower() == 'no':
@@ -290,7 +302,7 @@ class PostgreSQLTestBase(TestBase):
             query = 'CREATE DATABASE {} OWNER {} TEMPLATE {} encoding \'UTF8\';'\
                 .format(test_db_name, postgres_user, TEMPLATE_NAME)
             connection.execute(query)
-            connection.execute('commit')
+            connection.execute('COMMIT;')
             connection.close()
 
         # create db schemas needed by ambry.

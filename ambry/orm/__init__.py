@@ -346,7 +346,8 @@ def _clean_flag(in_flag):
 
     return bool(in_flag)
 
-
+# DEPRECATED
+# The two remaining uses of this should be replaced with dataset.next_sequence_id
 def next_sequence_id(session, sequence_ids, parent_vid, table_class, force_query = False):
     """
     Return the next sequence id for a object, identified by the vid of the parent object, and the database prefix
@@ -380,8 +381,8 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class, force_query
 
     if (not number and session) or force_query:
 
-        sql = text("SELECT max({seq_col})+1 FROM {table} WHERE {dvid_col} = '{vid}'"
-                   .format(table=table_class.__tablename__, dvid_col=parent_col,
+        sql = text("SELECT max({seq_col})+1 FROM {table} WHERE {parent_col} = '{vid}'"
+                   .format(table=table_class.__tablename__, parent_col=parent_col,
                            seq_col=seq_col, vid=parent_vid))
 
         max_id, = session.execute(sql).fetchone()
@@ -395,13 +396,11 @@ def next_sequence_id(session, sequence_ids, parent_vid, table_class, force_query
         # There was no session set. This should only happen when the parent object is new, and therefore,
         # there are no child number, so the appropriate starting number is 1. If the object is not new,
         # there will be conflicts.
-
         sequence_ids[key] = 1
 
     else:
         # There were no previous numbers, so start with 1
         sequence_ids[key] += 1
-
 
     return sequence_ids[key]
 
@@ -417,3 +416,5 @@ from ambry.orm.columnstat import ColumnStat
 from ambry.orm.source_table import SourceColumn, SourceTable
 from ambry.orm.source import DataSource, TransientDataSource
 from ambry.orm.database import Database
+from ambry.orm.account import Account
+from ambry.orm.process import Process

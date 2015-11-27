@@ -1,7 +1,7 @@
 """Server application for assigning dataset numbers. Requires a redis instance
 for data storage.
 
-Run with: python -mambry.server.numbers
+Run withsomething like: python -m ambry.server.numbers  -p 80 -H 162.243.194.227
 
 Requires a run_config configuration item:
 

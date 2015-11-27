@@ -424,10 +424,9 @@ class MetadataFile(DictBuildSourceFile):
             o = yaml.safe_load(file_default(self._file_const))
 
             try:
-                act = self._bundle.library.config.account('ambry').to_dict()
+                act = self._bundle.library.config.accounts.ambry.to_dict()
 
                 if act:
-                    del act['_name']
                     o['contacts']['creator'] = act
 
             except ConfigurationError:

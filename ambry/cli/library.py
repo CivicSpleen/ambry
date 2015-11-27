@@ -103,27 +103,37 @@ def library_parser(cmd):
 def library_command(args, rc):
     from ..library import new_library
     from . import global_logger
+    from ambry.orm.exc import NotFoundError
+    from sqlalchemy.exc import OperationalError
 
-    l = new_library(rc)
-
-    l.logger = global_logger
+    try:
+        l = new_library(rc)
+        l.logger = global_logger
+    except (NotFoundError, OperationalError) as e:
+        l = None
+        warn("Failed to construct library: {}".format(e))
 
     globals()['library_' + args.subcommand](args, l, rc)
 
 
-def library_init(args, l, config):
-    l.database.create()
-
-
 def library_drop(args, l, config):
     prt("Drop tables")
-    l.database.enable_delete = True
-    l.drop()
+    from ambry.orm import Database
+    from ambry.library import LibraryFilesystem
 
+    fs = LibraryFilesystem(config)
 
+    db = Database(fs.database_dsn)
+
+    print db.dsn
+    db.drop()
+    db.commit()
+    #db.create()
+    #db._create_path()
+    #db.create_tables()
 
 def library_clean(args, l, config):
-    prt("Clean tables")
+    prt("Clean tables in {}".format(l.database.dsn))
     l.clean()
 
 def library_remove(args, l, config):
