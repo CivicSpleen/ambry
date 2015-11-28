@@ -251,12 +251,12 @@ class PostgreSQLTestBase(TestBase):
             conf = TestBase.get_rc()  # get_runconfig()
 
         # we need valid postgres dsn.
-        if not ('database' in conf.dict and 'test-postgres' in conf.dict['database']):
+        if not ('database' in conf and 'test-postgres' in conf['database']):
             # example of the config
             # database:
             #     test-postgres: postgresql+psycopg2://user:pass@127.0.0.1/ambry
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-        dsn = conf.dict['database']['test-postgres']
+        dsn = conf.database['test-postgres']
         parsed_url = urlparse(dsn)
         postgres_user = parsed_url.username
         db_name = parsed_url.path.replace('/', '')

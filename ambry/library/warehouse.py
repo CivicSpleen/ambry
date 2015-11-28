@@ -10,14 +10,10 @@ Example:
 """
 import logging
 
-
-
 import sqlparse
 
-from ambry_sources.med.sqlite import add_partition as sqlite_add_partition,\
-    table_name as sqlite_table_name
-from ambry_sources.med.postgresql import add_partition as postgres_add_partition,\
-    table_name as postgres_table_name
+from ambry_sources.med import sqlite as sqlite_med
+from ambry_sources.med import postgresql as postgres_med
 
 from ambry.util import get_logger
 
@@ -27,7 +23,7 @@ logger = get_logger(__name__)  # , level=logging.DEBUG, propagate=False)
 
 class Warehouse(object):
     """ Provides SQL access to datasets in the library, allowing users to issue SQL queries, either as SQL
-or via Sqlalchemy, to return datasets.
+or via SQLAlchemy, to return datasets.
     """
 
     def __init__(self, library):
@@ -53,7 +49,6 @@ or via Sqlalchemy, to return datasets.
         raise Exception('Table name not found.')
 
     def query(self, query=''):
-        import apsw
 
         # create tables for all partitions found in the sql.
         logger.debug('Looking for refs and create virtual table for each. query: {}'.format(query))
@@ -76,7 +71,7 @@ or via Sqlalchemy, to return datasets.
             for statement in statements:
                 ref = self._get_table_name(statement)
                 self._install(ref, self._library.database, connection, cursor)
-                new_query.append(statement.to_unicode().replace(ref, postgres_table_name(ref)))
+                new_query.append(statement.to_unicode().replace(ref, postgres_med.table_name(ref)))
 
             new_query = '\n'.join(new_query)
 
@@ -88,6 +83,7 @@ or via Sqlalchemy, to return datasets.
 
     def _sqlite_execute(self, query=''):
         # we need apsw connection to operate with virtual tables.
+        import apsw
         statements = sqlparse.parse(query)
 
         connection = apsw.Connection(':memory:')
@@ -96,7 +92,7 @@ or via Sqlalchemy, to return datasets.
             for statement in statements:
                 ref = self._get_table_name(statement)
                 self._install(ref, self._library.database, connection, None)
-                new_query.append(statement.to_unicode().replace(ref, sqlite_table_name(ref)))
+                new_query.append(statement.to_unicode().replace(ref, sqlite_med.table_name(ref)))
 
             new_query = '\n'.join(new_query)
 
@@ -114,17 +110,17 @@ or via Sqlalchemy, to return datasets.
             ref: FIXME: describe with examples.
 
         """
-        # FIXME: Why do we need both - connection and cursor? Simplify interface.
+        # FIXME: Why do we need both - connection and cursor? Simplify interfaces.
         db_name = self._library.database.engine.name
 
         # FIXME: add_partition requires apsw connection.
         partition = self._library.partition(ref)
         if db_name == 'sqlite':
             logger.debug('Creating virtual table for {} partition.'.format(ref))
-            sqlite_add_partition(connection, partition.datafile, partition.vid)
+            sqlite_med.add_partition(connection, partition.datafile, partition.vid)
         elif db_name == 'postgresql':
             logger.debug('Creating foreign table for {} partition.'.format(ref))
-            postgres_add_partition(cursor, partition.datafile, partition.vid)
+            postgres_med.add_partition(cursor, partition.datafile, partition.vid)
         else:
             raise Exception('Do not know how to install partition into {} database.'.format(db_name))
 
@@ -138,8 +134,8 @@ or via Sqlalchemy, to return datasets.
         """
         pass
 
-    def _materialize(self, ref):
-        """ Creates a table for given partition reference.
+    def materialize(self, ref):
+        """ Creates a materialized view for given partition reference.
 
         Args:
             ref: FIXME:

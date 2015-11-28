@@ -36,6 +36,7 @@ from .filesystem import LibraryFilesystem
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 global_library = None
 
+
 def new_library(config=None):
 
     if config is None:
@@ -68,6 +69,8 @@ class Library(object):
         self._db = Database(self._fs.database_dsn)
 
         self._account_password = self.config.accounts.password
+
+        self._warehouse = None  # Will be populated in the warehouse property.
 
         try:
             self._db.open()
@@ -119,6 +122,13 @@ class Library(object):
     @property
     def filesystem(self):
         return self._fs
+
+    @property
+    def warehouse(self):
+        if not self._warehouse:
+            from ambry.library.warehouse import Warehouse
+            self._warehouse = Warehouse(self)
+        return self._warehouse
 
     @property
     def config(self):
