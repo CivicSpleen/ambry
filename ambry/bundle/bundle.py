@@ -41,6 +41,7 @@ def _CaptureException(f, *args, **kwargs):
     try:
         return f(*args, **kwargs)
     except Exception as e:
+        raise
         b.set_error_state()
         b.commit()
         if b.capture_exceptions:
@@ -398,20 +399,6 @@ class Bundle(object):
         source._bundle = self
         return source
 
-    def source_pipe(self, source, ps=None):
-        """Create a source pipe for a source, giving it access to download files to the local cache"""
-        from ambry.etl import GeneratorSourcePipe
-
-        if isinstance(source, string_types):
-            source = self.source(source)
-
-        source.dataset = self.dataset
-        source._bundle = self
-
-        iterable_source = self._iterable_source(source, ps)
-
-        return GeneratorSourcePipe(self, source, iterable_source)
-
     @property
     def sources(self):
         """Iterate over downloadable sources"""
@@ -439,6 +426,8 @@ class Bundle(object):
                 sources = list(s for s in self.sources if s.dest_table_name in tables)
             else:
                 sources = self.sources
+
+
         elif not isinstance(sources, (list, tuple)):
             sources = [sources]
 
@@ -755,7 +744,9 @@ Caster Code
         else:
             source = None
 
-        pl = Pipeline(self, source=self.source_pipe(source, ps) if source else None)
+        sf, sp = self.source_pipe(source, ps) if source else (None, None)
+
+        pl = Pipeline(self, source = sp)
 
         # Get the default pipeline, from the config at the head of this file.
         try:
@@ -883,6 +874,88 @@ Caster Code
                     row[i] = len(self.dataset.tables)
 
         return row
+
+    def source_pipe(self, source, ps=None):
+        """Create a source pipe for a source, giving it access to download files to the local cache"""
+
+        if isinstance(source, string_types):
+            source = self.source(source)
+
+        source.dataset = self.dataset
+        source._bundle = self
+
+        iter_source, source_pipe  =  self._iterable_source(source, ps)
+
+        return iter_source, source_pipe
+
+    def _iterable_source(self, source, ps=None):
+        from ambry_sources.sources import FixedSource, GeneratorSource
+        from ambry_sources.exceptions import MissingCredentials
+        from ambry_sources import get_source
+        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe
+
+        s = None
+
+        if source.reftype == 'partition':
+            source.update_table()  # Generate the source tables.
+            if ps:
+                ps.update(message='Ingested partition: {}'.format(source.datafile.path), state='done')
+
+            s = source.partition
+            sp = GeneratorSourcePipe(self, source, s)
+
+        elif source.reftype == 'generator':
+            import sys
+
+            if hasattr(self, source.generator):
+                gen_cls = getattr(self, source.generator)
+            elif source.generator in sys.modules['ambry.build'].__dict__:
+                gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
+            else:
+                gen_cls = self.import_lib().__dict__[source.generator]
+
+            spec = source.spec
+            spec.start_line = 1
+            spec.header_lines = [0]
+            s = GeneratorSource(spec, gen_cls(self, source))
+            sp = GeneratorSourcePipe(self, source, s)
+
+        elif source.is_downloadable:
+
+            def progress():
+                if ps:
+                    ps.add_update('Downloading {}'.format(source.url), source=source,
+                                  state='downloading')
+                else:
+                    self.log('Downloading {}'.format(source.url), source=source, state='downloading')
+
+            with self.progress.interval(progress, 10):
+                try:
+
+                    s = get_source(
+                        source.spec, self.library.download_cache,
+                        account_accessor=self.library.account_acessor)
+
+                except MissingCredentials as exc:
+                    formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
+                    msg = \
+                        'Missing credentials for {location}.\n' \
+                        'Hint: Check accounts section of your ~/.ambry-accounts.yaml ' \
+                        'for {location} credentials. If there is no such, use next template to ' \
+                        'add credentials:\n' \
+                        '{location}:\n' \
+                        '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
+                    raise Exception(msg)
+
+            if isinstance(s, FixedSource):
+                from ambry_sources.sources.spec import ColumnSpec
+
+                s.spec.columns = [ColumnSpec(c.name, c.position, c.start, c.width)
+                                  for c in source.source_table.columns]
+
+            sp = SourceFileSourcePipe(self, source, s)
+
+        return s, sp
 
     #
     # States
@@ -1215,7 +1288,7 @@ Caster Code
     # Ingestion
     #
 
-    @CaptureException
+    #@CaptureException
     def ingest(self, sources=None, tables=None, stage=None, force=False, update_tables=True):
         """Ingest a set of sources, specified as source objects, source names, or destination tables.
         If no stage is specified, execute the sources in groups by stage.
@@ -1255,8 +1328,8 @@ Caster Code
         count = 0
         errors = 0
 
-        try:
 
+        if True:
             self._run_events(TAG.BEFORE_INGEST, 0)
             # Clear out all ingested files that are malformed
             for s in self.sources:
@@ -1287,6 +1360,9 @@ Caster Code
 
             self.state = self.STATES.INGESTED
 
+
+        try:
+            pass
         finally:
             self._run_events(TAG.AFTER_INGEST, 0)
 
@@ -1316,6 +1392,7 @@ Caster Code
             # in MP.
             for source in sources:
                 _ = source.source_table
+
 
             if self.multi:
                 args = [(self.identity.vid, stage, source.vid, force) for source in downloadable_sources]
@@ -1347,71 +1424,6 @@ Caster Code
 
         return errors
 
-    def _iterable_source(self, source, ps=None):
-        from ambry_sources.sources import FixedSource, GeneratorSource
-        from ambry_sources.exceptions import MissingCredentials
-        from ambry_sources import get_source
-
-        s = None
-
-
-        if source.reftype == 'partition':
-            source.update_table()  # Generate the source tables.
-            if ps:
-                ps.update(message='Ingested partition: {}'.format(source.datafile.path), state='done')
-            source.state = source.STATES.INGESTED
-            return None
-
-        elif source.reftype == 'generator':
-            import sys
-
-            if hasattr(self, source.generator):
-                gen_cls = getattr(self, source.generator)
-            elif source.generator in sys.modules['ambry.build'].__dict__:
-                gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
-            else:
-                gen_cls = self.import_lib().__dict__[source.generator]
-
-            spec = source.spec
-            spec.start_line = 1
-            spec.header_lines = [0]
-            s = GeneratorSource(spec, gen_cls(self, source))
-
-        elif source.is_downloadable:
-
-            def progress():
-                if ps:
-                    ps.add_update('Downloading {}'.format(source.url), source=source,
-                                  state='downloading')
-                else:
-                    self.log('Downloading {}'.format(source.url), source=source,state='downloading')
-
-            with self.progress.interval(progress, 10):
-                try:
-
-                    s = get_source(
-                        source.spec, self.library.download_cache,
-                        account_accessor=self.library.account_acessor)
-
-                except MissingCredentials as exc:
-                    formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
-                    msg = \
-                        'Missing credentials for {location}.\n' \
-                        'Hint: Check accounts section of your ~/.ambry-accounts.yaml ' \
-                        'for {location} credentials. If there is no such, use next template to ' \
-                        'add credentials:\n' \
-                        '{location}:\n' \
-                        '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
-                    raise Exception(msg)
-
-            if isinstance(s, FixedSource):
-                from ambry_sources.sources.spec import ColumnSpec
-
-                s.spec.columns = [ColumnSpec(c.name, c.position, c.start, c.width)
-                                  for c in source.source_table.columns]
-
-            return s
-
     def _ingest_source(self, source, ps, force=None):
         """Ingest a single source"""
 
@@ -1442,9 +1454,9 @@ Caster Code
             ps.update('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
             source.state = source.STATES.INGESTING
 
-            iterable_source = self._iterable_source(source, ps)
+            iterable_source, source_pipe = self.source_pipe(source, ps)
 
-            if not iterable_source:
+            if not source.is_ingestible:
                 self.update(message='Not an ingestiable source: {}'.format(source.name),state='skipped', source=source)
                 source.state = source.STATES.NOTINGESTABLE
 
@@ -1464,6 +1476,8 @@ Caster Code
             ps.update(message='Ingested: {}'.format(source.datafile.path), state='done')
             source.state = source.STATES.INGESTED
             self.commit()
+
+
             return True
 
         except Exception as e:
@@ -1525,6 +1539,7 @@ Caster Code
         keyfunc = attrgetter('dest_table')
         for t, table_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
 
+
             if not force and not t.is_empty:
                 continue
 
@@ -1544,7 +1559,7 @@ Caster Code
                     self.log_pipeline(pl)
 
                     for h, c in zip(pl.write[Collect].headers, pl.write[Collect].rows[1]):
-                        t.add_column(name=h, datatype=type(c).__name__ if c is not None else 'str',
+                        c = t.add_column(name=h, datatype=type(c).__name__ if c is not None else 'str',
                                      update_existing=True)
 
                 self.log("Populated destination table '{}' from pipeline '{}'"
@@ -1555,17 +1570,28 @@ Caster Code
                 # with the header, then sort on the postition. This will produce a stream of header names
                 # that may have duplicates, but which is generally in the order the headers appear in the
                 # sources. The duplicates are properly handled when we add the columns in add_column()
-                columns = sorted(set([(i, col.dest_header, col.datatype, col.description) for source in table_sources
+                columns = sorted(set([(i, col.dest_header, col.datatype, col.description, col.has_codes)
+                                      for source in table_sources
                                  for i, col in enumerate(source.source_table.columns)]))
 
 
                 initial_count = len(t.columns)
 
-                for pos, name, datatype, desc in columns:
-                    t.add_column(name=name,
+                for pos, name, datatype, desc, has_codes in columns:
+                    c = t.add_column(name=name,
                                  datatype=datatype,
                                  description=desc,
                                  update_existing=True)
+
+                    if has_codes:
+
+                        c.datatype = 'types.{}OrCode'.format(datatype.title())
+
+                        c = t.add_column(name=name + '_codes',
+                                         datatype='str',
+                                         description='Codes for: ' + (desc if desc else name),
+                                         transform='||row.{}.code'.format(name),
+                                         update_existing=True)
 
                 final_count = len(t.columns)
 

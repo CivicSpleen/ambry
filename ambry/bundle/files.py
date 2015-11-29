@@ -832,19 +832,18 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         self._dataset.commit()
 
-        table_number = self._dataset.next_sequence_id(SourceTable, force_query=True)
-
         for row in bsfile.dict_row_reader:
             st = self._dataset.source_table(row['table'])
 
             if not st:
-                st = self._dataset.new_source_table(row['table'], table_number)
-                table_number += 1
+                st = self._dataset.new_source_table(row['table'])
+                #table_number += 1
 
             if 'datatype' not in row:
                 row['datatype'] = 'unknown'
 
             del row['table']
+
 
             st.add_column(**row)  # Create or update
 

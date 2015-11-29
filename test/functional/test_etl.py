@@ -35,7 +35,7 @@ class Test(TestBase):
 
     def setUp(self):
         from fs.opener import fsopendir
-
+        super(Test,self).setUp()
         self.fs = fsopendir('mem://test')
 
     @unittest.skip('Timing test')
@@ -261,4 +261,25 @@ class Test(TestBase):
         self.assertIn([0, 2], pl[PrintRows].rows)
         self.assertIn([10, 18], pl[PrintRows].rows)
         self.assertIn([20, 21], pl[PrintRows].rows)
+
+    def test_source_file_pipe(self):
+        from ambry.etl.pipeline import SourceFileSourcePipe
+        from itertools import islice
+
+        l = self.library()
+        l.clean()
+
+        b = self.import_single_bundle('ingest.example.com/variety')
+
+        for s in b.sources:
+            if s.start_line == 0:
+                continue
+            print '===', s.name, s.start_line, s.end_line
+            b.ingest(sources=[s])
+
+            sf, sp = b._iterable_source(s)
+
+            for row in islice(sp,10):
+                print row
+
 

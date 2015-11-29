@@ -42,9 +42,9 @@ class Dataset(Base):
     time_coverage = SAColumn('d_tcov', MutationList.as_mutable(JSONEncodedObj))
     grain_coverage = SAColumn('d_gcov', MutationList.as_mutable(JSONEncodedObj))
 
-    p_sequence_id = SAColumn('ds_p_sequence_id', Integer, default=1)
-    t_sequence_id = SAColumn('ds_t_sequence_id', Integer, default=1)
-    st_sequence_id = SAColumn('ds_st_sequence_id', Integer, default=1)
+    p_sequence_id = SAColumn('d_p_sequence_id', Integer, default=1)
+    t_sequence_id = SAColumn('d_t_sequence_id', Integer, default=1)
+    st_sequence_id = SAColumn('d_st_sequence_id', Integer, default=1)
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -466,6 +466,7 @@ class Dataset(Base):
         self.source_tables.append(table)
 
         assert table.sequence_id
+
 
         return table
 

@@ -39,7 +39,7 @@ Pipeline Exception: {exc_name}
 Message:         {message}
 Pipeline:        {pipeline_name}
 Pipe:            {pipe_class}
-Source:          {source_name}
+Source:          {source_name}, {source_id}
 Segment Headers: {headers}
 {extra}
 -------------------------------------
@@ -48,6 +48,7 @@ Pipeline:
 {pipeline}
 """.format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline=str(self.pipe.pipeline),
            pipe_class=qualified_class_name(self.pipe), source_name=self.pipe.source.name,
+           source_id=self.pipe.source.vid,
            headers=self.pipe.headers, exc_name = self.exc_name, extra = self.extra, extra_section=self.extra_section)
 
 class BadRowError(PipelineError):
@@ -222,9 +223,8 @@ class RowProxyPipe(Pipe):
         self.finish()
 
 
-
 class DatafileSourcePipe(Pipe):
-    """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
+    """A Source pipe that gemerates rows from an MPR file.  """
 
     def __init__(self, bundle, source):
         self.bundle = bundle
@@ -260,6 +260,67 @@ class DatafileSourcePipe(Pipe):
             yield self.headers
 
             for row in r.rows:
+                yield row
+
+        self.finish()
+
+    def start(self):
+        pass
+
+    def finish(self):
+        pass
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return "{}; {} {}".format(qualified_class_name(self), type(self.source), self.path)
+
+class SourceFileSourcePipe(Pipe):
+    """A source pipe that read from the original data file, but skips rows according to the sources's
+    row spec"""
+
+    def __init__(self, bundle, source_rec, source_file):
+        """
+
+        :param bundle:
+        :param source_rec:
+        :param source_file:
+        :return:
+        """
+        self.bundle = bundle
+
+        self._source = source_rec
+        self._file = source_file
+
+        self.path = self._file.path
+        self.file_name = self._source.name
+
+
+    def __iter__(self):
+
+        self.start()
+
+        self.headers = self._source.headers
+
+        # No? then get the headers from the datafile
+        if not self.headers:
+            self.headers = self._file.headers
+
+        itr = iter(self._file)
+
+        start_line = self._source.start_line or 0
+
+        # Throw away dataa before the data start line,
+        for i in range(start_line):
+            next(itr)
+
+        yield self.headers
+
+        if self._source.end_line:
+            for i in range(start_line, self._source.end_line):
+                yield next(itr)
+        else:
+            for row in itr:
                 yield row
 
         self.finish()
@@ -744,8 +805,6 @@ class MapSourceHeaders(Pipe):
 
     def process_header(self, headers):
 
-        print '!!!', headers
-
         if len(list(self.source.source_table.columns)) == 0:
             raise PipelineError(self, "Source table {} has no columns, can't map header"
                                 .format(self.source.source_table.name))
@@ -1214,9 +1273,11 @@ class CastColumns(Pipe):
 
         try:
             for proc in self.row_processors:
-                row = proc(rp.set_row(row), self.row_n, errors, scratch, self.accumulator, self, self.bundle, self.source)
+                row = proc(rp.set_row(row), self.row_n, errors, scratch, self.accumulator,
+                           self, self.bundle, self.source)
                 rp = self.row_proxy_2
         except CastingError as e:
+            raise
             raise PipelineError(self, "Failed to cast column in table {}: {}"
                                 .format(self.source.dest_table.name, e))
 

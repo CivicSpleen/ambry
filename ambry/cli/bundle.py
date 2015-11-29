@@ -782,13 +782,11 @@ def bundle_schema(args, l, rc):
 
     b.ingest(sources=args.source,tables=args.table, force=args.force)
 
-    if args.build:
-        b.dest_schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=True)
-    else:
-        b.dest_schema(sources=args.source, tables=args.table, clean=args.clean)
-
+    b.dest_schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=args.build)
 
     b.set_last_access(Bundle.STATES.SCHEMA)
+
+    prt("Created destination schema")
 
 
 def bundle_build(args, l, rc):
