@@ -7,8 +7,6 @@ from test.factories import PartitionFactory
 from ambry_sources import MPRowsFile
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
-from ambry.library.warehouse import Warehouse
-
 from test.test_base import TestBase, PostgreSQLTestBase
 
 
@@ -133,8 +131,7 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
         assert library.database.exists()
         return library
 
-    def _test_materialized_view(self):
-        # create materialized view wrd as select * from words;
+    def test_materialized_view(self):
         library = self._get_library()
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
@@ -176,7 +173,14 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
 
             library.warehouse.materialize(partition1.vid)
 
-            # assert materialized view created.
+            # query partition.
+            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+
+            # now drop the *.mpr file and check again. Query should return the same data.
+            #
+            syspath = datafile.syspath
+            os.remove(syspath)
+            self.assertFalse(os.path.exists(syspath))
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1)])
         finally:
