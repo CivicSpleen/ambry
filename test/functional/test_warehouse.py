@@ -1,21 +1,28 @@
 # -*- coding: utf-8 -*-
 import os
 import stat
+import unittest
+
+from semantic_version import Version
 
 from test.factories import PartitionFactory
 
+import ambry_sources
 from ambry_sources import MPRowsFile
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
 from test.test_base import TestBase, PostgreSQLTestBase
+
+AMBRY_SOURCES_VERSION = getattr(ambry_sources, '__version__', None) or ambry_sources.__meta__.__version__
 
 
 class Mixin(object):
     """ Requires successors to inherit from TestBase and provide _get_library method. """
 
     def test_select_query(self):
-        # FIXME: Check that for postgres only.
         if isinstance(self, PostgreSQLTest):
+            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
+                raise unittest.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
         library = self._get_library()
 
@@ -40,22 +47,6 @@ class Mixin(object):
             datafile = MPRowsFile(bundle.build_fs, partition1.cache_key)
             datafile.load_rows(GeneratorSource(SourceSpec('foobar'), gen()))
             partition1._datafile = datafile
-
-            # FIXME: ambry_sources should care about *.mpr permissions. Create an issue with test case.
-            # Waiting for https://github.com/CivicKnowledge/ambry_sources/issues/20. When the issue will be
-            # resolved, remove permissions setting.
-            if datafile.syspath.startswith('/tmp'):
-                parts = datafile.syspath.split(os.sep)
-                parts[0] = os.sep
-                for i, dir_ in enumerate(parts):
-                    if dir_ in ('/', 'tmp'):
-                        continue
-                    path = parts[:i]
-                    path.append(dir_)
-                    path = os.path.join(*path)
-                    if not is_group_readable(path):
-                        os.chmod(path, get_perm(path) | stat.S_IRGRP | stat.S_IXGRP)
-
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1)])
         finally:
@@ -132,6 +123,10 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
         return library
 
     def test_materialized_view(self):
+        if isinstance(self, PostgreSQLTest):
+            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
+                raise unittest.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
+
         library = self._get_library()
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
@@ -156,21 +151,7 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
             datafile.load_rows(GeneratorSource(SourceSpec('foobar'), gen()))
             partition1._datafile = datafile
 
-            # FIXME: ambry_sources should care about *.mpr permissions. Create an issue with test case.
-            # Waiting for https://github.com/CivicKnowledge/ambry_sources/issues/20. When the issue will be
-            # resolved, remove permissions setting.
-            if datafile.syspath.startswith('/tmp'):
-                parts = datafile.syspath.split(os.sep)
-                parts[0] = os.sep
-                for i, dir_ in enumerate(parts):
-                    if dir_ in ('/', 'tmp'):
-                        continue
-                    path = parts[:i]
-                    path.append(dir_)
-                    path = os.path.join(*path)
-                    if not is_group_readable(path):
-                        os.chmod(path, get_perm(path) | stat.S_IRGRP | stat.S_IXGRP)
-
+            # materialize partition (materialize view for postgres, readonly table for sqlite)
             library.warehouse.materialize(partition1.vid)
 
             # query partition.

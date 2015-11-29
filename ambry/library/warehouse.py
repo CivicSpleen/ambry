@@ -65,15 +65,6 @@ or via SQLAlchemy, to return datasets.
         view_table = '{}_v'.format(fdw_table)
 
         schema_name, table_name = fdw_table.split('.')
-        exists_query = '''
-            SELECT 1
-                FROM   pg_catalog.pg_class c
-                JOIN   pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                WHERE  n.nspname = %s
-                AND    c.relname = %s
-                AND    (c.relkind = 'r' OR c.relkind = 'v' OR c.relkind = 'm')
-                    -- r - table, v - view, m - materialized view.
-        '''
         connection = self._library.database.engine.raw_connection()
         with connection.cursor() as cursor:
             # check for materialized view.
