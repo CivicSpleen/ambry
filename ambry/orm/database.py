@@ -582,6 +582,9 @@ class Database(object):
 
         if self.driver == 'sqlite':
             # The Sqlite version is not atomic, but Sqlite also doesn't support concurrency
+            # So, we don't have to open a new connection, but we also can't open a new connection, so
+            # this uses the session.
+            self.commit()
             sql=text("SELECT  {p_seq_col} FROM {p_table} WHERE {p_vid_col} = '{parent_vid}' "
                      .format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
                        parent_vid=parent_vid))

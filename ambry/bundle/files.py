@@ -129,6 +129,11 @@ class BuildSourceFile(object):
             return None
 
     @property
+    def fs_is_newer(self):
+
+        return (self.fs_modtime or 0) > (self.record.modified or 0) and self.record.source_hash != self.fs_hash
+
+    @property
     def fs_hash(self):
         from ambry.util import md5_for_file
 

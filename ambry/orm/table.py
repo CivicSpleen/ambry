@@ -132,6 +132,10 @@ class Table(Base, DictableMixin):
                 if key == 'datatype' and value == 'unknown' and c.datatype:
                     continue
 
+                # Don't change a datatype if the value is set and the new value is unknown
+                if key == 'description' and not value:
+                    continue
+
                 try:
                     setattr(c, key, value)
                 except AttributeError:

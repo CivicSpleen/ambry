@@ -221,6 +221,8 @@ class RowProxyPipe(Pipe):
 
         self.finish()
 
+
+
 class DatafileSourcePipe(Pipe):
     """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
 
@@ -240,6 +242,7 @@ class DatafileSourcePipe(Pipe):
     def __iter__(self):
 
         self.start()
+
 
         with self._datafile.reader as r:
 
@@ -741,30 +744,26 @@ class MapSourceHeaders(Pipe):
 
     def process_header(self, headers):
 
-        if len(list(self.source.source_table.columns)) > 0:
-            self.map = {c.source_header: c.dest_header for c in self.source.source_table.columns
-                        if c.dest_header and c.source_header != c.dest_header}
-        else:
-            self.map = {}
+        print '!!!', headers
 
-        if len(headers) == 0:
-            raise ConfigurationError("Didn't get any source headers from source table '{}' "
-                                     .format(self.source.source_table.name))
+        if len(list(self.source.source_table.columns)) == 0:
+            raise PipelineError(self, "Source table {} has no columns, can't map header"
+                                .format(self.source.source_table.name))
 
-        if self.error_on_fail:
-            try:
-                headers = list([self.map[h] for h in headers])
-            except KeyError:
-                for h in headers:
-                    if h not in self.map:
-                        # pipe, header, table,
-                        raise MissingHeaderError( self, headers, h, self.source.source_table,
-                                                  "Failed to find header in source_table ")
+        dest_headers = [ c.dest_header for c in self.source.source_table.columns ]
 
-        else:
-            headers = list([self.map.get(h, h) for h in headers])
+        if len(headers) != len(dest_headers):
+            raise PipelineError(self, ("Source headers not same length as source table for source {}.\n"
+                                "Table : {} headers: {}\n"
+                                "Source: {} headers: {}\n")
+                                .format(self.source.name,len(dest_headers), dest_headers,
+                                        len(headers), headers))
 
-        return headers
+        return dest_headers
+
+    def process_body(self, row):
+
+        return super(MapSourceHeaders, self).process_body(row)
 
     def __str__(self):
         return qualified_class_name(self) + ': map = {} '.format(self.map)
@@ -1190,7 +1189,9 @@ class CastColumns(Pipe):
         self.orig_headers = headers
         self.row_proxy_1 = RowProxy(self.orig_headers)
 
-        assert len(self.source.dest_table.columns) > 1
+        if len(self.source.dest_table.columns) <= 1:
+            raise PipelineError(self, "Destination table {} has no columns, Did you run the schema phase?"
+                                .format(self.source.dest_table.name))
 
         # Return the table header, rather than the original row header.
 
@@ -1203,6 +1204,7 @@ class CastColumns(Pipe):
         return self.new_headers
 
     def process_body(self, row):
+        from ambry.valuetype.exceptions import CastingError
 
         self.row_n += 1
         scratch = {}
@@ -1210,9 +1212,13 @@ class CastColumns(Pipe):
 
         rp = self.row_proxy_1
 
-        for proc in self.row_processors:
-            row = proc(rp.set_row(row), self.row_n, errors, scratch, self.accumulator, self, self.bundle, self.source)
-            rp = self.row_proxy_2
+        try:
+            for proc in self.row_processors:
+                row = proc(rp.set_row(row), self.row_n, errors, scratch, self.accumulator, self, self.bundle, self.source)
+                rp = self.row_proxy_2
+        except CastingError as e:
+            raise PipelineError(self, "Failed to cast column in table {}: {}"
+                                .format(self.source.dest_table.name, e))
 
         return row
 

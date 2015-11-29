@@ -39,8 +39,8 @@ def _runable_for_event(f, tag, stage):
 
     f_tag, f_stage = f.__ambry_event__
 
-    if not stage:
-        stage = 1
+    if stage is None:
+        stage = 0
 
     if tag != f_tag or stage != f_stage:
         return False
@@ -104,3 +104,4 @@ def before_stage(stage=1):
 
 def after_stage(stage=1):
     return _wrap_for_events(TAG.AFTER_STAGE, stage)
+

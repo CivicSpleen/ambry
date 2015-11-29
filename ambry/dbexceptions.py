@@ -111,6 +111,10 @@ class BuildError(PhaseError):
 
     """General error while building a bundle."""
 
+class IngestionError(PhaseError):
+
+    """General error while ingesting sources."""
+
 class TestError(PhaseError):
 
     """Error or failure in built in tests"""

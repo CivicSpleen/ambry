@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Change directories to a bundle. If the bundle ref is not given, use the
 # currently active bundle, as reported by `bambry info -w`
-
+#
+# Options
+#    -s cd to the Source directory (default)
+#    -b cd to the build directory
 bambrycd() {
 
     OPTIND=1         # Reset in case getopts has been used previously in the shell.
@@ -14,10 +17,10 @@ bambrycd() {
     shift $((OPTIND-1))
 
     if [ -z "$1" ]; then
-        dir=$(bambry info  -w -q )
+        dir=$(bambry info  -w -q -H ) # Get the current bundle
     else
         dir=$1
     fi
 
-    cd `bambry -i $dir info $cd_opt`
+    cd $(bambry -i $dir info -T $cd_opt)
 }

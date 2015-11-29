@@ -9,11 +9,11 @@ class Test(TestBase):
         import unicodecsv as csv
 
         b = self.import_single_bundle('ingest.example.com/headerstypes')
-        b.run()
+        b.ingest()
 
     def test_basic(self):
         b = self.import_single_bundle('ingest.example.com/basic')
-        b.run()
+        b.ingest()
 
     def test_stages(self):
         b = self.import_single_bundle('ingest.example.com/stages')

@@ -277,6 +277,8 @@ class Dataset(Base):
         if not extant:
             self.tables.append(table)
 
+        self.commit()
+
         return table
 
     def new_partition(self, table, **kwargs):

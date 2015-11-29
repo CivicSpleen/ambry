@@ -39,11 +39,15 @@ class ProgressSection(object):
         self._group = None
         self._group = self.add(log_action='start',state='running', **kwargs)
 
+        assert self._session
+
     def __enter__(self):
+        assert self._session
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         from ambry.util import qualified_name
+        assert self._session
         if exc_val:
             self.add(
                 message = str(exc_val),
@@ -145,7 +149,6 @@ class ProgressSection(object):
 
         pr_id = self.add(*args, log_action='done', **kwargs)
 
-        self._session = None
         return pr_id
 
 class ProcessIntervals(object):
