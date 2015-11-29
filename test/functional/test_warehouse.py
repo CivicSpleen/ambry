@@ -16,7 +16,9 @@ class Mixin(object):
     """ Requires successors to inherit from TestBase and provide _get_library method. """
 
     def test_select_query(self):
-        assert_shares_group(user='postgres')
+        # FIXME: Check that for postgres only.
+        if isinstance(self, PostgreSQLTest):
+            assert_shares_group(user='postgres')
         library = self._get_library()
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
@@ -25,9 +27,6 @@ class Mixin(object):
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         partition1 = PartitionFactory(dataset=bundle.dataset)
         bundle.wrap_partition(partition1)
-
-        # FIXME: Improve library constructor and set warehouse there.
-        library._warehouse = Warehouse(library)
 
         def gen():
             # generate header
@@ -67,8 +66,16 @@ class Mixin(object):
 
 class InMemorySQLiteTest(TestBase, Mixin):
 
+    @classmethod
+    def get_rc(cls):
+        rc = TestBase.get_rc()
+        # use file database for library for that test case.
+        cls._real_test_database = rc.library.database
+        rc.library.database = 'sqlite://'
+        return rc
+
     def _get_library(self):
-        library = self.__class__.library()
+        library = self.library()
 
         # assert it is in-memory database.
         assert library.database.dsn == 'sqlite://'
@@ -81,19 +88,19 @@ class FileSQLiteTest(TestBase, Mixin):
     def get_rc(cls):
         rc = TestBase.get_rc()
         # use file database for library for that test case.
-        cls._real_test_database = rc.config.library.database
-        rc.config.library.database = 'sqlite:////tmp/test-warehouse.db'
+        cls._real_test_database = rc.library.database
+        rc.library.database = 'sqlite:////tmp/test-warehouse.db'
         return rc
 
     @classmethod
     def tearDownClass(cls):
         rc = TestBase.get_rc()
-        if rc.config.library.database != cls._real_test_database:
+        if rc.library.database != cls._real_test_database:
             # restore database
-            rc.config.library.database = cls._real_test_database
+            rc.library.database = cls._real_test_database
 
     def _get_library(self):
-        library = self.__class__.library()
+        library = self.library()
 
         # assert it is file database.
         assert library.database.exists()
@@ -106,25 +113,75 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
     def get_rc(cls):
         rc = TestBase.get_rc()
         # replace database with file database.
-        cls._real_test_database = rc.config.library.database
-        rc.config.library.database = cls.postgres_test_db_data['test_db_dsn']
+        cls._real_test_database = rc.library.database
+        rc.library.database = cls.postgres_test_db_data['test_db_dsn']
         return rc
 
     @classmethod
     def tearDownClass(cls):
         rc = TestBase.get_rc()
         real_test_database = getattr(cls, '_real_test_database', None)
-        if real_test_database and rc.config.library.database != real_test_database:
+        if real_test_database and rc.library.database != real_test_database:
             # restore database
-            rc.config.library.database = real_test_database
+            rc.library.database = real_test_database
         PostgreSQLTestBase.tearDownClass()
 
     def _get_library(self):
-        library = self.__class__.library()
+        library = self.library()
 
         # assert it is file database.
         assert library.database.exists()
         return library
+
+    def _test_materialized_view(self):
+        # create materialized view wrd as select * from words;
+        library = self._get_library()
+
+        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
+        bundle = self.setup_bundle(
+            'simple', source_url='temp://', build_url='temp://', library=library)
+        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
+        partition1 = PartitionFactory(dataset=bundle.dataset)
+        bundle.wrap_partition(partition1)
+
+        def gen():
+            # generate header
+            yield ['col1', 'col2']
+
+            # generate first row
+            yield [0, 0]
+
+            # generate second row
+            yield [1, 1]
+
+        try:
+            datafile = MPRowsFile(bundle.build_fs, partition1.cache_key)
+            datafile.load_rows(GeneratorSource(SourceSpec('foobar'), gen()))
+            partition1._datafile = datafile
+
+            # FIXME: ambry_sources should care about *.mpr permissions. Create an issue with test case.
+            # Waiting for https://github.com/CivicKnowledge/ambry_sources/issues/20. When the issue will be
+            # resolved, remove permissions setting.
+            if datafile.syspath.startswith('/tmp'):
+                parts = datafile.syspath.split(os.sep)
+                parts[0] = os.sep
+                for i, dir_ in enumerate(parts):
+                    if dir_ in ('/', 'tmp'):
+                        continue
+                    path = parts[:i]
+                    path.append(dir_)
+                    path = os.path.join(*path)
+                    if not is_group_readable(path):
+                        os.chmod(path, get_perm(path) | stat.S_IRGRP | stat.S_IXGRP)
+
+            library.warehouse.materialize(partition1.vid)
+
+            # assert materialized view created.
+            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            self.assertEqual(rows, [(0, 0), (1, 1)])
+        finally:
+            # FIXME: Use library.warehouse.close() instead.
+            library.database.close()
 
 
 def assert_shares_group(user=''):
