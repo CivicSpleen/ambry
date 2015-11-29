@@ -54,37 +54,41 @@ def bundle_command(args, rc):
     except LoggedException as e:
         exc = e.exc
         b = e.bundle
-        b.fatal(str(exc))
+        b.fatal(str(e.message))
 
 
-def get_bundle_ref(args, l):
+def get_bundle_ref(args, l, use_history=False):
     """ Use a variety of methods to determine which bundle to use
 
     :param args:
     :return:
     """
 
-    if args.id:
-        return (args.id, '-i argument')
+    if not use_history:
+        if args.id:
+            return (args.id, '-i argument')
 
-    try:
-        if args.ref:
-            l.bundle(args.ref)  # Exception if not exists
-            return (args.ref, 'argument')
-    except (AttributeError, NotFoundError, NotObjectNumberError):
-        pass
+        try:
+            if args.ref:
+                l.bundle(args.ref)  # Exception if not exists
+                return (args.ref, 'argument')
+        except (AttributeError, NotFoundError, NotObjectNumberError):
+            pass
 
-    if 'AMBRY_BUNDLE' in os.environ:
-        return (os.environ['AMBRY_BUNDLE'], 'environment')
+        if 'AMBRY_BUNDLE' in os.environ:
+            return (os.environ['AMBRY_BUNDLE'], 'environment')
 
-    cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
+        cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
 
-    if os.path.exists(cwd_bundle):
+        if os.path.exists(cwd_bundle):
 
-        with open(cwd_bundle) as f:
-            config = yaml.load(f)
-            id_ = config['identity']['id']
-            return (id_, 'directory')
+            with open(cwd_bundle) as f:
+                config = yaml.load(f)
+                try:
+                    id_ = config['identity']['id']
+                    return (id_, 'directory')
+                except KeyError:
+                    pass
 
     history = l.edit_history()
 
@@ -94,9 +98,9 @@ def get_bundle_ref(args, l):
     return None, None
 
 
-def using_bundle(args, l, print_loc=True):
+def using_bundle(args, l, print_loc=True, use_history=False):
 
-    ref, frm = get_bundle_ref(args, l)
+    ref, frm = get_bundle_ref(args, l, use_history=use_history)
 
     if not ref:
         fatal("Didn't get a bundle ref from the -i option, history, environment or argument")
@@ -107,6 +111,7 @@ def using_bundle(args, l, print_loc=True):
     b = l.bundle(ref, True)
 
     b.multi = args.multi
+    b.capture_exceptions = not args.exceptions
 
     if args.limited_run:
         b.limited_run = True
@@ -127,6 +132,8 @@ def bundle_parser(cmd):
                         help='URS1 signal will break to interactive prompt')
     parser.add_argument('-L', '--limited-run', default=False, action='store_true',
                         help='Enable bundle-specific behavior to reduce number of rows processed')
+    parser.add_argument('-E', '--exceptions', default=False, action='store_true',
+                        help="Don't capture and reformat exceptions; show the traceback on the console")
     parser.add_argument('-m', '--multi', default=False, action='store_true',
                         help='Run in multiprocessing mode')
     parser.add_argument('-p', '--processes',  type=int,
@@ -216,6 +223,10 @@ def bundle_parser(cmd):
                            help='Also report partition details')
     command_p.add_argument('-q', '--quiet', default=False, action='store_true',
                            help='Just report the minimum information, ')
+    command_p.add_argument('-H', '--history', default=False, action='store_true',
+                           help='When locating a bundle for --which, use only the edit history.')
+    command_p.add_argument('-T', '--touch', default=False, action='store_true',
+                           help='Update the edit history to this bundle')
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
@@ -270,42 +281,40 @@ def bundle_parser(cmd):
 
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Force ingesting already ingested files')
+    command_p.add_argument('-c', '--clean', default=False, action='store_true',
+                           help='Clean ingested files first')
+    command_p.add_argument('-p', '--purge-tables', default=False, action='store_true',
+                           help='Completely remove all source tables. Equivalent to deleting source_scheama.csv'
+                           ' and syncing.')
     command_p.add_argument('-t', '--table', action='append',
                            help='Only run the schema for the named tables. ')
-    command_p.add_argument('-S', '--source',  action='append',
+    command_p.add_argument('-s', '--source',  action='append',
                            help='Sources to ingest, instead of running all sources')
+    command_p.add_argument('-S', '--stage', help='Ingest sources at this stage')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
-    # Meta Command
-    #
-    command_p = sub_cmd.add_parser('meta', help='Clean, ingest and build the source and destination schemas')
-    command_p.set_defaults(subcommand='meta')
-
-    command_p.add_argument('-c', '--clean', default=False, action='store_true',
-                           help='Remove the schema source files, schema.csv and source_schema.csv')
-    command_p.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Re-run the schema, even if it already exists.')
-    command_p.add_argument('-b', '--build', action='store_true',
-                           help='Use the build process to determine the schema, not the source tables ')
-    command_p.add_argument('-s', '--sync', default=False, action='store_true',
-                           help='Syncrhonize before and after')
-    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Schema Command
     #
-    command_p = sub_cmd.add_parser('schema', help='Generate the source and destination schemas')
+    command_p = sub_cmd.add_parser('schema', help='Generate destination schemas from the source schemas')
     command_p.set_defaults(subcommand='schema')
 
+    command_p.add_argument('-b', '--build', action='store_true',
+                           help='For the destination schema, use the build process to "'
+                                '"determine the schema, not the source tables ')
+
     command_p.add_argument('-c', '--clean', default=False, action='store_true',
-                           help='Remove all columns from existing tavbles')
+                           help='Remove all columns from existing tables')
+
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Re-run the schema, even if it already exists.')
     command_p.add_argument('-t', '--table', action='append',
                            help='Only run the schema for the named tables. ')
-    command_p.add_argument('-S', '--source', action='append',
+    command_p.add_argument('-s', '--source', action='append',
                            help='Sources to ingest, instead of running all sources')
-    command_p.add_argument('-b', '--build', action='store_true',
-                           help='Use the build process to determine the schema, not the source tables ')
+
+
+
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Build Command
@@ -316,16 +325,17 @@ def bundle_parser(cmd):
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Build even built or finalized bundles')
 
-    command_p.add_argument('-s', '--sync', default=False, action='store_true',
+    command_p.add_argument('-y', '--sync', default=False, action='store_true',
                            help='Synchronize before and after')
 
     command_p.add_argument('-q', '--quick', default=False, action='store_true',
                            help="Just rebuild; don't clean beforehand")
 
-    command_p.add_argument('-S', '--source', action='append',
+    command_p.add_argument('-s', '--source', action='append',
                            help='Sources to build, instead of running all sources')
     command_p.add_argument('-t', '--table', action='append',
                            help='Build only sources that output to these destination tables')
+    command_p.add_argument('-S', '--stage', help='Ingest sources at this stage')
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
@@ -431,11 +441,9 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('extract', help='Extract data from a bundle')
     command_p.set_defaults(subcommand='extract')
     command_p.add_argument('-l', '--limit', type=int, default=None, help='Limit on number of rwos per file')
-    command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to export')
+    command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to extract')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
-    command_p = sub_cmd.add_parser('cluster', help='Cluster sources by similar headers')
-    command_p.set_defaults(subcommand='cluster')
 
     #
     # Colmap
@@ -485,20 +493,30 @@ def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
 
     if args.which:
-        ref, frm = get_bundle_ref(args, l)
+        ref, frm = get_bundle_ref(args, l, use_history=args.history)
 
-        b = using_bundle(args, l, print_loc=False)
+        b = l.bundle(ref)
 
         if args.quiet:
             prt(ref)
+
         else:
             prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
+
+        if args.touch:
+            b.set_last_access(Bundle.STATES.INFO)
+            b.commit()
+
         return
 
-    b = using_bundle(args, l, print_loc=False)
+    b = using_bundle(args, l, print_loc=False, use_history=args.history)
 
-    b.set_last_access(Bundle.STATES.INFO)
+    if args.touch:
+        b.set_last_access(Bundle.STATES.INFO)
+        b.commit()
 
+    # Just print the directory. Used in bambrycd to change
+    # directory in the user's shell
     if args.source_dir:
         print(b.source_fs.getsyspath('/'))
         return
@@ -614,13 +632,16 @@ def bundle_info(args, l, rc):
 
         rows = []
         for p in b.partitions:
-            rows.append([p.vid, p.vname, p.table.name,
+
+            rows.append([p.vid, p.vname, p.table.name,  p.stats_dict['id']['count'],
                          p.identity.time, p.identity.space, p.identity.grain,
                          '({}) '.format(len(p.time_coverage))+', '.join(str(e) for e in p.time_coverage[:5]),
                          '({}) '.format(len(p.space_coverage))+', '.join(p.space_coverage[:5]),
                          '({}) '.format(len(p.grain_coverage))+', '.join(p.grain_coverage[:5])])
         print('\nPartitions')
-        print(tabulate(rows, headers='Vid Name Table Time Space Grain TimeCov GeoCov GeoGrain'.split()))
+        rows = ['Vid Name Table Rows Time Space Grain TimeCov GeoCov GeoGrain'.split()] + rows
+        rows = drop_empty(rows)
+        print(tabulate(rows[1:], headers=rows[0]))
 
 
 def check_built(b):
@@ -712,8 +733,9 @@ def bundle_sync(args, l, rc):
         b.sync_in()
 
     if args.code:
-        prt('Sync code')
-        b.sync_code()
+        synced=b.sync_code()
+        prt('Synced {} files'.format(synced))
+
 
     if args.out:
         prt('Sync out')
@@ -731,12 +753,23 @@ def bundle_ingest(args, l, rc):
     if not args.force and not args.table and not args.source:
         check_built(b)
 
-    if args.table:
-        b.ingest(tables=args.table, force=args.force)
-    elif args.source:
-        b.ingest(sources=args.source, force=args.force)
-    else:
-        b.ingest(force=args.force)
+    b.sync_code()
+
+    if b.sync_sources() > 0:
+        b.log("Source file changed, automatically cleaning")
+        args.clean = True
+
+    if args.clean:
+        b.clean_ingested()
+
+    if args.purge_tables:
+        b.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
+        b.dataset.source_tables[:] = []
+        b.commit()
+
+    b.ingest(tables=args.table, sources=args.source, force=args.force)
+
+    b.sync_out()
 
     b.set_last_access(Bundle.STATES.INGESTED)
 
@@ -745,47 +778,17 @@ def bundle_schema(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
 
-    # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l, print_loc=False).cast_to_subclass()
+    b.sync_code()
+
     b.ingest(sources=args.source,tables=args.table, force=args.force)
 
     if args.build:
-        b.schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=True)
+        b.dest_schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=True)
     else:
-        b.schema(sources=args.source, tables=args.table, clean=args.clean)
+        b.dest_schema(sources=args.source, tables=args.table, clean=args.clean)
+
 
     b.set_last_access(Bundle.STATES.SCHEMA)
-
-
-def bundle_meta(args, l, rc):
-
-    b = using_bundle(args, l).cast_to_subclass()
-
-    if not args.force:
-        check_built(b)
-
-    b.clean()
-
-    if args.clean:
-        b.clean_source_files()
-
-    if args.sync:
-        b.sync_in()
-
-    # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l, print_loc=False).cast_to_subclass()
-
-    b.ingest()
-
-    if args.build:
-        b.build_schema()
-    else:
-        b.schema()
-
-    b.set_last_access(Bundle.STATES.SCHEMA)
-
-    if args.sync:
-        b.sync_out()
 
 
 def bundle_build(args, l, rc):
@@ -799,10 +802,13 @@ def bundle_build(args, l, rc):
 
     if args.sync:
         b.sync_in()
+    else:
+        b.sync_code()
+        b.sync_sources()
 
     b = b.cast_to_subclass()
 
-    b.run_stages(sources=args.source, tables=args.table, force=args.force)
+    b.build(sources=args.source, tables=args.table, stage=args.stage, force=args.force)
 
     b.set_last_access(Bundle.STATES.BUILT)
 
@@ -1149,10 +1155,8 @@ def bundle_export(args, l, rc):
 
     b = using_bundle(args, l)
 
-    if b.is_finalized:
-        fatal("Can't export a finalized bundle: state =  {}".format(b.state))
-
     if args.source:
+
         source_dir = os.path.abspath(args.source)
 
         if args.append:
@@ -1167,6 +1171,9 @@ def bundle_export(args, l, rc):
     b.sync_out()
 
     prt('Exported bundle: {}'.format(b.source_fs))
+
+    b.set_last_access(Bundle.STATES.SYNCED)
+    b.commit()
 
 file_const_map = dict(
     b=File.BSFILE.BUILD,
@@ -1251,7 +1258,7 @@ def bundle_edit(args, l, rc):
         try:
             command, arg = queue.get(True)
 
-            # On OS X Terminal, the printing moves the cursor down a lone, but not to the start, so these
+            # On OS X Terminal, the printing moves the cursor down a line, but not to the start, so these
             # ANSI sequences fix the cursor positiing. No idea why ...
             print("\033[0G\033[1F")
 

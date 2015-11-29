@@ -130,8 +130,6 @@ def root_command(args, rc):
     except Exception as e:
 
         warn('Failed to instantiate library: {}'.format(e))
-        raise
-
         l = None
 
     globals()['root_' + args.subcommand](args, l, rc)

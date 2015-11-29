@@ -75,7 +75,8 @@ class DataSourceBase(object):
         :return:
 
         """
-        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
+        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset',
+                     'hash', 'process_records')
         return OrderedDict(
             (p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS)
 

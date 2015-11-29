@@ -96,9 +96,19 @@ class Process(Base):
             None: '?'
         }
 
-        parts.append("{}:{}".format(self.phase if self.phase else '?', self.stage))
+        phase_str = self.phase if self.phase else '?'
 
-        parts.append(am.get(self.log_action,'')+' '+(self.message if self.message else ''))
+        if self.stage:
+            phase_str = phase_str + ':' + str(self.stage)
+
+        parts.append(phase_str)
+
+        action_char = am.get(self.log_action,'')
+
+        if self.state == 'error':
+            action_char = '!'
+
+        parts.append(action_char+' '+(self.message if self.message else ''))
 
         return ' '.join(parts)
 

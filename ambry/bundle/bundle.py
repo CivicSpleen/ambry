@@ -41,18 +41,18 @@ def _CaptureException(f, *args, **kwargs):
     try:
         return f(*args, **kwargs)
     except Exception as e:
-        raise
+        b.set_error_state()
+        b.commit()
         if b.capture_exceptions:
-            b.exception(e)
+            b.logged_exception(e)
             raise LoggedException(e, b)
         else:
+            b.exception(e)
             raise
-
 
 def CaptureException(f, *args, **kwargs):
     """Decorator to capture exceptions. and logging the error"""
     return decorator(_CaptureException, f)  # Preserves signature
-
 
 class Bundle(object):
 
@@ -398,16 +398,19 @@ class Bundle(object):
         source._bundle = self
         return source
 
-    def source_pipe(self, source):
+    def source_pipe(self, source, ps=None):
         """Create a source pipe for a source, giving it access to download files to the local cache"""
-        from ambry.etl import DatafileSourcePipe
+        from ambry.etl import GeneratorSourcePipe
+
         if isinstance(source, string_types):
             source = self.source(source)
 
         source.dataset = self.dataset
         source._bundle = self
 
-        return DatafileSourcePipe(self, source)
+        iterable_source = self._iterable_source(source, ps)
+
+        return GeneratorSourcePipe(self, source, iterable_source)
 
     @property
     def sources(self):
@@ -645,13 +648,22 @@ class Bundle(object):
         :param e:  Exception to log.
 
         """
+        self.logged_exception(e)
+        self.logger.exception(e)
+
+    def logged_exception(self, e):
+        """Record the exception, but don't log it; it's already been logged
+
+        :param e:  Exception to log.
+
+        """
         if str(e) not in self._errors:
             self._errors.append(str(e))
 
         self.set_error_state()
         self.dataset.config.build.state.exception_type = str(e.__class__.__name__)
         self.dataset.config.build.state.exception = str(e)
-        self.logger.exception(e)
+
 
     def warn(self, message):
         """Log an error messsage.
@@ -727,7 +739,7 @@ Caster Code
 
         self.build_fs.setcontents(path, v, encoding='utf8')
 
-    def pipeline(self, source=None, phase='build'):
+    def pipeline(self, source=None, phase='build', ps = None):
         """
         Construct the ETL pipeline for all phases. Segments that are not used for the current phase
         are filtered out later.
@@ -743,7 +755,7 @@ Caster Code
         else:
             source = None
 
-        pl = Pipeline(self, source=self.source_pipe(source) if source else None)
+        pl = Pipeline(self, source=self.source_pipe(source, ps) if source else None)
 
         # Get the default pipeline, from the config at the head of this file.
         try:
@@ -924,7 +936,10 @@ Caster Code
 
     def set_last_access(self, tag):
         """Mark the time that this bundle was last accessed"""
-        self.dataset.config.build.access.last = tag
+        import time
+        # time defeats check that value didn't change
+
+        self.dataset.config.build.access.last = '{}-{}'.format(tag,time.time())
 
     #########################
     # Build phases
@@ -935,86 +950,7 @@ Caster Code
 
     def run(self, sources=None, tables=None, force=False, schema=False):
         """Synonym for run_stages"""
-        return self.run_stages(sources, tables, force=force)
-
-    @CaptureException
-    def run_stages(self, sources=None, tables=None, force=False):
-        """Like run, but runs stages in order, rather than each phase in order. So, run() will ingest all sources,
-        then build all sources, while run_stages() will ingest then build all order=1 sources, then ingest and
-        build all order=2 sources.
-
-        Actual operation is to group sources by order, then call run() on each group
-        """
-
-        from itertools import groupby
-        from operator import attrgetter
-        from ambry.bundle.events import TAG
-
-        resolved_sources = self._resolve_sources(sources, tables)
-
-        if force:  # Clean all of the old partitions
-
-            for p in self.dataset.partitions:
-                if p.type == p.TYPE.SEGMENT:
-                    self.log("Removing old segment partition: {}".format(p.identity.name))
-                else:
-                    self.log("Removing build partition: {}".format(p.identity.name))
-                self.wrap_partition(p).datafile.remove()
-                self.session.delete(p)
-
-            for s in resolved_sources:
-                if s.state in (self.STATES.BUILDING, self.STATES.BUILT):
-                    s.state = self.STATES.INGESTED
-
-            self.commit()
-
-        keyfunc = attrgetter('stage')
-        self._run_events(TAG.BEFORE_RUN)
-
-        for stage, stage_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
-            stage_sources = list(stage_sources)  # Stage_sources is an iterator, can only be traversed once
-
-            self._run_events(TAG.BEFORE_STAGE, stage)
-            if not self._run_stage(stage, sources=stage_sources,  force=force, finalize=False):
-                self.error('Failed to run stage {}'.format(stage))
-            self._run_events(TAG.AFTER_STAGE, stage)
-
-        # Don't run if the caller specified a subset of sources or tables
-
-        if not sources and not tables:
-            self.post_run()
-
-        if not sources and not tables:
-            self._run_events(TAG.AFTER_RUN)
-        else:
-            self.log("Sources or tables specified; skipping after run test")
-
-        return True
-
-    def _run_stage(self, stage=None, sources=None, tables=None,  force=False, finalize=True):
-
-        if self.is_finalized and not force:
-            self.error("Can't run; bundle is finalized")
-            return False
-
-        sources = self._resolve_sources(sources, tables)
-
-        if not self.ingest(sources=sources, force=force):
-            self.error('Run: failed to ingest')
-            return False
-
-        if not self.schema(sources=sources, stage=stage, force=force):
-            self.error('Run: failed to build schema')
-            return False
-
-        if not self.build(sources=sources, stage=stage, force=force):
-            self.error('Run: failed to build')
-            return False
-
-        if finalize:
-            self.finalize()
-
-        return True
+        return self.build(sources, tables, force=force)
 
     #
     # Syncing
@@ -1077,18 +1013,42 @@ Caster Code
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
 
-        self.log('---- Sync Code ----')
+        synced = 0
+
         for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
-            self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+            bsf = self.build_source_files.file(fc)
+            if bsf.fs_is_newer:
+                self.log("Syncing {}".format(bsf.file_name))
+                bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+                synced += 1
 
         self.build_source_files.file(File.BSFILE.META).record_to_objects()
+
+        return synced
+
+    def sync_sources(self):
+        """Sync in only the sources.csv file"""
+        from ambry.orm.file import File
+        from ambry.bundle.files import BuildSourceFile
+
+        synced = 0
+
+        for fc in [File.BSFILE.SOURCES]:
+            bsf = self.build_source_files.file(fc)
+            if bsf.fs_is_newer:
+                self.log("Syncing {}".format(bsf.file_name))
+                bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+                synced += 1
+
+        self.build_source_files.file(File.BSFILE.META).record_to_objects()
+
+        return synced
 
     def sync_schema(self):
         """Sync in code files and the meta file, avoiding syncing the larger files"""
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
 
-        self.log('---- Sync Schema ----')
         for fc in [File.BSFILE.SCHEMA, File.BSFILE.SOURCESCHEMA]:
             self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
 
@@ -1270,17 +1230,7 @@ Caster Code
         from fs.errors import ResourceNotFoundError
         import zlib
 
-        self.state = self.STATES.INGESTING
-
-        # Clear out all ingested files that are malformed
-        for s in self.sources:
-            if s.is_downloadable:
-                df = s.datafile
-                try:
-                    info = df.info
-                    df.close()
-                except (ResourceNotFoundError, zlib.error, IOError):
-                    df.remove()
+        key = lambda s: s.stage if s.stage else 1
 
         def not_final_or_delete(s):
             import zlib
@@ -1294,23 +1244,58 @@ Caster Code
                 s.datafile.remove()
                 return True
 
-        key = lambda s: s.stage if s.stage else 1
-        sources = sorted(self._resolve_sources(sources, tables, stage), key=key)
+        sources = sorted(self._resolve_sources(sources, tables, stage, predicate=not_final_or_delete), key=key)
 
-        for stage, g in groupby(sources, key):
-            sources = [s for s in g if not_final_or_delete(s)]
+        if not sources:
+            self.log("No sources left to ingest")
+            return
 
-            if not len(sources):
-                continue
+        self.state = self.STATES.INGESTING
 
-            self._run_events(TAG.BEFORE_INGEST, stage)
-            self._ingest_sources(sources, stage, force=force)
-            self._run_events(TAG.AFTER_INGEST, stage)
-            self.record_stage_state(self.STATES.INGESTING, stage)
+        count = 0
+        errors = 0
 
-        self.state = self.STATES.INGESTED
+        try:
 
-        return True
+            self._run_events(TAG.BEFORE_INGEST, 0)
+            # Clear out all ingested files that are malformed
+            for s in self.sources:
+                if s.is_downloadable:
+                    df = s.datafile
+                    try:
+                        info = df.info
+                        df.close()
+                    except (ResourceNotFoundError, zlib.error, IOError):
+                        df.remove()
+
+            for stage, g in groupby(sources, key):
+                sources = [s for s in g if not_final_or_delete(s)]
+
+                if not len(sources):
+                    continue
+
+                self._run_events(TAG.BEFORE_INGEST, stage)
+                stage_errors = self._ingest_sources(sources, stage, force=force)
+
+                errors += stage_errors
+
+                count += len(sources) - stage_errors
+
+                self._run_events(TAG.AFTER_INGEST, stage)
+                self.record_stage_state(self.STATES.INGESTING, stage)
+
+
+            self.state = self.STATES.INGESTED
+
+        finally:
+            self._run_events(TAG.AFTER_INGEST, 0)
+
+        self.log("Ingested {} sources".format(count))
+
+        if errors == 0:
+            return True
+        else:
+            return False
 
     def _ingest_sources(self, sources, stage, force=False ):
         """Ingest a set of sources, usually for one stage"""
@@ -1321,7 +1306,11 @@ Caster Code
         downloadable_sources = [s for s in sources if force or
                                 (s.is_processable and not s.is_ingested and not s.is_built)]
 
-        with self.progress.start('ingest',stage, item_total = len(sources)) as ps:
+        errors = 0
+        with self.progress.start('ingest', stage,
+                                 message='Ingesting ' + ('MP' if self.multi else 'SP'),
+                                 item_total=len(sources), item_type='source', item_count=len(downloadable_sources)
+                                 ) as ps:
 
             # Create all of the source tables first, so we can't get contention for creating them
             # in MP.
@@ -1329,12 +1318,12 @@ Caster Code
                 _ = source.source_table
 
             if self.multi:
-                args = [(self.identity.vid, stage,  source.vid, force) for source in downloadable_sources]
+                args = [(self.identity.vid, stage, source.vid, force) for source in downloadable_sources]
 
                 pool = self.library.process_pool(limited_run=self.limited_run)
 
                 try:
-                    ps.add('ingesting multi process')
+
                     result = pool.map_async(ingest_mp, args)
 
                     pool.close()
@@ -1345,50 +1334,33 @@ Caster Code
                     pool.terminate()
                     raise
             else:
-                ps.add('ingesting single process', item_type='source', item_count=len(downloadable_sources))
-                for i, source in enumerate(downloadable_sources):
-                    ps.add(message='ingesting', source = source, item_count = i, state = 'running')
-                    self._ingest_source(source, ps, force)
+                for i, source in enumerate(downloadable_sources, 1):
+                    ps.add(message='Ingesting source #{}, {}'.format(i, source.name),
+                           source=source, item_count=i, state='running')
+                    r = self._ingest_source(source, ps, force)
+                    if not r:
+                        errors += 1
 
-            return True
+            if errors > 0:
+                from ambry.dbexceptions import IngestionError
+                raise IngestionError("Failed to ingest {} sources".format(errors))
 
-    def _ingest_source(self, source, ps, force=None):
-        """Ingest a single source"""
+        return errors
+
+    def _iterable_source(self, source, ps=None):
         from ambry_sources.sources import FixedSource, GeneratorSource
-        from ambry_sources import get_source
         from ambry_sources.exceptions import MissingCredentials
-        from ambry.orm.exc import NotFoundError
-
-        if not source.is_partition and source.datafile.exists:
-            if not source.datafile.is_finalized:
-                source.datafile.remove()
-            elif force:
-                source.datafile.remove()
-            else:
-                ps.update(message = 'Source {} already ingested, skipping'.format(source.name),state = 'skipped')
-                return
-
-        if source.is_partition:
-            # Check if the partition exists
-            try:
-                p = self.library.partition(source.ref)
-            except NotFoundError:
-                # Maybe it is an internal reference, in which case we can just delay
-                # until the partition is built
-                ps.update(message="Not Ingesting {}: referenced partition '{}' does not exist"
-                          .format(source.name, source.ref), state='skipped')
-                return
-
-        ps.update('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
-        source.state = source.STATES.INGESTING
+        from ambry_sources import get_source
 
         s = None
 
+
         if source.reftype == 'partition':
             source.update_table()  # Generate the source tables.
-            ps.update(message='Ingested partition: {}'.format(source.datafile.path), state='done')
+            if ps:
+                ps.update(message='Ingested partition: {}'.format(source.datafile.path), state='done')
             source.state = source.STATES.INGESTED
-            return
+            return None
 
         elif source.reftype == 'generator':
             import sys
@@ -1407,13 +1379,19 @@ Caster Code
 
         elif source.is_downloadable:
 
-            with self.progress.interval(lambda: ps.add_update('Downloading {}'.format(source.url),source=source,
-                                                              state='downloading'), 10):
+            def progress():
+                if ps:
+                    ps.add_update('Downloading {}'.format(source.url), source=source,
+                                  state='downloading')
+                else:
+                    self.log('Downloading {}'.format(source.url), source=source,state='downloading')
+
+            with self.progress.interval(progress, 10):
                 try:
 
                     s = get_source(
                         source.spec, self.library.download_cache,
-                        clean=force, account_accessor=self.library.account_acessor)
+                        account_accessor=self.library.account_acessor)
 
                 except MissingCredentials as exc:
                     formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
@@ -1432,27 +1410,76 @@ Caster Code
                 s.spec.columns = [ColumnSpec(c.name, c.position, c.start, c.width)
                                   for c in source.source_table.columns]
 
-        else:
-            self.update(message='Not an ingestiable source: {}'.format(source.name),state='skipped', source=source)
-            source.state = source.STATES.NOTINGESTABLE
+            return s
 
-            return
+    def _ingest_source(self, source, ps, force=None):
+        """Ingest a single source"""
 
-        def dl_progress_f():
-            (desc, n_records, total, rate) = source.datafile.report_progress()
-            ps.update(message='Ingesting {}: {} {} of {}, rate: {}'
-                      .format(source.spec.name,desc, n_records, total, rate))
+        try:
 
-        with self.progress.interval(lambda: ps.add_update(dl_progress_f,state='loading', source=source), 10):
-            source.datafile.load_rows(s)
+            from ambry.orm.exc import NotFoundError
 
-        source.update_table()  # Generate the source tables.
-        source.update_spec()  # Update header_lines, start_line, etc.
+            if not source.is_partition and source.datafile.exists:
+                if not source.datafile.is_finalized:
+                    source.datafile.remove()
+                elif force:
+                    source.datafile.remove()
+                else:
+                    ps.update(message = 'Source {} already ingested, skipping'.format(source.name),state = 'skipped')
+                    return True
 
-        ps.update(message='Ingested: {}'.format(source.datafile.path), state='done')
-        source.state = source.STATES.INGESTED
-        self.commit()
-        return source.name
+            if source.is_partition:
+                # Check if the partition exists
+                try:
+                    p = self.library.partition(source.ref)
+                except NotFoundError:
+                    # Maybe it is an internal reference, in which case we can just delay
+                    # until the partition is built
+                    ps.update(message="Not Ingesting {}: referenced partition '{}' does not exist"
+                              .format(source.name, source.ref), state='skipped')
+                    return True
+
+            ps.update('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
+            source.state = source.STATES.INGESTING
+
+            iterable_source = self._iterable_source(source, ps)
+
+            if not iterable_source:
+                self.update(message='Not an ingestiable source: {}'.format(source.name),state='skipped', source=source)
+                source.state = source.STATES.NOTINGESTABLE
+
+                return True
+
+            def dl_progress_f():
+                (desc, n_records, total, rate) = source.datafile.report_progress()
+                ps.update(message='Ingesting {}: {} {} of {}, rate: {}'
+                          .format(source.spec.name, desc, n_records, total, rate))
+
+            with self.progress.interval(lambda: ps.add_update(dl_progress_f, state='loading', source=source), 10):
+                source.datafile.load_rows(iterable_source)
+
+            source.update_table()  # Generate the source tables.
+            source.update_spec()  # Update header_lines, start_line, etc.
+
+            ps.update(message='Ingested: {}'.format(source.datafile.path), state='done')
+            source.state = source.STATES.INGESTED
+            self.commit()
+            return True
+
+        except Exception as e:
+            import traceback
+            from ambry.util import qualified_class_name
+
+            ps.update(
+                message="Source {} failed with exception: {}".format(source.name, e),
+                exception_class=qualified_class_name(e),
+                exception_trace=str(traceback.format_exc()),
+                state='error'
+            )
+
+            source.state = source.STATES.INGESTING + '_error'
+            self.commit()
+            return False
 
     def _ingest_update_tables(self, sources):
         # Do these updates, even if we skipped ingestion, so that the source tables will be generated if they
@@ -1470,7 +1497,7 @@ Caster Code
     #
 
     @CaptureException
-    def schema(self, sources=None, tables=None, stage=None, clean=False, force=False, use_pipeline=False):
+    def dest_schema(self, sources=None, tables=None,  clean=False, force=False, use_pipeline=False):
         """
         Generate destination schemas.
 
@@ -1488,13 +1515,11 @@ Caster Code
         from ambry.etl import Collect, Head
         from ambry.bundle.events import TAG
 
-        resolved_sources = self._resolve_sources(sources, tables, stage, predicate=lambda s: s.is_processable)
+        resolved_sources = self._resolve_sources(sources, tables,  predicate=lambda s: s.is_processable)
 
         if clean:
             self.dataset.delete_tables_partitions()
             self.commit()
-
-        self._run_events(TAG.BEFORE_SCHEMA, stage)
 
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
@@ -1537,7 +1562,10 @@ Caster Code
                 initial_count = len(t.columns)
 
                 for pos, name, datatype, desc in columns:
-                    t.add_column(name=name, datatype=datatype, description=desc, update_existing=True)
+                    t.add_column(name=name,
+                                 datatype=datatype,
+                                 description=desc,
+                                 update_existing=True)
 
                 final_count = len(t.columns)
 
@@ -1547,14 +1575,20 @@ Caster Code
                     self.log("Populated destination table '{}' from source table '{}' with {} columns"
                              .format(t.name, source.source_table.name, diff))
 
-        self._run_events(TAG.AFTER_SCHEMA, stage)
+
         self.commit()
+
+        bsf = self.build_source_files.file(File.BSFILE.SCHEMA)
+
+        bsf.objects_to_record()
+        bsf.record_to_fs()
 
         return True
 
-    def source_schema(self, sources=None, tables=None):
+    def source_schema(self, sources=None, tables=None,  clean=False):
         """Process a collection of ingested sources to make source tables. """
         from ambry.bundle.files import BuildSourceFile
+
         sources = self._resolve_sources(sources, tables, None,
                                         predicate=lambda s: s.is_processable and not s.is_partition)
 
@@ -1565,6 +1599,7 @@ Caster Code
         self.commit()
 
         bsf = self.build_source_files.file(File.BSFILE.SOURCESCHEMA)
+
         bsf.objects_to_record()
         bsf.record_to_fs()
 
@@ -1583,23 +1618,47 @@ Caster Code
 
     def pre_build(self, force=False):
 
-        if self.is_finalized:
-            self.error("Can't build; bundle is finalized")
-            return False
+        if not force:
 
-        if self.is_built:
-            self.error("Can't run build; bundle is built")
-            return False
+            if self.is_finalized:
+                self.error("Can't build; bundle is finalized")
+                return False
 
-        if self.state.endswith('error'):
-            self.error("Can't run build; bundle is in error state")
-            return False
+            if self.is_built:
+                self.error("Can't run build; bundle is built")
+                return False
+
+            if self.state.endswith('error'):
+                self.error("Can't run build; bundle is in error state")
+                return False
 
         self.state = self.STATES.BUILDING
 
         return True
 
-    def build(self, sources=None, tables=None, stage=None, force=False):
+    def _reset_build(self, sources):
+        """Remove partition datafiles and reset the datafiles to the INGESTED state"""
+
+        for p in self.dataset.partitions:
+            if p.type == p.TYPE.SEGMENT:
+                self.log("Removing old segment partition: {}".format(p.identity.name))
+                self.wrap_partition(p).datafile.remove()
+                self.session.delete(p)
+
+        for s in sources:
+
+            p = s.partition
+            if p:
+                self.wrap_partition(p).datafile.remove()
+                self.session.delete(p)
+
+            if s.state in (self.STATES.BUILDING, self.STATES.BUILT):
+                s.state = self.STATES.INGESTED
+
+        self.commit()
+
+    @CaptureException
+    def build(self, sources=None, tables=None, stage=None, force=False, finalize=True):
         """
 
         :param phase:
@@ -1613,66 +1672,71 @@ Caster Code
         from .concurrent import build_mp
         from ambry.bundle.events import TAG
 
-        with self.progress.start('build',stage, item_total = len(sources)) as ps:
-            if not self.pre_build(force):
-                ps.done(message='Pre-build failed', state='skipped')
-                return False
+        try:
 
-            resolved_sources = self._resolve_sources(sources, None, stage=stage,
+            self._run_events(TAG.BEFORE_BUILD, 0)
+
+            resolved_sources = self._resolve_sources(sources, tables, stage=stage,
                                                      predicate=lambda s: s.is_processable)
 
-            if not resolved_sources:
-                ps.done(message='No sources', state='skipped')
-                self.log('No processable sources, skipping build stage {}'.format(stage))
-                return True
+            with self.progress.start('build',stage, item_total = len(resolved_sources)) as ps:
 
-            for stage, source_group in groupby(sorted(resolved_sources, key=attrgetter('stage')), attrgetter('stage')):
+                if not resolved_sources:
+                    ps.done(message='No sources', state='skipped')
+                    self.log('No processable sources, skipping build stage {}'.format(stage))
+                    return True
 
-                sources = list(source_group)
+                if not self.pre_build(force):
+                    ps.done(message='Pre-build failed', state='skipped')
+                    return False
 
-                self.log('Processing {} sources, stage {} ; first 10: {}'
-                         .format(len(sources), stage, [x.name for x in sources[:10]]))
-                self._run_events(TAG.BEFORE_BUILD, stage)
+                if force:
+                    self._reset_build(resolved_sources)
 
-                if self.multi:
-                    args = [(self.identity.vid, stage, source.vid, force) for source in sources]
+                for stage, stage_sources in groupby(sorted(resolved_sources, key=attrgetter('stage')), attrgetter('stage')):
 
-                    pool = self.library.process_pool(limited_run=self.limited_run)
+                    stage_sources = list(stage_sources)
 
-                    try:
-                        pool.map(build_mp, args)
-                    except KeyboardInterrupt:
-                        self.log('Got keyboard interrrupt; terminating workers')
-                        pool.terminate()
+                    self.log('Processing {} sources, stage {} ; first 10: {}'
+                             .format(len(stage_sources), stage, [x.name for x in stage_sources[:10]]))
+                    self._run_events(TAG.BEFORE_BUILD, stage)
 
-                else:
+                    if self.multi:
+                        args = [(self.identity.vid, stage, source.vid, force) for source in stage_sources]
 
-                    for i, source in enumerate(sources):
-                        ps.add(source = source, item_count = i, state = 'running')
-                        self.build_source(source, ps, force=force)
+                        pool = self.library.process_pool(limited_run=self.limited_run)
 
-                    self.record_stage_state(self.STATES.BUILDING, stage)
+                        try:
+                            pool.map(build_mp, args)
+                        except KeyboardInterrupt:
+                            self.log('Got keyboard interrrupt; terminating workers')
+                            pool.terminate()
 
-                self.dataset.commit()
+                    else:
 
-                self.unify_partitions()
+                        for i, source in enumerate(stage_sources):
+                            ps.add(source = source, item_count = i, state = 'running')
+                            self.build_source(stage, source, ps, force=force)
 
-                self.dataset.commit()
+                        self.record_stage_state(self.STATES.BUILDING, stage)
 
-                self._run_events(TAG.AFTER_BUILD, stage)
+                    self.dataset.commit()
+
+                    self.unify_partitions()
+
+                    self.dataset.commit()
+
+                    self._run_events(TAG.AFTER_BUILD, stage)
+
+            if finalize:
+                self.finalize()
+
+        finally:
+
+            self._run_events(TAG.AFTER_BUILD, 0)
 
         return True
 
-    def post_run(self):
-        """After the build, update the configuration with the time required for
-        the build, then save the schema back to the tables, if it was revised
-        during the build."""
-
-        self.state = self.STATES.BUILT
-
-        self.log('---- Finished Building ---- ')
-
-        return True
 
     def build_table(self, table, force=False):
         """Build all of the sources for a table """
@@ -1680,12 +1744,13 @@ Caster Code
         sources = self._resolve_sources(None, [table])
 
         for source in sources:
-            self.build_source(source, force=force)
+            self.build_source(None, source, force=force)
 
         self.unify_partitions()
 
-    def build_source(self, source, ps, force=False):
+    def build_source(self, stage, source, ps, force=False):
         """Build a single source"""
+        from ambry.bundle.events import TAG
 
         assert source.is_processable, source.name
 
@@ -1693,7 +1758,7 @@ Caster Code
             ps.update(message='Source {} already built'.format(source.name), state='skipped')
             return
 
-        pl = self.pipeline(source)
+        pl = self.pipeline(source, ps=ps)
 
         source.state = self.STATES.BUILDING
 
@@ -1746,6 +1811,7 @@ Caster Code
 
         source.state = self.STATES.BUILT
 
+
     def unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
         and delete the children. """
@@ -1764,12 +1830,12 @@ Caster Code
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
 
-        ps = self.progress.start('coalesce',0, message='Coalescing partition segments')
+        with self.progress.start('coalesce',0, message='Coalescing partition segments') as ps:
 
-        for name, segments in iteritems(partitions):
-            ps.add('', item_type='partitions', item_count=len(segments),
-                       message='Colescing partition {}'.format(name))
-            self.unify_partition(name, segments, ps)
+            for name, segments in iteritems(partitions):
+                ps.add(item_type='partitions', item_count=len(segments),
+                           message='Colescing partition {}'.format(name))
+                self.unify_partition(name, segments, ps)
 
     def unify_partition(self, partition_name, segments, ps):
         from ..orm.partition import Partition
@@ -1796,17 +1862,17 @@ Caster Code
 
         def coalesce_progress_f():
                 (desc, n_records, total, rate) = parent.datafile.report_progress()
-                ps.update(message='Coalescing {}: {} {} of {}, rate: {}'
+                ps.update(message='Coalescing {}: {} of {}, rate: {}'
                           .format(parent.identity.name, n_records, total, rate))
 
-        with self.progress.interval(coalesce_progress_f, 10):
+        with self.progress.interval(coalesce_progress_f, 5):
 
             with parent.datafile.writer as w:
                 for seg in sorted(segments, key=lambda x: b(x.name)):
-                    ps.add("Removing exisiting datafile", partition=parent)
-                    self.debug(indent + 'Coalescing segment  {} '.format(seg.identity.name))
+                    ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
 
                     with self.wrap_partition(seg).datafile.reader as reader:
+                        import time
                         for row in reader.rows:
                             w.insert_row((i,) + row[1:])
                             i += 1
@@ -2119,9 +2185,10 @@ Caster Code
             # self.log(stream.getvalue())
 
             self.log("Ran {} tests for tag '{}', {}{} failed, {} errors, {} skipped".format(
-                r.testsRun, tag, ' stage {}, '.format(stage) if stage else '',
+                r.testsRun, tag, ' stage {}, '.format(stage) if stage is not None else '',
                 len(r.failures), len(r.errors), len(r.skipped)
             ))
+
             for test, trace in r.failures:
                 self.error('Test Failure: {} {}'.format(test, trace))
 
