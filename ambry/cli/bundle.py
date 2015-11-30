@@ -317,6 +317,32 @@ def bundle_parser(cmd):
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
+    #
+    # Run Command
+    #
+    command_p = sub_cmd.add_parser('run', help='Ingest, crate a schema, and build.')
+    command_p.set_defaults(subcommand='run')
+
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Build even built or finalized bundles')
+
+    command_p.add_argument('-c', '--clean', default=False, action='store_true',
+                           help='Clean and synchronize before running')
+
+    command_p.add_argument('-y', '--sync', default=False, action='store_true',
+                           help='Synchronize before and after')
+
+    command_p.add_argument('-q', '--quick', default=False, action='store_true',
+                           help="Just rebuild; don't clean beforehand")
+
+    command_p.add_argument('-s', '--source', action='append',
+                           help='Sources to build, instead of running all sources')
+    command_p.add_argument('-t', '--table', action='append',
+                           help='Build only sources that output to these destination tables')
+    command_p.add_argument('-S', '--stage', help='Ingest sources at this stage')
+
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+
     # Build Command
     #
     command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
@@ -369,11 +395,11 @@ def bundle_parser(cmd):
     command_p.add_argument('-f' '--force', default=False, action='store_true', help='Force storing the file')
 
     #
-    # run Command
+    # Exec Command
     #
 
-    command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
-    command_p.set_defaults(subcommand='run')
+    command_p = sub_cmd.add_parser('exec', help='Execute a method on the bundle')
+    command_p.set_defaults(subcommand='exec')
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Force running on a built or finalized bundle')
@@ -782,9 +808,11 @@ def bundle_schema(args, l, rc):
 
     b.ingest(sources=args.source,tables=args.table, force=args.force)
 
-    b.dest_schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=args.build)
+    b.schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=args.build)
 
     b.set_last_access(Bundle.STATES.SCHEMA)
+
+    b.sync_out()
 
     prt("Created destination schema")
 
@@ -810,12 +838,37 @@ def bundle_build(args, l, rc):
 
     b.set_last_access(Bundle.STATES.BUILT)
 
+def bundle_run(args, l, rc):
+
+    b = using_bundle(args, l)
+
+    args.force = True if args.quick else args.force
+
+    if not args.force and not args.table and not args.source:
+        check_built(b)
+
+    if args.clean:
+        b.clean()
+        args.sync = True
+
+    if args.sync:
+        b.sync_in()
+    else:
+        b.sync_code()
+        b.sync_sources()
+
+    b = b.cast_to_subclass()
+
+    b.run(sources=args.source, tables=args.table, stage=args.stage, force=args.force)
+
+    b.set_last_access(Bundle.STATES.BUILT)
+
 
 def bundle_install(args, l, rc):
     raise NotImplementedError()
 
 
-def bundle_run(args, l, rc):
+def bundle_exec(args, l, rc):
 
     b = using_bundle(args, l)
 

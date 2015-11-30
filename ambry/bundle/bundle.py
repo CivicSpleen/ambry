@@ -41,9 +41,12 @@ def _CaptureException(f, *args, **kwargs):
     try:
         return f(*args, **kwargs)
     except Exception as e:
-        raise
-        b.set_error_state()
-        b.commit()
+        try:
+            b.set_error_state()
+            b.commit()
+        except Exception as e2:
+            raise e
+
         if b.capture_exceptions:
             b.logged_exception(e)
             raise LoggedException(e, b)
@@ -1018,12 +1021,15 @@ Caster Code
     # Build phases
     #########################
 
-    #
-    # Do All; Run the full process
+    def run(self, sources=None, tables=None, stage=None, force=False, finalize=True):
 
-    def run(self, sources=None, tables=None, force=False, schema=False):
-        """Synonym for run_stages"""
-        return self.build(sources, tables, force=force)
+        self.log('---- Run ----')
+
+        self.ingest(sources, tables, stage, force=force)
+
+        self.schema(sources, tables, force=force)
+
+        self.build(sources, tables, stage, force=force)
 
     #
     # Syncing
@@ -1161,8 +1167,6 @@ Caster Code
 
         self.commit()
 
-        self.log('---- Done Cleaning ----')
-
         return True
 
     def clean_except_files(self):
@@ -1289,7 +1293,7 @@ Caster Code
     #
 
     #@CaptureException
-    def ingest(self, sources=None, tables=None, stage=None, force=False, update_tables=True):
+    def ingest(self, sources=None, tables=None, stage=None, force=False):
         """Ingest a set of sources, specified as source objects, source names, or destination tables.
         If no stage is specified, execute the sources in groups by stage.
 
@@ -1302,6 +1306,8 @@ Caster Code
         from ambry.bundle.events import TAG
         from fs.errors import ResourceNotFoundError
         import zlib
+
+        self.log('---- Ingesting ----')
 
         key = lambda s: s.stage if s.stage else 1
 
@@ -1356,7 +1362,6 @@ Caster Code
 
                 self._run_events(TAG.AFTER_INGEST, stage)
                 self.record_stage_state(self.STATES.INGESTING, stage)
-
 
             self.state = self.STATES.INGESTED
 
@@ -1477,7 +1482,6 @@ Caster Code
             source.state = source.STATES.INGESTED
             self.commit()
 
-
             return True
 
         except Exception as e:
@@ -1511,7 +1515,7 @@ Caster Code
     #
 
     @CaptureException
-    def dest_schema(self, sources=None, tables=None,  clean=False, force=False, use_pipeline=False):
+    def schema(self, sources=None, tables=None,  clean=False, force=False, use_pipeline=False):
         """
         Generate destination schemas.
 
@@ -1525,9 +1529,9 @@ Caster Code
         """
         from itertools import groupby
         from operator import attrgetter
-        from ambry.orm.exc import NotFoundError
         from ambry.etl import Collect, Head
-        from ambry.bundle.events import TAG
+
+        self.log('---- Schema ----')
 
         resolved_sources = self._resolve_sources(sources, tables,  predicate=lambda s: s.is_processable)
 
@@ -1697,6 +1701,8 @@ Caster Code
         from itertools import groupby
         from .concurrent import build_mp
         from ambry.bundle.events import TAG
+
+        self.log('---- Building ----')
 
         try:
 

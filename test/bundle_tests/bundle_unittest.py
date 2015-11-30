@@ -14,8 +14,14 @@ class Test(TestBase):
     @classmethod
     def setUpClass(cls):
 
-        cls.import_bundles(clean=True) # If clean==true, class setup completely reloads the library
-        cls.l = cls.library()
+        cls.db_type = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+        cls.config = TestBase.get_rc()
+        cls.l = TestBase._get_library(cls.config)
+        print "Database: ", cls.l.database.dsn
+
+        cls._import_bundles(cls.l, clean=True, force_import=False)
+
+
 
     def setUp(self):
         super(TestBase, self).setUp()

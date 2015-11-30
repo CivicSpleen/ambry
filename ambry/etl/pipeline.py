@@ -310,9 +310,10 @@ class SourceFileSourcePipe(Pipe):
 
         start_line = self._source.start_line or 0
 
-        # Throw away dataa before the data start line,
+        # Throw away data before the data start line,
         for i in range(start_line):
             next(itr)
+
 
         yield self.headers
 
@@ -806,8 +807,9 @@ class MapSourceHeaders(Pipe):
     def process_header(self, headers):
 
         if len(list(self.source.source_table.columns)) == 0:
+
             raise PipelineError(self, "Source table {} has no columns, can't map header"
-                                .format(self.source.source_table.name))
+                                       .format(self.source.source_table.name))
 
         dest_headers = [ c.dest_header for c in self.source.source_table.columns ]
 
