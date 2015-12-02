@@ -701,7 +701,7 @@ class Library(object):
 
             self.logger.info("Visiting {}".format(f))
             config = yaml.load(fs.getcontents(f))
-
+            maxtasksperchild
             if not config:
                 self.logger.error("Failed to get a valid bundle configuration from '{}'".format(f))
 
@@ -753,4 +753,5 @@ class Library(object):
 
         self.logger.info('Starting MP pool with {} processors'.format(cpus))
         return multiprocessing.Pool(processes=cpus, initializer=init_library,
+                                    maxtasksperchild = 1,
                                     initargs=[self.database.dsn, self._account_password, limited_run])

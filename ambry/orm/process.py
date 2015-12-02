@@ -51,8 +51,8 @@ class Process(Base):
 
     item_type = SAColumn('pr_type', Text, doc='Item type, such as table, source or partition')
 
-    item_count = SAColumn('pr_count', Integer)
-    item_total = SAColumn('pr_items', Integer)
+    item_count = SAColumn('pr_count', Integer, doc='Number of items processed')
+    item_total = SAColumn('pr_items', Integer, doc='Number of items to be processed')
 
     message = SAColumn('pr_message', Text)
 
@@ -112,6 +112,17 @@ class Process(Base):
             action_char = '!'
 
         parts.append(action_char+' '+(self.message if self.message else ''))
+
+        if self.item_count:
+            ic = 'processed '+str(self.item_count)
+
+            if self.item_total:
+                ic += ' of {}'.format(self.item_total)
+
+            if self.item_type:
+                ic += ' '+self.item_type
+
+            parts.append(ic)
 
         return ' '.join(parts)
 

@@ -1783,7 +1783,8 @@ def bundle_log(args, l, rc):
 
         def append(pr):
             d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.dict.items() if k in
-                            ['id', 'group', 'state', 'd_vid', 'hostname', 'pid', 'phase', 'stage', 'modified', 'item_count',
+                            ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
+                             'phase', 'stage', 'modified', 'item_count',
                              'message'])
 
             d['modified'] = float(d['modified']) - time.time()
@@ -1795,7 +1796,8 @@ def bundle_log(args, l, rc):
 
         for pr in (b.progress.query.filter(Process.d_vid == b.identity.vid)
                    .order_by(Process.modified.desc())).all():
-            if pr.state != 'done':
+            # Don't show reports that are done or older then 2 minutes.
+            if pr.state != 'done' and pr.modified > time.time() - 120:
                 append(pr)
 
 
@@ -1805,7 +1807,7 @@ def bundle_log(args, l, rc):
         from tabulate import tabulate
 
         if records:
-            prt_no_format(tabulate(records[1:], records[0]))
+            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]),records[0]))
 
 
 

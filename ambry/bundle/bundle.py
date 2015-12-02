@@ -267,9 +267,18 @@ class Bundle(object):
         source = self.source(source_name)
 
         try:
-            return self.library.partition(source.url)
+            p =  self.library.partition(source.url)
+
+            if not p.is_local:
+                with self.progress.start('test', 0, message='localizing') as ps:
+                    p.localize(ps)
+
+            return p
+
         except NotFoundError:
             return self.library.bundle(source.url)
+
+
 
     @property
     def config(self):
@@ -1834,12 +1843,13 @@ Caster Code
 
             def run_progress_f():
                 (n_records, rate) = pl.sink.report_progress()
-                ps.update(message='Running pipeline {}: {} records, rate: {}'
-                          .format(source_name, n_records, rate),
-                          item_count = n_records
-                          )
+                if n_records > 0:
+                    ps.update(message='Running pipeline {}: {} records, rate: {}'
+                              .format(source_name, n_records, rate),
+                              item_count = n_records
+                              )
 
-            with self.progress.interval(run_progress_f, 4):
+            with self.progress.interval(run_progress_f, 5):
                 pl.run()
 
             ps.update(message='Finished source', state='done')

@@ -450,17 +450,71 @@ class Partition(Base, DictableMixin):
         except ResourceNotFoundError as e:
             raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
 
-        return  datafile
+        return datafile
+
+    @property
+    def is_local(self):
+        """Return ture is the partition file is local"""
+        return self.datafile.exists
+
+
+    def localize(self, ps=None):
+        """Copy a non-local partition file to the local build directory"""
+        from  filelock import FileLock
+        from ambry.util import ensure_dir_exists
+        from ambry_sources import MPRowsFile
+
+        local = self._bundle.build_fs
+
+        b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+        remote = self._bundle.library.remote(b)
+
+        lock_path = local.getsyspath(self.cache_key + '.lock')
+
+        ensure_dir_exists(lock_path)
+
+        lock = FileLock(lock_path)
+
+        if ps:
+            ps.add_update(message='Localizing {}'.format(self.identity.name),
+                          partition=self,
+                          item_type='bytes',
+                          state='downloading')
+
+        def progress(bts):
+            if ps:
+                if ps.rec.item_total is None:
+                    ps.rec.item_count = 0
+
+                item_count = ps.rec.item_count + bts
+                ps.rec.data['updates'] = ps.rec.data.get('updates', 0) + 1
+
+                if ps.rec.data['updates'] % 32 == 1:
+                    ps.update(message='Localizing {}'.format(self.identity.name),
+                          item_count=item_count )
+
+        def exception_cb(e):
+            raise e
+
+        with lock:
+            with remote.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
+                event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
+                                                f,
+                                                progress_callback=progress,
+                                                error_callback=exception_cb)
+                event.wait()
+                if ps:
+                    ps.update_done()
+
 
     @property
     def reader(self):
         from ambry.orm.exc import NotFoundError
         from fs.errors import ResourceNotFoundError
         """The reader for the datafile"""
-        try:
-            return self.datafile.reader
-        except (NotFoundError,ResourceNotFoundError) :
-            return self.remote_datafile.reader
+
+        return self.datafile.reader
+
 
     def select(self, predicate=None, headers=None):
         """

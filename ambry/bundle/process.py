@@ -144,6 +144,13 @@ class ProgressSection(object):
 
         return self._ai_rec_id
 
+    def update_done(self, *args, **kwargs):
+        """Clear out the previous update"""
+        kwargs['state'] = 'done'
+        self.update(*args, **kwargs)
+        self.rec = None
+
+
     def done(self, *args, **kwargs):
 
         start = self._session.query(Process).filter(Process.id == self._group).one()
@@ -151,6 +158,7 @@ class ProgressSection(object):
 
         self._session.query(Process).filter(Process.group == self._group).update({Process.state: 'done'})
 
+        kwargs['state'] = 'done'
         pr_id = self.add(*args, log_action='done', **kwargs)
 
         return pr_id
@@ -319,7 +327,7 @@ class ProcessLogger(object):
     def clean(self):
         """Delete all of the records"""
 
-        # Deleteing seems to be really weird and unrelable. 
+        # Deleteing seems to be really weird and unrelable.
         (self._session.query(Process).filter(Process.d_vid == self._d_vid)
          ).delete(synchronize_session='fetch')
 
