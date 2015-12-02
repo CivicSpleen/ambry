@@ -8,7 +8,6 @@ Example:
     for row in l.warehouse.query('SELECT * FROM <partition id or vid> ... '):
         print row
 """
-import logging
 
 import sqlparse
 
@@ -16,13 +15,17 @@ import six
 
 import apsw
 
-from ambry_sources.med import sqlite as sqlite_med
-from ambry_sources.med import postgresql as postgres_med
+from ambry_sources.med import sqlite as sqlite_med, postgresql as postgres_med
 
 from ambry.util import get_logger
 
 
-logger = get_logger(__name__)  # , level=logging.DEBUG, propagate=False)
+logger = get_logger(__name__)
+
+# debug level
+#
+import logging
+logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
 
 
 class WarehouseError(Exception):
@@ -44,17 +47,19 @@ or via SQLAlchemy, to return datasets.
         # If keep_connection is true, do not close the connection until close method call.
         self._library = library
 
-        self._database = self._library.database  # FIXME: Use database from config
-        if self._database.engine.name == 'sqlite':
-            logger.debug('Initalizing sqlite warehouse.')
-            self._backend = SQLiteWrapper(library)
-        elif self._database.engine.name == 'postgresql':
-            logger.debug('Initalizing postgres warehouse.')
-            self._backend = PostgreSQLWrapper(library)
+        warehouse_dsn = library.config.library.get('warehouse')
+        if not warehouse_dsn:
+            warehouse_dsn = library.config.library.database
+        if warehouse_dsn.startswith('sqlite:'):
+            logger.debug('Initializing sqlite warehouse.')
+            self._backend = SQLiteWrapper(library, warehouse_dsn)
+        elif warehouse_dsn.startswith('postgresql'):
+            logger.debug('Initializing postgres warehouse.')
+            self._backend = PostgreSQLWrapper(library, warehouse_dsn)
         else:
             raise Exception(
-                'Do not know how to handle {} db engine.'
-                .format(self._database.engine.name))
+                'Do not know how to handle {} dsn.'
+                .format(warehouse_dsn))
 
     def query(self, query=''):
         """ Creates virtual tables for all partitions found in the query and executes query.
@@ -119,8 +124,9 @@ or via SQLAlchemy, to return datasets.
 class DatabaseWrapper(object):
     """ Base class for warehouse databases engines. """
 
-    def __init__(self, library):
+    def __init__(self, library, dsn):
         self._library = library
+        self._dsn = dsn
 
     def install(self, connection, partition, materialize=False):
         """ Installs partition's mpr to the database to allow to execute sql queries over mpr.
@@ -359,10 +365,12 @@ class PostgreSQLWrapper(DatabaseWrapper):
 
         """
         if not getattr(self, '_connection', None):
+            from sqlalchemy import create_engine
             logger.debug(
-                'Getting raw connection.\n   dsn: {}'
-                .format(self._library.database.dsn))
-            self._connection = self._library.database.engine.raw_connection()
+                'Creating new connection.\n   dsn: {}'
+                .format(self._dsn))
+            engine = create_engine(self._dsn)
+            self._connection = engine.raw_connection()
         return self._connection
 
     def _execute(self, connection, query):

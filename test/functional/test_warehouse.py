@@ -142,7 +142,9 @@ class InMemorySQLiteTest(TestBase, Mixin):
     def get_rc(cls):
         rc = TestBase.get_rc()
         # use file database for library for that test case.
+        cls._real_warehouse_database = rc.library.get('warehouse')
         cls._real_test_database = rc.library.database
+        rc.library.warehouse = 'sqlite://'
         rc.library.database = 'sqlite://'
         return rc
 
@@ -150,7 +152,7 @@ class InMemorySQLiteTest(TestBase, Mixin):
         library = self.library()
 
         # assert it is in-memory database.
-        assert library.database.dsn == 'sqlite://'
+        assert library.config.library.warehouse == 'sqlite://'
 
         return library
 
@@ -173,17 +175,18 @@ class FileSQLiteTest(TestBase, Mixin):
     def get_rc(cls):
         rc = TestBase.get_rc()
         # use file database for library for that test case.
-        if not rc.library.database == cls._warehouse_db:
-            cls._real_test_database = rc.library.database
-            rc.library.database = cls._warehouse_db
+        if not rc.library.warehouse == cls._warehouse_db:
+            cls._real_warehouse_database = rc.library.database
+            rc.library.warehouse = cls._warehouse_db
+            rc.library.database = cls._warehouse_db  # It's ok to use the same db file for that test case.
         return rc
 
     @classmethod
     def tearDownClass(cls):
         rc = TestBase.get_rc()
-        if rc.library.database != cls._real_test_database:
+        if rc.library.database != cls._real_warehouse_database:
             # restore database
-            rc.library.database = cls._real_test_database
+            rc.library.database = cls._real_warehouse_database
 
     def _get_library(self):
         library = self.library()
@@ -202,17 +205,18 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
     def get_rc(cls):
         rc = TestBase.get_rc()
         # replace database with file database.
-        cls._real_test_database = rc.library.database
-        rc.library.database = cls.postgres_test_db_data['test_db_dsn']
+        cls._real_warehouse_database = rc.library.database
+        rc.library.warehouse = cls.postgres_test_db_data['test_db_dsn']
+        rc.library.database = cls.postgres_test_db_data['test_db_dsn']  # It's ok to use the same database.
         return rc
 
     @classmethod
     def tearDownClass(cls):
         rc = TestBase.get_rc()
-        real_test_database = getattr(cls, '_real_test_database', None)
-        if real_test_database and rc.library.database != real_test_database:
+        real_warehouse_database = getattr(cls, '_real_warehouse_database', None)
+        if real_warehouse_database and rc.library.database != real_warehouse_database:
             # restore database
-            rc.library.database = real_test_database
+            rc.library.database = real_warehouse_database
         PostgreSQLTestBase.tearDownClass()
 
     def _get_library(self):
