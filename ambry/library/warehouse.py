@@ -61,12 +61,11 @@ or via SQLAlchemy, to return datasets.
             query (str): sql query
 
         """
-
+        # FIXME: If query is empty, return a Sqlalchemy query or select object
         logger.debug('Looking for refs and create virtual table for each. query: {}'.format(query))
         connection = self._backend._get_connection()
         return self._backend.query(connection, query)
 
-    # FIXME: classmethod
     def install(self, ref):
         """ Finds partition by reference and installs it to warehouse db.
 
@@ -78,18 +77,6 @@ or via SQLAlchemy, to return datasets.
         partition = self._library.partition(ref)
         connection = self._backend._get_connection()
         self.backend.install(connection, partition)
-
-    def index(self, ref, columns):
-        """ Create an index on the columns.
-
-        Args:
-            ref: FIXME:
-            columns (list):
-
-        """
-        connection = self._backend._get_connection()
-        partition = self._library.partition(ref)
-        self._backend.index(connection, partition, columns)
 
     def materialize(self, ref):
         """ Creates materialized table for given partition reference.
@@ -105,6 +92,18 @@ or via SQLAlchemy, to return datasets.
         connection = self._backend._get_connection()
         return self._backend.install(connection, partition, materialize=True)
 
+    def index(self, ref, columns):
+        """ Create an index on the columns.
+
+        Args:
+            ref: FIXME:
+            columns (list):
+
+        """
+        connection = self._backend._get_connection()
+        partition = self._library.partition(ref)
+        self._backend.index(connection, partition, columns)
+
     def close(self):
         """ Closes warehouse database. """
         self._backend.close()
@@ -117,9 +116,6 @@ class DatabaseWrapper(object):
         self._library = library
 
     def install(self, connection, partition, materialize=False):
-        raise NotImplementedError
-
-    def _get_connection(self):
         raise NotImplementedError
 
     def query(self, connection, query):
@@ -158,14 +154,40 @@ class DatabaseWrapper(object):
         raise NotImplementedError
 
     def close(self):
-        # FIXME:
+        """ Closes connection to database. """
         raise NotImplementedError
 
     def _get_warehouse_table(self, connection, partition):
+        """ Finds and returns partition table in the db represented by given connection if any.
+
+        Args:
+            connection: connection to db where to look for partition table.
+            partition (FIXME:):
+
+        Raises:
+            MissingTableError: if database does not have partition table.
+
+        Returns:
+            str: database table storing partition data.
+
+        """
         raise NotImplementedError
 
     def _execute(self, connection, query):
-        """ FIXME: """
+        """ Executes sql query using given connection.
+
+        Args:
+            connection: connection to db
+            query (str): sql query.
+
+        Returns:
+            iterable: result of the query.
+
+        """
+        raise NotImplementedError
+
+    def _get_connection(self):
+        """ Returns connection to database. """
         raise NotImplementedError
 
 
@@ -176,7 +198,8 @@ class PostgreSQLWrapper(DatabaseWrapper):
         """ Creates FDW or materialize view for given partition.
 
         Args:
-            ref (str): id, vid, name or versioned name of the partition.
+            connection:
+            partition (FIXME:):
             materialize (boolean): if True, create read-only table. If False create virtual table.
 
         Returns:
@@ -203,12 +226,13 @@ class PostgreSQLWrapper(DatabaseWrapper):
         """ Create an index on the columns.
 
         Args:
-            ref: FIXME:
+            connection:
+            partition (FIXME:):
             columns (list):
 
         """
         query_tmpl = '''
-        CREATE INDEX {index_name} ON {table_name} ({column});
+            CREATE INDEX {index_name} ON {table_name} ({column});
         '''
         table_name = '{}_v'.format(postgres_med.table_name(partition.vid))
         for column in columns:
@@ -221,6 +245,7 @@ class PostgreSQLWrapper(DatabaseWrapper):
                 cursor.execute('COMMIT;')
 
     def close(self):
+        """ Closes connection to database. """
         if getattr(self, '_connection', None):
             self._connection.close()
             self._connection = None
@@ -229,7 +254,8 @@ class PostgreSQLWrapper(DatabaseWrapper):
         """ Creates FDW for the partition.
 
         Args:
-            FIXME:
+            connection:
+            partition (FIXME:):
 
         """
         logger.debug('Creating foreign table for {} partition.'.format(partition.name))
@@ -237,7 +263,15 @@ class PostgreSQLWrapper(DatabaseWrapper):
             postgres_med.add_partition(cursor, partition.datafile, partition.vid)
 
     def _execute(self, connection, query):
-        """ Executes given query and returns result. """
+        """ Executes given query and returns result.
+
+        Args:
+            connection FIXME::
+            query (str): sql query
+
+        Returns:
+            iterable with query result.
+        """
         # execute query
         with connection.cursor() as cursor:
             cursor.execute(query)
@@ -245,6 +279,12 @@ class PostgreSQLWrapper(DatabaseWrapper):
         return result
 
     def _get_connection(self):
+        """ Returns connection to the postgres database.
+
+        Returns:
+            FIXME: connection to postgres database.
+
+        """
         if not getattr(self, '_connection', None):
             self._connection = self._library.database.engine.raw_connection()
         return self._connection
@@ -253,8 +293,8 @@ class PostgreSQLWrapper(DatabaseWrapper):
         """ Returns name of the table who stores partition data.
 
         Args:
-            partition FIXME:
             connection FIXME: connection to warehouse db.
+            partition FIXME:
 
         Returns:
             str:
@@ -286,7 +326,19 @@ class PostgreSQLWrapper(DatabaseWrapper):
                                 .format(partition.vid))
 
     def _relation_exists(self, connection, relation):
-        """ Returns True if relation exists in the postgres db. Otherwise returns False. """
+        """ Returns True if relation exists in the postgres db. Otherwise returns False.
+
+        Args:
+            connection FIXME: connection to warehouse db.
+            partition FIXME:
+
+        Note:
+            relation means table, view or materialized view here.
+
+        Returns:
+            boolean: True if relation exists, False otherwise.
+
+        """
         schema_name, table_name = relation.split('.')
 
         exists_query = '''
@@ -342,12 +394,12 @@ class SQLiteWrapper(DatabaseWrapper):
         """ Create an index on the columns.
 
         Args:
-            ref: FIXME:
-            columns (list):
-
+            connection (FIXME:):
+            partition (FIXME:):
+            columns (list of str):
         """
         query_tmpl = '''
-        CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({column});
+            CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({column});
         '''
         table_name = '{}_v'.format(sqlite_med.table_name(partition.vid))
         for column in columns:
@@ -359,11 +411,12 @@ class SQLiteWrapper(DatabaseWrapper):
             cursor.execute(query)
 
     def close(self):
+        """ Closes connection to sqlite database. """
         if getattr(self, '_connection', None):
             self._connection.close()
 
     def _get_warehouse_table(self, connection, partition):
-        """ Returns name of the table who stores partition data.
+        """ Returns name of the sqlite table who stores partition data.
 
         Args:
             partition FIXME:
@@ -399,6 +452,16 @@ class SQLiteWrapper(DatabaseWrapper):
                                 .format(partition.vid))
 
     def _relation_exists(self, connection, relation):
+        """ Returns True if relation (table) exists in the sqlite db. Otherwise returns False.
+
+        Args:
+            connection FIXME: connection to warehouse db.
+            partition FIXME:
+
+        Returns:
+            boolean: True if relation exists, False otherwise.
+
+        """
         query = 'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=?;'
         cursor = connection.cursor()
         cursor.execute(query, [relation])
@@ -407,7 +470,16 @@ class SQLiteWrapper(DatabaseWrapper):
 
     @staticmethod
     def _get_create_query(mprows, tablename):
-        """ Returns tuple FIXME: """
+        """ Returns `create table ...` query for given mprows.
+
+        Args:
+            mprows (FIXME:):
+            tablename (str): name of the table in the return create query.
+
+        Returns:
+            str: create table query.
+
+        """
         TYPE_MAP = {
             'int': 'INTEGER',
             'float': 'REAL',
@@ -427,6 +499,12 @@ class SQLiteWrapper(DatabaseWrapper):
         return query
 
     def _get_connection(self):
+        """ Returns connection to warehouse sqlite db.
+
+        Returns:
+            FIXME:
+
+        """
         # FIXME: use connection from config or database if config is missed.
         if not getattr(self, '_connection', None):
             dsn = self._library.database.dsn
@@ -438,11 +516,27 @@ class SQLiteWrapper(DatabaseWrapper):
         return self._connection
 
     def _add_partition(self, connection, partition):
-        """ Creates sqlite virtual table for given partition. """
+        """ Creates sqlite virtual table for given partition.
+
+        Args:
+            connection:
+            partition (FIXME:):
+
+        """
         logger.debug('Creating virtual table for {} partition.'.format(partition.name))
         sqlite_med.add_partition(connection, partition.datafile, partition.vid)
 
     def _execute(self, connection, query):
+        """ Executes given query using given connection.
+
+        Args:
+            connection (apsw.Connection):
+            query (str): sql query
+
+        Returns:
+            iterable with query result.
+
+        """
         # FIXME: Assuming apsw.Connection
         cursor = connection.cursor()
         result = cursor.execute(query).fetchall()
