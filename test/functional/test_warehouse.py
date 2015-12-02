@@ -10,6 +10,7 @@ from test.factories import PartitionFactory
 import ambry_sources
 from ambry_sources import MPRowsFile
 from ambry_sources.med import sqlite as sqlite_med
+from ambry_sources.med import postgresql as postgres_med
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
 from test.test_base import TestBase, PostgreSQLTestBase
@@ -31,11 +32,10 @@ class Mixin(object):
             # generate header
             yield ['col1', 'col2']
 
-            # generate first row
+            # generate some rows
             yield [0, 0]
-
-            # generate second row
             yield [1, 1]
+            yield [2, 2]
         return GeneratorSource(SourceSpec('foobar'), gen())
 
     def test_install_and_query_mpr(self):
@@ -57,7 +57,7 @@ class Mixin(object):
             datafile.load_rows(self._get_generator_source())
             partition1._datafile = datafile
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1)])
+            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             library.warehouse.close()
             library.database.close()
@@ -93,7 +93,7 @@ class Mixin(object):
             os.remove(syspath)
             self.assertFalse(os.path.exists(syspath))
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1)])
+            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             library.warehouse.close()
             # FIXME: Use library.warehouse.close() only.
@@ -129,7 +129,7 @@ class Mixin(object):
 
             # query indexed data
             rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1)])
+            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             library.warehouse.close()
             # FIXME: Use library.warehouse.close() only.
@@ -221,6 +221,20 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
         # assert it is file database.
         assert library.database.exists()
         return library
+
+    def _assert_is_indexed(self, warehouse, partition, column):
+        table = postgres_med.table_name(partition.vid) + '_v'
+        with warehouse._backend._connection.cursor() as cursor:
+            # Sometimes postgres may not use index although index exists.
+            # See https://wiki.postgresql.org/wiki/FAQ#Why_are_my_queries_slow.3F_Why_don.27t_they_use_my_indexes.3F
+            # and http://stackoverflow.com/questions/9475778/postgresql-query-not-using-index-in-production
+            # for details.
+            # So, force postgres always to use existing indexes.
+            cursor.execute('SET enable_seqscan TO \'off\';')
+            query = 'EXPLAIN SELECT * FROM {} WHERE {} > 1 and {} < 3;'.format(table, column, column)
+            cursor.execute(query)
+            result = cursor.fetchall()
+            self.assertIn('Index Scan', result[0][0])
 
 
 def assert_shares_group(user=''):

@@ -172,17 +172,6 @@ class DatabaseWrapper(object):
 class PostgreSQLWrapper(DatabaseWrapper):
     """ Warehouse wrapper over PostgreSQL database. """
 
-    def _add_partition(self, connection, partition):
-        """ Creates FDW for the partition.
-
-        Args:
-            FIXME:
-
-        """
-        logger.debug('Creating foreign table for {} partition.'.format(partition.name))
-        with connection.cursor() as cursor:
-            postgres_med.add_partition(cursor, partition.datafile, partition.vid)
-
     def install(self, connection, partition, materialize=False):
         """ Creates FDW or materialize view for given partition.
 
@@ -210,10 +199,42 @@ class PostgreSQLWrapper(DatabaseWrapper):
                 cursor.execute('COMMIT;')
         return view_table if materialize else fdw_table
 
+    def index(self, connection, partition, columns):
+        """ Create an index on the columns.
+
+        Args:
+            ref: FIXME:
+            columns (list):
+
+        """
+        query_tmpl = '''
+        CREATE INDEX {index_name} ON {table_name} ({column});
+        '''
+        table_name = '{}_v'.format(postgres_med.table_name(partition.vid))
+        for column in columns:
+            query = query_tmpl.format(
+                index_name='{}_{}_i'.format(partition.vid, column), table_name=table_name,
+                column=column)
+            logger.debug('Creating postgres index on {} column. query: {}'.format(column, query))
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                cursor.execute('COMMIT;')
+
     def close(self):
         if getattr(self, '_connection', None):
             self._connection.close()
             self._connection = None
+
+    def _add_partition(self, connection, partition):
+        """ Creates FDW for the partition.
+
+        Args:
+            FIXME:
+
+        """
+        logger.debug('Creating foreign table for {} partition.'.format(partition.name))
+        with connection.cursor() as cursor:
+            postgres_med.add_partition(cursor, partition.datafile, partition.vid)
 
     def _execute(self, connection, query):
         """ Executes given query and returns result. """
