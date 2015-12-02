@@ -22,7 +22,7 @@ from ambry_sources.med import postgresql as postgres_med
 from ambry.util import get_logger
 
 
-logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
+logger = get_logger(__name__)  # , level=logging.DEBUG, propagate=False)
 
 
 class WarehouseError(Exception):
