@@ -9,6 +9,7 @@ from test.factories import PartitionFactory
 
 import ambry_sources
 from ambry_sources import MPRowsFile
+from ambry_sources.med import sqlite as sqlite_med
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
 from test.test_base import TestBase, PostgreSQLTestBase
@@ -20,6 +21,11 @@ class Mixin(object):
     """ Requires successors to inherit from TestBase and provide _get_library method. """
 
     # helpers
+
+    def _assert_is_indexed(self, warehouse, partition, column):
+        ''' Raises AssertionError if column is not indexed. '''
+        raise NotImplementedError('Override the method and provide db specific index check.')
+
     def _get_generator_source(self):
         def gen():
             # generate header
@@ -35,7 +41,7 @@ class Mixin(object):
     def test_install_and_query_mpr(self):
         if isinstance(self, PostgreSQLTest):
             if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
-                raise unittest.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
+                self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
         library = self._get_library()
 
@@ -59,8 +65,7 @@ class Mixin(object):
     def test_install_and_query_materialized_table(self):
         # materialized view for postgres and readonly table for sqlite.
         if isinstance(self, PostgreSQLTest):
-            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
-                raise unittest.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
+            _assert_valid_ambry_sources()
 
         library = self._get_library()
 
@@ -94,6 +99,42 @@ class Mixin(object):
             # FIXME: Use library.warehouse.close() only.
             library.database.close()
 
+    def test_index_creation(self):
+        if isinstance(self, PostgreSQLTest):
+            _assert_valid_ambry_sources()
+
+        library = self._get_library()
+
+        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
+        bundle = self.setup_bundle(
+            'simple', source_url='temp://', build_url='temp://', library=library)
+        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
+        partition1 = PartitionFactory(dataset=bundle.dataset)
+        bundle.wrap_partition(partition1)
+
+        try:
+            datafile = MPRowsFile(bundle.build_fs, partition1.cache_key)
+            datafile.load_rows(self._get_generator_source())
+            partition1._datafile = datafile
+
+            # Index creation requires materialized tables.
+            library.warehouse.materialize(partition1.vid)
+
+            # Create indexes
+            library.warehouse.index(partition1.vid, ['col1', 'col2'])
+
+            # query partition.
+            self._assert_is_indexed(library.warehouse, partition1, 'col1')
+            self._assert_is_indexed(library.warehouse, partition1, 'col2')
+
+            # query indexed data
+            rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
+            self.assertEqual(rows, [(0, 0), (1, 1)])
+        finally:
+            library.warehouse.close()
+            # FIXME: Use library.warehouse.close() only.
+            library.database.close()
+
 
 class InMemorySQLiteTest(TestBase, Mixin):
 
@@ -112,6 +153,9 @@ class InMemorySQLiteTest(TestBase, Mixin):
         assert library.database.dsn == 'sqlite://'
 
         return library
+
+    def _assert_is_indexed(self, warehouse, partition, column):
+        _assert_sqlite_index(warehouse, partition, column)
 
 
 class FileSQLiteTest(TestBase, Mixin):
@@ -147,6 +191,9 @@ class FileSQLiteTest(TestBase, Mixin):
         # assert it is file database.
         assert library.database.exists()
         return library
+
+    def _assert_is_indexed(self, warehouse, partition, column):
+        _assert_sqlite_index(warehouse, partition, column)
 
 
 class PostgreSQLTest(PostgreSQLTestBase, Mixin):
@@ -214,3 +261,16 @@ def is_group_readable(filepath):
 
 def get_perm(filepath):
     return stat.S_IMODE(os.lstat(filepath)[stat.ST_MODE])
+
+
+def _assert_valid_ambry_sources():
+    if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
+        raise unittest.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
+
+
+def _assert_sqlite_index(warehouse, partition, column):
+    table = sqlite_med.table_name(partition.vid) + '_v'
+    cursor = warehouse._backend._connection.cursor()
+    query = 'EXPLAIN QUERY PLAN SELECT * FROM {} WHERE {} > 1;'.format(table, column)
+    result = cursor.execute(query).fetchall()
+    assert 'USING INDEX' in result[0][-1]

@@ -22,7 +22,7 @@ from ambry_sources.med import postgresql as postgres_med
 from ambry.util import get_logger
 
 
-logger = get_logger(__name__)  # , level=logging.DEBUG, propagate=False)
+logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
 
 
 class WarehouseError(Exception):
@@ -88,7 +88,8 @@ or via SQLAlchemy, to return datasets.
 
         """
         connection = self._backend._get_connection()
-        self._backend.index(connection, ref, columns)
+        partition = self._library.partition(ref)
+        self._backend.index(connection, partition, columns)
 
     def materialize(self, ref):
         """ Creates materialized table for given partition reference.
@@ -158,7 +159,7 @@ class DatabaseWrapper(object):
 
     def close(self):
         # FIXME:
-        pass
+        raise NotImplementedError
 
     def _get_warehouse_table(self, connection, partition):
         raise NotImplementedError
@@ -315,6 +316,26 @@ class SQLiteWrapper(DatabaseWrapper):
                 # cursor.execute(ro_query)
                 cursor.close()
         return table if materialize else virtual_table
+
+    def index(self, connection, partition, columns):
+        """ Create an index on the columns.
+
+        Args:
+            ref: FIXME:
+            columns (list):
+
+        """
+        query_tmpl = '''
+        CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({column});
+        '''
+        table_name = '{}_v'.format(sqlite_med.table_name(partition.vid))
+        for column in columns:
+            query = query_tmpl.format(
+                index_name='{}_{}_i'.format(partition.vid, column), table_name=table_name,
+                column=column)
+            logger.debug('Creating sqlite index on {} column. query: {}'.format(column, query))
+            cursor = connection.cursor()
+            cursor.execute(query)
 
     def close(self):
         if getattr(self, '_connection', None):
