@@ -26,6 +26,7 @@ logger = get_logger(__name__)  # , level=logging.DEBUG, propagate=False)
 
 
 class WarehouseError(Exception):
+    """ Base class for all warehouse errors. """
     pass
 
 
@@ -43,8 +44,10 @@ or via SQLAlchemy, to return datasets.
         # If keep_connection is true, do not close the connection until close method call.
         self._library = library
         if self._library.database.engine.name == 'sqlite':
+            logger.debug('Initalizing sqlite warehouse.')
             self._backend = SQLiteWrapper(library)
         elif self._library.database.engine.name == 'postgresql':
+            logger.debug('Initalizing postgres warehouse.')
             self._backend = PostgreSQLWrapper(library)
         else:
             raise Exception(
@@ -88,7 +91,7 @@ or via SQLAlchemy, to return datasets.
         self._backend.index(connection, ref, columns)
 
     def materialize(self, ref):
-        """ Creates a materialized view for given partition reference.
+        """ Creates materialized table for given partition reference.
 
         Args:
             ref: FIXME:

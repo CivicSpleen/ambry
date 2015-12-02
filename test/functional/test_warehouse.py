@@ -32,7 +32,7 @@ class Mixin(object):
             yield [1, 1]
         return GeneratorSource(SourceSpec('foobar'), gen())
 
-    def test_select_query(self):
+    def test_install_and_query_mpr(self):
         if isinstance(self, PostgreSQLTest):
             if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
                 raise unittest.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
@@ -56,7 +56,7 @@ class Mixin(object):
             library.warehouse.close()
             library.database.close()
 
-    def test_materialized_table(self):
+    def test_install_and_query_materialized_table(self):
         # materialized view for postgres and readonly table for sqlite.
         if isinstance(self, PostgreSQLTest):
             if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
@@ -117,11 +117,21 @@ class InMemorySQLiteTest(TestBase, Mixin):
 class FileSQLiteTest(TestBase, Mixin):
 
     @classmethod
+    def setUpClass(cls):
+        TestBase.setUpClass()
+        cls._warehouse_db = 'sqlite:////tmp/test-warehouse.db'
+
+    def tearDown(self):
+        super(self.__class__, self).tearDown()
+        os.remove(self._warehouse_db.replace('sqlite:///', ''))
+
+    @classmethod
     def get_rc(cls):
         rc = TestBase.get_rc()
         # use file database for library for that test case.
-        cls._real_test_database = rc.library.database
-        rc.library.database = 'sqlite:////tmp/test-warehouse.db'
+        if not rc.library.database == cls._warehouse_db:
+            cls._real_test_database = rc.library.database
+            rc.library.database = cls._warehouse_db
         return rc
 
     @classmethod
