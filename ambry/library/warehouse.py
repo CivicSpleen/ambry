@@ -43,16 +43,18 @@ or via SQLAlchemy, to return datasets.
     def __init__(self, library):
         # If keep_connection is true, do not close the connection until close method call.
         self._library = library
-        if self._library.database.engine.name == 'sqlite':
+
+        self._database = self._library.database  # FIXME: Use database from config
+        if self._database.engine.name == 'sqlite':
             logger.debug('Initalizing sqlite warehouse.')
             self._backend = SQLiteWrapper(library)
-        elif self._library.database.engine.name == 'postgresql':
+        elif self._database.engine.name == 'postgresql':
             logger.debug('Initalizing postgres warehouse.')
             self._backend = PostgreSQLWrapper(library)
         else:
             raise Exception(
                 'Do not know how to handle {} db engine.'
-                .format(self._library.database.engine.name))
+                .format(self._database.engine.name))
 
     def query(self, query=''):
         """ Creates virtual tables for all partitions found in the query and executes query.
@@ -62,7 +64,9 @@ or via SQLAlchemy, to return datasets.
 
         """
         # FIXME: If query is empty, return a Sqlalchemy query or select object
-        logger.debug('Looking for refs and create virtual table for each. query: {}'.format(query))
+        logger.debug(
+            'Executing warehouse query using {} backend. \n    query: {}'
+            .format(self._library.database.engine.name, query))
         connection = self._backend._get_connection()
         return self._backend.query(connection, query)
 
@@ -87,6 +91,8 @@ or via SQLAlchemy, to return datasets.
             str: name of the partition table in the database.
 
         """
+        logger.debug(
+            'Materializing warehouse partition.\n    partition: {}'.format(ref))
         partition = self._library.partition(ref)
         connection = self._backend._get_connection()
         return self._backend.install(connection, partition, materialize=True)
@@ -99,6 +105,8 @@ or via SQLAlchemy, to return datasets.
             columns (list of str): names of the columns needed indexes.
 
         """
+        logger.debug(
+            'Creating index for partition.\n    ref: {}, columns: {}'.format(ref, columns))
         connection = self._backend._get_connection()
         partition = self._library.partition(ref)
         self._backend.index(connection, partition, columns)
@@ -139,18 +147,35 @@ class DatabaseWrapper(object):
 
         # install all partitions and replace table names in the query.
         #
+        logger.debug('Findind and installing all partitions from query. \n    query: {}'.format(query))
         new_query = []
         for statement in statements:
+            logger.debug(
+                'Searching statement for partition ref.\n    statement: {}'.format(statement.to_unicode()))
             ref = _get_table_name(statement)
-            partition = self._library.partition(ref)
-            try:
-                # try to use existing fdw or materialized view.
-                warehouse_table = self._get_warehouse_table(connection, partition)
-            except MissingTableError:
-                # FDW is not created, create.
-                warehouse_table = self.install(connection, partition)
-            new_query.append(statement.to_unicode().replace(ref, warehouse_table))
-            new_query = '\n'.join(new_query)
+            if ref:
+                partition = self._library.partition(ref)
+                logger.debug(
+                    'Searching partition table in the warehouse database. \n    partition: {}'
+                    .format(partition.name))
+                try:
+                    # try to use existing fdw or materialized view.
+                    warehouse_table = self._get_warehouse_table(connection, partition)
+                    logger.debug(
+                        'Partition already installed. \n    partition: {}'.format(partition.name))
+                except MissingTableError:
+                    # FDW is not created, create.
+                    logger.debug(
+                        'Partition is not installed. Install now. \n    partition: {}'.format(partition.name))
+                    warehouse_table = self.install(connection, partition)
+                new_query.append(statement.to_unicode().replace(ref, warehouse_table))
+            else:
+                new_query.append.statement.to_unicode()
+
+        new_query = '\n'.join(new_query)
+        logger.debug(
+            'Executing updated query after partition install.\n    query: {}, query before update: {}'
+            .format(new_query, query))
         return self._execute(connection, new_query)
 
     def index(self, connection, partition, columns):
@@ -225,11 +250,19 @@ class PostgreSQLWrapper(DatabaseWrapper):
         if materialize:
             with connection.cursor() as cursor:
                 view_exists = self._relation_exists(connection, view_table)
-                if not view_exists:
+                if view_exists:
+                    logger.debug(
+                        'Materialized view of the partition already exists.\n    partition: {}, view: {}'
+                        .format(partition.name, view_table))
+                else:
                     query = 'CREATE MATERIALIZED VIEW {} AS SELECT * FROM {};'\
                         .format(view_table, fdw_table)
+                    logger.debug(
+                        'Creating new materialized view of the partition.'
+                        '\n    partition: {}, view: {}, query: {}'
+                        .format(partition.name, view_table, query))
                     cursor.execute(query)
-                cursor.execute('COMMIT;')
+                    cursor.execute('COMMIT;')
         return view_table if materialize else fdw_table
 
     def index(self, connection, partition, columns):
@@ -249,7 +282,7 @@ class PostgreSQLWrapper(DatabaseWrapper):
             query = query_tmpl.format(
                 index_name='{}_{}_i'.format(partition.vid, column), table_name=table_name,
                 column=column)
-            logger.debug('Creating postgres index on {} column. query: {}'.format(column, query))
+            logger.debug('Creating postgres index.\n    column: {}, query: {}'.format(column, query))
             with connection.cursor() as cursor:
                 cursor.execute(query)
                 cursor.execute('COMMIT;')
@@ -283,16 +316,26 @@ class PostgreSQLWrapper(DatabaseWrapper):
         # Not optimized version.
         #
         # first check either partition has materialized view.
-        fdw_table = postgres_med.table_name(partition.vid)
-        view_table = '{}_v'.format(fdw_table)
+        logger.debug(
+            'Looking for materialized view of the partition.\n    partition: {}'.format(partition.name))
+        foreign_table = postgres_med.table_name(partition.vid)
+        view_table = '{}_v'.format(foreign_table)
         view_exists = self._relation_exists(connection, view_table)
         if view_exists:
+            logger.debug(
+                'Materialized view of the partition found.\n    partition: {}, view: {}'
+                .format(partition.name, view_table))
             return view_table
 
         # now check for fdw/virtual table
-        fdw_exists = self._relation_exists(connection, fdw_table)
-        if fdw_exists:
-            return fdw_table
+        logger.debug(
+            'Looking for foreign table of the partition.\n    partition: {}'.format(partition.name))
+        foreign_exists = self._relation_exists(connection, foreign_table)
+        if foreign_exists:
+            logger.debug(
+                'Foreign table of the partition found.\n    partition: {}, foreign table: {}'
+                .format(partition.name, foreign_table))
+            return foreign_table
         raise MissingTableError('warehouse postgres database does not have table for {} partition.'
                                 .format(partition.vid))
 
@@ -304,7 +347,7 @@ class PostgreSQLWrapper(DatabaseWrapper):
             partition (orm.Partition):
 
         """
-        logger.debug('Creating foreign table for {} partition.'.format(partition.name))
+        logger.debug('Creating foreign table for partition.\n    partition: {}'.format(partition.name))
         with connection.cursor() as cursor:
             postgres_med.add_partition(cursor, partition.datafile, partition.vid)
 
@@ -316,6 +359,9 @@ class PostgreSQLWrapper(DatabaseWrapper):
 
         """
         if not getattr(self, '_connection', None):
+            logger.debug(
+                'Getting raw connection.\n   dsn: {}'
+                .format(self._library.database.dsn))
             self._connection = self._library.database.engine.raw_connection()
         return self._connection
 
@@ -386,14 +432,27 @@ class SQLiteWrapper(DatabaseWrapper):
         table = '{}_v'.format(virtual_table)
 
         if materialize:
-            if not self._relation_exists(connection, table):
+            if self._relation_exists(connection, table):
+                logger.debug(
+                    'Materialized table of the partition already exists.\n    partition: {}, table: {}'
+                    .format(partition.name, table))
+            else:
                 cursor = connection.cursor()
+
                 # create table
                 create_query = self.__class__._get_create_query(partition, table)
+                logger.debug(
+                    'Creating new materialized view of the partition.'
+                    '\n    partition: {}, view: {}, query: {}'
+                    .format(partition.name, table, create_query))
                 cursor.execute(create_query)
 
                 # populate just created table with data from virtual table.
                 copy_query = '''INSERT INTO {} SELECT * FROM {};'''.format(table, virtual_table)
+                logger.debug(
+                    'Populating sqlite table of the partition.'
+                    '\n    partition: {}, view: {}, query: {}'
+                    .format(partition.name, table, copy_query))
                 cursor.execute(copy_query)
 
                 cursor.close()
@@ -415,7 +474,7 @@ class SQLiteWrapper(DatabaseWrapper):
             query = query_tmpl.format(
                 index_name='{}_{}_i'.format(partition.vid, column), table_name=table_name,
                 column=column)
-            logger.debug('Creating sqlite index on {} column. query: {}'.format(column, query))
+            logger.debug('Creating sqlite index.\n    column: {}, query: {}'.format(column, query))
             cursor = connection.cursor()
             cursor.execute(query)
 
@@ -449,13 +508,23 @@ class SQLiteWrapper(DatabaseWrapper):
         # first check either partition has readonly table.
         virtual_table = sqlite_med.table_name(partition.vid)
         table = '{}_v'.format(virtual_table)
+        logger.debug(
+            'Looking for materialized table of the partition.\n    partition: {}'.format(partition.name))
         table_exists = self._relation_exists(connection, virtual_table)
         if table_exists:
+            logger.debug(
+                'Materialized table of the partition found.\n    partition: {}, table: {}'
+                .format(partition.name, table))
             return table
 
         # now check for virtual table
+        logger.debug(
+            'Looking for a virtual table of the partition.\n    partition: {}'.format(partition.name))
         virtual_exists = self._relation_exists(connection, virtual_table)
         if virtual_exists:
+            logger.debug(
+                'Virtual table of the partition found.\n    partition: {}, table: {}'
+                .format(partition.name, table))
             return virtual_table
         raise MissingTableError('warehouse postgres database does not have table for {} partition.'
                                 .format(partition.vid))
@@ -515,12 +584,17 @@ class SQLiteWrapper(DatabaseWrapper):
 
         """
         # FIXME: use connection from config or database if warehouse config is missed.
-        if not getattr(self, '_connection', None):
+        if getattr(self, '_connection', None):
+            logger.debug('Connection to warehouse db already exists. Using existing one.')
+        else:
             dsn = self._library.database.dsn
             if dsn == 'sqlite://':
                 dsn = ':memory:'
             else:
                 dsn = dsn.replace('sqlite:///', '')
+            logger.debug(
+                'Creating new apsw connection.\n   dsn: {}, config_dsn: {}'
+                .format(dsn, self._library.database.dsn))
             self._connection = apsw.Connection(dsn)
         return self._connection
 
@@ -532,7 +606,7 @@ class SQLiteWrapper(DatabaseWrapper):
             partition (orm.Partition):
 
         """
-        logger.debug('Creating virtual table for {} partition.'.format(partition.name))
+        logger.debug('Creating virtual table for partition.\n    partition: {}'.format(partition.name))
         sqlite_med.add_partition(connection, partition.datafile, partition.vid)
 
     def _execute(self, connection, query):
@@ -558,14 +632,17 @@ def _get_table_name(statement):
         statement (sqlparse.sql.Statement): parsed by sqlparse sql statement.
 
     Returns:
-        unicode:
+        unicode or None if table not found
     """
     for i, token in enumerate(statement.tokens):
         if token.value.lower() == 'from':
             # check rest for table name
             for elem in statement.tokens[i:]:
                 if isinstance(elem, sqlparse.sql.Identifier):
-                    logger.debug('Returning `{}` table name found in `{}` statement.'
-                                 .format(elem.get_name(), statement.to_unicode()))
+                    logger.debug(
+                        'Partition table name found in the statement.\n    table_name: {}, statement: {}'
+                        .format(elem.get_name(), statement.to_unicode()))
                     return elem.get_name()
-    raise Exception('Table name not found.')
+    logger.debug(
+        'Partition table not found in the statement.\n    statement: {}'
+        .format(statement.to_unicode()))

@@ -38,7 +38,7 @@ class Mixin(object):
             yield [2, 2]
         return GeneratorSource(SourceSpec('foobar'), gen())
 
-    def test_install_and_query_mpr(self):
+    def test_query_mpr_with_auto_install(self):
         if isinstance(self, PostgreSQLTest):
             if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
                 self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
