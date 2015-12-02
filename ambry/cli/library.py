@@ -106,12 +106,16 @@ def library_command(args, rc):
     from ambry.orm.exc import NotFoundError
     from sqlalchemy.exc import OperationalError
 
-    try:
-        l = new_library(rc)
-        l.logger = global_logger
-    except (NotFoundError, OperationalError) as e:
+    if args.subcommand == 'drop':
         l = None
-        warn("Failed to construct library: {}".format(e))
+    else:
+
+        try:
+            l = new_library(rc)
+            l.logger = global_logger
+        except (NotFoundError, OperationalError) as e:
+            l = None
+            warn("Failed to construct library: {}".format(e))
 
     globals()['library_' + args.subcommand](args, l, rc)
 
@@ -125,9 +129,8 @@ def library_drop(args, l, config):
 
     db = Database(fs.database_dsn)
 
-    print db.dsn
     db.drop()
-    db.commit()
+
     #db.create()
     #db._create_path()
     #db.create_tables()

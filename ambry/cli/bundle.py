@@ -240,7 +240,7 @@ def bundle_parser(cmd):
     command_p.add_argument('-o', '--out', default=False, action='store_true',
                            help='Sync from records to files')
     command_p.add_argument('-c', '--code', default=False, action='store_true',
-                           help='Sync bundle.py and bundle.yaml in, but not sources or schemas.')
+                           help='Sync bundle.py, bundle.yaml and other code files in, but not sources or schemas.')
 
     #     duplicate Command
     #
@@ -412,8 +412,8 @@ def bundle_parser(cmd):
     # Ampr
     #
 
-    command_p = sub_cmd.add_parser('ampr', help='Run the ampr command on a source or partition')
-    command_p.set_defaults(subcommand='ampr')
+    command_p = sub_cmd.add_parser('view', help='View the datafile for a source or partition, using the ampr command')
+    command_p.set_defaults(subcommand='view')
     from ambry_sources.cli import make_arg_parser
     make_arg_parser(command_p)
 
@@ -514,6 +514,22 @@ def bundle_parser(cmd):
                        help='Select a docker version that is the same as this Ambry installation')
 
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
+
+    #
+    # Log
+    #
+
+    # Set command
+    #
+    command_p = sub_cmd.add_parser('log', help='Print out various logs')
+    command_p.set_defaults(subcommand='log')
+    group = command_p.add_mutually_exclusive_group()
+    group.add_argument('-e', '--exceptions', default=None, action='store_true',
+                       help='Print exceptions from the progress log')
+    group.add_argument('-p', '--progress', default=None, action='store_true',
+                       help='Display progress logs')
+
+
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -667,7 +683,8 @@ def bundle_info(args, l, rc):
         print('\nPartitions')
         rows = ['Vid Name Table Rows Time Space Grain TimeCov GeoCov GeoGrain'.split()] + rows
         rows = drop_empty(rows)
-        print(tabulate(rows[1:], headers=rows[0]))
+        if rows:
+            print(tabulate(rows[1:], headers=rows[0]))
 
 
 def check_built(b):
@@ -768,13 +785,16 @@ def bundle_sync(args, l, rc):
         b.sync_out()
 
     b.set_last_access(Bundle.STATES.SYNCED)
-
     b.commit()
 
 
 def bundle_ingest(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
+    b.set_last_access(Bundle.STATES.SYNCED)
+    b.commit()
+
+    b.clean_progress()
 
     if not args.force and not args.table and not args.source:
         check_built(b)
@@ -803,6 +823,9 @@ def bundle_ingest(args, l, rc):
 def bundle_schema(args, l, rc):
 
     b = using_bundle(args, l).cast_to_subclass()
+    b.set_last_access(Bundle.STATES.SYNCED)
+    b.clean_progress()
+    b.commit()
 
     b.sync_code()
 
@@ -820,6 +843,9 @@ def bundle_schema(args, l, rc):
 def bundle_build(args, l, rc):
 
     b = using_bundle(args, l)
+    b.set_last_access(Bundle.STATES.SYNCED)
+    b.clean_progress()
+    b.commit()
 
     args.force = True if args.quick else args.force
 
@@ -841,6 +867,8 @@ def bundle_build(args, l, rc):
 def bundle_run(args, l, rc):
 
     b = using_bundle(args, l)
+
+    b.clean_progress()
 
     args.force = True if args.quick else args.force
 
@@ -914,6 +942,9 @@ def bundle_checkin(args, l, rc):
     ref, frm = get_bundle_ref(args, l)
 
     b = l.bundle(ref, True)
+
+    remote_name = l.resolve_remote(b)
+    remote = l.remote(remote_name)
 
     remote, path = b.checkin()
 
@@ -1370,7 +1401,7 @@ def bundle_extract(args, l, rc):
     b.logger.info('Extracted to: {}'.format(bfs.getsyspath('/')))
 
 
-def bundle_ampr(args, l, rc):
+def bundle_view(args, l, rc):
     from ambry_sources.cli import main
 
     b = using_bundle(args, l)
@@ -1730,6 +1761,53 @@ def bundle_docker(args, l, rc):
         cid = run_container()
 
         os.execlp('docker', 'docker', 'attach', cid)
+
+
+def bundle_log(args, l, rc):
+    b = using_bundle(args, l)
+    from ambry.util import drop_empty
+
+    if args.exceptions:
+
+        for pr in b.progress.exceptions:
+            prt_no_format('===== {} ====='.format(str(pr)))
+            prt_no_format(pr.exception_trace)
+
+    elif args.progress:
+
+        from ambry.orm import Process
+        import time
+        from collections import OrderedDict
+
+        records = []
+
+        def append(pr):
+            d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.dict.items() if k in
+                            ['id', 'group', 'state', 'd_vid', 'hostname', 'pid', 'phase', 'stage', 'modified', 'item_count',
+                             'message'])
+
+            d['modified'] = float(d['modified']) - time.time()
+
+            if not records:
+                records.append(d.keys())
+
+            records.append(d.values())
+
+        for pr in (b.progress.query.filter(Process.d_vid == b.identity.vid)
+                   .order_by(Process.modified.desc())).all():
+            if pr.state != 'done':
+                append(pr)
+
+
+
+        records = drop_empty(records)
+
+        from tabulate import tabulate
+
+        if records:
+            prt_no_format(tabulate(records[1:], records[0]))
+
+
 
 
 

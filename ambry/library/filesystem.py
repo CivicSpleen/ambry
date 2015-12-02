@@ -92,13 +92,13 @@ class LibraryFilesystem(object):
 
         account = account_acessor(pd['netloc'])
 
-        assert account.account_id == pd['netloc']
+        assert account['account_id'] == pd['netloc']
 
         s3 = S3FS(
             bucket=pd['netloc'],
             prefix=pd['path'],
-            aws_access_key=account.access_key,
-            aws_secret_key=account.secret,
+            aws_access_key=account['access_key'],
+            aws_secret_key=account['secret'],
 
         )
 

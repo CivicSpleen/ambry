@@ -81,7 +81,10 @@ class Database(object):
         self._echo = echo
         self._foreign_keys = foreign_keys
 
+        self._raise_on_commit = False # For debugging
+
         if self.driver in ['postgres', 'postgresql', 'postgresql+psycopg2', 'postgis']:
+            self.driver = 'postgres'
             self._schema = POSTGRES_SCHEMA_NAME
         else:
             self._schema = None
@@ -260,6 +263,10 @@ class Database(object):
             self._connection = None
 
     def commit(self):
+
+        if self._raise_on_commit: # For debugging
+            raise Exception("Committed")
+
         self.session.commit()
         #self.close_session()
 

@@ -121,6 +121,12 @@ class Dataset(Base):
     def session(self):
         return self._database.session
 
+    def close(self):
+        return self._database.close()
+
+    def close_session(self):
+        return self._database.close_session()
+
     @property
     def identity(self):
         from ..identity import Identity
@@ -276,8 +282,6 @@ class Dataset(Base):
 
         if not extant:
             self.tables.append(table)
-
-        self.commit()
 
         return table
 

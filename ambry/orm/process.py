@@ -83,7 +83,10 @@ class Process(Base):
         import os
 
         parts = []
-        if self.hostname != platform.node() or self.pid!= os.getpid():
+
+        # This bit only gets executed when records stored in the database from one node or process are
+        # read from another. It won't print out in normall logging,
+        if self.hostname != platform.node() or self.pid != os.getpid():
             hostpid = "({}@{})".format(self.pid, self.hostname)
             parts.append(hostpid)
 
@@ -111,6 +114,20 @@ class Process(Base):
         parts.append(action_char+' '+(self.message if self.message else ''))
 
         return ' '.join(parts)
+
+    @property
+    def dict(self):
+        """A dict that holds key/values for all of the properties in the
+        object.
+
+        :return:
+
+        """
+        from collections import OrderedDict
+
+        return  OrderedDict( (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
+             if p.key not in ('partition', 'source', 'table','dataset', 'children', 'parent'))
+
 
     @staticmethod
     def before_insert(mapper, conn, target):

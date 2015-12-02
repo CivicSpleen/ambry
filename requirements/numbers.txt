@@ -1,0 +1,4 @@
+# Requirements for the numbers server
+redis
+bottle
+paste

@@ -47,12 +47,14 @@ class ProgressSection(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         from ambry.util import qualified_name
+        import traceback
         assert self._session
+
         if exc_val:
             self.add(
                 message = str(exc_val),
                 exception_class = qualified_name(exc_type),
-                exception_trace = str(exc_tb),
+                exception_trace = str(traceback.format_exc(exc_tb)),
 
             )
             self.done("Failed in context with exception")
@@ -145,7 +147,9 @@ class ProgressSection(object):
     def done(self, *args, **kwargs):
 
         start = self._session.query(Process).filter(Process.id == self._group).one()
-        start.state = 'Done'
+        start.state = 'done'
+
+        self._session.query(Process).filter(Process.group == self._group).update({Process.state: 'done'})
 
         pr_id = self.add(*args, log_action='done', **kwargs)
 
@@ -285,6 +289,41 @@ class ProcessLogger(object):
         """Return all start records for this the dataset, grouped by the start record"""
 
         return (self._session.query(Process)
-                .filter(Process.d_vid==self._d_vid)
+                .filter(Process.d_vid==self._d_vid)).all()
+
+    @property
+    def starts(self):
+        """Return all start records for this the dataset, grouped by the start record"""
+
+        return (self._session.query(Process)
+                .filter(Process.d_vid == self._d_vid)
                 .filter(Process.log_action == 'start')
                 ).all()
+
+    @property
+    def query(self):
+        """Return all start records for this the dataset, grouped by the start record"""
+
+        return (self._session.query(Process).filter(Process.d_vid == self._d_vid))
+
+    @property
+    def exceptions(self):
+        """Return all start records for this the dataset, grouped by the start record"""
+
+        return (self._session.query(Process)
+                .filter(Process.d_vid == self._d_vid)
+                .filter(Process.exception_class != None)
+                .order_by(Process.modified)).all()
+
+
+    def clean(self):
+        """Delete all of the records"""
+
+        # Deleteing seems to be really weird and unrelable. 
+        (self._session.query(Process).filter(Process.d_vid == self._d_vid)
+         ).delete(synchronize_session='fetch')
+
+        for r in self.records:
+            self._session.delete(r)
+
+        self._session.commit()

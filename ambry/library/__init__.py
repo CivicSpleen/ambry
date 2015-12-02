@@ -400,8 +400,8 @@ class Library(object):
 
                 def progress(bytes):
                     calls[0] += 1
-                    if calls[0] % 4 == 0:
-                        self.logger.info('Checking in {}; {} bytes'.format(p.identity.vname, bytes))
+                    if calls[0] % 8 == 0:
+                        self.logger.info('Checking in {}; {} KB'.format(p.identity.vname, round(bytes/1024.0)))
 
                 remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
                 event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
@@ -537,7 +537,7 @@ class Library(object):
     def account_acessor(self):
 
         def _accessor(account_id):
-            return self.account(account_id)
+            return self.account(account_id).dict
 
         return _accessor
 

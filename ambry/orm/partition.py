@@ -416,35 +416,51 @@ class Partition(Base, DictableMixin):
     def datafile(self):
         """Return the datafile for this partition, from the build directory, the remote, or the warehouse"""
         from ambry_sources import MPRowsFile
+        from fs.errors import ResourceNotFoundError
+        from ambry.orm.exc import NotFoundError
 
         if self._datafile is None:
 
-            if not self.location or self.location == 'build':
-                assert bool(self.cache_key)
+            try:
                 self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
 
-            elif self.location == 'remote':
-                from ambry_sources import MPRowsFile
-                # Get bundle for this partition
-                # Actually ... this seems way to complex. Why not self._bundle.remote()
-                # FIXME
-                b = self._bundle.library.bundle(self.identity.as_dataset().vid)
-                remote = self._bundle.library.remote(b)
+            except ResourceNotFoundError:
+                raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
 
-                self._datafile = MPRowsFile(remote, self.cache_key)
-
-            elif self.location == 'warehouse':
-                raise NotImplementedError()
-
-            else:
-                raise NotImplementedError()
 
         return self._datafile
 
     @property
+    def remote_datafile(self):
+
+        from fs.errors import ResourceNotFoundError
+        from ambry.orm.exc import NotFoundError
+
+        try:
+
+            from ambry_sources import MPRowsFile
+            # Get bundle for this partition
+            # Actually ... this seems way too complex. Why not self._bundle.remote()
+            # FIXME
+            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+            remote = self._bundle.library.remote(b)
+
+            datafile = MPRowsFile(remote, self.cache_key)
+
+        except ResourceNotFoundError as e:
+            raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
+
+        return  datafile
+
+    @property
     def reader(self):
+        from ambry.orm.exc import NotFoundError
+        from fs.errors import ResourceNotFoundError
         """The reader for the datafile"""
-        return self.datafile.reader
+        try:
+            return self.datafile.reader
+        except (NotFoundError,ResourceNotFoundError) :
+            return self.remote_datafile.reader
 
     def select(self, predicate=None, headers=None):
         """

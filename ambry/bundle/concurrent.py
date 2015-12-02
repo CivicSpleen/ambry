@@ -96,7 +96,7 @@ def build_mp(args):
 
     ps = b.progress.start('build',stage,message="MP build", source=source)
 
-    return b.build_source(source, ps, force)
+    return b.build_source(stage, source, ps, force)
 
 
 @MPBundleMethod

@@ -115,14 +115,18 @@ class Docker(Command):
 
     user_options = [
         ('base', 'B', 'Build the base docker image, civicknowledge.com/ambry-base'),
-        ('build', 'b', 'Build the base docker image, civicknowledge.com/ambry'),
+        ('build', 'b', 'Build the ambry docker image, civicknowledge.com/ambry'),
+        ('dev', 'd', 'Build the dev version of the ambry docker image, civicknowledge.com/ambry'),
         ('launch', 'l', 'Run the docker image on the currently configured database'),
+        ('numbers', 'n', 'Build the numbers server docker image, civicknowledge.com/ambry-numbers'),
     ]
 
     def initialize_options(self):
-        self.build = None
-        self.base = None
-        self.launch = None
+        self.build = False
+        self.dev = False
+        self.base = False
+        self.launch = False
+        self.numbers = False
 
     def finalize_options(self):
         pass
@@ -130,19 +134,10 @@ class Docker(Command):
     def run(self):
         import os
 
-        if self.base:
-            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-base',
-                        '-t', 'civicknowledge/ambry-base', '.'])
-
-        if self.build:
+        def tag():
             from ambry._meta import __version__
             import subprocess
             import json
-
-            args = ['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry',
-                        '-t', 'civicknowledge/ambry', '.']
-
-            self.spawn(args)
 
             # Inspect the image to get the image id, so we can tag it.
             # FIXME. Instead of parsing the JSON, this should be:
@@ -152,6 +147,28 @@ class Docker(Command):
             d = json.loads(out)
 
             self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/ambry:{}'.format(__version__)])
+
+        if self.base:
+            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-base',
+                        '-t', 'civicknowledge/ambry-base', '.'])
+
+        if self.numbers:
+            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.numbers',
+                        '-t', 'civicknowledge/ambry-numbers', '.'])
+
+        if self.build:
+            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry',
+                        '-t', 'civicknowledge/ambry', '.'])
+
+            tag()
+
+        if self.dev:
+            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-dev',
+                        '-t', 'civicknowledge/ambry', '.'])
+
+            tag()
+
+
 
         if self.launch:
             from ambry import get_library
