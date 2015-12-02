@@ -6,10 +6,9 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-library = None  # GLobal library object
+library = None  # Global library object
 import atexit
 import os
-
 
 def _MPBundleMethod(f, args):
     """
@@ -90,13 +89,18 @@ def init_library(database_dsn, accounts_password, limited_run = False):
 @MPBundleMethod
 def build_mp(args):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
+
     b, stage, source_name, force = args
 
     source = b.source(source_name)
 
     ps = b.progress.start('build',stage,message="MP build", source=source)
 
-    return b.build_source(stage, source, ps, force)
+    r =  b.build_source(stage, source, ps, force)
+
+    library.close()
+
+    return r
 
 
 @MPBundleMethod
@@ -109,4 +113,8 @@ def ingest_mp(args):
 
     ps = b.progress.start('ingest',0,message="MP ingestion", source=source)
 
-    return b._ingest_source(source, ps, clean_files)
+    r =  b._ingest_source(source, ps, clean_files)
+
+    library.close()
+
+    return r

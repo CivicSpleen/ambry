@@ -1415,7 +1415,9 @@ Caster Code
                 pool = self.library.process_pool(limited_run=self.limited_run)
 
                 try:
-
+                    # The '1' for chunksize ensures that the subprocess only gets one
+                    # source to build. Combined with maxchildspertask = 1 in the pool,
+                    # each process will only handle one source before exiting.
                     result = pool.map_async(ingest_mp, args)
 
                     pool.close()
@@ -1781,7 +1783,10 @@ Caster Code
                         pool = self.library.process_pool(limited_run=self.limited_run)
 
                         try:
-                            pool.map(build_mp, args)
+                            # The '1' for chunksize ensures that the subprocess only gets one
+                            # source to build. Combined with maxchildspertask = 1 in the pool,
+                            # each process will only handle one source before exiting.
+                            pool.map(build_mp, args, 1)
                         except KeyboardInterrupt:
                             self.log('Got keyboard interrrupt; terminating workers')
                             pool.terminate()
@@ -1861,13 +1866,16 @@ Caster Code
         if self.multi:
             self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
 
+        self.logger.info('A')
         self.commit()
-
+        self.logger.info('B')
         try:
             for p in pl[ambry.etl.PartitionWriter].partitions:
 
                 try:
+                    self.logger.info('C')
                     p.finalize()
+                    self.logger.info('D')
                 except AttributeError:
                     print(self.table(p.table_name))
                     raise
@@ -1875,12 +1883,17 @@ Caster Code
                 # FIXME Shouldn't need to do this commit, but without it, some stats get added multiple
                 # times, causing an error later. Probably could be avoided by adding the stats to the
                 # collection in the dataset
+                self.logger.info('E')
                 self.commit()
+                self.logger.info('F')
+
 
         except IndexError:
             self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
 
+        self.logger.info('G')
         self.log_pipeline(pl)
+        self.logger.info('H')
 
         source.state = self.STATES.BUILT
 

@@ -501,6 +501,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='docker')
     command_p.add_argument('-i', '--docker_id', default=False, action='store_true',
                            help='Print the id of the running container')
+    command_p.add_argument('-c', '--container', help='Use a specific container id')
     command_p.add_argument('-k', '--kill', default=False, action='store_true',
                            help='Kill the running container')
     command_p.add_argument('-n', '--docker_name', default=False, action='store_true',
@@ -1608,10 +1609,13 @@ def bundle_docker(args, l, rc):
     b = using_bundle(args, l, print_loc=False)
     client = docker_client()
 
-    try:
-        last_container = b.config.build.docker.last_container
-    except KeyError:
-        last_container = None
+    if args.container:
+        last_container = args.container
+    else:
+        try:
+            last_container = b.config.build.docker.last_container
+        except KeyError:
+            last_container = None
 
     try:
         inspect = client.inspect_container(last_container)
