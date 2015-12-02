@@ -71,7 +71,7 @@ or via SQLAlchemy, to return datasets.
         # FIXME: If query is empty, return a Sqlalchemy query or select object
         logger.debug(
             'Executing warehouse query using {} backend. \n    query: {}'
-            .format(self._library.database.engine.name, query))
+            .format(self._backend._dsn, query))
         connection = self._backend._get_connection()
         return self._backend.query(connection, query)
 
@@ -296,6 +296,7 @@ class PostgreSQLWrapper(DatabaseWrapper):
     def close(self):
         """ Closes connection to database. """
         if getattr(self, '_connection', None):
+            logger.debug('Closing postgresql connection.')
             self._connection.close()
             self._connection = None
 
@@ -489,6 +490,7 @@ class SQLiteWrapper(DatabaseWrapper):
     def close(self):
         """ Closes connection to sqlite database. """
         if getattr(self, '_connection', None):
+            logger.debug('Closing sqlite connection.')
             self._connection.close()
 
     def _get_warehouse_table(self, connection, partition):
@@ -595,14 +597,14 @@ class SQLiteWrapper(DatabaseWrapper):
         if getattr(self, '_connection', None):
             logger.debug('Connection to warehouse db already exists. Using existing one.')
         else:
-            dsn = self._library.database.dsn
+            dsn = self._dsn
             if dsn == 'sqlite://':
                 dsn = ':memory:'
             else:
                 dsn = dsn.replace('sqlite:///', '')
             logger.debug(
                 'Creating new apsw connection.\n   dsn: {}, config_dsn: {}'
-                .format(dsn, self._library.database.dsn))
+                .format(dsn, self._dsn))
             self._connection = apsw.Connection(dsn)
         return self._connection
 
