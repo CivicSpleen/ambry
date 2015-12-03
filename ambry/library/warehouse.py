@@ -15,17 +15,20 @@ import six
 
 import apsw
 
+from sqlalchemy import create_engine
+
 from ambry_sources.med import sqlite as sqlite_med, postgresql as postgres_med
 
 from ambry.util import get_logger
+from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber, PartitionNumber
 
 
 logger = get_logger(__name__)
 
-# debug level
+# debug logging
 #
-import logging
-logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
+# import logging
+# logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
 
 
 class WarehouseError(Exception):
@@ -35,6 +38,11 @@ class WarehouseError(Exception):
 
 class MissingTableError(WarehouseError):
     """ Raises if warehouse does not have table for the partition. """
+    pass
+
+
+class MissingViewError(WarehouseError):
+    """ Raises if warehouse does not have view associated with the table. """
     pass
 
 
@@ -82,9 +90,16 @@ or via SQLAlchemy, to return datasets.
             ref (str): id, vid, name or versioned name of the partition.
 
         """
-        partition = self._library.partition(ref)
-        connection = self._backend._get_connection()
-        self.backend.install(connection, partition)
+        if ref.startswith('t'):
+            # looks like a table. FIXME: Find better way to recognize the table.
+            table = self._library.table(ref)
+            connection = self._backend._get_connection()
+            self._backend.install_table(connection, table)
+        else:
+            # assuming partition
+            partition = self._library.partition(ref)
+            connection = self._backend._get_connection()
+            self._backend.install(connection, partition)
 
     def materialize(self, ref):
         """ Creates materialized table for given partition reference.
@@ -160,23 +175,55 @@ class DatabaseWrapper(object):
                 'Searching statement for partition ref.\n    statement: {}'.format(statement.to_unicode()))
             ref = _get_table_name(statement)
             if ref:
-                partition = self._library.partition(ref)
-                logger.debug(
-                    'Searching partition table in the warehouse database. \n    partition: {}'
-                    .format(partition.name))
+                partition = None
+                table = None
                 try:
-                    # try to use existing fdw or materialized view.
-                    warehouse_table = self._get_warehouse_table(connection, partition)
+                    obj_number = ObjectNumber.parse(ref)
+                    if isinstance(obj_number, TableNumber):
+                        table = self._library.table(ref)
+                    elif isinstance(obj_number, PartitionNumber):
+                        partition = self._library.partition(ref)
+                    else:
+                        # We do not process other object numbers, assuming partitoin name or vname.
+                        raise NotObjectNumberError
+                except NotObjectNumberError:
+                    # assuming name or versioned name of the partition.
+                    partition = self._library.partition(ref)
+
+                if partition:
                     logger.debug(
-                        'Partition already installed. \n    partition: {}'.format(partition.name))
-                except MissingTableError:
-                    # FDW is not created, create.
+                        'Searching partition table in the warehouse database. \n    partition: {}'
+                        .format(partition.name))
+                    try:
+                        # try to use existing fdw or materialized view.
+                        warehouse_table = self._get_warehouse_table(connection, partition)
+                        logger.debug(
+                            'Partition already installed. \n    partition: {}'.format(partition.vid))
+                    except MissingTableError:
+                        # FDW is not created, create.
+                        logger.debug(
+                            'Partition is not installed. Install now. \n    partition: {}'
+                            .format(partition.vid))
+                        warehouse_table = self.install(connection, partition)
+                    new_query.append(statement.to_unicode().replace(ref, warehouse_table))
+
+                if table:
                     logger.debug(
-                        'Partition is not installed. Install now. \n    partition: {}'.format(partition.name))
-                    warehouse_table = self.install(connection, partition)
-                new_query.append(statement.to_unicode().replace(ref, warehouse_table))
+                        'Searching table view in the warehouse database. \n    table: {}'
+                        .format(table.vid))
+                    try:
+                        # try to use existing fdw or materialized view.
+                        warehouse_table = self._get_warehouse_view(connection, table)
+                        logger.debug(
+                            'Table view already exists. \n    table: {}'.format(table.vid))
+                    except MissingTableError:
+                        # View is not created, create.
+                        logger.debug(
+                            'Table view does not exist. Create now. \n    table: {}'.format(table.vid))
+                        self.install_table(connection, table)
+                    new_query.append(statement.to_unicode())
             else:
-                new_query.append.statement.to_unicode()
+                new_query.append(statement.to_unicode())
 
         new_query = '\n'.join(new_query)
         logger.debug(
@@ -200,7 +247,7 @@ class DatabaseWrapper(object):
         raise NotImplementedError
 
     def _get_warehouse_table(self, connection, partition):
-        """ Finds and returns partition table in the db represented by given connection if any.
+        """ Finds and returns partition table in the db represented by given connection.
 
         Args:
             connection: connection to db where to look for partition table.
@@ -208,6 +255,22 @@ class DatabaseWrapper(object):
 
         Raises:
             MissingTableError: if database does not have partition table.
+
+        Returns:
+            str: database table storing partition data.
+
+        """
+        raise NotImplementedError
+
+    def _get_warehouse_view(self, connection, table):
+        """ Finds and returns table view name in the db represented by given connection.
+
+        Args:
+            connection: connection to db where to look for partition table.
+            table (orm.Table):
+
+        Raises:
+            MissingViewError: if database does not have partition table.
 
         Returns:
             str: database table storing partition data.
@@ -300,6 +363,32 @@ class PostgreSQLWrapper(DatabaseWrapper):
             self._connection.close()
             self._connection = None
 
+    def _get_warehouse_view(self, connection, table):
+        """ Finds and returns table view name in the db represented by given connection.
+
+        Args:
+            connection: connection to db where to look for partition table.
+            table (orm.Table):
+
+        Raises:
+            MissingViewError: if database does not have partition table.
+
+        Returns:
+            str: database table storing partition data.
+
+        """
+        logger.debug(
+            'Looking for view of the table.\n    table: {}'.format(table.vid))
+        view = table.vid
+        view_exists = self._relation_exists(connection, view)
+        if view_exists:
+            logger.debug(
+                'Materialized view of the partition found.\n    partition: {}, view: {}'
+                .format(table.vid, view))
+            return view
+        raise MissingViewError('postgres database of the warehouse does not have view for {} table.'
+                               .format(table.vid))
+
     def _get_warehouse_table(self, connection, partition):
         """ Returns name of the table who stores partition data.
 
@@ -366,7 +455,6 @@ class PostgreSQLWrapper(DatabaseWrapper):
 
         """
         if not getattr(self, '_connection', None):
-            from sqlalchemy import create_engine
             logger.debug(
                 'Creating new connection.\n   dsn: {}'
                 .format(self._dsn))
@@ -467,11 +555,32 @@ class SQLiteWrapper(DatabaseWrapper):
                 cursor.close()
         return table if materialize else virtual_table
 
+    def install_table(self, connection, table):
+        """ Installs table to the warehouse.
+
+        Args:
+            connection (apsw.Connection): connection to sqlite database who stores warehouse data.
+            partition (orm.Partition):
+            columns (list of str):
+        """
+        # first install all partitions of the table
+        queries = []
+        query_tmpl = 'SELECT * FROM {}'
+        for partition in table.partitions:
+            installed_name = self.install(connection, partition)
+            queries.append(query_tmpl.format(installed_name))
+
+        # now create view with union of all partitions.
+        query = 'CREATE VIEW {} AS {} '.format(table.vid, '\nUNION ALL\n'.join(queries))
+        logger.debug('Creating view for table.\n    table: {}, query: {}'.format(table.vid, query))
+        cursor = connection.cursor()
+        cursor.execute(query)
+
     def index(self, connection, partition, columns):
         """ Create an index on the columns.
 
         Args:
-            connection (apsw.Connection): connection to sqlite database who store warehouse data.
+            connection (apsw.Connection): connection to sqlite database who stores warehouse data.
             partition (orm.Partition):
             columns (list of str):
         """
@@ -493,11 +602,37 @@ class SQLiteWrapper(DatabaseWrapper):
             logger.debug('Closing sqlite connection.')
             self._connection.close()
 
+    def _get_warehouse_view(self, connection, table):
+        """ Finds and returns table view name in the db represented by given connection.
+
+        Args:
+            connection: connection to db where to look for partition table.
+            table (orm.Table):
+
+        Raises:
+            MissingViewError: if database does not have partition table.
+
+        Returns:
+            str: database table storing partition data.
+
+        """
+        logger.debug(
+            'Looking for view of the table.\n    table: {}'.format(table.vid))
+        view = table.vid
+        view_exists = self._relation_exists(connection, view)
+        if view_exists:
+            logger.debug(
+                'View of the table exists.\n    table: {}, view: {}'
+                .format(table.vid, view))
+            return view
+        raise MissingViewError('postgres database of the warehouse does not have view for {} table.'
+                               .format(table.vid))
+
     def _get_warehouse_table(self, connection, partition):
         """ Returns name of the sqlite table who stores partition data.
 
         Args:
-            connection (apsw.Connection): connection to sqlite database who store warehouse data.
+            connection (apsw.Connection): connection to sqlite database who stores warehouse data.
             partition (orm.Partition):
 
         Returns:
@@ -540,17 +675,17 @@ class SQLiteWrapper(DatabaseWrapper):
                                 .format(partition.vid))
 
     def _relation_exists(self, connection, relation):
-        """ Returns True if relation (table) exists in the sqlite db. Otherwise returns False.
+        """ Returns True if relation (table or view) exists in the sqlite db. Otherwise returns False.
 
         Args:
-            connection (apsw.Connection): connection to sqlite database who store warehouse data.
+            connection (apsw.Connection): connection to sqlite database who stores warehouse data.
             partition (orm.Partition):
 
         Returns:
             boolean: True if relation exists, False otherwise.
 
         """
-        query = 'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=?;'
+        query = 'SELECT 1 FROM sqlite_master WHERE (type=\'table\' OR type=\'view\') AND name=?;'
         cursor = connection.cursor()
         cursor.execute(query, [relation])
         result = cursor.fetchall()

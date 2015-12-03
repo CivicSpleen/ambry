@@ -5,7 +5,7 @@ import unittest
 
 from semantic_version import Version
 
-from test.factories import PartitionFactory
+from test.factories import PartitionFactory, TableFactory
 
 import ambry_sources
 from ambry_sources import MPRowsFile
@@ -27,15 +27,20 @@ class Mixin(object):
         ''' Raises AssertionError if column is not indexed. '''
         raise NotImplementedError('Override the method and provide db specific index check.')
 
-    def _get_generator_source(self):
-        def gen():
+    def _get_generator_source(self, rows=None):
+        if not rows:
+            rows = [
+                [0, 0],
+                [1, 1],
+                [2, 2]]
+
+        def gen(rows=rows):
             # generate header
             yield ['col1', 'col2']
 
             # generate some rows
-            yield [0, 0]
-            yield [1, 1]
-            yield [2, 2]
+            for row in rows:
+                yield row
         return GeneratorSource(SourceSpec('foobar'), gen())
 
     def test_query_mpr_with_auto_install(self):
@@ -81,7 +86,7 @@ class Mixin(object):
             datafile.load_rows(self._get_generator_source())
             partition1._datafile = datafile
 
-            # materialize partition (materialize view for postgres, readonly table for sqlite)
+            # materialize partition (materialized view for postgres, readonly table for sqlite)
             library.warehouse.materialize(partition1.vid)
 
             # query partition.
@@ -96,7 +101,6 @@ class Mixin(object):
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             library.warehouse.close()
-            # FIXME: Use library.warehouse.close() only.
             library.database.close()
 
     def test_index_creation(self):
@@ -130,6 +134,49 @@ class Mixin(object):
             # query indexed data
             rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
+        finally:
+            library.warehouse.close()
+            # FIXME: Use library.warehouse.close() only.
+            library.database.close()
+
+    def test_table_query(self):
+        if isinstance(self, PostgreSQLTest):
+            self.skipTest('Not ready for postgres.')
+            _assert_valid_ambry_sources()
+        else:
+            # sqlite tests
+            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.8'):
+                self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
+
+        library = self._get_library()
+
+        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
+        bundle = self.setup_bundle(
+            'simple', source_url='temp://', build_url='temp://', library=library)
+        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
+        TableFactory._meta.sqlalchemy_session = bundle.dataset.session
+
+        table1 = TableFactory(dataset=bundle.dataset)
+        partition1 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=1)
+        partition2 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=2)
+        bundle.wrap_partition(partition1)
+        bundle.wrap_partition(partition2)
+
+        try:
+            datafile1 = MPRowsFile(bundle.build_fs, partition1.cache_key)
+            datafile1.load_rows(self._get_generator_source())
+            partition1._datafile = datafile1
+
+            datafile2 = MPRowsFile(bundle.build_fs, partition2.cache_key)
+            datafile2.load_rows(self._get_generator_source(rows=[[3, 3], [4, 4]]))
+            partition2._datafile = datafile2
+
+            # Install table
+            library.warehouse.install(table1.vid)
+
+            # query all partitions
+            rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(table1.vid))
+            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)])
         finally:
             library.warehouse.close()
             # FIXME: Use library.warehouse.close() only.
