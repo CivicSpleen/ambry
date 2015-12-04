@@ -20,7 +20,7 @@ import psycopg2
 from ambry_sources.med import sqlite as sqlite_med, postgresql as postgres_med
 
 from ambry.util import get_logger, parse_url_to_dict
-from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber, PartitionNumber
+from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
 
 
 logger = get_logger(__name__)
@@ -819,8 +819,8 @@ def _get_table_name(statement):
                 if isinstance(elem, sqlparse.sql.Identifier):
                     logger.debug(
                         'Partition table name found in the statement.\n    table_name: {}, statement: {}'
-                        .format(elem.get_name(), statement.to_unicode()))
-                    return elem.get_name()
+                        .format(elem.get_real_name(), statement.to_unicode()))
+                    return elem.get_real_name()
     logger.debug(
         'Partition table not found in the statement.\n    statement: {}'
         .format(statement.to_unicode()))
