@@ -157,6 +157,26 @@ class DatabaseWrapper(object):
         """
         raise NotImplementedError
 
+    def install_table(self, connection, table):
+        """ Installs all partitons of the table and create view with union of all partitons.
+
+        Args:
+            connection: connection to database who stores warehouse data.
+            table (orm.Table):
+        """
+        # first install all partitions of the table
+        queries = []
+        query_tmpl = 'SELECT * FROM {}'
+        for partition in table.partitions:
+            installed_name = self.install(connection, partition)
+            queries.append(query_tmpl.format(installed_name))
+
+        # now create view with union of all partitions.
+        query = 'CREATE VIEW {} AS {} '.format(
+            self.get_view_name(table), '\nUNION ALL\n'.join(queries))
+        logger.debug('Creating view for table.\n    table: {}\n    query: {}'.format(table.vid, query))
+        self._execute(connection, query, fetch=False)
+
     def query(self, connection, query):
         """ Creates virtual tables for all partitions found in the query and executes query.
 
@@ -221,14 +241,15 @@ class DatabaseWrapper(object):
                         logger.debug(
                             'Table view does not exist. Create now. \n    table: {}'.format(table.vid))
                         self.install_table(connection, table)
-                    new_query.append(statement.to_unicode())
+                    new_query.append(statement.to_unicode().replace(table.vid, self.get_view_name(table)))
             else:
                 new_query.append(statement.to_unicode())
 
         new_query = '\n'.join(new_query)
         logger.debug(
-            'Executing updated query after partition install.\n    query: {}, query before update: {}'
-            .format(new_query, query))
+            'Executing updated query after partition install.'
+            '\n    query before update: {}\n    query to execute (updated query): {}'
+            .format(query, new_query))
         return self._execute(connection, new_query)
 
     def index(self, connection, partition, columns):
@@ -278,12 +299,13 @@ class DatabaseWrapper(object):
         """
         raise NotImplementedError
 
-    def _execute(self, connection, query):
+    def _execute(self, connection, query, fetch=True):
         """ Executes sql query using given connection.
 
         Args:
             connection: connection to db
             query (str): sql query.
+            fetch (boolean, optional): if True, fetch query result and return it. If False, do not fetch.
 
         Returns:
             iterable: result of the query.
@@ -334,6 +356,19 @@ class PostgreSQLWrapper(DatabaseWrapper):
                     cursor.execute('COMMIT;')
         return view_table if materialize else fdw_table
 
+    @staticmethod
+    def get_view_name(table):
+        """ Returns view name of the table.
+
+        Args:
+            table (orm.Table):
+
+        Returns:
+            str:
+
+        """
+        return 'partitions.{}'.format(table.vid)
+
     def index(self, connection, partition, columns):
         """ Create an index on the columns.
 
@@ -379,11 +414,11 @@ class PostgreSQLWrapper(DatabaseWrapper):
         """
         logger.debug(
             'Looking for view of the table.\n    table: {}'.format(table.vid))
-        view = table.vid
+        view = self.get_view_name(table)
         view_exists = self._relation_exists(connection, view)
         if view_exists:
             logger.debug(
-                'Materialized view of the partition found.\n    partition: {}, view: {}'
+                'View of the table found.\n    table: {}, view: {}'
                 .format(table.vid, view))
             return view
         raise MissingViewError('postgres database of the warehouse does not have view for {} table.'
@@ -462,22 +497,23 @@ class PostgreSQLWrapper(DatabaseWrapper):
             self._connection = engine.raw_connection()
         return self._connection
 
-    def _execute(self, connection, query):
+    def _execute(self, connection, query, fetch=True):
         """ Executes given query and returns result.
 
         Args:
             connection: connection to postgres database who stores warehouse data.
             query (str): sql query
+            fetch (boolean, optional): if True, fetch query result and return it. If False, do not fetch.
 
         Returns:
-            iterable with query result.
+            iterable with query result or None if fetch is False.
 
         """
         # execute query
         with connection.cursor() as cursor:
             cursor.execute(query)
-            result = cursor.fetchall()
-        return result
+            if fetch:
+                return cursor.fetchall()
 
     def _relation_exists(self, connection, relation):
         """ Returns True if relation exists in the postgres db. Otherwise returns False.
@@ -555,27 +591,6 @@ class SQLiteWrapper(DatabaseWrapper):
                 cursor.close()
         return table if materialize else virtual_table
 
-    def install_table(self, connection, table):
-        """ Installs table to the warehouse.
-
-        Args:
-            connection (apsw.Connection): connection to sqlite database who stores warehouse data.
-            partition (orm.Partition):
-            columns (list of str):
-        """
-        # first install all partitions of the table
-        queries = []
-        query_tmpl = 'SELECT * FROM {}'
-        for partition in table.partitions:
-            installed_name = self.install(connection, partition)
-            queries.append(query_tmpl.format(installed_name))
-
-        # now create view with union of all partitions.
-        query = 'CREATE VIEW {} AS {} '.format(table.vid, '\nUNION ALL\n'.join(queries))
-        logger.debug('Creating view for table.\n    table: {}, query: {}'.format(table.vid, query))
-        cursor = connection.cursor()
-        cursor.execute(query)
-
     def index(self, connection, partition, columns):
         """ Create an index on the columns.
 
@@ -602,6 +617,10 @@ class SQLiteWrapper(DatabaseWrapper):
             logger.debug('Closing sqlite connection.')
             self._connection.close()
 
+    @staticmethod
+    def get_view_name(table):
+        return table.vid
+
     def _get_warehouse_view(self, connection, table):
         """ Finds and returns table view name in the db represented by given connection.
 
@@ -618,7 +637,7 @@ class SQLiteWrapper(DatabaseWrapper):
         """
         logger.debug(
             'Looking for view of the table.\n    table: {}'.format(table.vid))
-        view = table.vid
+        view = self.get_view_name(table)
         view_exists = self._relation_exists(connection, view)
         if view_exists:
             logger.debug(
@@ -754,20 +773,22 @@ class SQLiteWrapper(DatabaseWrapper):
         logger.debug('Creating virtual table for partition.\n    partition: {}'.format(partition.name))
         sqlite_med.add_partition(connection, partition.datafile, partition.vid)
 
-    def _execute(self, connection, query):
+    def _execute(self, connection, query, fetch=True):
         """ Executes given query using given connection.
 
         Args:
             connection (apsw.Connection): connection to the sqlite db who stores warehouse data.
             query (str): sql query
+            fetch (boolean, optional): if True, fetch query result and return it. If False, do not fetch.
 
         Returns:
             iterable with query result.
 
         """
         cursor = connection.cursor()
-        result = cursor.execute(query).fetchall()
-        return result
+        cursor.execute(query)
+        if fetch:
+            return cursor.fetchall()
 
 
 def _get_table_name(statement):

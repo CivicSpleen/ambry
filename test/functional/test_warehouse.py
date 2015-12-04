@@ -141,7 +141,6 @@ class Mixin(object):
 
     def test_table_query(self):
         if isinstance(self, PostgreSQLTest):
-            self.skipTest('Not ready for postgres.')
             _assert_valid_ambry_sources()
         else:
             # sqlite tests
@@ -176,7 +175,9 @@ class Mixin(object):
 
             # query all partitions
             rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(table1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)])
+
+            # We need to sort rows before check because the order of the table partitions is unknown.
+            self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
         finally:
             library.warehouse.close()
             # FIXME: Use library.warehouse.close() only.
