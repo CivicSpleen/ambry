@@ -812,16 +812,12 @@ def _get_table_names(statement):
         statement (sqlparse.sql.Statement): parsed by sqlparse sql statement.
 
     Returns:
-        unicode or None if table not found
+        list of str
     """
     tables = []
-    for i, token in enumerate(statement.tokens):
-        if token.value.lower() == 'from':
-            # check rest for table name
-            for elem in statement.tokens[i:]:
-                if isinstance(elem, sqlparse.sql.Identifier):
-                    tables.append(elem.get_real_name())
-                    break
+    for token in statement.tokens:
+        if isinstance(token, sqlparse.sql.Identifier):
+            tables.append(token.get_real_name())
     logger.debug(
         'List of table names found in the statement.\n    statement: {}\n    tables: {}\n'
         .format(statement.to_unicode(), tables))
