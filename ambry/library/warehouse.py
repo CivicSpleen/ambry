@@ -397,6 +397,8 @@ class PostgreSQLWrapper(DatabaseWrapper):
             logger.debug('Closing postgresql connection.')
             self._connection.close()
             self._connection = None
+        if getattr(self, '_engine', None):
+            self._engine.dispose()
 
     def _get_warehouse_view(self, connection, table):
         """ Finds and returns table view name in the db represented by given connection.
@@ -493,8 +495,8 @@ class PostgreSQLWrapper(DatabaseWrapper):
             logger.debug(
                 'Creating new connection.\n   dsn: {}'
                 .format(self._dsn))
-            engine = create_engine(self._dsn)
-            self._connection = engine.raw_connection()
+            self._engine = create_engine(self._dsn)
+            self._connection = self._engine.raw_connection()
         return self._connection
 
     def _execute(self, connection, query, fetch=True):
