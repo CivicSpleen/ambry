@@ -15,11 +15,11 @@ import six
 
 import apsw
 
-from sqlalchemy import create_engine
+import psycopg2
 
 from ambry_sources.med import sqlite as sqlite_med, postgresql as postgres_med
 
-from ambry.util import get_logger
+from ambry.util import get_logger, parse_url_to_dict
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber, PartitionNumber
 
 
@@ -495,8 +495,17 @@ class PostgreSQLWrapper(DatabaseWrapper):
             logger.debug(
                 'Creating new connection.\n   dsn: {}'
                 .format(self._dsn))
-            self._engine = create_engine(self._dsn)
-            self._connection = self._engine.raw_connection()
+
+            d = parse_url_to_dict(self._dsn)
+            self._connection = psycopg2.connect(
+                database=d['path'].strip('/'), user=d['username'], password=d['password'],
+                port=d['port'], host=d['hostname'])
+            # It takes some time to find the way how to get raw connection from sqlalchemy. So,
+            # I leave the commented code.
+            #
+            # self._engine = create_engine(self._dsn)
+            # self._connection = self._engine.raw_connection()
+            #
         return self._connection
 
     def _execute(self, connection, query, fetch=True):
