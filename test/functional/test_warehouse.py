@@ -114,7 +114,6 @@ class Mixin(object):
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             library.warehouse.close()
-            # FIXME: Use library.warehouse.close() only.
             library.database.close()
 
     def test_table_install_and_query(self):
@@ -153,7 +152,6 @@ class Mixin(object):
             self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
         finally:
             library.warehouse.close()
-            # FIXME: Use library.warehouse.close() only.
             library.database.close()
 
 

@@ -90,13 +90,17 @@ or via SQLAlchemy, to return datasets.
             ref (str): id, vid, name or versioned name of the partition.
 
         """
-        if ref.startswith('t'):
-            # looks like a table. FIXME: Find better way to recognize the table.
-            table = self._library.table(ref)
-            connection = self._backend._get_connection()
-            self._backend.install_table(connection, table)
-        else:
-            # assuming partition
+        try:
+            obj_number = ObjectNumber.parse(ref)
+            if isinstance(obj_number, TableNumber):
+                table = self._library.table(ref)
+                connection = self._backend._get_connection()
+                self._backend.install_table(connection, table)
+            else:
+                # assume partition
+                raise NotObjectNumberError
+        except NotObjectNumberError:
+            # assume partition.
             partition = self._library.partition(ref)
             connection = self._backend._get_connection()
             self._backend.install(connection, partition)
@@ -201,13 +205,11 @@ class DatabaseWrapper(object):
                     obj_number = ObjectNumber.parse(ref)
                     if isinstance(obj_number, TableNumber):
                         table = self._library.table(ref)
-                    elif isinstance(obj_number, PartitionNumber):
-                        partition = self._library.partition(ref)
                     else:
-                        # We do not process other object numbers, assuming partitoin name or vname.
+                        # Do not care about other object numbers. Assume partition.
                         raise NotObjectNumberError
                 except NotObjectNumberError:
-                    # assuming name or versioned name of the partition.
+                    # assume partition
                     partition = self._library.partition(ref)
 
                 if partition:
@@ -758,7 +760,6 @@ class SQLiteWrapper(DatabaseWrapper):
             connection to the sqlite db who stores warehouse data.
 
         """
-        # FIXME: use connection from config or database if warehouse config is missed.
         if getattr(self, '_connection', None):
             logger.debug('Connection to warehouse db already exists. Using existing one.')
         else:
