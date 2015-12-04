@@ -154,6 +154,48 @@ class Mixin(object):
             library.warehouse.close()
             library.database.close()
 
+    def test_query_with_union(self):
+        if isinstance(self, PostgreSQLTest):
+            _assert_valid_ambry_sources()
+        else:
+            # sqlite tests
+            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.8'):
+                self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
+
+        library = self._get_library()
+
+        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
+        bundle = self.setup_bundle(
+            'simple', source_url='temp://', build_url='temp://', library=library)
+        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
+        TableFactory._meta.sqlalchemy_session = bundle.dataset.session
+
+        table1 = TableFactory(dataset=bundle.dataset)
+        partition1 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=1)
+        partition2 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=2)
+        bundle.wrap_partition(partition1)
+        bundle.wrap_partition(partition2)
+
+        try:
+            partition1._datafile = _get_datafile(
+                bundle.build_fs, partition1.cache_key)
+            partition2._datafile = _get_datafile(
+                bundle.build_fs, partition2.cache_key, rows=[[3, 3], [4, 4]])
+
+            # execute nested query.
+            query = '''
+                SELECT col1, col2 FROM {}
+                UNION
+                SELECT col1, col2 FROM {};'''\
+                .format(partition1.vid, partition2.vid)
+            rows = library.warehouse.query(query)
+
+            # We need to sort rows before check because the order of the table partitions is unknown.
+            self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
+        finally:
+            library.warehouse.close()
+            library.database.close()
+
 
 class InMemorySQLiteTest(TestBase, Mixin):
 

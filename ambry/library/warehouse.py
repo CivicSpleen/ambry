@@ -197,55 +197,57 @@ class DatabaseWrapper(object):
         for statement in statements:
             logger.debug(
                 'Searching statement for partition ref.\n    statement: {}'.format(statement.to_unicode()))
-            ref = _get_table_name(statement)
-            if ref:
-                partition = None
-                table = None
-                try:
-                    obj_number = ObjectNumber.parse(ref)
-                    if isinstance(obj_number, TableNumber):
-                        table = self._library.table(ref)
-                    else:
-                        # Do not care about other object numbers. Assume partition.
-                        raise NotObjectNumberError
-                except NotObjectNumberError:
-                    # assume partition
-                    partition = self._library.partition(ref)
+            table_names = _get_table_names(statement)
+            new_statement = statement.to_unicode()
 
-                if partition:
-                    logger.debug(
-                        'Searching partition table in the warehouse database. \n    partition: {}'
-                        .format(partition.name))
+            if table_names:
+                for ref in table_names:
+                    partition = None
+                    table = None
                     try:
-                        # try to use existing fdw or materialized view.
-                        warehouse_table = self._get_warehouse_table(connection, partition)
-                        logger.debug(
-                            'Partition already installed. \n    partition: {}'.format(partition.vid))
-                    except MissingTableError:
-                        # FDW is not created, create.
-                        logger.debug(
-                            'Partition is not installed. Install now. \n    partition: {}'
-                            .format(partition.vid))
-                        warehouse_table = self.install(connection, partition)
-                    new_query.append(statement.to_unicode().replace(ref, warehouse_table))
+                        obj_number = ObjectNumber.parse(ref)
+                        if isinstance(obj_number, TableNumber):
+                            table = self._library.table(ref)
+                        else:
+                            # Do not care about other object numbers. Assume partition.
+                            raise NotObjectNumberError
+                    except NotObjectNumberError:
+                        # assume partition
+                        partition = self._library.partition(ref)
 
-                if table:
-                    logger.debug(
-                        'Searching table view in the warehouse database. \n    table: {}'
-                        .format(table.vid))
-                    try:
-                        # try to use existing fdw or materialized view.
-                        warehouse_table = self._get_warehouse_view(connection, table)
+                    if partition:
                         logger.debug(
-                            'Table view already exists. \n    table: {}'.format(table.vid))
-                    except MissingTableError:
-                        # View is not created, create.
+                            'Searching partition table in the warehouse database. \n    partition: {}'
+                            .format(partition.name))
+                        try:
+                            # try to use existing fdw or materialized view.
+                            warehouse_table = self._get_warehouse_table(connection, partition)
+                            logger.debug(
+                                'Partition already installed. \n    partition: {}'.format(partition.vid))
+                        except MissingTableError:
+                            # FDW is not created, create.
+                            logger.debug(
+                                'Partition is not installed. Install now. \n    partition: {}'
+                                .format(partition.vid))
+                            warehouse_table = self.install(connection, partition)
+                        new_statement = new_statement.replace(ref, warehouse_table)
+
+                    if table:
                         logger.debug(
-                            'Table view does not exist. Create now. \n    table: {}'.format(table.vid))
-                        self.install_table(connection, table)
-                    new_query.append(statement.to_unicode().replace(table.vid, self.get_view_name(table)))
-            else:
-                new_query.append(statement.to_unicode())
+                            'Searching table view in the warehouse database. \n    table: {}'
+                            .format(table.vid))
+                        try:
+                            # try to use existing fdw or materialized view.
+                            warehouse_table = self._get_warehouse_view(connection, table)
+                            logger.debug(
+                                'Table view already exists. \n    table: {}'.format(table.vid))
+                        except MissingTableError:
+                            # View is not created, create.
+                            logger.debug(
+                                'Table view does not exist. Create now. \n    table: {}'.format(table.vid))
+                            self.install_table(connection, table)
+                        new_statement = new_statement.replace(table.vid, self.get_view_name(table))
+            new_query.append(new_statement)
 
         new_query = '\n'.join(new_query)
         logger.debug(
@@ -803,8 +805,8 @@ class SQLiteWrapper(DatabaseWrapper):
             return cursor.fetchall()
 
 
-def _get_table_name(statement):
-    """ Finds first identifier in the statement and returns it.
+def _get_table_names(statement):
+    """ Returns table names found in the query.
 
     Args:
         statement (sqlparse.sql.Statement): parsed by sqlparse sql statement.
@@ -812,15 +814,15 @@ def _get_table_name(statement):
     Returns:
         unicode or None if table not found
     """
+    tables = []
     for i, token in enumerate(statement.tokens):
         if token.value.lower() == 'from':
             # check rest for table name
             for elem in statement.tokens[i:]:
                 if isinstance(elem, sqlparse.sql.Identifier):
-                    logger.debug(
-                        'Partition table name found in the statement.\n    table_name: {}, statement: {}'
-                        .format(elem.get_real_name(), statement.to_unicode()))
-                    return elem.get_real_name()
+                    tables.append(elem.get_real_name())
+                    break
     logger.debug(
-        'Partition table not found in the statement.\n    statement: {}'
-        .format(statement.to_unicode()))
+        'List of table names found in the statement.\n    statement: {}\n    tables: {}\n'
+        .format(statement.to_unicode(), tables))
+    return tables
