@@ -66,7 +66,7 @@ class File(Base, DictableMixin):
     source = SAColumn('f_source', Text, nullable=False)
 
     mime_type = SAColumn('f_mime_type', Text)
-    preference = SAColumn('f_preference', String(1), default=PREFERENCE.MERGE) # 'F' for filesystem, 'O' for objects, "M" for merge
+    preference = SAColumn('f_preference', String(1), default=PREFERENCE.MERGE)  # 'F' for filesystem, 'O' for objects, "M" for merge
     state = SAColumn('f_state', Text)
     hash = SAColumn('f_hash', Text)  # Hash of the contents
     modified = SAColumn('f_modified', Float)
@@ -78,8 +78,6 @@ class File(Base, DictableMixin):
     __table_args__ = (
         UniqueConstraint('f_d_vid', 'f_path', 'f_major_type', 'f_minor_type',  name='u_ref_path'),
     )
-
-
 
     def update(self, of):
         """Update a file from another file, for copying"""
@@ -105,7 +103,6 @@ class File(Base, DictableMixin):
             # We need utf-8 to make python3 to work. (kazbek)
             # return msgpack.unpackb(self.contents)
             return msgpack.unpackb(self.contents, encoding='utf-8')
-           
         else:
             return self.contents
 
@@ -138,7 +135,6 @@ class File(Base, DictableMixin):
             self.contents = contents
 
         self.hash = hashlib.md5(self.contents).hexdigest()
-
 
         self.modified = time.time()
         self.size = new_size
