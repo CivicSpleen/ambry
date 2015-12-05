@@ -43,6 +43,7 @@ logger = get_logger(__name__)
 class FileTypeError(Exception):
     """Bad file type"""
 
+
 class BuildSourceFile(object):
 
     SYNC_DIR = Constant()
@@ -102,7 +103,6 @@ class BuildSourceFile(object):
     @property
     def path(self):
         return self._fs.getsyspath(file_name(self._file_const))
-
 
     def remove(self):
         from fs.errors import ResourceNotFoundError
@@ -169,7 +169,6 @@ class BuildSourceFile(object):
 
         if (self.record.modified or 0) > (self.fs_modtime or 0):
             # Record is newer
-
             return self.SYNC_DIR.RECORD_TO_FILE
 
         return None
@@ -196,7 +195,6 @@ class BuildSourceFile(object):
             else:
                 return None
 
-
             self._dataset.config.sync[self._file_const][sd] = time.time()
             return sd
         except Exception as e:
@@ -218,6 +216,7 @@ class BuildSourceFile(object):
     def record_to_fs(self):
         """Create a filesystem file from a File"""
         raise NotImplementedError
+
 
 class RowBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -259,8 +258,6 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fr = self._dataset.bsfile(self._file_const)
 
-        fn_path = file_name(self._file_const)
-
         # Some types have special representations in spreadsheets, particularly lists and dicts
         def munge_types(v):
             if isinstance(v, (list, tuple)):
@@ -296,6 +293,7 @@ class RowBuildSourceFile(BuildSourceFile):
                 with self._fs.open(fn_path, 'w', newline='') as f:
                     self.record_to_fh(f)
 
+
 class DictBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
 
@@ -320,9 +318,6 @@ class DictBuildSourceFile(BuildSourceFile):
 
         fr = self._dataset.bsfile(self._file_const)
 
-        fn_path = file_name(self._file_const)
-
-
         if fr.contents:
             yaml.safe_dump(fr.unpacked_contents, f, default_flow_style=False, encoding='utf-8')
             fr.source_hash = self.fs_hash
@@ -339,6 +334,7 @@ class DictBuildSourceFile(BuildSourceFile):
             with self._fs.open(fn_path, 'w', encoding='utf-8') as f:
 
                 self.record_to_fh(f)
+
 
 class StringSourceFile(BuildSourceFile):
     """A Source Build File that is a single file. """
@@ -366,7 +362,6 @@ class StringSourceFile(BuildSourceFile):
         fr.source_hash = self.fs_hash
         fr.modified = self.fs_modtime
 
-
     def record_to_fh(self, f):
         fr = self._dataset.bsfile(self._file_const)
 
@@ -384,6 +379,7 @@ class StringSourceFile(BuildSourceFile):
             # No UTF-Encoding! Just go directly from the the database to the file.
             with self._fs.open(file_name(self._file_const), 'wb') as f:
                 self.record_to_fh(f)
+
 
 class MetadataFile(DictBuildSourceFile):
 
@@ -447,6 +443,7 @@ class MetadataFile(DictBuildSourceFile):
 
         return fr
 
+
 class PythonSourceFile(StringSourceFile):
 
     def clean_objects(self):
@@ -473,12 +470,10 @@ class PythonSourceFile(StringSourceFile):
         :param kwargs: items to add to the module globals
         :return:
         """
-        import os
         from fs.errors import NoSysPathError
 
         try:
             import ambry.build
-
             module = sys.modules['ambry.build']
         except ImportError:
             module = imp.new_module('ambry.build')
@@ -502,7 +497,7 @@ class PythonSourceFile(StringSourceFile):
             # Has encoding, so don't decode
             contents = bf.contents
         else:
-            contents = bf.unpacked_contents # Assumes utf-8
+            contents = bf.unpacked_contents  # Assumes utf-8
 
         exec(compile(contents, abs_path, 'exec'), module.__dict__)
 
@@ -511,7 +506,6 @@ class PythonSourceFile(StringSourceFile):
     def import_bundle(self):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
-        import os
         from fs.errors import NoSysPathError
 
         try:
@@ -535,7 +529,6 @@ class PythonSourceFile(StringSourceFile):
         exec(compile(bf.contents, abs_path, 'exec'), module.__dict__)
 
         return module.Bundle
-
 
     def import_lib(self):
         """Import the lib.py file into the bundle module"""
@@ -654,6 +647,7 @@ class SourcesFile(RowBuildSourceFile):
 
         bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
 
+
 class SchemaFile(RowBuildSourceFile):
 
     def clean_objects(self):
@@ -726,7 +720,6 @@ class SchemaFile(RowBuildSourceFile):
 
                 table_number += 1
                 extant_tables[table_name] = table
-
 
             data = {k.replace('d_', '', 1): v
                     for k, v in list(row.items()) if k and k.startswith('d_') and v}
@@ -808,6 +801,7 @@ class SchemaFile(RowBuildSourceFile):
         bsfile = self._dataset.bsfile(self._file_const)
         bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
 
+
 class SourceSchemaFile(RowBuildSourceFile):
 
     def clean_objects(self):
@@ -884,13 +878,16 @@ file_info_map = {
     File.BSFILE.SOURCES: (File.path_map[File.BSFILE.SOURCES], SourcesFile)
 }
 
+
 def file_name(const):
     """Return the file name for a file constant"""
     return file_info_map[const][0]
 
+
 def file_class(const):
     """Return the class for a file constant"""
     return file_info_map[const][1]
+
 
 def file_default(const):
     """Return the default content for the file"""
@@ -910,6 +907,7 @@ def file_default(const):
 
     with open(path, 'rb') as f:
         return f.read()
+
 
 class BuildSourceFileAccessor(object):
 
