@@ -34,9 +34,9 @@ class TestBase(unittest.TestCase):
         # WAARNING! This path and dsn is only used if it is explicitly referenced.
         # Otherwise, the get_rc() will use a database specified in the
         # test rc file.
-        self.db_path = "/tmp/ambry-test-{}.db".format(str(uuid.uuid4()))
+        self.db_path = '/tmp/ambry-test-{}.db'.format(str(uuid.uuid4()))
 
-        self.dsn = "sqlite:///{}".format(self.db_path)
+        self.dsn = 'sqlite:///{}'.format(self.db_path)
 
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
@@ -65,14 +65,14 @@ class TestBase(unittest.TestCase):
 
         from fs.opener import fsopendir
 
-        config = ambry.run.load() # not cached; get_config is
+        config = ambry.run.load()  # not cached; get_config is
 
         dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
 
         orig_root = config.library.filesystem_root
-        root_dir  = config.filesystem.test.format(root=orig_root)
+        root_dir = config.filesystem.test.format(root=orig_root)
 
-        dsn = config.get('database',{}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
+        dsn = config.get('database', {}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
 
         config.library.filesystem_root = root_dir
         config.library.database = dsn
@@ -85,7 +85,6 @@ class TestBase(unittest.TestCase):
                 config.loaded = None
                 config.dump(f)
 
-        print "Database: ", dsn
         return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
 
     @classmethod
@@ -141,7 +140,7 @@ class TestBase(unittest.TestCase):
             l.clean()
             l.create()
 
-        orig_source = os.path.join(os.path.dirname(bundle_tests.__file__),cache_path)
+        orig_source = os.path.join(os.path.dirname(bundle_tests.__file__), cache_path)
         l.import_bundles(orig_source, detach=True, force=True)
 
         b = next(b for b in l.bundles).cast_to_subclass()

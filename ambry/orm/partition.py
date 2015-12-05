@@ -86,7 +86,6 @@ class Partition(Base, DictableMixin):
     installed = SAColumn('p_installed', String(100))
     _location = SAColumn('p_location', String(100))  # Location of the data file
 
-
     __table_args__ = (
         # ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
         UniqueConstraint('p_sequence_id', 'p_d_vid', name='_uc_partitions_1'),

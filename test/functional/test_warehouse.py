@@ -1,23 +1,36 @@
 # -*- coding: utf-8 -*-
 import os
 import stat
+import unittest
 
-from test.factories import PartitionFactory
+from semantic_version import Version
 
+from test.factories import PartitionFactory, TableFactory
+
+import ambry_sources
 from ambry_sources import MPRowsFile
+from ambry_sources.med import sqlite as sqlite_med
+from ambry_sources.med import postgresql as postgres_med
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
-from ambry.library.warehouse import Warehouse
-
 from test.test_base import TestBase, PostgreSQLTestBase
+
+AMBRY_SOURCES_VERSION = getattr(ambry_sources, '__version__', None) or ambry_sources.__meta__.__version__
 
 
 class Mixin(object):
     """ Requires successors to inherit from TestBase and provide _get_library method. """
 
-    def test_select_query(self):
-        # FIXME: Check that for postgres only.
+    # helpers
+
+    def _assert_is_indexed(self, warehouse, partition, column):
+        ''' Raises AssertionError if column is not indexed. '''
+        raise NotImplementedError('Override the method and provide db specific index check.')
+
+    def test_query_mpr_with_auto_install(self):
         if isinstance(self, PostgreSQLTest):
+            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
+                self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
         library = self._get_library()
 
@@ -28,113 +41,19 @@ class Mixin(object):
         partition1 = PartitionFactory(dataset=bundle.dataset)
         bundle.wrap_partition(partition1)
 
-        def gen():
-            # generate header
-            yield ['col1', 'col2']
-
-            # generate first row
-            yield [0, 0]
-
-            # generate second row
-            yield [1, 1]
-
         try:
-            datafile = MPRowsFile(bundle.build_fs, partition1.cache_key)
-            datafile.load_rows(GeneratorSource(SourceSpec('foobar'), gen()))
-            partition1._datafile = datafile
-
-            # FIXME: ambry_sources should care about *.mpr permissions. Create an issue with test case.
-            # Waiting for https://github.com/CivicKnowledge/ambry_sources/issues/20. When the issue will be
-            # resolved, remove permissions setting.
-            if datafile.syspath.startswith('/tmp'):
-                parts = datafile.syspath.split(os.sep)
-                parts[0] = os.sep
-                for i, dir_ in enumerate(parts):
-                    if dir_ in ('/', 'tmp'):
-                        continue
-                    path = parts[:i]
-                    path.append(dir_)
-                    path = os.path.join(*path)
-                    if not is_group_readable(path):
-                        os.chmod(path, get_perm(path) | stat.S_IRGRP | stat.S_IXGRP)
-
+            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1)])
+            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
+            library.warehouse.close()
             library.database.close()
 
+    def test_install_and_query_materialized_partition(self):
+        # materialized view for postgres and readonly table for sqlite.
+        if isinstance(self, PostgreSQLTest):
+            _assert_valid_ambry_sources()
 
-class InMemorySQLiteTest(TestBase, Mixin):
-
-    @classmethod
-    def get_rc(cls):
-        rc = TestBase.get_rc()
-        # use file database for library for that test case.
-        cls._real_test_database = rc.library.database
-        rc.library.database = 'sqlite://'
-        return rc
-
-    def _get_library(self):
-        library = self.library()
-
-        # assert it is in-memory database.
-        assert library.database.dsn == 'sqlite://'
-        return library
-
-
-class FileSQLiteTest(TestBase, Mixin):
-
-    @classmethod
-    def get_rc(cls):
-        rc = TestBase.get_rc()
-        # use file database for library for that test case.
-        cls._real_test_database = rc.library.database
-        rc.library.database = 'sqlite:////tmp/test-warehouse.db'
-        return rc
-
-    @classmethod
-    def tearDownClass(cls):
-        rc = TestBase.get_rc()
-        if rc.library.database != cls._real_test_database:
-            # restore database
-            rc.library.database = cls._real_test_database
-
-    def _get_library(self):
-        library = self.library()
-
-        # assert it is file database.
-        assert library.database.exists()
-        return library
-
-
-class PostgreSQLTest(PostgreSQLTestBase, Mixin):
-
-    @classmethod
-    def get_rc(cls):
-        rc = TestBase.get_rc()
-        # replace database with file database.
-        cls._real_test_database = rc.library.database
-        rc.library.database = cls.postgres_test_db_data['test_db_dsn']
-        return rc
-
-    @classmethod
-    def tearDownClass(cls):
-        rc = TestBase.get_rc()
-        real_test_database = getattr(cls, '_real_test_database', None)
-        if real_test_database and rc.library.database != real_test_database:
-            # restore database
-            rc.library.database = real_test_database
-        PostgreSQLTestBase.tearDownClass()
-
-    def _get_library(self):
-        library = self.library()
-
-        # assert it is file database.
-        assert library.database.exists()
-        return library
-
-    def _test_materialized_view(self):
-        # create materialized view wrd as select * from words;
         library = self._get_library()
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
@@ -144,44 +63,243 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
         partition1 = PartitionFactory(dataset=bundle.dataset)
         bundle.wrap_partition(partition1)
 
-        def gen():
-            # generate header
-            yield ['col1', 'col2']
-
-            # generate first row
-            yield [0, 0]
-
-            # generate second row
-            yield [1, 1]
-
         try:
-            datafile = MPRowsFile(bundle.build_fs, partition1.cache_key)
-            datafile.load_rows(GeneratorSource(SourceSpec('foobar'), gen()))
-            partition1._datafile = datafile
+            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
 
-            # FIXME: ambry_sources should care about *.mpr permissions. Create an issue with test case.
-            # Waiting for https://github.com/CivicKnowledge/ambry_sources/issues/20. When the issue will be
-            # resolved, remove permissions setting.
-            if datafile.syspath.startswith('/tmp'):
-                parts = datafile.syspath.split(os.sep)
-                parts[0] = os.sep
-                for i, dir_ in enumerate(parts):
-                    if dir_ in ('/', 'tmp'):
-                        continue
-                    path = parts[:i]
-                    path.append(dir_)
-                    path = os.path.join(*path)
-                    if not is_group_readable(path):
-                        os.chmod(path, get_perm(path) | stat.S_IRGRP | stat.S_IXGRP)
-
+            # materialize partition (materialized view for postgres, readonly table for sqlite)
             library.warehouse.materialize(partition1.vid)
 
-            # assert materialized view created.
+            # query partition.
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1)])
+
+            # now drop the *.mpr file and check again. Query should return the same data.
+            #
+            syspath = partition1._datafile.syspath
+            os.remove(syspath)
+            self.assertFalse(os.path.exists(syspath))
+            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
-            # FIXME: Use library.warehouse.close() instead.
+            library.warehouse.close()
             library.database.close()
+
+    def test_index_creation(self):
+        if isinstance(self, PostgreSQLTest):
+            _assert_valid_ambry_sources()
+
+        library = self._get_library()
+
+        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
+        bundle = self.setup_bundle(
+            'simple', source_url='temp://', build_url='temp://', library=library)
+        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
+        partition1 = PartitionFactory(dataset=bundle.dataset)
+        bundle.wrap_partition(partition1)
+
+        try:
+            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
+
+            # Index creation requires materialized tables.
+            library.warehouse.materialize(partition1.vid)
+
+            # Create indexes
+            library.warehouse.index(partition1.vid, ['col1', 'col2'])
+
+            # query partition.
+            self._assert_is_indexed(library.warehouse, partition1, 'col1')
+            self._assert_is_indexed(library.warehouse, partition1, 'col2')
+
+            # query indexed data
+            rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
+            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
+        finally:
+            library.warehouse.close()
+            library.database.close()
+
+    def test_table_install_and_query(self):
+        if isinstance(self, PostgreSQLTest):
+            _assert_valid_ambry_sources()
+        else:
+            # sqlite tests
+            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.8'):
+                self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
+
+        library = self._get_library()
+
+        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
+        bundle = self.setup_bundle(
+            'simple', source_url='temp://', build_url='temp://', library=library)
+        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
+        TableFactory._meta.sqlalchemy_session = bundle.dataset.session
+
+        table1 = TableFactory(dataset=bundle.dataset)
+        partition1 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=1)
+        partition2 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=2)
+        bundle.wrap_partition(partition1)
+        bundle.wrap_partition(partition2)
+
+        try:
+            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
+            partition2._datafile = _get_datafile(bundle.build_fs, partition2.cache_key, rows=[[3, 3], [4, 4]])
+
+            # Install table
+            library.warehouse.install(table1.vid)
+
+            # query all partitions
+            rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(table1.vid))
+
+            # We need to sort rows before check because the order of the table partitions is unknown.
+            self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
+        finally:
+            library.warehouse.close()
+            library.database.close()
+
+    def test_query_with_union(self):
+        if isinstance(self, PostgreSQLTest):
+            _assert_valid_ambry_sources()
+        else:
+            # sqlite tests
+            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.8'):
+                self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
+
+        library = self._get_library()
+
+        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
+        bundle = self.setup_bundle(
+            'simple', source_url='temp://', build_url='temp://', library=library)
+        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
+        TableFactory._meta.sqlalchemy_session = bundle.dataset.session
+
+        table1 = TableFactory(dataset=bundle.dataset)
+        partition1 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=1)
+        partition2 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=2)
+        bundle.wrap_partition(partition1)
+        bundle.wrap_partition(partition2)
+
+        try:
+            partition1._datafile = _get_datafile(
+                bundle.build_fs, partition1.cache_key)
+            partition2._datafile = _get_datafile(
+                bundle.build_fs, partition2.cache_key, rows=[[3, 3], [4, 4]])
+
+            # execute nested query.
+            query = '''
+                SELECT col1, col2 FROM {}
+                UNION
+                SELECT col1, col2 FROM {};'''\
+                .format(partition1.vid, partition2.vid)
+            rows = library.warehouse.query(query)
+
+            # We need to sort rows before check because the order of the table partitions is unknown.
+            self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
+        finally:
+            library.warehouse.close()
+            library.database.close()
+
+
+class InMemorySQLiteTest(TestBase, Mixin):
+
+    @classmethod
+    def get_rc(cls):
+        rc = TestBase.get_rc()
+        # use file database for library for that test case.
+        cls._real_warehouse_database = rc.library.get('warehouse')
+        cls._real_test_database = rc.library.database
+        rc.library.warehouse = 'sqlite://'
+        rc.library.database = 'sqlite://'
+        return rc
+
+    def _get_library(self):
+        library = self.library()
+
+        # assert it is in-memory database.
+        assert library.config.library.warehouse == 'sqlite://'
+
+        return library
+
+    def _assert_is_indexed(self, warehouse, partition, column):
+        _assert_sqlite_index(warehouse, partition, column)
+
+
+class FileSQLiteTest(TestBase, Mixin):
+
+    @classmethod
+    def setUpClass(cls):
+        TestBase.setUpClass()
+        cls._warehouse_db = 'sqlite:////tmp/test-warehouse.db'
+
+    def tearDown(self):
+        super(self.__class__, self).tearDown()
+        os.remove(self._warehouse_db.replace('sqlite:///', ''))
+
+    @classmethod
+    def get_rc(cls):
+        rc = TestBase.get_rc()
+        # use file database for library for that test case.
+        if not rc.library.warehouse == cls._warehouse_db:
+            cls._real_warehouse_database = rc.library.database
+            rc.library.warehouse = cls._warehouse_db
+            rc.library.database = cls._warehouse_db  # It's ok to use the same db file for that test case.
+        return rc
+
+    @classmethod
+    def tearDownClass(cls):
+        rc = TestBase.get_rc()
+        if rc.library.database != cls._real_warehouse_database:
+            # restore database
+            rc.library.database = cls._real_warehouse_database
+
+    def _get_library(self):
+        library = self.library()
+
+        # assert it is file database.
+        assert library.database.exists()
+        return library
+
+    def _assert_is_indexed(self, warehouse, partition, column):
+        _assert_sqlite_index(warehouse, partition, column)
+
+
+class PostgreSQLTest(PostgreSQLTestBase, Mixin):
+
+    @classmethod
+    def get_rc(cls):
+        rc = TestBase.get_rc()
+        # replace database with file database.
+        cls._real_warehouse_database = rc.library.database
+        rc.library.warehouse = cls.postgres_test_db_data['test_db_dsn']
+        rc.library.database = cls.postgres_test_db_data['test_db_dsn']  # It's ok to use the same database.
+        return rc
+
+    @classmethod
+    def tearDownClass(cls):
+        rc = TestBase.get_rc()
+        real_warehouse_database = getattr(cls, '_real_warehouse_database', None)
+        if real_warehouse_database and rc.library.database != real_warehouse_database:
+            # restore database
+            rc.library.database = real_warehouse_database
+        PostgreSQLTestBase.tearDownClass()
+
+    def _get_library(self):
+        library = self.library()
+
+        # assert it is file database.
+        assert library.database.exists()
+        return library
+
+    def _assert_is_indexed(self, warehouse, partition, column):
+        table = postgres_med.table_name(partition.vid) + '_v'
+        with warehouse._backend._connection.cursor() as cursor:
+            # Sometimes postgres may not use index although index exists.
+            # See https://wiki.postgresql.org/wiki/FAQ#Why_are_my_queries_slow.3F_Why_don.27t_they_use_my_indexes.3F
+            # and http://stackoverflow.com/questions/9475778/postgresql-query-not-using-index-in-production
+            # for details.
+            # So, force postgres always to use existing indexes.
+            cursor.execute('SET enable_seqscan TO \'off\';')
+            query = 'EXPLAIN SELECT * FROM {} WHERE {} > 1 and {} < 3;'.format(table, column, column)
+            cursor.execute(query)
+            result = cursor.fetchall()
+            self.assertIn('Index Scan', result[0][0])
 
 
 def assert_shares_group(user=''):
@@ -222,3 +340,39 @@ def is_group_readable(filepath):
 
 def get_perm(filepath):
     return stat.S_IMODE(os.lstat(filepath)[stat.ST_MODE])
+
+
+def _assert_valid_ambry_sources():
+    if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
+        raise unittest.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
+
+
+def _assert_sqlite_index(warehouse, partition, column):
+    table = sqlite_med.table_name(partition.vid) + '_v'
+    cursor = warehouse._backend._connection.cursor()
+    query = 'EXPLAIN QUERY PLAN SELECT * FROM {} WHERE {} > 1;'.format(table, column)
+    result = cursor.execute(query).fetchall()
+    assert 'USING INDEX' in result[0][-1]
+
+
+def _get_generator_source(rows=None):
+    if not rows:
+        rows = [
+            [0, 0],
+            [1, 1],
+            [2, 2]]
+
+    def gen(rows=rows):
+        # generate header
+        yield ['col1', 'col2']
+
+        # generate some rows
+        for row in rows:
+            yield row
+    return GeneratorSource(SourceSpec('foobar'), gen())
+
+
+def _get_datafile(fs, path, rows=None):
+    datafile = MPRowsFile(fs, path)
+    datafile.load_rows(_get_generator_source(rows=rows))
+    return datafile

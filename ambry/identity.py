@@ -121,7 +121,6 @@ class Name(object):
                         k,
                         self.name_parts))
 
-
     def _parse_version(self, version):
 
         if version is not None and isinstance(version, string_types):
@@ -219,7 +218,6 @@ class Name(object):
         final_parts = [str(d[k]) for (k, _, _) in self.name_parts
                        if k and d.get(k, False) and k in (names - excludes)]
 
-
         return sep.join(final_parts)
 
     @property
@@ -234,7 +232,8 @@ class Name(object):
         # bundle path when called from subclasses
         names = [k for k, _, _ in Name._name_parts]
 
-        return os.path.join(self.source,self._path_join(names=names,excludes='source',sep=self.NAME_PART_SEP))
+        return os.path.join(
+            self.source, self._path_join(names=names, excludes='source', sep=self.NAME_PART_SEP))
 
     @property
     def source_path(self):
@@ -253,7 +252,7 @@ class Name(object):
             parts.append(self.bspace)
 
         parts.append(
-            self._path_join(names=names,excludes=[ 'source', 'version','bspace'],sep=self.NAME_PART_SEP))
+            self._path_join(names=names, excludes=['source', 'version', 'bspace'], sep=self.NAME_PART_SEP))
 
         return os.path.join(*parts)
 
@@ -361,7 +360,6 @@ class PartialPartitionName(Name):
 
     def promote(self, name):
         """Promote to a PartitionName by combining with a bundle Name."""
-
         return PartitionName(**dict(list(name.dict.items()) + list(self.dict.items())))
 
     def is_valid(self):
@@ -426,10 +424,9 @@ class PartitionName(PartialPartitionName, Name):
         d = self._dict(with_name=False)
 
         return self.NAME_PART_SEP.join(
-                    [str(d[k]) for (k, _, _) in self.name_parts
-                    if k and d.get(k, False) and k != 'version' and (k != 'format' or str(d[k]) != Name.DEFAULT_FORMAT)]
+            [str(d[k]) for (k, _, _) in self.name_parts
+            if k and d.get(k, False) and k != 'version' and (k != 'format' or str(d[k]) != Name.DEFAULT_FORMAT)]
         )
-
 
     @property
     def path(self):
@@ -496,7 +493,7 @@ class PartitionName(PartialPartitionName, Name):
 
         d = self._dict(with_name=False)
 
-        d = {k: d.get(k) for k, _,_ in PartialPartitionName._name_parts if d.get(k,False)}
+        d = {k: d.get(k) for k, _, _ in PartialPartitionName._name_parts if d.get(k, False)}
 
         if 'format' in d and d['format'] == Name.DEFAULT_FORMAT:
             del d['format']
@@ -692,7 +689,7 @@ class ObjectNumber(object):
     # other objects ) , can have several differnt lengths. We
     # Use these different lengths to determine what kinds of
     # fields to parse
-    # 's'-> short dataset, 'l'->long datset, 'r' -> has revision
+    # 's'-> short dataset, 'l'->long dataset, 'r' -> has revision
     #
     # generate with:
     #     {
@@ -799,11 +796,10 @@ class ObjectNumber(object):
                     column, revision=revision)
 
             elif type_ == cls.TYPE.OTHER1:
-
                     return GeneralNumber1(on_str_orig[0],
-                                       DatasetNumber(dataset, assignment_class=assignment_class),
-                                       int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.OTHER1])),
-                                       revision=revision)
+                                          DatasetNumber(dataset, assignment_class=assignment_class),
+                                          int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.OTHER1])),
+                                          revision=revision)
 
             elif type_ == cls.TYPE.OTHER2:
                     return GeneralNumber2(on_str_orig[0],
@@ -1244,15 +1240,15 @@ class Identity(object):
 
     def __init__(self, name, object_number):
 
-        assert isinstance(name, self._name_class), "Wrong type: {}. Expected {}"\
+        assert isinstance(name, self._name_class), 'Wrong type: {}. Expected {}'\
             .format(type(name), self._name_class)
 
         self._on = object_number
         self._name = name
 
         if not self._name.type_is_compatible(self._on):
-            raise TypeError("The name and the object number must be " +
-                            "of compatible types: got {} and {}"
+            raise TypeError('The name and the object number must be ' +
+                            'of compatible types: got {} and {}'
                             .format(type(name), type(object_number)))
 
         # Update the patch number to always be the revision
@@ -1747,7 +1743,7 @@ class NumberServer(object):
 
         self.last_response = d
 
-        self.next_time = time.time() + self.last_response.get('wait',0)
+        self.next_time = time.time() + self.last_response.get('wait', 0)
 
         return ObjectNumber.parse(d['number'])
 
