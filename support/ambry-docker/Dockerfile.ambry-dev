@@ -8,9 +8,9 @@ MAINTAINER Eric Busboom "eric@civicknowledge.org"
 ENV AMBRY_IS_REMOTE 1
 
 
-WORKDIR /opt
+WORKDIR /opt #rev
 
-RUN pip install git+https://github.com/CivicKnowledge/ambry_sources.git && \
+RUN pip install git+https://github.com/CivicKnowledge/ambry_sources.git && \ #rev
     pip install git+https://github.com/CivicKnowledge/geoid.git
 
 COPY . /opt/ambry/

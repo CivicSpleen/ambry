@@ -61,22 +61,23 @@ def CaptureException(f, *args, **kwargs):
 class Bundle(object):
     STATES = Constant()
     STATES.NEW = 'new'
-    STATES.SYNCED = 'sync_done'
+    STATES.SYNCED = 'synced'
     STATES.DOWNLOADED = 'downloaded'
     STATES.CLEANING = 'clean'
-    STATES.CLEANED = 'clean_done'
+    STATES.CLEANED = 'cleaned'
     STATES.PREPARING = 'prepare'
-    STATES.PREPARED = 'prepare_done'
-    STATES.BUILDING = 'build'
-    STATES.BUILT = 'build_done'
-    STATES.FINALIZING = 'finalize'
-    STATES.FINALIZED = 'finalize_done'
+    STATES.PREPARED = 'prepared'
+    STATES.WAITING = 'waiting'
+    STATES.BUILDING = 'building'
+    STATES.BUILT = 'built'
+    STATES.FINALIZING = 'finalizing'
+    STATES.FINALIZED = 'finalized'
     STATES.INSTALLING = 'install'
-    STATES.INSTALLED = 'install_done'
+    STATES.INSTALLED = 'installed'
     STATES.META = 'meta'
     STATES.SCHEMA = 'schema'
     STATES.INGESTING = 'ingest'
-    STATES.INGESTED = 'ingest_done'
+    STATES.INGESTED = 'ingested'
     STATES.NOTINGESTABLE = 'not_ingestable'
 
     # Other things that can be part of the 'last action'
@@ -142,9 +143,27 @@ class Bundle(object):
         self._ps = None  # Progress logger section, created as needed.
         self.init()
 
+
+
     def init(self):
         """An overridable initialization method, called in the Bundle constructor"""
         pass
+
+
+    def init_debug(self):
+        """Initialize debugging features, such as a handler for USR2 to print a trace"""
+        import signal
+        from ambry.util import debug
+
+        def debug_trace(sig, frame):
+            """Interrupt running process, and provide a python prompt for interactive
+            debugging."""
+
+            self.log("Trace signal received")
+            self.log(''.join(traceback.format_stack(frame)))
+
+        signal.signal(signal.SIGUSR2, debug_trace)  # Register handler
+
 
     def set_file_system(self, source_url=False, build_url=False):
         """Set the source file filesystem and/or build  file system"""
@@ -221,7 +240,8 @@ class Bundle(object):
         return self.dataset.commit()
 
     def close(self):
-        return self.dataset.close()
+        self.progress.close()
+        self.dataset.close()
 
     def close_session(self):
         return self.dataset.close_session()
@@ -665,8 +685,8 @@ class Bundle(object):
             self._errors.append(str(e))
 
         self.set_error_state()
-        self.dataset.config.build.state.exception_type = str(e.__class__.__name__)
-        self.dataset.config.build.state.exception = str(e)
+        self.buildstate.state.exception_type = str(e.__class__.__name__)
+        self.buildstate.state.exception = str(e)
 
     def warn(self, message):
         """Log an error messsage.
@@ -883,7 +903,7 @@ Caster Code
                 row[i] = self.metadata.about[key]
             elif f.startswith('state'):
                 _, key = f.split('.')
-                row[i] = self.dataset.config.build.state[key]
+                row[i] = self.buildstate.state[key]
             elif f.startswith('count'):
                 _, key = f.split('.')
                 if key == 'sources':
@@ -949,12 +969,12 @@ Caster Code
 
             with self.progress.interval(progress, 10):
                 try:
-
                     s = get_source(
                         source.spec, self.library.download_cache,
                         account_accessor=self.library.account_acessor)
 
                 except MissingCredentials as exc:
+                    from ambry.dbexceptions import ConfigurationError
                     formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
                     msg = \
                         'Missing credentials for {location}.\n' \
@@ -963,7 +983,7 @@ Caster Code
                         'add credentials:\n' \
                         '{location}:\n' \
                         '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
-                    raise Exception(msg)
+                    raise ConfigurationError(msg+'\nOriginal Exception: '+str(exc))
 
             if isinstance(s, FixedSource):
                 from ambry_sources.sources.spec import ColumnSpec
@@ -981,24 +1001,27 @@ Caster Code
 
     def clear_states(self):
         """Delete  all of the build state information"""
-        return self.dataset.config.build.clean()
+        self.buildstate.clean()
+        self.buildstate.commit()
+        return
 
     @property
     def state(self):
         """Return the current build state"""
-        return self.dataset.config.build.state.current
+        return self.buildstate.state.current
 
     @property
     def error_state(self):
         """Set the error condition"""
-        self.dataset.config.build.state.lasttime = time()
-        return self.dataset.config.build.state.error
+        self.buildstate.state.lasttime = time()
+        self.buildstate.commit()
+        return self.buildstate.state.error
 
     @property
-    def build_state(self):
-        """"Returns the build state accessor, self.dataset.config.build.state"""
+    def buildstate(self):
+        """"Returns the build state accessor, self.buildstate.state"""
 
-        return self.dataset.config.build.state
+        return self.progress.build
 
     @state.setter
     def state(self, state):
@@ -1006,23 +1029,25 @@ Caster Code
 
         assert state != 'build_bundle'
 
-        self.dataset.config.build.state.current = state
-        self.dataset.config.build.state[state] = time()
-        self.dataset.config.build.state.lasttime = time()
+        self.buildstate.state.current = state
+        self.buildstate.state[state] = time()
+        self.buildstate.state.lasttime = time()
 
-        self.dataset.config.build.state.error = False
-        self.dataset.config.build.state.exception = None
-        self.dataset.config.build.state.exception_type = None
+        self.buildstate.state.error = False
+        self.buildstate.state.exception = None
+        self.buildstate.state.exception_type = None
+        self.buildstate.commit()
+
 
     def record_stage_state(self, phase, stage):
         """Record the completion times of phases and stages"""
 
         key = '{}-{}'.format(phase, stage if stage else 1)
 
-        self.dataset.config.build.state[key] = time()
+        self.buildstate.state[key] = time()
 
     def set_error_state(self):
-        self.dataset.config.build.state.error = time()
+        self.buildstate.state.error = time()
         self.state = self.state + ('_error' if not self.state.endswith('_error') else '')
 
     def set_last_access(self, tag):
@@ -1030,7 +1055,8 @@ Caster Code
         import time
         # time defeats check that value didn't change
 
-        self.dataset.config.build.access.last = '{}-{}'.format(tag, time.time())
+        self.buildstate.access.last = '{}-{}'.format(tag, time.time())
+        self.buildstate.commit()
 
     #########################
     # Build phases
@@ -1066,7 +1092,6 @@ Caster Code
 
         self.state = self.STATES.SYNCED
         self.log('---- Synchronized ----')
-        self.commit()
 
         self.library.search.index_bundle(self, force=True)
 
@@ -1074,10 +1099,11 @@ Caster Code
 
     def sync_in(self):
         """Synchronize from files to records, and records to objects"""
+        self.log('---- Sync In ----')
         from ambry.bundle.files import BuildSourceFile
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
-        self.log('---- Sync In ----')
+
         self.library.commit()
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
@@ -1218,6 +1244,7 @@ Caster Code
 
         self.dataset.sources[:] = []
         self.dataset.source_tables[:] = []
+        self.dataset.st_sequence_id = 1
 
     def clean_progress(self):
         self.progress.clean()
@@ -1237,6 +1264,10 @@ Caster Code
         self.session.query(ColumnStat).filter(ColumnStat.d_vid == self.dataset.vid).delete()
 
         self.dataset.delete_partitions()
+
+        for s in self.sources:
+            s.state =  None
+
 
         if self.build_partition_fs.exists:
             try:
@@ -1298,7 +1329,7 @@ Caster Code
 
     def clean_build_state(self):
 
-        self.dataset.config.build.clean()
+        self.buildstate.clean()
         self.commit()
 
     #
@@ -1418,7 +1449,7 @@ Caster Code
                     # The '1' for chunksize ensures that the subprocess only gets one
                     # source to build. Combined with maxchildspertask = 1 in the pool,
                     # each process will only handle one source before exiting.
-                    result = pool.map_async(ingest_mp, args)
+                    result = pool.map_async(ingest_mp, args, 1)
 
                     pool.close()
                     pool.join()
@@ -1671,7 +1702,6 @@ Caster Code
                 self.error("Can't run build; bundle is in error state")
                 return False
 
-        self.state = self.STATES.BUILDING
 
         return True
 
@@ -1715,11 +1745,11 @@ Caster Code
 
         from operator import attrgetter
         from itertools import groupby
-        from .concurrent import build_mp
+        from .concurrent import build_mp, unify_mp
         from ambry.bundle.events import TAG
 
-        self.log('---- Building ----')
-
+        self.log('==== Building ====')
+        self.state = self.STATES.BUILDING
 
 
         class SourceSet(object):
@@ -1773,20 +1803,44 @@ Caster Code
 
                     stage_sources.reload()
 
+                    for s in stage_sources:
+                        s.state = self.STATES.WAITING
+                    self.commit()
+
+                    stage_sources.reload()
+
                     self.log('Processing {} sources, stage {} ; first 10: {}'
                              .format(len(stage_sources), stage, [x.name for x in stage_sources.sources[:10]]))
                     self._run_events(TAG.BEFORE_BUILD, stage)
 
                     if self.multi:
-                        args = [(self.identity.vid, stage, source.vid, force) for source in stage_sources]
-
-                        pool = self.library.process_pool(limited_run=self.limited_run)
 
                         try:
                             # The '1' for chunksize ensures that the subprocess only gets one
                             # source to build. Combined with maxchildspertask = 1 in the pool,
                             # each process will only handle one source before exiting.
-                            pool.map(build_mp, args, 1)
+                            args = [(self.identity.vid, stage, source.vid, force) for source in stage_sources]
+                            pool = self.library.process_pool(limited_run=self.limited_run)
+                            r = pool.map_async(build_mp, args, 1)
+                            pool.close()
+                            pool.join()
+                            completed_sources = r.get()
+
+                            ps.add("Finished MP building {} sources. Starting MP coalescing"
+                                   .format(len(completed_sources)))
+
+                            partition_names = [(self.identity.vid, k) for k,v
+                                               in self.collect_segment_partitions().items()]
+
+                            pool = self.library.process_pool(limited_run=self.limited_run)
+                            r = pool.map_async(unify_mp, partition_names, 1)
+
+                            pool.close()
+                            pool.join()
+                            completed_partitions = r.get()
+
+                            ps.add("Finished MP coalescing {} partitions".format(len(completed_partitions)))
+
                         except KeyboardInterrupt:
                             self.log('Got keyboard interrrupt; terminating workers')
                             pool.terminate()
@@ -1798,19 +1852,23 @@ Caster Code
                                    source=source, item_count=i, state='running')
                             self.build_source(stage, source, ps, force=force)
 
-                    self.unify_partitions()
+                        self.unify_partitions()
 
                     self._run_events(TAG.AFTER_BUILD, stage)
+
+            self.state = self.STATES.BUILT
+
 
             if finalize:
                 self.finalize()
 
         finally:
-
             self._run_events(TAG.AFTER_BUILD, 0)
 
         self.close_session()
 
+        self.log('==== Done Building ====')
+        self.buildstate.commit()
         return True
 
     def build_table(self, table, force=False):
@@ -1844,38 +1902,38 @@ Caster Code
 
         try:
 
-            source_name = source.spec.name  # In case the source drops out of the session, which is does.
-
+            source_name = source.name  # In case the source drops out of the session, which is does.
+            s_vid = source.vid
             def run_progress_f():
                 (n_records, rate) = pl.sink.report_progress()
                 if n_records > 0:
                     ps.update(message='Running pipeline {}: {} records, rate: {}'
                               .format(source_name, n_records, rate),
-                              item_count = n_records
-                              )
+                              s_vid=s_vid,
+                              item_type = 'rows',
+                              item_count = n_records)
 
             with self.progress.interval(run_progress_f, 5):
                 pl.run()
 
-            ps.update(message='Finished source', state='done')
+            ps.update(message='Finished running source')
 
         except:
             self.log_pipeline(pl)
             raise
 
-        if self.multi:
-            self.logger.info('Done running source {} with pipeline {}'.format(source.name, pl.name))
-
-        self.logger.info('A')
         self.commit()
-        self.logger.info('B')
+
         try:
-            for p in pl[ambry.etl.PartitionWriter].partitions:
+            partitions = list(pl[ambry.etl.PartitionWriter].partitions)
+            ps.update(message='Finalizing segment partition',
+                      item_type='partitions', item_total=len(partitions), item_count = 0  )
+            for i, p in enumerate(partitions):
+
+                ps.update(message='Finalizing segment partition {}'.format(p.name),item_count=i, p_vid=p.vid)
 
                 try:
-                    self.logger.info('C')
                     p.finalize()
-                    self.logger.info('D')
                 except AttributeError:
                     print(self.table(p.table_name))
                     raise
@@ -1883,24 +1941,23 @@ Caster Code
                 # FIXME Shouldn't need to do this commit, but without it, some stats get added multiple
                 # times, causing an error later. Probably could be avoided by adding the stats to the
                 # collection in the dataset
-                self.logger.info('E')
-                self.commit()
-                self.logger.info('F')
 
+                self.commit()
 
         except IndexError:
             self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
 
-        self.logger.info('G')
         self.log_pipeline(pl)
-        self.logger.info('H')
-
         source.state = self.STATES.BUILT
 
-    def unify_partitions(self):
-        """For all of the segments for a partition, create the parent partition, combine the children into the parent,
-        and delete the children. """
+        self.commit()
 
+        ps.update(message='Finished source', state='done')
+        return source.name
+
+    def collect_segment_partitions(self):
+        """Return a dict of segments partitions, keyed on the name of the parent partition
+        """
         from collections import defaultdict
 
         # Group the segments by their parent partition name, which is the
@@ -1911,6 +1968,14 @@ Caster Code
                 name = p.identity.name
                 name.segment = None
                 partitions[name].add(p)
+
+        return partitions
+
+    def unify_partitions(self):
+        """For all of the segments for a partition, create the parent partition, combine the children into the parent,
+        and delete the children. """
+
+        partitions = self.collect_segment_partitions()
 
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
@@ -1928,40 +1993,53 @@ Caster Code
         if segments is None:
             segments = set()
             for p in self.dataset.partitions:
+
                 if p.type == p.TYPE.SEGMENT:
                     name = p.identity.name
                     name.segment = None
 
-                    if name == partition_name:
+                    if str(name) == str(partition_name):
                         segments.add(p)
 
         parent = self.partitions.get_or_new_partition(partition_name, type=Partition.TYPE.UNION)
+        parent.state = parent.STATES.COALESCING
 
         if parent.datafile.exists:
             ps.add("Removing exisiting datafile", partition=parent)
             parent.datafile.remove()
 
-        headers = None
-        i = 1  # Row id.
+        if len(segments) == 1:
+            seg = list(segments)[0]
+            # If there is only one segment, just move it over
+            ps.update('Coalescing single partition {} '.format(seg.identity.name), partition=seg)
+            with self.wrap_partition(seg).datafile.open() as f:
+                parent.datafile.set_contents(f)
 
-        def coalesce_progress_f():
-            (desc, n_records, total, rate) = parent.datafile.report_progress()
-            ps.update(message='Coalescing {}: {} of {}, rate: {}'
-                      .format(parent.identity.name, n_records, total, rate))
+        else:
 
-        with self.progress.interval(coalesce_progress_f, 5):
+            headers = None
+            i = 1  # Row id.
 
-            with parent.datafile.writer as w:
-                for seg in sorted(segments, key=lambda x: b(x.name)):
-                    ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
+            def coalesce_progress_f():
+                (desc, n_records, total, rate) = parent.datafile.report_progress()
+                ps.update(message='Coalescing {}: {} of {}, rate: {}'
+                          .format(parent.identity.name, n_records, total, rate))
 
-                    with self.wrap_partition(seg).datafile.reader as reader:
-                        import time
-                        for row in reader.rows:
-                            w.insert_row((i,) + row[1:])
-                            i += 1
+            with self.progress.interval(coalesce_progress_f, 5):
 
-        parent.finalize()
+                with parent.datafile.writer as w:
+                    for seg in sorted(segments, key=lambda x: b(x.name)):
+                        ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
+
+                        with self.wrap_partition(seg).datafile.reader as reader:
+                            import time
+                            for row in reader.rows:
+                                w.insert_row((i,) + row[1:])
+                                i += 1
+
+        parent.STATES.COALESCED
+        self.commit()
+        parent.finalize(ps)
         self.commit()
 
         for s in segments:
@@ -1970,6 +2048,8 @@ Caster Code
             self.session.delete(s)
 
         self.commit()
+
+        return partition_name
 
     def exec_context(self, **kwargs):
         """Base environment for evals, the stuff that is the same for all evals. Primarily used in the
@@ -2184,10 +2264,16 @@ Caster Code
 
     def finalize(self):
 
+        self.state = self.STATES.FINALIZING
+
+        self.log('Adding bundle to search index')
         self.library.search.index_bundle(self, force=True)
 
-        self.state = self.STATES.FINALIZED
+
+        self.log('Writing bundle sqlite file')
         self.finalize_write_bundle_file()
+        self.state = self.STATES.FINALIZED
+
         return True
 
     def import_tests(self):
@@ -2281,7 +2367,7 @@ Caster Code
             if len(r.failures) + len(r.errors) > 0:
                 from ambry.dbexceptions import TestError
                 self.set_error_state()
-                self.dataset.config.build.state.test_error = [
+                self.buildstate.state.test_error = [
                     (str(test), str(trc)) for test, trc in r.failures + r.errors
                     ]
                 raise TestError('Failed tests: {}'

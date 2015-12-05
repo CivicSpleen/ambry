@@ -55,7 +55,7 @@ class Library(object):
 
     def __init__(self,  config=None, search=None):
         from sqlalchemy.exc import OperationalError
-        from ambry.library.config import LibraryConfigSyncProxy
+
 
         if config:
             self._config = config
@@ -77,15 +77,19 @@ class Library(object):
         except OperationalError as e:
             self.logger.error("Failed to open database '{}': {} ".format(self._db.dsn, e))
 
-        lcsp = LibraryConfigSyncProxy(self)
-        lcsp.sync()
-
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
 
         if search:
             self._search = Search(self, search)
         else:
             self._search = None
+
+    def sync_config(self):
+        """Sync the file config into the library proxy data in the root dataset """
+        from ambry.library.config import LibraryConfigSyncProxy
+        lcsp = LibraryConfigSyncProxy(self)
+        lcsp.sync()
+
 
     def resolve_object_number(self, ref):
         """Resolve a variety of object numebrs to a dataset number"""

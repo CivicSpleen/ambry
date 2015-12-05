@@ -612,10 +612,9 @@ class SourcesFile(RowBuildSourceFile):
                     d['source_table_name'] = d['source_table']
                     del d['source_table']
 
-                if 'state' in d:
-                    del d['state']
-
                 d['d_vid'] = self._dataset.vid
+
+                d['state'] = 'synced'
 
                 try:
                     ds = self._dataset.source_file(d['name'])

@@ -1584,12 +1584,33 @@ def make_table_map(table, headers):
     return eval(header_code), eval(body_code)
 
 
+
+
 class SelectPartition(Pipe):
     """A Base class for adding a _pname column, which is used by the partition writer to select which
     partition a row is written to. By default, uses a partition name that consists of only the
-     destination table of the source and a segment of the id of the source"""
+     destination table of the source and a segment of the id of the source
+
+
+     """
 
     def __init__(self, select_f=None):
+        """
+
+        The select_f parameter is either a code string, which gets evaluated as the body of a lambda,
+        or a callable.
+
+        If it is a string, it can reference these local variables:
+
+            pipe, bundle, source, row
+
+        If it is a callable, its signature is:
+
+            select_f(pipe, bundle, source, row)
+
+        :param select_f: A string of Python code, or a callable.
+        :return:
+        """
 
         self._default = None
         self._code = 'default'
@@ -1636,9 +1657,6 @@ class SelectPartition(Pipe):
         if not isinstance(name, PartialPartitionName):
             name = PartialPartitionName(**name)
 
-        if not name.segment:
-            name.segment = self.source.sequence_id
-
         if not name.table:
             name.table = self.source.dest_table_name
 
@@ -1656,9 +1674,11 @@ class SelectPartition(Pipe):
 class SelectPartitionFromSource(Pipe):
     """Set the name of the partition to write rows to from the  table, time, space and grain of the source"""
 
-    def __init__(self):
+    def __init__(self, use_source_id=True):
         self._default = None
         self._code = 'default'
+        self._use_source_id = use_source_id
+
         self._row_proxy = None
 
     def process_header(self, row):
@@ -1668,7 +1688,7 @@ class SelectPartitionFromSource(Pipe):
                                              time=str(self.source.time) if self.source.time is not None else None,
                                              space=str(self.source.space) if self.source.space is not None else None,
                                              grain=str(self.source.grain) if self.source.grain is not None else None,
-                                             segment=self.source.sequence_id)
+                                             segment=self.source.sequence_id if self._use_source_id else None)
         self._orig_headers = row
         self._row_proxy = RowProxy(row)
         return row + ['_pname']
@@ -1750,7 +1770,10 @@ class WriteToPartition(Pipe, PartitionWriter):
                     from ..orm.partition import Partition
                     import os
 
-                    p = self.bundle.partitions.new_partition(pname, type=Partition.TYPE.SEGMENT)
+                    type_ = Partition.TYPE.SEGMENT if pname.segment else Partition.TYPE.UNION
+
+                    p = self.bundle.partitions.new_partition(pname, type=type_)
+                    p.state = p.STATES.BUILDING
                     self.bundle.commit()
 
                     try:
@@ -1787,6 +1810,7 @@ class WriteToPartition(Pipe, PartitionWriter):
         self._end_time = time.time()
 
         for key, (p, header_mapper, body_mapper, writer) in iteritems(self._datafiles):
+            p.state = p.STATES.BUILT
             try:
                 writer.close()
             except Exception as e:

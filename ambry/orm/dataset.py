@@ -402,9 +402,13 @@ class Dataset(Base):
         return q
 
     def delete_tables_partitions(self):
+        self.t_sequence_id = 1
+        self.p_sequence_id = 1
         return self._database.delete_tables_partitions(self)
 
+
     def delete_partitions(self):
+        self.p_sequence_id = 1
         return self._database.delete_partitions(self)
 
     def new_source(self, name, **kwargs):
@@ -563,20 +567,6 @@ class ConfigAccessor(object):
 
         self.dataset = dataset
 
-    @property
-    def process(self):
-        """Access process configuarion values as attributes
-
-        >>> db = Database(self.dsn)
-        >>> db.open()
-        >>> ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
-        >>> ds.process.build.foo = [1,2,3,4]
-        >>> ds.process.build.bar = [5,6,7,8]
-        """
-
-        from .config import ProcessConfigGroupAccessor
-
-        return ProcessConfigGroupAccessor(self.dataset, 'process')
 
     @property
     def metadata(self):
@@ -592,6 +582,8 @@ class ConfigAccessor(object):
         """Access build configuration values as attributes. See self.process
             for a usage example"""
         from .config import BuildConfigGroupAccessor
+
+        raise Exception('Use bundle.progress.buildstate instead')
 
         return BuildConfigGroupAccessor(self.dataset, 'buildstate')
 

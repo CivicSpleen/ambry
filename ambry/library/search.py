@@ -111,6 +111,7 @@ class Search(object):
     def search(self, search_phrase, limit=None):
         """Search for datasets, and expand to database records"""
         from ambry.identity import ObjectNumber
+        from ambry.orm.exc import NotFoundError
 
         results = self.search_datasets(search_phrase, limit)
 
@@ -119,9 +120,11 @@ class Search(object):
 
             r.vid = vid
 
-            r.bundle = self.library.bundle(r.vid)
-
-            yield r
+            try:
+                r.bundle = self.library.bundle(r.vid)
+                yield r
+            except NotFoundError:
+                pass
 
     def list_documents(self, limit=None):
         """

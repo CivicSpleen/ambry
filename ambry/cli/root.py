@@ -124,6 +124,7 @@ def root_command(args, rc):
     try:
         l = new_library(rc)
         l.logger = global_logger
+        l.sync_config()
     except DatabaseError as e:
         warn('No library: {}'.format(e))
         l = None

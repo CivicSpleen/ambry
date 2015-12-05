@@ -94,13 +94,26 @@ def build_mp(args):
 
     source = b.source(source_name)
 
-    ps = b.progress.start('build',stage,message="MP build", source=source)
+    with b.progress.start('build_mp',stage,message="MP build", source=source) as ps:
+        r = b.build_source(stage, source, ps, force)
 
-    r =  b.build_source(stage, source, ps, force)
-
-    library.close()
+    b.close()
 
     return r
+
+@MPBundleMethod
+def unify_mp(args):
+    """Unify all of the segment partitions for a parent partition, then run stats on the MPR file"""
+
+    b, partition_name = args
+
+    with b.progress.start('coalesce_mp',0,message="MP coalesce {}".format(partition_name)) as ps:
+        r = b.unify_partition(partition_name, None, ps)
+
+    b.close()
+
+    return r
+
 
 
 @MPBundleMethod
@@ -111,10 +124,9 @@ def ingest_mp(args):
 
     source = b.source(source_name)
 
-    ps = b.progress.start('ingest',0,message="MP ingestion", source=source)
+    with b.progress.start('ingest_mp',0,message="MP ingestion", source=source) as ps:
+        r =  b._ingest_source(source, ps, clean_files)
 
-    r =  b._ingest_source(source, ps, clean_files)
-
-    library.close()
+    b.close()
 
     return r

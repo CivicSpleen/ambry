@@ -30,8 +30,6 @@ class ProgressSection(object):
         self._phase = phase
         self._stage = stage
 
-        self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
-
         self.rec = None
 
         self._ai_rec_id = None # record for add_update
@@ -173,9 +171,11 @@ class ProcessIntervals(object):
         :return:
 
         """
+        import signal
+
         self._interval = interval
         self._interval_f = f
-        self._orig_alarm_handler = None
+        self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
 
     def __enter__(self):
         self.start_progress_logging(self._interval_f, self._interval)
@@ -212,14 +212,9 @@ class ProcessIntervals(object):
 
             f()
 
-            # Or, use signal.itimer()? Maybe, but this way, the handler will stop if there is
-            # an exception, rather than getting regular exceptions.
-            signal.alarm(interval)
+            signal.alarm(interval) # Or, use signal.itimer()?
 
-        old_handler = signal.signal(signal.SIGALRM, handler)
-
-        if not self._orig_alarm_handler:  # Only want the handlers from other outside sources
-            self._orig_alarm_handler = old_handler
+        self._orig_alarm_handler = signal.signal(signal.SIGALRM, handler)
 
         signal.alarm(interval)
 
@@ -231,11 +226,10 @@ class ProcessIntervals(object):
 
         import signal
 
-        if self._orig_alarm_handler:
-            signal.signal(signal.SIGALRM, self._orig_alarm_handler)
-            self._orig_alarm_handler = None
+        signal.signal(signal.SIGALRM, self._orig_alarm_handler)
+        self._orig_alarm_handler = None
 
-            signal.alarm(0)  # Cancel any currently active alarm.
+        signal.alarm(0)  # Cancel any currently active alarm.
 
 
 class ProcessLogger(object):
@@ -247,6 +241,7 @@ class ProcessLogger(object):
         self._vid = dataset.vid
         self._d_vid = dataset.vid
         self._logger = logger
+        self._buildstate = None
 
         db = dataset._database
         schema = db._schema
@@ -268,7 +263,7 @@ class ProcessLogger(object):
             # Make a new connection to the existing database
             self._db = db
             self._connection = self._db.engine.connect()
-            self._session = self._db.Session(bind=self._connection)
+            self._session = self._db.Session(bind=self._connection, expire_on_commit = False)
 
         if schema:
             self._session.execute('SET search_path TO {}'.format(schema))
@@ -277,8 +272,13 @@ class ProcessLogger(object):
         if self._db.driver == 'sqlite':
             self._db.close()
         else:
-            if self._connection:
-                self._connection.close()
+            self.close()
+
+    def close(self):
+
+        if self._connection:
+            self._connection.close()
+
 
     @property
     def dataset(self):
@@ -335,3 +335,15 @@ class ProcessLogger(object):
             self._session.delete(r)
 
         self._session.commit()
+
+    def commit(self):
+        self._session.commit()
+
+    @property
+    def build(self):
+        """Access build configuration values as attributes. See self.process
+            for a usage example"""
+        from ambry.orm.config import BuildConfigGroupAccessor
+
+        # It is a leightweight object, so no need to cache
+        return BuildConfigGroupAccessor(self.dataset, 'buildstate', self._session)

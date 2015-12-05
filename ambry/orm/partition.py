@@ -39,6 +39,8 @@ class Partition(Base, DictableMixin):
     STATES.PREPARED = 'prepared'
     STATES.BUILDING = 'building'
     STATES.BUILT = 'built'
+    STATES.COALESCING = 'coalescing'
+    STATES.COALESCED = 'coalesced'
     STATES.ERROR = 'error'
     STATES.FINALIZING = 'finalizing'
     STATES.FINALIZED = 'finalized'
@@ -361,9 +363,9 @@ class Partition(Base, DictableMixin):
             if hasattr(self, k):
                 setattr(self, k, v)
 
-    def finalize(self):
+    def finalize(self, ps=None):
 
-        self.state = self.STATES.BUILT
+        self.state = self.STATES.FINALIZING
 
         # Write the stats for this partition back into the partition
 
@@ -377,6 +379,7 @@ class Partition(Base, DictableMixin):
             w.finalize()
 
         if self.type == self.TYPE.UNION:
+            ps.update('Running stats ', state='running')
             stats = self.datafile.run_stats()
             self.set_stats(stats)
             self.set_coverage(stats)
@@ -384,6 +387,7 @@ class Partition(Base, DictableMixin):
         self._location = 'build'
 
         self.state = self.STATES.FINALIZED
+
 
     # =============
     # These methods are a bit non-cohesive, since they require the _bundle value to be set, which is

@@ -158,7 +158,13 @@ class Database(object):
                 from sqlalchemy.pool import NullPool, AssertionPool
                 # FIXME: Find another way to initiate postgres with NullPool (it is usefull for tests only.)
 
-                self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs) #, poolclass=AssertionPool)
+                if not 'connect_args' in self.engine_kwargs:
+                    self.engine_kwargs['connect_args'] = {
+                        "application_name": "ambry:{}".format(os.getpid())
+                    }
+
+                self._engine = create_engine(self.dsn, echo=self._echo,
+                                             **self.engine_kwargs) #, poolclass=AssertionPool)
             else:
 
                 self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)

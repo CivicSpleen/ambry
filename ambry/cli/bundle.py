@@ -38,6 +38,8 @@ def bundle_command(args, rc):
     l = new_library(rc)
     l.logger = global_logger
 
+    l.sync_config()
+
     if args.debug:
         from ..util import debug
         warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
@@ -112,6 +114,10 @@ def using_bundle(args, l, print_loc=True, use_history=False):
 
     b.multi = args.multi
     b.capture_exceptions = not args.exceptions
+
+    if args.debug:
+        warn('Bundle debug mode. Send USR2 signal (kill -USR2 ) to displaya stack trace')
+        b.init_debug()
 
     if args.limited_run:
         b.limited_run = True
@@ -266,6 +272,8 @@ def bundle_parser(cmd):
                            help='Clean any built partitions')
     command_p.add_argument('-b', '--build', default=False, action='store_true',
                            help='Clean the build directory')
+    command_p.add_argument('-B', '--build-state', default=False, action='store_true',
+                           help='Clean the build state configuration')
     command_p.add_argument('-S', '--sync', default=False, action='store_true',
                            help='Sync in after cleaning')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
@@ -508,8 +516,9 @@ def bundle_parser(cmd):
                            help='Print the name of the running container')
     command_p.add_argument('-l', '--logs', default=False, action='store_true',
                            help='Get the logs (stdout) from a runnings container')
-
-    command_p.add_argument('-s', '--stats', default=False, action='store_true',
+    command_p.add_argument('-s', '--shell', default=False, action='store_true',
+                           help='Run a shell on the currently running container')
+    command_p.add_argument('-S', '--stats', default=False, action='store_true',
                            help='Report stats from the currently running container')
     command_p.add_argument('-v', '--version', default=False, action='store_true',
                        help='Select a docker version that is the same as this Ambry installation')
@@ -524,11 +533,13 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('log', help='Print out various logs')
     command_p.set_defaults(subcommand='log')
-    group = command_p.add_mutually_exclusive_group()
-    group.add_argument('-e', '--exceptions', default=None, action='store_true',
+
+    command_p.add_argument('-e', '--exceptions', default=None, action='store_true',
                        help='Print exceptions from the progress log')
-    group.add_argument('-p', '--progress', default=None, action='store_true',
+    command_p.add_argument('-p', '--progress', default=None, action='store_true',
                        help='Display progress logs')
+    command_p.add_argument('-s', '--stats', default=None, action='store_true',
+                       help='Display states and counts of partitions and sources')
 
 
 
@@ -599,7 +610,8 @@ def bundle_info(args, l, rc):
     inf(0, 'VID', b.identity.vid)
     inf(0, 'VName', b.identity.vname)
 
-    inf(1, 'Build State', b.dataset.config.build.state.current)
+    inf(1, 'Build State', b.buildstate.state.current)
+    inf(1, 'Build Time', b.buildstate.build_duration_pretty)
     try:
         inf(1, 'Geo cov', str(list(b.metadata.coverage.geo)))
         inf(1, 'Grain cov', str(list(b.metadata.coverage.grain)))
@@ -722,7 +734,8 @@ def bundle_clean(args, l, rc):
     if not args.force:
         check_built(b)
 
-    if not any((args.source, args.files, args.tables, args.partitions, args.ingested)):
+    if not any((args.source, args.files, args.tables, args.partitions, args.ingested,
+                args.build_state)):
         args.all = True
 
     if args.source or args.all:
@@ -748,6 +761,10 @@ def bundle_clean(args, l, rc):
     if args.ingested or args.all:
         prt('Clean ingested')
         b.clean_ingested()
+
+    if args.build_state or args.all:
+        prt('Clean build_state')
+        b.clean_build_state()
 
     if args.sync:
         b.sync_in()
@@ -1613,7 +1630,7 @@ def bundle_docker(args, l, rc):
         last_container = args.container
     else:
         try:
-            last_container = b.config.build.docker.last_container
+            last_container = b.buildstate.docker.last_container
         except KeyError:
             last_container = None
 
@@ -1622,8 +1639,8 @@ def bundle_docker(args, l, rc):
 
     except NotFound:
         # OK; the last_container is dead
-        b.config.build.docker.last_container = None
-        b.commit()
+        b.buildstate.docker.last_container = None
+        b.buildstate.commit()
         inspect  = None
     except NullResource:
         inspect = None
@@ -1715,8 +1732,8 @@ def bundle_docker(args, l, rc):
 
             prt("Killed {}", last_container)
 
-            b.config.build.docker.last_container = None
-            b.commit()
+            b.buildstate.docker.last_container = None
+            b.buildstate.commit()
             last_container = None
         else:
             warn('No container to kill')
@@ -1725,8 +1742,8 @@ def bundle_docker(args, l, rc):
     if bambry_cmd:
         # If there is command, run the container first so the subsequent arguments can operate on it
         last_container = run_container(bambry_cmd)
-        b.config.build.docker.last_container = last_container
-        b.commit()
+        b.buildstate.docker.last_container = last_container
+        b.buildstate.commit()
 
 
     if args.docker_id:
@@ -1760,6 +1777,12 @@ def bundle_docker(args, l, rc):
             prt_no_format(s['memory_stats'])
             prt_no_format(s['cpu_stats'])
 
+    elif args.shell:
+        # Run a shell on a container
+
+
+        os.execlp('docker', 'docker', 'exec', '-t','-i', last_container, '/bin/bash')
+
     elif not bambry_cmd and not args.kill:
         # Run a container and then attach to it.
         cid = run_container()
@@ -1770,15 +1793,19 @@ def bundle_docker(args, l, rc):
 def bundle_log(args, l, rc):
     b = using_bundle(args, l)
     from ambry.util import drop_empty
+    from itertools import groupby
+    from collections import defaultdict
+    from ambry.orm import Partition
+    from tabulate import tabulate
 
     if args.exceptions:
-
+        print '=== EXCEPTIONS ===='
         for pr in b.progress.exceptions:
             prt_no_format('===== {} ====='.format(str(pr)))
             prt_no_format(pr.exception_trace)
 
     elif args.progress:
-
+        print '=== PROGRESS ===='
         from ambry.orm import Process
         import time
         from collections import OrderedDict
@@ -1804,14 +1831,45 @@ def bundle_log(args, l, rc):
             if pr.state != 'done' and pr.modified > time.time() - 120:
                 append(pr)
 
-
-
         records = drop_empty(records)
-
-        from tabulate import tabulate
 
         if records:
             prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]),records[0]))
+
+    if args.stats:
+        print '=== STATS ===='
+        ds = b.dataset
+        key_f = key=lambda e: e.state
+        states = set()
+        d = defaultdict(lambda: defaultdict(int))
+
+        for state, sources in groupby(sorted(ds.sources, key=key_f), key_f):
+            d['Sources'][state] = sum(1 for _ in sources) or None
+            states.add(state)
+
+        key_f = key = lambda e: (e.state, e.type)
+
+        for (state, type), partitions in groupby(sorted(ds.partitions, key=key_f), key_f):
+            states.add(state)
+            if type == Partition.TYPE.UNION:
+                d['Partitions'][state] = sum(1 for _ in partitions) or None
+            else:
+                d['Segments'][state] = sum(1 for _ in partitions) or None
+
+
+
+
+        headers = sorted(states)
+        rows = []
+
+        for r in ('Sources','Partitions','Segments'):
+            row = [r]
+            for state in headers:
+                row.append(d[r].get(state,''))
+            rows.append(row)
+
+        if rows:
+            prt_no_format(tabulate(rows, headers))
 
 
 
