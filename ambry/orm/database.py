@@ -35,7 +35,7 @@ Dbci = namedtuple('Dbc', 'dsn_template sql')
 scheme_map = {'postgis': 'postgresql+psycopg2', 'spatialite': 'sqlite'}
 
 MIGRATION_TEMPLATE = '''\
-# -*- coding: utf-8 -*-',
+# -*- coding: utf-8 -*-'
 
 from ambry.orm.database import BaseMigration
 
@@ -261,7 +261,7 @@ class Database(object):
 
     def commit(self):
         self.session.commit()
-        #self.close_session()
+        # self.close_session()
 
     def rollback(self):
         self.session.rollback()
@@ -273,7 +273,7 @@ class Database(object):
             self.logger.info('Cleaning: {}'.format(ds.name))
             self.remove_dataset(ds)
 
-        #self.remove_dataset(self.root_dataset)
+        # self.remove_dataset(self.root_dataset)
 
         self.create()
 
@@ -307,9 +307,8 @@ class Database(object):
             self.logger.info('Deleting data from  {}'.format(tbl))
             self.engine.execute(tbl.delete())
 
-
-        # remove sqlite file.
         if self.dsn.startswith('sqlite:') and self.exists():
+            # remove sqlite file.
             os.remove(self.path)
         else:
             self.commit()
@@ -320,7 +319,6 @@ class Database(object):
             for tbl in reversed(self.metadata.sorted_tables):
                 self.logger.info('Droping {}'.format(tbl))
                 tbl.drop(self.engine)
-
 
     @property
     def metadata(self):
@@ -571,7 +569,7 @@ class Database(object):
         # Name of sequence id column in the child
         c_seq_col = child_table_class.sequence_id.property.columns[0].name
 
-        p_seq_col = getattr(parent_table_class,c_seq_col).property.columns[0].name
+        p_seq_col = getattr(parent_table_class, c_seq_col).property.columns[0].name
 
         p_vid_col = parent_table_class.vid.property.columns[0].name
 
@@ -585,14 +583,14 @@ class Database(object):
             # So, we don't have to open a new connection, but we also can't open a new connection, so
             # this uses the session.
             self.commit()
-            sql=text("SELECT  {p_seq_col} FROM {p_table} WHERE {p_vid_col} = '{parent_vid}' "
-                     .format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
-                       parent_vid=parent_vid))
+            sql = text("SELECT  {p_seq_col} FROM {p_table} WHERE {p_vid_col} = '{parent_vid}' "
+                       .format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col,
+                               p_vid_col=p_vid_col, parent_vid=parent_vid))
 
             v = next(iter(self.session.execute(sql)))[0]
-            sql=text("UPDATE {p_table} SET {p_seq_col} = {p_seq_col} + 1 WHERE {p_vid_col} = '{parent_vid}' "
-                     .format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
-                       parent_vid=parent_vid))
+            sql = text("UPDATE {p_table} SET {p_seq_col} = {p_seq_col} + 1 WHERE {p_vid_col} = '{parent_vid}' "
+                       .format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col,
+                               p_vid_col=p_vid_col, parent_vid=parent_vid))
 
             self.session.execute(sql)
             self.commit()
@@ -600,7 +598,7 @@ class Database(object):
 
         else:
             # Must be postges, or something else that supports "RETURNING"
-            sql=text("""
+            sql = text("""
             UPDATE {p_table} SET {p_seq_col} = {p_seq_col} + 1 WHERE {p_vid_col} = '{parent_vid}' RETURNING {p_seq_col}
             """.format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
                        parent_vid=parent_vid))
@@ -615,7 +613,7 @@ class Database(object):
         # Name of sequence id column in the child
         c_seq_col = child_table_class.sequence_id.property.columns[0].name
 
-        p_seq_col = getattr(parent_table_class,c_seq_col).property.columns[0].name
+        p_seq_col = getattr(parent_table_class, c_seq_col).property.columns[0].name
 
         try:
             parent_col = child_table_class._parent_col
@@ -632,6 +630,7 @@ class Database(object):
             max_id = 1
 
         return max_id
+
 
 class BaseMigration(object):
     """ Base class for all migrations. """
@@ -654,9 +653,11 @@ class BaseMigration(object):
         raise NotImplementedError(
             'subclasses of MigrationBase must provide a _migrate_postgresql() method')
 
+
 class VersionIsNotStored(Exception):
     """ Means that ambry never updated db schema. """
     pass
+
 
 def migrate(connection):
     """ Collects all migrations and applies missed.
@@ -696,7 +697,6 @@ def create_migration_template(name):
     assert name, 'Name of the migration can not be empty.'
     from . import migrations
 
-    #
     # Find next number
     #
     package = migrations
@@ -708,13 +708,11 @@ def create_migration_template(name):
 
     next_number = max(all_versions) + 1
 
-    #
     # Generate next migration name
     #
     next_migration_name = '{}_{}.py'.format(next_number, name)
     migration_fullname = os.path.join(package.__path__[0], next_migration_name)
 
-    #
     # Write next migration file content.
     #
     with open(migration_fullname, 'w') as f:
@@ -743,7 +741,9 @@ def get_stored_version(connection):
         return version
     elif connection.engine.name == 'postgresql':
         try:
-            r = connection.execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME)).fetchone()
+            r = connection\
+                .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                .fetchone()
             if not r:
                 raise VersionIsNotStored
 
@@ -755,9 +755,6 @@ def get_stored_version(connection):
         return version
     else:
         raise DatabaseError('Do not know how to get version from {} engine.'.format(connection.engine.name))
-
-
-
 
 
 def _validate_version(connection):
@@ -788,7 +785,7 @@ def _migration_required(connection):
     actual_version = SCHEMA_VERSION
     assert isinstance(stored_version, int)
     assert isinstance(actual_version, int)
-    assert stored_version <= actual_version, 'Db version can not be more than models version. Update your source code.'
+    assert stored_version <= actual_version, 'Db version can not be greater than models version. Update your source code.'
     return stored_version < actual_version
 
 
@@ -855,5 +852,3 @@ def _get_all_migrations():
 
     all_migrations = sorted(all_migrations, key=lambda x: x[0])
     return all_migrations
-
-
