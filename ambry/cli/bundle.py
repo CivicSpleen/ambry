@@ -27,7 +27,7 @@ from ..orm import File
 
 def bundle_command(args, rc):
 
-    from ..library import new_library
+    from ..library import Library, global_library
     from . import global_logger
     from ambry.orm.exc import ConflictError
     from ambry.dbexceptions import LoggedException
@@ -35,7 +35,12 @@ def bundle_command(args, rc):
     if args.test_library:
         rc.set_library_database('test')
 
-    l = new_library(rc)
+    l = Library(rc, echo=args.echo)
+
+    global global_library
+
+    global_library = l
+
     l.logger = global_logger
 
     l.sync_config()
@@ -117,7 +122,7 @@ def using_bundle(args, l, print_loc=True, use_history=False):
 
     if args.debug:
         warn('Bundle debug mode. Send USR2 signal (kill -USR2 ) to displaya stack trace')
-        b.init_debug()
+        l.init_debug()
 
     if args.limited_run:
         b.limited_run = True
@@ -138,6 +143,8 @@ def bundle_parser(cmd):
                         help='URS1 signal will break to interactive prompt')
     parser.add_argument('-L', '--limited-run', default=False, action='store_true',
                         help='Enable bundle-specific behavior to reduce number of rows processed')
+    parser.add_argument('-e', '--echo', required=False, default=False, action='store_true',
+                        help='Echo database queries.')
     parser.add_argument('-E', '--exceptions', default=False, action='store_true',
                         help="Don't capture and reformat exceptions; show the traceback on the console")
     parser.add_argument('-m', '--multi', default=False, action='store_true',
@@ -540,6 +547,8 @@ def bundle_parser(cmd):
                        help='Display progress logs')
     command_p.add_argument('-s', '--stats', default=None, action='store_true',
                        help='Display states and counts of partitions and sources')
+    command_p.add_argument('-a', '--all', default=None, action='store_true',
+                           help='Display all records')
 
 
 
@@ -663,6 +672,8 @@ def bundle_info(args, l, rc):
 
         for p in b.partitions:
             rows = ['Column LOM Count Uniques Values'.split()]
+            # FIXME! This is slow. Some of the stats should be loaded into the partitions, such as the
+            # number of rows.
             d = p.stats_dict
             keys = [k for k, v in iteritems(d)]
 
@@ -684,11 +695,16 @@ def bundle_info(args, l, rc):
             print(SingleTable(rows, title='Stats for ' + str(p.identity.name)).table)
 
     elif args.partitions:
+        from ambry.orm import Partition, Table
+        from sqlalchemy.orm import lazyload, joinedload
 
         rows = []
-        for p in b.partitions:
+        for p in (b.dataset.query(Partition).filter(Partition.d_vid == b.identity.vid)
+                          .options(lazyload('*'), joinedload(Partition.table))
+                  ).all():
 
-            rows.append([p.vid, p.vname, p.table.name,  p.stats_dict['id']['count'],
+
+            rows.append([p.vid, p.vname, p.table.name,  p.count,
                          p.identity.time, p.identity.space, p.identity.grain,
                          '({}) '.format(len(p.time_coverage))+', '.join(str(e) for e in p.time_coverage[:5]),
                          '({}) '.format(len(p.space_coverage))+', '.join(p.space_coverage[:5]),
@@ -1793,10 +1809,12 @@ def bundle_docker(args, l, rc):
 def bundle_log(args, l, rc):
     b = using_bundle(args, l)
     from ambry.util import drop_empty
+    from ambry.util.text import ansicolors
     from itertools import groupby
     from collections import defaultdict
     from ambry.orm import Partition
     from tabulate import tabulate
+
 
     if args.exceptions:
         print '=== EXCEPTIONS ===='
@@ -1809,27 +1827,47 @@ def bundle_log(args, l, rc):
         from ambry.orm import Process
         import time
         from collections import OrderedDict
+        from sqlalchemy.sql import and_
+
 
         records = []
 
-        def append(pr):
-            d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.dict.items() if k in
+        def append(pr, edit=None):
+            from ambry.util.text import ansicolors
+
+            if not isinstance(pr, dict):
+                pr = pr.dict
+
+            d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.items() if k in
                             ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
                              'phase', 'stage', 'modified', 'item_count',
                              'message'])
 
-            d['modified'] = float(d['modified']) - time.time()
+            d['modified'] = round(float(d['modified']) - time.time(),1)
+
+
+            if edit:
+                for k, v in edit.items():
+                    d[k] = v(d[k])
 
             if not records:
                 records.append(d.keys())
 
             records.append(d.values())
 
-        for pr in (b.progress.query.filter(Process.d_vid == b.identity.vid)
-                   .order_by(Process.modified.desc())).all():
-            # Don't show reports that are done or older then 2 minutes.
-            if pr.state != 'done' and pr.modified > time.time() - 120:
+        q = b.progress.query.order_by(Process.modified.desc())
+
+        for pr in q.all():
+            # Don't show reports that are done or older than 2 minutes.
+            if args.all or (pr.state != 'done' and pr.modified > time.time() - 120):
                 append(pr)
+
+        # Add old running rows, which may indicate a dead process.
+        q = (b.progress.query.filter(Process.s_vid != None)
+             .filter(and_(Process.state == 'running',Process.modified < time.time() - 60)))
+
+        for pr in q.all():
+            append(pr, edit={'modified': lambda e: (str(e)+' (dead?)') })
 
         records = drop_empty(records)
 
@@ -1856,9 +1894,6 @@ def bundle_log(args, l, rc):
             else:
                 d['Segments'][state] = sum(1 for _ in partitions) or None
 
-
-
-
         headers = sorted(states)
         rows = []
 
@@ -1870,6 +1905,8 @@ def bundle_log(args, l, rc):
 
         if rows:
             prt_no_format(tabulate(rows, headers))
+
+
 
 
 

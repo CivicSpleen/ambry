@@ -378,8 +378,10 @@ class GeneratorSourcePipe(Pipe):
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
 
-    def __init__(self, count=None):
+    def __init__(self, count=None, callback=None, callback_freq=1000):
         self._count = count
+        self._callback = callback
+        self._callback_freq = callback_freq
         self.i = 0
         self._start_time = None
 
@@ -389,11 +391,17 @@ class Sink(Pipe):
         self._start_time = time()
 
         count = count if count else self._count
-
+        cb_count = self._callback_freq
         for i, row in enumerate(self._source_pipe):
             self.i = i
             if count and i == count:
                 break
+
+            if cb_count == 0:
+                cb_count = self._callback_freq
+                self._callback(self, i)
+            cb_count -= 1
+
 
     def report_progress(self):
         """
@@ -2140,11 +2148,11 @@ class Pipeline(OrderedDict):
 
         return chain, last
 
-    def run(self, count=None, source_pipes=None):
+    def run(self, count=None, source_pipes=None, callback=None):
 
         try:
 
-            self.sink = Sink(count=count)
+            self.sink = Sink(count=count, callback=callback)
 
             if source_pipes:
                 for source_pipe in source_pipes:

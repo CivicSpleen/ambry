@@ -121,6 +121,9 @@ class Dataset(Base):
     def session(self):
         return self._database.session
 
+    def query(self, *args, **kwargs):
+        return self.session.query(*args, **kwargs)
+
     def close(self):
         return self._database.close()
 

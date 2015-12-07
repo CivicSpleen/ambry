@@ -385,6 +385,8 @@ class Partition(Base, DictableMixin):
 
         self._location = 'build'
 
+        self.count = self.stats_dict['id']['count']
+
         self.state = self.STATES.FINALIZED
 
 

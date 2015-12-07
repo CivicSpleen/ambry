@@ -30,6 +30,7 @@ from ambry.util import get_logger
 from .filesystem import LibraryFilesystem
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
+
 global_library = None
 
 
@@ -49,7 +50,7 @@ def new_library(config=None):
 
 class Library(object):
 
-    def __init__(self,  config=None, search=None):
+    def __init__(self,  config=None, search=None, echo=None):
         from sqlalchemy.exc import OperationalError
 
 
@@ -62,7 +63,7 @@ class Library(object):
 
         self._fs = LibraryFilesystem(config)
 
-        self._db = Database(self._fs.database_dsn)
+        self._db = Database(self._fs.database_dsn, echo=echo)
 
         self._account_password = self.config.accounts.password
 
@@ -85,6 +86,20 @@ class Library(object):
         from ambry.library.config import LibraryConfigSyncProxy
         lcsp = LibraryConfigSyncProxy(self)
         lcsp.sync()
+
+    def init_debug(self):
+        """Initialize debugging features, such as a handler for USR2 to print a trace"""
+        import signal
+        from ambry.util import debug
+
+        def debug_trace(sig, frame):
+            """Interrupt running process, and provide a python prompt for interactive
+            debugging."""
+
+            self.log("Trace signal received")
+            self.log(''.join(traceback.format_stack(frame)))
+
+        signal.signal(signal.SIGUSR2, debug_trace)  # Register handler
 
 
     def resolve_object_number(self, ref):
@@ -775,7 +790,9 @@ class Library(object):
     def process_pool(self, limited_run = False):
         """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
 
-        from multiprocessing import Pool, cpu_count
+        from multiprocessing import  cpu_count
+        from ambry.bundle.concurrent import Pool
+
         from ambry.bundle.concurrent import init_library
 
         if self.processes:
@@ -784,6 +801,6 @@ class Library(object):
             cpus = cpu_count()
 
         self.logger.info('Starting MP pool with {} processors'.format(cpus))
-        return Pool(processes=cpus, initializer=init_library,
+        return Pool(self, processes=cpus, initializer=init_library,
                                     maxtasksperchild = 1,
                                     initargs=[self.database.dsn, self._account_password, limited_run])

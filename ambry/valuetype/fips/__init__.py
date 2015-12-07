@@ -17,6 +17,7 @@ class County(IntValue):
     _county_map = None
 
     def __init__(self, v):
+        #FIXME. loading a global library is probably a really bad idea.
         from ambry.library import global_library
         # v is set in __new__
 

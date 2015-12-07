@@ -161,77 +161,6 @@ class ProgressSection(object):
 
         return pr_id
 
-class ProcessIntervals(object):
-
-    def __init__(self, f, interval=2):
-        """Context manager to start and stop context logging.
-
-        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args)
-        :param interval: Frequency to call the function, in seconds.
-        :return:
-
-        """
-        import signal
-
-        self._interval = interval
-        self._interval_f = f
-        self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
-
-    def __enter__(self):
-        self.start_progress_logging(self._interval_f, self._interval)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-
-        self.stop_progress_logging()
-
-        if exc_val:
-            return False
-        else:
-            return True
-
-    def start_progress_logging(self, f, interval=2):
-        """
-        Call the function ``f`` every ``interval`` seconds to produce a logging message to be passed
-        to self.log().
-
-        NOTE: This may cause problems with IO operations:
-
-            When a signal arrives during an I/O operation, it is possible that the I/O operation raises an exception
-            after the signal handler returns. This is dependent on the underlying Unix system's
-            semantics regarding interrupted system calls.
-
-        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args).
-                  The function takes no args
-        :param interval: Frequence to call the function, in seconds.
-        :return:
-        """
-
-        import signal
-
-        def handler(signum, frame):
-
-            f()
-
-            signal.alarm(interval) # Or, use signal.itimer()?
-
-        self._orig_alarm_handler = signal.signal(signal.SIGALRM, handler)
-
-        signal.alarm(interval)
-
-    def stop_progress_logging(self):
-        """
-        Stop progress logging by removing the Alarm signal handler and canceling the alarm.
-        :return:
-        """
-
-        import signal
-
-        signal.signal(signal.SIGALRM, self._orig_alarm_handler)
-        self._orig_alarm_handler = None
-
-        signal.alarm(0)  # Cancel any currently active alarm.
-
-
 class ProcessLogger(object):
 
     def __init__(self, dataset, logger = None):
@@ -289,8 +218,7 @@ class ProcessLogger(object):
         """Start a new routine, stage or phase"""
         return ProgressSection(self, self._session, phase, stage, self._logger, **kwargs)
 
-    def interval(self, func, interval=2):
-        return ProcessIntervals(func, interval)
+
 
     @property
     def records(self):
@@ -323,7 +251,6 @@ class ProcessLogger(object):
                 .filter(Process.exception_class != None)
                 .order_by(Process.modified)).all()
 
-
     def clean(self):
         """Delete all of the records"""
 
@@ -347,3 +274,24 @@ class ProcessLogger(object):
 
         # It is a leightweight object, so no need to cache
         return BuildConfigGroupAccessor(self.dataset, 'buildstate', self._session)
+
+class CallInterval(object):
+    """Call the inner callback at a limited frequency"""
+
+    def __init__(self, f, freq,  **kwargs):
+        self._f = f
+        self._freq = freq
+        self._next = 0
+
+        self._kwargs = kwargs
+
+    def __call__(self, *args, **kwargs):
+        import time
+
+        if time.time() > self._next:
+            kwargs.update(self._kwargs)
+            self._f(*args, **kwargs)
+            self._next = time.time() + self._freq
+
+
+

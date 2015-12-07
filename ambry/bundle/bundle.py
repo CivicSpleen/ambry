@@ -150,20 +150,6 @@ class Bundle(object):
         pass
 
 
-    def init_debug(self):
-        """Initialize debugging features, such as a handler for USR2 to print a trace"""
-        import signal
-        from ambry.util import debug
-
-        def debug_trace(sig, frame):
-            """Interrupt running process, and provide a python prompt for interactive
-            debugging."""
-
-            self.log("Trace signal received")
-            self.log(''.join(traceback.format_stack(frame)))
-
-        signal.signal(signal.SIGUSR2, debug_trace)  # Register handler
-
 
     def set_file_system(self, source_url=False, build_url=False):
         """Set the source file filesystem and/or build  file system"""
@@ -960,30 +946,29 @@ Caster Code
 
         elif source.is_downloadable:
 
-            def progress():
+            def progress(read_len, total_len):
                 if ps:
-                    ps.add_update('Downloading {}'.format(source.url), source=source,
+                    ps.add_update('Downloading {}: {}'.format(source.url, total_len), source=source,
                                   state='downloading')
                 else:
-                    self.log('Downloading {}'.format(source.url), source=source, state='downloading')
+                    self.log('Downloading {}'.format(source.url, total_len), source=source, state='downloading')
 
-            with self.progress.interval(progress, 10):
-                try:
-                    s = get_source(
-                        source.spec, self.library.download_cache,
-                        account_accessor=self.library.account_acessor)
+            try:
+                s = get_source(
+                    source.spec, self.library.download_cache,
+                    account_accessor=self.library.account_acessor, callback=progress)
 
-                except MissingCredentials as exc:
-                    from ambry.dbexceptions import ConfigurationError
-                    formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
-                    msg = \
-                        'Missing credentials for {location}.\n' \
-                        'Hint: Check accounts section of your ~/.ambry-accounts.yaml ' \
-                        'for {location} credentials. If there is no such, use next template to ' \
-                        'add credentials:\n' \
-                        '{location}:\n' \
-                        '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
-                    raise ConfigurationError(msg+'\nOriginal Exception: '+str(exc))
+            except MissingCredentials as exc:
+                from ambry.dbexceptions import ConfigurationError
+                formatted_cred = ['    {}: <your {}>'.format(x, x) for x in exc.required_credentials]
+                msg = \
+                    'Missing credentials for {location}.\n' \
+                    'Hint: Check accounts section of your ~/.ambry-accounts.yaml ' \
+                    'for {location} credentials. If there is no such, use next template to ' \
+                    'add credentials:\n' \
+                    '{location}:\n' \
+                    '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
+                raise ConfigurationError(msg+'\nOriginal Exception: '+str(exc))
 
             if isinstance(s, FixedSource):
                 from ambry_sources.sources.spec import ColumnSpec
@@ -1516,8 +1501,7 @@ Caster Code
                 ps.update(message='Ingesting {}: {} {} of {}, rate: {}'
                           .format(source.spec.name, desc, n_records, total, rate))
 
-            with self.progress.interval(lambda: ps.add_update(dl_progress_f, state='loading', source=source), 10):
-                source.datafile.load_rows(iterable_source)
+            source.datafile.load_rows(iterable_source)
 
             source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
@@ -1736,7 +1720,6 @@ Caster Code
     #@CaptureException
     def build(self, sources=None, tables=None, stage=None, force=False, finalize=True):
         """
-
         :param phase:
         :param stage:
         :param sources: Source names or destination table names.
@@ -1819,11 +1802,10 @@ Caster Code
                             # The '1' for chunksize ensures that the subprocess only gets one
                             # source to build. Combined with maxchildspertask = 1 in the pool,
                             # each process will only handle one source before exiting.
+
                             args = [(self.identity.vid, stage, source.vid, force) for source in stage_sources]
                             pool = self.library.process_pool(limited_run=self.limited_run)
                             r = pool.map_async(build_mp, args, 1)
-                            pool.close()
-                            pool.join()
                             completed_sources = r.get()
 
                             ps.add("Finished MP building {} sources. Starting MP coalescing"
@@ -1832,14 +1814,14 @@ Caster Code
                             partition_names = [(self.identity.vid, k) for k,v
                                                in self.collect_segment_partitions().items()]
 
-                            pool = self.library.process_pool(limited_run=self.limited_run)
                             r = pool.map_async(unify_mp, partition_names, 1)
 
-                            pool.close()
-                            pool.join()
                             completed_partitions = r.get()
 
                             ps.add("Finished MP coalescing {} partitions".format(len(completed_partitions)))
+
+                            pool.close()
+                            pool.join()
 
                         except KeyboardInterrupt:
                             self.log('Got keyboard interrrupt; terminating workers')
@@ -1884,6 +1866,7 @@ Caster Code
     def build_source(self, stage, source, ps, force=False):
         """Build a single source"""
         from ambry.bundle.events import TAG
+        from ambry.bundle.process import CallInterval
 
         assert source.is_processable, source.name
 
@@ -1904,17 +1887,17 @@ Caster Code
 
             source_name = source.name  # In case the source drops out of the session, which is does.
             s_vid = source.vid
-            def run_progress_f():
-                (n_records, rate) = pl.sink.report_progress()
+
+            def run_progress_f(sink_pipe, rows):
+                (n_records, rate) = sink_pipe.report_progress()
                 if n_records > 0:
-                    ps.update(message='Running pipeline {}: {} records, rate: {}'
-                              .format(source_name, n_records, rate),
+                    ps.update(message='Running pipeline {}: rate: {}'
+                              .format(source_name, rate),
                               s_vid=s_vid,
                               item_type = 'rows',
                               item_count = n_records)
 
-            with self.progress.interval(run_progress_f, 5):
-                pl.run()
+            pl.run(callback=CallInterval(run_progress_f, 5))
 
             ps.update(message='Finished running source')
 
@@ -1989,6 +1972,7 @@ Caster Code
 
     def unify_partition(self, partition_name, segments, ps):
         from ..orm.partition import Partition
+        from ambry.bundle.process import CallInterval
 
         if segments is None:
             segments = set()
@@ -2020,22 +2004,27 @@ Caster Code
             headers = None
             i = 1  # Row id.
 
-            def coalesce_progress_f():
+            def coalesce_progress_f(i):
                 (desc, n_records, total, rate) = parent.datafile.report_progress()
+                assert i == n_records
                 ps.update(message='Coalescing {}: {} of {}, rate: {}'
                           .format(parent.identity.name, n_records, total, rate))
 
-            with self.progress.interval(coalesce_progress_f, 5):
+            coalesce_progress_f = CallInterval(coalesce_progress_f, 10) # FIXME Should be a decorator
 
-                with parent.datafile.writer as w:
-                    for seg in sorted(segments, key=lambda x: b(x.name)):
-                        ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
+            with parent.datafile.writer as w:
+                for seg in sorted(segments, key=lambda x: b(x.name)):
+                    ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
 
-                        with self.wrap_partition(seg).datafile.reader as reader:
-                            import time
-                            for row in reader.rows:
-                                w.insert_row((i,) + row[1:])
-                                i += 1
+                    with self.wrap_partition(seg).datafile.reader as reader:
+                        import time
+                        for row in reader.rows:
+                            w.insert_row((i,) + row[1:])
+                            i += 1
+
+                            if i%1000 == 1:
+                                coalesce_progress_f(i)
+
 
         parent.STATES.COALESCED
         self.commit()
@@ -2049,7 +2038,7 @@ Caster Code
 
         self.commit()
 
-        return partition_name
+        return str(partition_name)
 
     def exec_context(self, **kwargs):
         """Base environment for evals, the stuff that is the same for all evals. Primarily used in the
