@@ -313,8 +313,6 @@ def bundle_parser(cmd):
     command_p.add_argument('-s', '--source', action='append',
                            help='Sources to ingest, instead of running all sources')
 
-
-
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Build Command
@@ -444,8 +442,6 @@ def bundle_parser(cmd):
     command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to extract')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
-
-    #
     # Colmap
     #
 
@@ -466,8 +462,6 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='test')
     command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
 
-
-    #
     # Docker
     #
 
@@ -485,9 +479,10 @@ def bundle_parser(cmd):
     command_p.add_argument('-s', '--stats', default=False, action='store_true',
                            help='Report stats from the currently running container')
     command_p.add_argument('-v', '--version', default=False, action='store_true',
-                       help='Select a docker version that is the same as this Ambry installation')
+                           help='Select a docker version that is the same as this Ambry installation')
 
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
+
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -733,9 +728,8 @@ def bundle_sync(args, l, rc):
         b.sync_in()
 
     if args.code:
-        synced=b.sync_code()
+        synced = b.sync_code()
         prt('Synced {} files'.format(synced))
-
 
     if args.out:
         prt('Sync out')
@@ -780,13 +774,12 @@ def bundle_schema(args, l, rc):
 
     b.sync_code()
 
-    b.ingest(sources=args.source,tables=args.table, force=args.force)
+    b.ingest(sources=args.source, tables=args.table, force=args.force)
 
     if args.build:
         b.dest_schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=True)
     else:
         b.dest_schema(sources=args.source, tables=args.table, clean=args.clean)
-
 
     b.set_last_access(Bundle.STATES.SCHEMA)
 
@@ -1064,7 +1057,6 @@ def bundle_dump(args, l, rc):
         records = sorted(records, key=lambda r: (r[4], r[0]))
 
     elif args.table == 'metadata':
-        import json
 
         for key, value in b.metadata.kv:
             print key, value
@@ -1507,6 +1499,7 @@ def bundle_test(args, l, rc):
 
     b.run_tests(args.tests)
 
+
 def docker_client():
     from docker.client import Client
     from docker.utils import kwargs_from_env
@@ -1517,6 +1510,7 @@ def docker_client():
     client = Client(**kwargs)
 
     return client
+
 
 def bundle_docker(args, l, rc):
     import os
@@ -1538,7 +1532,7 @@ def bundle_docker(args, l, rc):
         # OK; the last_container is dead
         b.config.build.docker.last_container = None
         b.commit()
-        inspect  = None
+        inspect = None
     except NullResource:
         inspect = None
         pass  # OK; no container specified in the last_container value
@@ -1548,7 +1542,6 @@ def bundle_docker(args, l, rc):
     #
 
     bambry_cmd = ' '.join(args.args).strip()
-
 
     def run_container(bambry_cmd=None):
         """Run a new docker container"""
@@ -1584,7 +1577,6 @@ def bundle_docker(args, l, rc):
 
         if args.limited_run:
             envs.append('AMBRY_LIMITED_RUN=1')
-
 
         if args.version:
             import ambry._meta
@@ -1627,7 +1619,7 @@ def bundle_docker(args, l, rc):
 
             client.remove_container(last_container)
 
-            prt("Killed {}", last_container)
+            prt('Killed {}', last_container)
 
             b.config.build.docker.last_container = None
             b.commit()
@@ -1635,13 +1627,11 @@ def bundle_docker(args, l, rc):
         else:
             warn('No container to kill')
 
-
     if bambry_cmd:
         # If there is command, run the container first so the subsequent arguments can operate on it
         last_container = run_container(bambry_cmd)
         b.config.build.docker.last_container = last_container
         b.commit()
-
 
     if args.docker_id:
         if last_container:
@@ -1656,14 +1646,13 @@ def bundle_docker(args, l, rc):
 
         return
 
-
     elif args.logs:
 
         if last_container:
             for line in client.logs(last_container, stream=True):
                 print line,
         else:
-            fatal("No running container")
+            fatal('No running container')
 
     elif args.stats:
 
@@ -1679,7 +1668,3 @@ def bundle_docker(args, l, rc):
         cid = run_container()
 
         os.execlp('docker', 'docker', 'attach', cid)
-
-
-
-

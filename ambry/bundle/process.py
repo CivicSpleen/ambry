@@ -11,8 +11,10 @@ import platform
 from ambry.orm import Process
 from six import string_types
 
+
 class ProgressLoggingError(Exception):
     pass
+
 
 class ProgressSection(object):
     """A handler of the records for a single routine or phase"""
@@ -34,10 +36,10 @@ class ProgressSection(object):
 
         self.rec = None
 
-        self._ai_rec_id = None # record for add_update
+        self._ai_rec_id = None  # record for add_update
 
         self._group = None
-        self._group = self.add(log_action='start',state='running', **kwargs)
+        self._group = self.add(log_action='start', state='running', **kwargs)
 
         assert self._session
 
@@ -50,18 +52,18 @@ class ProgressSection(object):
         assert self._session
         if exc_val:
             self.add(
-                message = str(exc_val),
-                exception_class = qualified_name(exc_type),
-                exception_trace = str(exc_tb),
+                message=str(exc_val),
+                exception_class=qualified_name(exc_type),
+                exception_trace=str(exc_tb),
 
             )
-            self.done("Failed in context with exception")
+            self.done('Failed in context with exception')
             return False
         else:
-            self.done("Successful context exit")
+            self.done('Successful context exit')
             return True
 
-    def augment_args(self,args, kwargs):
+    def augment_args(self, args, kwargs):
 
         kwargs['pid'] = self._pid
         kwargs['d_vid'] = self._parent._d_vid
@@ -71,7 +73,7 @@ class ProgressSection(object):
         kwargs['group'] = self._group
 
         if self._session is None:
-            raise ProgressLoggingError("Progress logging section is already closed")
+            raise ProgressLoggingError('Progress logging section is already closed')
 
         for arg in args:
             if isinstance(arg, string_types):
@@ -81,7 +83,7 @@ class ProgressSection(object):
         # from a different database, so we convert them to vids. For postgres,
         # the pojects are in the same database, but they would have been attached to another
         # session, so we'd have to either detach them, or do the following anyway
-        for table,vid in (('source','s_vid'), ('table','t_vid'),('partition','p_vid')):
+        for table, vid in (('source', 's_vid'), ('table', 't_vid'), ('partition', 'p_vid')):
             if table in kwargs:
                 kwargs[vid] = kwargs[table].vid
                 del kwargs[table]
@@ -119,7 +121,7 @@ class ProgressSection(object):
             for k, v in kwargs.items():
 
                 # Don't update object; use whatever was set in the original record
-                if k not in ('source','s_vid','table','t_vid','partition','p_vid'):
+                if k not in ('source', 's_vid', 'table', 't_vid', 'partition', 'p_vid'):
                     setattr(self.rec, k, v)
 
             self._session.merge(self.rec)
@@ -137,7 +139,7 @@ class ProgressSection(object):
             self._ai_rec_id = self.add(*args, **kwargs)
         else:
             au_save = self._ai_rec_id
-            self.update(*args,**kwargs)
+            self.update(*args, **kwargs)
             self._ai_rec_id = au_save
 
         return self._ai_rec_id
@@ -150,6 +152,7 @@ class ProgressSection(object):
         pr_id = self.add(*args, log_action='done', **kwargs)
 
         return pr_id
+
 
 class ProcessIntervals(object):
 
@@ -228,8 +231,7 @@ class ProcessIntervals(object):
 
 class ProcessLogger(object):
 
-    def __init__(self, dataset, logger = None):
-        import signal
+    def __init__(self, dataset, logger=None):
         import os.path
 
         self._vid = dataset.vid
@@ -243,11 +245,16 @@ class ProcessLogger(object):
             # Create an entirely new database. Sqlite does not like concurrent access,
             # even from multiple connections in the same process.
             from ambry.orm import Database
-            parts = os.path.split(db.dsn)
-            dsn = '/'.join(parts[:-1]+('progress.db',))
+            if db.dsn == 'sqlite://':
+                # in memory database.
+                dsn = db.dsn
+            else:
+                # create new database for progress
+                parts = os.path.split(db.dsn)
+                dsn = '/'.join(parts[:-1] + ('progress.db',))
 
             self._db = Database(dsn, foreign_keys=False)
-            self._db.create() # falls through if already exists
+            self._db.create()  # falls through if already exists
             self._engine = self._db.engine
             self._connection = self._db.connection
             self._session = self._db.session
@@ -271,7 +278,7 @@ class ProcessLogger(object):
     @property
     def dataset(self):
         from ambry.orm import Dataset
-        return self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
+        return self._session.query(Dataset).filter(Dataset.vid == self._d_vid).one()
 
     def start(self, phase, stage, **kwargs):
         """Start a new routine, stage or phase"""
@@ -284,7 +291,7 @@ class ProcessLogger(object):
     def records(self):
         """Return all start records for this the dataset, grouped by the start record"""
 
-        return (self._session.query(Process)
-                .filter(Process.d_vid==self._d_vid)
-                .filter(Process.log_action == 'start')
-                ).all()
+        return self._session.query(Process)\
+            .filter(Process.d_vid == self._d_vid)\
+            .filter(Process.log_action == 'start')\
+            .all()

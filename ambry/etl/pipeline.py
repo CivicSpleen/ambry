@@ -18,8 +18,6 @@ from ambry.util import qualified_class_name
 
 from ambry_sources import RowProxy
 
-from ambry.dbexceptions import ConfigurationError
-
 
 class PipelineError(Exception):
     def __init__(self,  pipe,  *args, **kwargs):
