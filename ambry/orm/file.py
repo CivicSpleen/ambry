@@ -32,6 +32,7 @@ class File(Base, DictableMixin):
     BSFILE.SCHEMA = 'schema'
     BSFILE.COLMAP = 'column_map'
     BSFILE.SOURCES = 'sources'
+    BSFILE.SQL = 'sql'
     BSFILE.PARTITIONS = 'partitions'
     BSFILE.DOC = 'documentation'
 
@@ -44,6 +45,7 @@ class File(Base, DictableMixin):
         BSFILE.SCHEMA: 'schema.csv',
         BSFILE.SOURCESCHEMA: 'source_schema.csv',
         BSFILE.SOURCES: 'sources.csv',
+        BSFILE.SQL: 'bundle.sql',
     }
 
     # The preferences are primarily implemented in the prepare phase. WIth FILE preference, the

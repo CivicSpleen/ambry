@@ -19,16 +19,17 @@ import psycopg2
 
 from ambry_sources.med import sqlite as sqlite_med, postgresql as postgres_med
 
-from ambry.util import get_logger, parse_url_to_dict
+from ambry.orm.exc import NotFoundError
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
+from ambry.util import get_logger, parse_url_to_dict
 
 
 logger = get_logger(__name__)
 
 # debug logging
 #
-# import logging
-# logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
+import logging
+logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
 
 
 class WarehouseError(Exception):
@@ -188,7 +189,7 @@ class DatabaseWrapper(object):
             query (str): sql query
 
         """
-        statements = sqlparse.parse(query)
+        statements = sqlparse.parse(sqlparse.format(query, strip_comments=True))
 
         # install all partitions and replace table names in the query.
         #
@@ -197,7 +198,7 @@ class DatabaseWrapper(object):
         for statement in statements:
             logger.debug(
                 'Searching statement for partition ref.\n    statement: {}'.format(statement.to_unicode()))
-            table_names = _get_table_names(statement)
+            table_names = _get_table_names1(statement)
             new_statement = statement.to_unicode()
 
             if table_names:
@@ -726,12 +727,13 @@ class SQLiteWrapper(DatabaseWrapper):
         return result == [(1,)]
 
     @staticmethod
-    def _get_create_query(partition, tablename):
-        """ Creates and returns `create table ...` query for given mprows.
+    def _get_create_query(partition, tablename, include=None):
+        """ Creates and returns `CREATE TABLE ...` sql statement for given mprows.
 
         Args:
             partition (orm.Partition):
             tablename (str): name of the table in the return create query.
+            include (list of str, optional): list of columns to include to query.
 
         Returns:
             str: create table query.
@@ -746,7 +748,11 @@ class SQLiteWrapper(DatabaseWrapper):
             'datetime': 'TIMESTAMP WITHOUT TIME ZONE'
         }
         columns_types = []
+        if not include:
+            include = []
         for column in sorted(partition.datafile.reader.columns, key=lambda x: x['pos']):
+            if include and column['name'] not in include:
+                continue
             sqlite_type = TYPE_MAP.get(column['type'])
             if not sqlite_type:
                 raise Exception('Do not know how to convert {} to sql column.'.format(column['type']))
@@ -815,10 +821,64 @@ def _get_table_names(statement):
         list of str
     """
     tables = []
+    collect_table = False
     for token in statement.tokens:
-        if isinstance(token, sqlparse.sql.Identifier):
+        if token.value.lower() == 'from' or token.value.lower().endswith(' join'):
+            collect_table = True
+            continue
+        if isinstance(token, sqlparse.sql.Identifier) and collect_table:
             tables.append(token.get_real_name())
+            collect_table = False
     logger.debug(
         'List of table names found in the statement.\n    statement: {}\n    tables: {}\n'
         .format(statement.to_unicode(), tables))
     return tables
+
+
+# bundle.sql processing implementation.
+# FIXME: Move to the better place.
+
+def execute_sql(bundle, asql):
+    """ Executes all sql statements from asql.
+
+    Args:
+        bundle (FIXME:):
+        asql (str): unified sql - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
+    """
+    #installed = _install_partitions(bundle.library, asql)
+    # sql = asql
+    # for raw_name, table_name in installed:
+    #    sql = sql.replace(raw_name, table_name)
+        # sql = _convert_query(bundle.library.database, asql)
+    # if dsn.startswith('sqlite:'):
+    #    logger.debug('Initializing sqlite warehouse.')
+    backend = SQLiteWrapper(bundle.library, bundle.library.database.dsn)
+    connection = backend._get_connection()
+    statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
+    for statement in statements:
+        backend.query(connection, statement.to_unicode())
+    #conn
+    # backend.--
+    #connection = bundle.library.database.connection
+    #connection.execute(sql)
+
+
+def _convert_query(database, asql):
+    """ Converts simple query to database dialect.
+
+    Args:
+        connection:
+        asql: unified sql. See https://github.com/CivicKnowledge/ambry/issues/140 for details.
+
+    """
+    return asql
+
+
+def _get_table_names1(statement):
+    # Simplified version of more appropriate for ambry queryes
+    parts = statement.to_unicode().split()
+    tables = set()
+    for i, token in enumerate(parts):
+        if token.lower() == 'from' or token.lower().endswith('join'):
+            tables.add(parts[i + 1])
+    return list(tables)

@@ -1,0 +1,77 @@
+about:
+    access: test
+    footnote: This is a footnote
+    grain: county
+    groups:
+    - Examples
+    license: other-open
+    processed: Packaged for [Ambry](http://ambry.io) by {{contact_bundle.creator.org}}
+    rights: null
+    source: '{{contact_source.creator.org}}'
+    space: California
+    subject: demo, Zażółć gęślą jaźń Съешь же ещё этих мягких французских
+    summary: This is a short summary of the data bundle, from {{contact_source.creator.org}}
+    tags:
+    - example
+    - demo
+    time: 2010
+    title: Simple Example Bundle With SQL file.
+build:
+    dict1:
+        dict2:
+            dict3:
+                key1: value1
+                key2: value2
+            key1: value1
+            key2: value2
+        key1: value1
+        key2: value2
+    key1: value1
+contacts:
+    analyst:
+        org: Example Com
+        url: http://example.com/simple-with-sql
+    creator:
+        email: bob@bob.com
+        name: Bob Bobson
+        org: Example Com
+        url: http://example.com/simple-with-sql
+dependencies: {}
+identity:
+    dataset: simplewithsql
+    id: d000simpl1
+    revision: 3
+    source: example.com
+    version: 0.1.3
+names:
+    fqname: example.com-simple_with_sql-0.1.3~d000simple003
+    name: example.com-simple_with_sql
+    vid: d000simple003
+    vname: example.com-simple-0.1.3
+pipelines:
+    build2:
+        body:
+        - 'Add({ ''year'' : lambda e,r: e.source.time, ''release'' : lambda e,r: str(e.source.grain)
+            if e.source.grain else ''all'' })'
+        - MergeHeader
+        - TypeIntuiter
+        - MangleHeader
+        - MapToSourceTable(error_on_fail = False)
+        cast:
+        - CasterPipe
+
+        first:
+        - PrintRows
+        last:
+        - PrintRows
+        store:
+        - SelectPartition
+        - WriteToPartition
+    test:
+    - PrintEvery(10)
+    - 'Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )'
+    test2:
+    - 'MatchPredicate(lambda r: r[2] == ''g'')'
+    - 'Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )'
+requirements:
+    xlrd: xlrd

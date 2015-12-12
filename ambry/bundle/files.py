@@ -2,19 +2,21 @@
 
 This module manages reading and writing files that configure a source bundle:
 
-- bundle.py: Main code file for building a bundle
-- meta.py: One-time executed code for manipulating bundle metadata.
+- bundle.py: Main code file for building a bundle.
+- bundle.sql: Set of SQL statements. The system loads the SQL file and creates all of the tables,
+    so they can be referenced during the build.
 - bundle.yaml: Main metadata file.
+- column_map.csv: Maps column names from a source file to the schema.
+- meta.py: One-time executed code for manipulating bundle metadata.
 - schema.csv: Describes tables and columns.
-- column_map.csv: Maps column names from a source file to the schema
-- sources.csv: Describes the name, description and URL of input data
+- sources.csv: Describes the name, description and URL of input data.
 
 This module connects the filesystem to the File records in a dataset. A parallel module,
 ambry.orm.files, connects between the File records and the other types of records in a Dataset
 
 Build source file data is stored in File records in msgpack format. Files that are essentially spreadsheets,
-such as schema, column_map and sources, are stored as a list of lists, one list per row.YAML files
-are stored as dicts, and python files are stored as strings. Msgpack format is used because it is
+such as schema, column_map and sources, are stored as a list of lists, one list per row. YAML files
+are stored as dicts, and python and sql files are stored as strings. Msgpack format is used because it is
 fast and small, which is important for largest schema files, such as those in the US Census.
 
 """
@@ -84,7 +86,7 @@ class BuildSourceFile(object):
 
     @property
     def file_content(self):
-        """Return the contents of the file system file"""
+        """Return the contents of the system file"""
         return self._fs.getcontents(file_name(self._file_const))
 
     @property
@@ -102,9 +104,11 @@ class BuildSourceFile(object):
 
     @property
     def path(self):
+        """ Returns system path of the file. """
         return self._fs.getsyspath(file_name(self._file_const))
 
     def remove(self):
+        """ Removes file from filesystem. """
         from fs.errors import ResourceNotFoundError
 
         try:
@@ -356,7 +360,7 @@ class StringSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
 
-        with self._fs.open(fn_path, 'r', encoding="utf-8") as f:
+        with self._fs.open(fn_path, 'r', encoding='utf-8') as f:
             fr.update_contents(f.read(), 'text/plain')
 
         fr.source_hash = self.fs_hash
@@ -875,7 +879,8 @@ file_info_map = {
     File.BSFILE.META: (File.path_map[File.BSFILE.META], MetadataFile),
     File.BSFILE.SCHEMA: (File.path_map[File.BSFILE.SCHEMA], SchemaFile),
     File.BSFILE.SOURCESCHEMA: (File.path_map[File.BSFILE.SOURCESCHEMA], SourceSchemaFile),
-    File.BSFILE.SOURCES: (File.path_map[File.BSFILE.SOURCES], SourcesFile)
+    File.BSFILE.SOURCES: (File.path_map[File.BSFILE.SOURCES], SourcesFile),
+    File.BSFILE.SQL: (File.path_map[File.BSFILE.SQL], StringSourceFile)
 }
 
 
@@ -905,9 +910,6 @@ def file_default(const):
         with open(path, 'rt', encoding='utf-8') as f:
             return f.read()
 
-    with open(path, 'rb') as f:
-        return f.read()
-
 
 class BuildSourceFileAccessor(object):
 
@@ -919,7 +921,7 @@ class BuildSourceFileAccessor(object):
 
     @property
     def build_file(self):
-        raise DeprecationWarning("Use self.build_bundle")
+        raise DeprecationWarning('Use self.build_bundle')
         return self.file(File.BSFILE.BUILD)
 
     def __getattr__(self, item):
