@@ -15,6 +15,7 @@ from decorator import decorator
 from six import string_types, iteritems, u, b
 
 from fs.errors import NoSysPathError
+from fs.wrapfs.lazyfs import LazyFS
 
 from geoid.civick import GVid
 from geoid import NotASummaryName
@@ -50,9 +51,11 @@ def _CaptureException(f, *args, **kwargs):
             b.exception(e)
             raise
 
+
 def CaptureException(f, *args, **kwargs):
     """Decorator to capture exceptions. and logging the error"""
     return decorator(_CaptureException, f)  # Preserves signature
+
 
 class Bundle(object):
 
@@ -99,7 +102,6 @@ class Bundle(object):
 
     def __init__(self, dataset, library, source_url=None, build_url=None):
         import logging
-        import signal
 
         self._dataset = dataset
         self._library = library
@@ -135,7 +137,7 @@ class Bundle(object):
         self.test_class = None
 
         self._progress = None
-        self._ps = None # Progress logger section, created as needed.
+        self._ps = None  # Progress logger section, created as needed.
         self.init()
 
     def init(self):
@@ -204,7 +206,7 @@ class Bundle(object):
         for module_name, pip_name in iteritems(self.metadata.requirements):
             extant = self.dataset.config.requirements[module_name].url
 
-            force =  (extant and extant != pip_name)
+            force = (extant and extant != pip_name)
 
             self._library.install_packages(module_name, pip_name, force=force)
 
@@ -298,7 +300,6 @@ class Bundle(object):
             self._progress = ProcessLogger(self.dataset, self.logger)
 
         return self._progress
-
 
     @property
     def partitions(self):
@@ -418,7 +419,6 @@ class Bundle(object):
         def set_bundle(s):
             s._bundle = self
             return s
-
         return list(set_bundle(s) for s in self.dataset.sources)
 
     def _resolve_sources(self, sources, tables, stage=None, predicate=None):
@@ -664,7 +664,6 @@ class Bundle(object):
         self.dataset.config.build.state.exception_type = str(e.__class__.__name__)
         self.dataset.config.build.state.exception = str(e)
 
-
     def warn(self, message):
         """Log an error messsage.
 
@@ -736,10 +735,14 @@ Caster Code
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
         self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
+        # LazyFS should handled differently because of:
+        # TypeError: lazy_fs.setcontents(..., encoding='utf-8') got an unexpected keyword argument 'encoding'
+        if isinstance(self.build_fs, LazyFS):
+            self.build_fs.wrapped_fs.setcontents(path, v, encoding='utf8')
+        else:
+            self.build_fs.setcontents(path, v, encoding='utf8')
 
-        self.build_fs.setcontents(path, v, encoding='utf8')
-
-    def pipeline(self, source=None, phase='build', ps = None):
+    def pipeline(self, source=None, phase='build', ps=None):
         """
         Construct the ETL pipeline for all phases. Segments that are not used for the current phase
         are filtered out later.
@@ -939,7 +942,7 @@ Caster Code
         import time
         # time defeats check that value didn't change
 
-        self.dataset.config.build.access.last = '{}-{}'.format(tag,time.time())
+        self.dataset.config.build.access.last = '{}-{}'.format(tag, time.time())
 
     #########################
     # Build phases
@@ -959,7 +962,7 @@ Caster Code
     def sync(self, force=None, defaults=False):
         """
 
-        :param force: Force a sync in one direction, either ftr or rtf.
+        :param force: Force a sync in one direction, either ftr (file to record) or rtf (record to file).
         :param defaults [False] If True and direction is rtf, write default source files
         :return:
         """
@@ -1018,7 +1021,7 @@ Caster Code
         for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
             bsf = self.build_source_files.file(fc)
             if bsf.fs_is_newer:
-                self.log("Syncing {}".format(bsf.file_name))
+                self.log('Syncing {}'.format(bsf.file_name))
                 bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
                 synced += 1
 
@@ -1036,7 +1039,7 @@ Caster Code
         for fc in [File.BSFILE.SOURCES]:
             bsf = self.build_source_files.file(fc)
             if bsf.fs_is_newer:
-                self.log("Syncing {}".format(bsf.file_name))
+                self.log('Syncing {}'.format(bsf.file_name))
                 bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
                 synced += 1
 
@@ -1133,17 +1136,17 @@ Caster Code
         self.dataset.process_records[:] = []
 
     def clean_tables(self):
-        """Like clean, but also clears out schema tables and the partitions that depend on them. . """
+        """Like clean, but also clears out schema tables and the partitions that depend on them. """
 
         self.dataset.delete_tables_partitions()
 
     def clean_partitions(self):
-        """Delete partition records and any built partition files.  """
+        """Delete partition records and any built partition files. """
         import shutil
         from ambry.orm import ColumnStat
 
         # FIXME. There is a problem with the cascades for ColumnStats that prevents them from
-        # being  deleted with the partitions. Probably, the are seen to be owed by the columns instead.
+        # being  deleted with the partitions. Probably, they are seen to be owed by the columns instead.
         self.session.query(ColumnStat).filter(ColumnStat.d_vid == self.dataset.vid).delete()
 
         self.dataset.delete_partitions()
@@ -1244,7 +1247,8 @@ Caster Code
                 s.datafile.remove()
                 return True
 
-        sources = sorted(self._resolve_sources(sources, tables, stage, predicate=not_final_or_delete), key=key)
+        sources = sorted(self._resolve_sources(sources, tables, stage, predicate=not_final_or_delete),
+                         key=key)
 
         if not sources:
             self.log("No sources left to ingest")
@@ -1284,7 +1288,6 @@ Caster Code
                 self._run_events(TAG.AFTER_INGEST, stage)
                 self.record_stage_state(self.STATES.INGESTING, stage)
 
-
             self.state = self.STATES.INGESTED
 
         finally:
@@ -1297,7 +1300,7 @@ Caster Code
         else:
             return False
 
-    def _ingest_sources(self, sources, stage, force=False ):
+    def _ingest_sources(self, sources, stage, force=False):
         """Ingest a set of sources, usually for one stage"""
         from concurrent import ingest_mp
 
@@ -1309,7 +1312,8 @@ Caster Code
         errors = 0
         with self.progress.start('ingest', stage,
                                  message='Ingesting ' + ('MP' if self.multi else 'SP'),
-                                 item_total=len(sources), item_type='source', item_count=len(downloadable_sources)
+                                 item_total=len(sources), item_type='source',
+                                 item_count=len(downloadable_sources)
                                  ) as ps:
 
             # Create all of the source tables first, so we can't get contention for creating them
@@ -1343,7 +1347,7 @@ Caster Code
 
             if errors > 0:
                 from ambry.dbexceptions import IngestionError
-                raise IngestionError("Failed to ingest {} sources".format(errors))
+                raise IngestionError('Failed to ingest {} sources'.format(errors))
 
         return errors
 
@@ -1353,7 +1357,6 @@ Caster Code
         from ambry_sources import get_source
 
         s = None
-
 
         if source.reftype == 'partition':
             source.update_table()  # Generate the source tables.
@@ -1384,7 +1387,7 @@ Caster Code
                     ps.add_update('Downloading {}'.format(source.url), source=source,
                                   state='downloading')
                 else:
-                    self.log('Downloading {}'.format(source.url), source=source,state='downloading')
+                    self.log('Downloading {}'.format(source.url), source=source, state='downloading')
 
             with self.progress.interval(progress, 10):
                 try:
@@ -1425,13 +1428,15 @@ Caster Code
                 elif force:
                     source.datafile.remove()
                 else:
-                    ps.update(message = 'Source {} already ingested, skipping'.format(source.name),state = 'skipped')
+                    ps.update(
+                        message='Source {} already ingested, skipping'.format(source.name),
+                        state='skipped')
                     return True
 
             if source.is_partition:
                 # Check if the partition exists
                 try:
-                    p = self.library.partition(source.ref)
+                    self.library.partition(source.ref)
                 except NotFoundError:
                     # Maybe it is an internal reference, in which case we can just delay
                     # until the partition is built
@@ -1445,7 +1450,9 @@ Caster Code
             iterable_source = self._iterable_source(source, ps)
 
             if not iterable_source:
-                self.update(message='Not an ingestiable source: {}'.format(source.name),state='skipped', source=source)
+                self.update(
+                    message='Not an ingestiable source: {}'.format(source.name),
+                    state='skipped', source=source)
                 source.state = source.STATES.NOTINGESTABLE
 
                 return True
@@ -1511,9 +1518,7 @@ Caster Code
         """
         from itertools import groupby
         from operator import attrgetter
-        from ambry.orm.exc import NotFoundError
         from ambry.etl import Collect, Head
-        from ambry.bundle.events import TAG
 
         resolved_sources = self._resolve_sources(sources, tables,  predicate=lambda s: s.is_processable)
 
@@ -1574,7 +1579,6 @@ Caster Code
 
                     self.log("Populated destination table '{}' from source table '{}' with {} columns"
                              .format(t.name, source.source_table.name, diff))
-
 
         self.commit()
 
@@ -1676,10 +1680,18 @@ Caster Code
 
             self._run_events(TAG.BEFORE_BUILD, 0)
 
+            from ambry.library.warehouse import execute_sql
+            sql_file = [x for x in self.dataset.files if x.path == 'bundle.sql']
+            if sql_file and sql_file[0].unpacked_contents:
+                # close pysqlite connection because execute_sql creates apsw connection.
+                # FIXME: Close sqlite database only.
+                self.library.database.close()
+                execute_sql(self, sql_file[0].unpacked_contents)
+
             resolved_sources = self._resolve_sources(sources, tables, stage=stage,
                                                      predicate=lambda s: s.is_processable)
 
-            with self.progress.start('build',stage, item_total = len(resolved_sources)) as ps:
+            with self.progress.start('build', stage, item_total=len(resolved_sources)) as ps:
 
                 if not resolved_sources:
                     ps.done(message='No sources', state='skipped')
@@ -1715,7 +1727,7 @@ Caster Code
                     else:
 
                         for i, source in enumerate(stage_sources):
-                            ps.add(source = source, item_count = i, state = 'running')
+                            ps.add(source=source, item_count=i, state='running')
                             self.build_source(stage, source, ps, force=force)
 
                         self.record_stage_state(self.STATES.BUILDING, stage)
@@ -1736,7 +1748,6 @@ Caster Code
             self._run_events(TAG.AFTER_BUILD, 0)
 
         return True
-
 
     def build_table(self, table, force=False):
         """Build all of the sources for a table """
@@ -1771,12 +1782,12 @@ Caster Code
 
         try:
 
-            source_name = source.spec.name # In case the source drops out of the session, which is does.
+            source_name = source.spec.name  # In case the source drops out of the session, which is does.
 
             def run_progress_f():
                 (desc, n_records, total, rate) = pl.sink.report_progress.report_progress()
                 ps.update(message='Running pipeline {}: {} {} of {}, rate: {}'
-                          .format(source.spec.name,desc, n_records, total, rate))
+                          .format(source.spec.name, desc, n_records, total, rate))
 
             with self.progress.interval(run_progress_f, 10):
                 pl.run()
@@ -1811,7 +1822,6 @@ Caster Code
 
         source.state = self.STATES.BUILT
 
-
     def unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
         and delete the children. """
@@ -1830,11 +1840,11 @@ Caster Code
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
 
-        with self.progress.start('coalesce',0, message='Coalescing partition segments') as ps:
+        with self.progress.start('coalesce', 0, message='Coalescing partition segments') as ps:
 
             for name, segments in iteritems(partitions):
                 ps.add(item_type='partitions', item_count=len(segments),
-                           message='Colescing partition {}'.format(name))
+                       message='Coalescing partition {}'.format(name))
                 self.unify_partition(name, segments, ps)
 
     def unify_partition(self, partition_name, segments, ps):
@@ -1858,7 +1868,6 @@ Caster Code
 
         headers = None
         i = 1  # Row id.
-
 
         def coalesce_progress_f():
                 (desc, n_records, total, rate) = parent.datafile.report_progress()
@@ -1975,7 +1984,12 @@ Caster Code
         path = '/code/casters/{}.py'.format(source.name)
 
         self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
-        self.build_fs.setcontents(path, code, encoding='utf8')
+        # LazyFS should handled differently because of:
+        # TypeError: lazy_fs.setcontents(..., encoding='utf-8') got an unexpected keyword argument 'encoding'
+        if isinstance(self.build_fs, LazyFS):
+            self.build_fs.wrapped_fs.setcontents(path, code, encoding='utf8')
+        else:
+            self.build_fs.setcontents(path, code, encoding='utf8')
 
         # The abs_path is just for reporting line numbers in debuggers, etc.
         try:
@@ -2180,7 +2194,7 @@ Caster Code
             suite.addTests(tests)
             stream = StringIO.StringIO()
 
-            r = unittest.TextTestRunner(stream=stream,verbosity=2).run(suite)
+            r = unittest.TextTestRunner(stream=stream, verbosity=2).run(suite)
 
             # self.log(stream.getvalue())
 
