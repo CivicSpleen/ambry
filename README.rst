@@ -73,7 +73,7 @@ Datasets search implemented on top of PostgreSQL requires postgresql-contrib and
     # create extension
     $ psql <db_name> -c 'CREATE EXTENSION pg_trgm;'
 
-Foreign Data Wrapper (need to query partition files packed with psgpack.)
+Foreign Data Wrapper (need to query partition files packed with msgpack.)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 1. Install multicorn:
@@ -89,7 +89,7 @@ Foreign Data Wrapper (need to query partition files packed with psgpack.)
 
 .. code-block:: bash
 
-    pip install ambryfdw
+    pip install ambry_sources[geo,fdw]
 
 CKAN export
 ===========

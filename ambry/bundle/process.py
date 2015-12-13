@@ -11,8 +11,10 @@ import platform
 from ambry.orm import Process
 from six import string_types
 
+
 class ProgressLoggingError(Exception):
     pass
+
 
 class ProgressSection(object):
     """A handler of the records for a single routine or phase"""
@@ -161,9 +163,11 @@ class ProgressSection(object):
 
         return pr_id
 
-class ProcessLogger(object):
 
-    def __init__(self, dataset, logger = None):
+class ProcessLogger(object):
+    """Database connection and access object for recording build progress and build state"""
+
+    def __init__(self, dataset, logger = None, new_connection=True):
         import signal
         import os.path
 
@@ -171,6 +175,7 @@ class ProcessLogger(object):
         self._d_vid = dataset.vid
         self._logger = logger
         self._buildstate = None
+        self._new_connection = new_connection
 
         db = dataset._database
         schema = db._schema
@@ -187,12 +192,18 @@ class ProcessLogger(object):
             self._engine = self._db.engine
             self._connection = self._db.connection
             self._session = self._db.session
+            self._session.merge(dataset)
+            self._session.commit()
 
-        else:
+        elif new_connection: # For postgres, by default, create a new db connection
             # Make a new connection to the existing database
             self._db = db
             self._connection = self._db.engine.connect()
             self._session = self._db.Session(bind=self._connection, expire_on_commit = False)
+        else: # When not building, ok to use existing connection
+            self._db = db
+            self._connection = db.connection
+            self._session = db.session
 
         if schema:
             self._session.execute('SET search_path TO {}'.format(schema))
@@ -205,13 +216,14 @@ class ProcessLogger(object):
 
     def close(self):
 
-        if self._connection:
+        if self._connection and self._new_connection:
             self._connection.close()
 
 
     @property
     def dataset(self):
         from ambry.orm import Dataset
+
         return self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
 
     def start(self, phase, stage, **kwargs):
@@ -264,6 +276,7 @@ class ProcessLogger(object):
         self._session.commit()
 
     def commit(self):
+        assert self._new_connection
         self._session.commit()
 
     @property
@@ -272,16 +285,18 @@ class ProcessLogger(object):
             for a usage example"""
         from ambry.orm.config import BuildConfigGroupAccessor
 
-        # It is a leightweight object, so no need to cache
+        # It is a lightweight object, so no need to cache
         return BuildConfigGroupAccessor(self.dataset, 'buildstate', self._session)
+
 
 class CallInterval(object):
     """Call the inner callback at a limited frequency"""
 
     def __init__(self, f, freq,  **kwargs):
+        import time
         self._f = f
         self._freq = freq
-        self._next = 0
+        self._next = time.time() + self._freq
 
         self._kwargs = kwargs
 
@@ -292,6 +307,14 @@ class CallInterval(object):
             kwargs.update(self._kwargs)
             self._f(*args, **kwargs)
             self._next = time.time() + self._freq
+
+
+def call_interval(freq,**kwargs):
+    """Decorator for the CallInterval wrapper"""
+    def wrapper(f):
+        return CallInterval(f, freq, **kwargs)
+
+    return wrapper
 
 
 

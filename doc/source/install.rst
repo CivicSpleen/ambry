@@ -99,51 +99,14 @@ Follow up with :ref:`install-post-install` to create your configuration files an
 Windows
 *************
 
-For Windows, you can probably use the "Easy Way" installation: install Anaconda first, then Ambry. If that doesn't work, try Vagrant or Docker. 
+For Windows, use Docker, or a Ubuntu VM.
 
-*************
-Vagrant
-*************
-
-To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the source code. The Vagrant environment is inside the source distribution, and share's the host's source directory, so the Vagrant installation is a good way to develop on Windows while running in Ubuntu. 
-
-First, clone the source from github, https://github.com/CivicKnowledge/ambry.git or, download a Zip archive from: https://github.com/CivicKnowledge/ambry/archive/master.zip
-
-After unpacking the source, change directory to the vagrant directory, :file:`support/ambry-vagrant` and run :command:`vagrant up`
-
-.. code-block:: bash
-
-    $ wget https://github.com/CivicKnowledge/ambry/archive/master.zip
-    $ unzip master.zip
-    $ cd ambry-master/support/ambry-vagrant/
-    $ vagrant up
-    
-When the build is done, ssh to the box. 
-
-.. code-block:: bash
-
-    $ vagrant ssh 
-
-Then, follow the instrictions at :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
-  
 
 *************
 Docker
 *************
    
-A Dockerfile for a basic docker image is available in: :file:`support/ambry-docker`. To build it, run:
-
-.. code-block:: bash
-
-    $ docker build -t ambry .
-
-When that is finished, you can run the image with:
-
-.. code-block:: bash
-
-    $ docker run -i -t ambry bin/bash
-
-.. _install-post-install:
+:ref:`tutorial/docker`
 
 *************
 Post Install

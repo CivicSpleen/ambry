@@ -449,7 +449,7 @@ class BasePartitionIndex(BaseIndex):
         """
 
         schema = ' '.join(
-            '{} {} {} {} {}'.format(
+            u'{} {} {} {} {}'.format(
                 c.id,
                 c.vid,
                 c.name,

@@ -50,7 +50,7 @@ def new_library(config=None):
 
 class Library(object):
 
-    def __init__(self,  config=None, search=None, echo=None):
+    def __init__(self,  config=None, search=None, echo=None, read_only = False):
         from sqlalchemy.exc import OperationalError
 
 
@@ -60,6 +60,8 @@ class Library(object):
             self._config = get_runconfig()
 
         self.logger = logger
+
+        self.read_only = read_only # allow optimizations that assume we aren't building bundles.
 
         self._fs = LibraryFilesystem(config)
 
@@ -218,7 +220,8 @@ class Library(object):
             ds = self._db.new_dataset(**identity.dict)
 
         b = Bundle(ds, self)
-
+        b.commit()
+        print b.dataset
         b.state = Bundle.STATES.NEW
         b.set_last_access(Bundle.STATES.NEW)
 
@@ -410,6 +413,8 @@ class Library(object):
         :return:
         """
 
+        from ambry.bundle.process import call_interval
+
         remote_name = self.resolve_remote(b)
 
         remote = self.remote(remote_name)
@@ -419,44 +424,60 @@ class Library(object):
         db = Database('sqlite:///{}'.format(db_path))
         ds = db.dataset(b.dataset.vid)
 
-        self.logger.info('Checking in bundle {}'.format(ds.identity.vname))
+        with b.progress.start('checkin', 0, message='Check in bundle') as ps:
 
-        # Set the location for the bundle file
-        for p in ds.partitions:
-            p.location = 'remote'
+            ps.add(message='Checking in bundle {} to {}'.format(ds.identity.vname, remote))
 
-        ds.config.build.state.current = Bundle.STATES.INSTALLED
-        ds.commit()
-        db.commit()
-        db.close()
+            # Set the location for the bundle file
+            for p in ds.partitions:
+                p.location = 'remote'
 
-        db_ck = b.identity.cache_key + '.db'
+            # Fixme; this should be on ds, not b
+            # b.buildstate.state.current = Bundle.STATES.INSTALLED
+            ds.commit()
+            db.commit()
+            db.close()
 
-        with open(db_path) as f:
-            remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
-            remote.setcontents(db_ck, f)
+            db_ck = b.identity.cache_key + '.db'
 
-        os.remove(db_path)
+            ps.add(message="Upload bundle file", item_type='bytes', item_count = 0)
+            total = [0]
+            @call_interval(5)
+            def upload_cb(n):
+                total[0] += n
+                ps.update(message="Upload bundle file", item_count=total[0])
 
-        for p in b.partitions:
+            with open(db_path) as f:
+                remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
+                self.logger.info('Send bundle file {} '.format(db_path))
+                e = remote.setcontents_async(db_ck, f, progress_callback=upload_cb)
+                e.wait()
 
-            with p.datafile.open(mode='rb') as fin:
-                self.logger.info('Checking in {}'.format(p.identity.vname))
+            ps.update(state='done')
 
-                calls = [0]
+            os.remove(db_path)
 
-                def progress(bytes):
-                    calls[0] += 1
-                    if calls[0] % 8 == 0:
-                        self.logger.info('Checking in {}; {} KB'.format(p.identity.vname, round(bytes/1024.0)))
+            for p in b.partitions:
 
-                remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
-                event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
-                event.wait()
+                ps.add(message="Upload partition", item_type='bytes', item_count=0, p_vid=p.vid)
 
-        b.dataset.commit()
+                with p.datafile.open(mode='rb') as fin:
 
-        return remote_name, db_ck
+                    total = [0]
+                    @call_interval(5)
+                    def progress(bytes):
+                        total[0] += bytes
+                        ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0] )
+
+                    remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
+                    event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
+                    event.wait()
+
+                    ps.update(state = 'done')
+
+            b.dataset.commit()
+
+            return remote_name, db_ck
 
     #
     # Remotes

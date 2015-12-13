@@ -27,7 +27,12 @@ class Geoid(ValueType):
     geoid = None
 
     def __init__(self, v):
-        self.geoid = self.parser(v)
+        from geoid import Geoid
+
+        if isinstance(v, Geoid):
+            self.geoid = v
+        else:
+            self.geoid = self.parser(v)
 
     @classmethod
     def parse(cls,  v):

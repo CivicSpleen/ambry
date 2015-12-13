@@ -105,12 +105,22 @@ def root_parser(cmd):
     sp = cmd.add_parser('docker', help='Manage docker images and containers')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='docker')
-    sp.add_argument('-b', '--build', default=False, action='store_true', help='Build a new docker image')
-    sp.add_argument('-r', '--run', default=False, action='store_true', help='Run the docker image')
-    sp.add_argument('-l', '--local', default=False, action='store_true',
-                    help='Use the local Sqlite database, not a postgress database supplied through an environmental var')
-    sp.add_argument('-s', '--shell', default=False, action='store_true',
-                    help='Run a shell in the docker image')
+
+    sp.add_argument('-b', '--build', help="Build a new docker image. Specify one of: "
+                    "'ambry','dev','numbers','db','ui'")
+
+    sp.add_argument('-i', '--init', default=False, action='store_true',
+                    help="Initialilze a new data volume and database")
+
+    sp.add_argument('-n', '--new', default=False, action='store_true',
+                    help="With -i, initialize a new database and volume, and report the new DSN")
+
+
+    #sp.add_argument('-r', '--run', default=False, action='store_true', help='Run the docker image')
+    #sp.add_argument('-l', '--local', default=False, action='store_true',
+    #                help='Use the local Sqlite database, not a postgress database supplied through an environmental var')
+    #sp.add_argument('-s', '--shell', default=False, action='store_true',
+    #                help='Run a shell in the docker image')
 
 def root_command(args, rc):
     from ..library import new_library
@@ -389,23 +399,133 @@ def root_import(args, l, rc):
         if args.detach:
             b.set_file_system(source_url=None)
 
+
+def docker_client():
+    from docker.client import Client
+    from docker.utils import kwargs_from_env
+
+    kwargs = kwargs_from_env()
+
+    if 'tls' in kwargs:
+        kwargs['tls'].assert_hostname = False
+
+    client = Client(**kwargs)
+
+    return client
+
+
 def root_docker(args, l, rc):
     import os
 
-    if args.build:
-        raise NotImplementedError()
+    if args.init:
+        return root_docker_init(args, l, rc)
 
-    if args.run:
 
-        if args.local:
-            db = ''
-            passwd = ''
-        else:
-            db = ' -e AMBRY_DB={}'.format(l.database.dsn)
-            passwd = ' -e AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password)
+def root_docker_init(args, l, rc):
+    """Initialize a new docker volumes and database container, and report the database DSNs"""
 
-        args = ('docker run --rm -t -i '+db+passwd+' civicknowledge/ambry').split()
+    from docker.errors import NotFound, NullResource
+    import string
+    import random
+    from ambry.util import parse_url_to_dict
+    from docker.utils import kwargs_from_env
+    from . import fatal
 
-        print args
+    client = docker_client()
 
-        os.execvp('docker', args)
+    def id_generator(size=12, chars=string.ascii_lowercase + string.digits):
+        return ''.join(random.choice(chars) for _ in range(size))
+
+    # Check if the postgres image exists.
+
+    postgres_image = 'civicknowledge/postgres'
+
+    try:
+        inspect = client.inspect_image(postgres_image)
+    except NotFound:
+        fatal(('Database image {i} not in docker. Run \'python setup.py docker -D\' or '
+               ' \'docker pull {i}\'').format(i=postgres_image))
+
+    # Assume that the database host IP is also the docker host IP. This usually be true
+    # externally to the docker host, and internally, we'll alter the host:port to
+    # 'db' anyway.
+    db_host_ip = parse_url_to_dict(kwargs_from_env()['base_url'])['netloc'].split(':',1)[0]
+
+    try:
+        d = parse_url_to_dict(l.database.dsn)
+    except AttributeError:
+        d = {'query':''}
+
+    if 'docker' not in d['query'] or args.new:
+        username = id_generator()
+        password = id_generator()
+        database = id_generator()
+    else:
+        username = d['username']
+        password = d['password']
+        database = d['path'].strip('/')
+
+    volumes_c = 'ambry_volumes_{}'.format(username)
+    db_c = 'ambry_db_{}'.format(username)
+
+    #
+    # Create the volume container
+    #
+
+    try:
+        inspect = client.inspect_container(volumes_c)
+        prt('Found volume container {}'.format(volumes_c))
+    except NotFound:
+        prt('Creating volume container {}'.format(volumes_c))
+
+        r = client.create_container(
+            name=volumes_c,
+            image='cogniteev/echo',
+            volumes=['/var/ambry', '/var/backups'],
+            host_config = client.create_host_config()
+        )
+
+    #
+    # Create the database container
+    #
+
+    try:
+        inspect = client.inspect_container(db_c)
+        prt('Found db container {}'.format(db_c))
+    except NotFound:
+        prt('Creating db container {}'.format(db_c))
+        kwargs = dict(
+            name=db_c,
+            image=postgres_image,
+            volumes=['/var/ambry', '/var/backups'],
+            ports=[5432],
+            environment={
+                'ENCODING': 'UTF8',
+                'BACKUP_ENABLED': 'true',
+                'BACKUP_FREQUENCY': 'daily',
+                'BACKUP_EMAIL': 'eric@busboom.org',
+                'USER': username,
+                'PASSWORD': password,
+                'SCHEMA': database,
+                'POSTGIS': 'true'
+            },
+            host_config=client.create_host_config(
+                volumes_from=[volumes_c],
+                port_bindings={5432: ('0.0.0.0',)}
+            )
+        )
+
+        r = client.create_container(**kwargs)
+
+        client.start(r['Id'])
+
+        inspect = client.inspect_container(r['Id'])
+
+    port =  inspect['NetworkSettings']['Ports']['5432/tcp'][0]['HostPort']
+
+    dsn = 'postgres://{username}:{password}@{host}:{port}/{database}?docker'.format(
+            username=username, password=password, database=database, host=db_host_ip, port=port)
+
+    if l and l.database.dsn != dsn:
+        prt("Set the library.database configuration to this DSN:")
+        prt(dsn)

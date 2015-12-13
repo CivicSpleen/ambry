@@ -317,7 +317,11 @@ class Bundle(object):
         """Returned a cached ProcessLogger to record build progress """
 
         if not self._progress:
-            self._progress = ProcessLogger(self.dataset, self.logger)
+
+            # If won't be building, only use one connection
+            new_connection = False if self._library.read_only else True
+
+            self._progress = ProcessLogger(self.dataset, self.logger, new_connection=new_connection)
 
         return self._progress
 
@@ -396,11 +400,11 @@ class Bundle(object):
         :return:
         """
         from ambry.orm import Table
-        from sqlalchemy.orm import noload
+        from sqlalchemy.orm import lazyload
 
         return (self.dataset.session.query(Table)
                 .filter(Table.d_vid == self.dataset.vid)
-                .options(noload('column'))
+                .options(lazyload('*'))
                 .all())
 
     def new_table(self, name, add_id=True, **kwargs):
@@ -917,6 +921,7 @@ Caster Code
         from ambry_sources.exceptions import MissingCredentials
         from ambry_sources import get_source
         from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe
+        from ambry.bundle.process import call_interval
 
         s = None
 
@@ -946,6 +951,7 @@ Caster Code
 
         elif source.is_downloadable:
 
+            @call_interval(5)
             def progress(read_len, total_len):
                 if ps:
                     ps.add_update('Downloading {}: {}'.format(source.url, total_len), source=source,
@@ -977,6 +983,9 @@ Caster Code
                                   for c in source.source_table.columns]
 
             sp = SourceFileSourcePipe(self, source, s)
+
+        else:
+            raise Exception("Don't know what to do with source: {}".format(source.name))
 
         return s, sp
 
@@ -1154,8 +1163,15 @@ Caster Code
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
 
+        synced = 0
         for fc in [File.BSFILE.SCHEMA, File.BSFILE.SOURCESCHEMA]:
-            self.build_source_files.file(fc).sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+            bsf = self.build_source_files.file(fc)
+            if bsf.fs_is_newer:
+                self.log("Syncing {}".format(bsf.file_name))
+                bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+                synced += 1
+
+        return synced
 
     #
     # Clean
@@ -1445,8 +1461,7 @@ Caster Code
                     raise
             else:
                 for i, source in enumerate(downloadable_sources, 1):
-                    ps.add(message='Ingesting source #{}, {}'.format(i, source.name),
-                           source=source, item_count=i, state='running')
+                    ps.add(message='Ingesting source #{}, {}'.format(i, source.name), source=source, state='running')
                     r = self._ingest_source(source, ps, force)
                     if not r:
                         errors += 1
@@ -1459,6 +1474,7 @@ Caster Code
 
     def _ingest_source(self, source, ps, force=None):
         """Ingest a single source"""
+        from ambry.bundle.process import call_interval
 
         try:
 
@@ -1484,7 +1500,7 @@ Caster Code
                               .format(source.name, source.ref), state='skipped')
                     return True
 
-            ps.update('Ingesting: {} from {}'.format(source.spec.name, source.url or source.generator))
+
             source.state = source.STATES.INGESTING
 
             iterable_source, source_pipe = self.source_pipe(source, ps)
@@ -1496,17 +1512,24 @@ Caster Code
 
                 return True
 
-            def dl_progress_f():
-                (desc, n_records, total, rate) = source.datafile.report_progress()
-                ps.update(message='Ingesting {}: {} {} of {}, rate: {}'
-                          .format(source.spec.name, desc, n_records, total, rate))
+            ps.update('Ingesting {} from {}'.format(source.spec.name, source.url or source.generator),
+                      item_type='rows', item_count=0)
 
-            source.datafile.load_rows(iterable_source)
+            @call_interval(5)
+            def ingest_progress_f(i):
+                (desc, n_records, total, rate) = source.datafile.report_progress()
+
+                ps.update(message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
+
+            source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
+                                      limit=500 if self.limited_run else None)
+
+            ps.update(message='Updating tables and specs for {}'.format(source.name))
 
             source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
 
-            ps.update(message='Ingested: {}'.format(source.datafile.path), state='done')
+            ps.update(message='Ingested {}'.format(source.datafile.path), state='done')
             source.state = source.STATES.INGESTED
             self.commit()
 
@@ -1840,7 +1863,6 @@ Caster Code
 
             self.state = self.STATES.BUILT
 
-
             if finalize:
                 self.finalize()
 
@@ -1866,7 +1888,7 @@ Caster Code
     def build_source(self, stage, source, ps, force=False):
         """Build a single source"""
         from ambry.bundle.events import TAG
-        from ambry.bundle.process import CallInterval
+        from ambry.bundle.process import call_interval
 
         assert source.is_processable, source.name
 
@@ -1888,6 +1910,7 @@ Caster Code
             source_name = source.name  # In case the source drops out of the session, which is does.
             s_vid = source.vid
 
+            @call_interval(5)
             def run_progress_f(sink_pipe, rows):
                 (n_records, rate) = sink_pipe.report_progress()
                 if n_records > 0:
@@ -1897,7 +1920,13 @@ Caster Code
                               item_type = 'rows',
                               item_count = n_records)
 
-            pl.run(callback=CallInterval(run_progress_f, 5))
+            pl.run(callback=run_progress_f)
+
+            # Run the final routines at the end of the pipelin
+            for f in pl.final:
+                ps.update(message='Run final routine: {}'.format(f))
+                f(pl)
+
 
             ps.update(message='Finished running source')
 
@@ -2006,9 +2035,9 @@ Caster Code
 
             def coalesce_progress_f(i):
                 (desc, n_records, total, rate) = parent.datafile.report_progress()
-                assert i == n_records
-                ps.update(message='Coalescing {}: {} of {}, rate: {}'
-                          .format(parent.identity.name, n_records, total, rate))
+
+                ps.update(message='Coalescing {}: {}/{} of {}, rate: {}'
+                          .format(parent.identity.name, i,n_records, total, rate))
 
             coalesce_progress_f = CallInterval(coalesce_progress_f, 10) # FIXME Should be a decorator
 
@@ -2039,6 +2068,7 @@ Caster Code
         self.commit()
 
         return str(partition_name)
+
 
     def exec_context(self, **kwargs):
         """Base environment for evals, the stuff that is the same for all evals. Primarily used in the

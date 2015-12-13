@@ -14,7 +14,7 @@ from fs.opener import fsopendir
 from tabulate import tabulate
 
 from six import iteritems, iterkeys, callable as six_callable, text_type, binary_type
-from six.moves import queue as six_queue
+
 
 from ambry.identity import NotObjectNumberError
 from ambry.bundle import Bundle
@@ -315,8 +315,8 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='schema')
 
     command_p.add_argument('-b', '--build', action='store_true',
-                           help='For the destination schema, use the build process to "'
-                                '"determine the schema, not the source tables ')
+                           help='For the destination schema, use the build process to '
+                                'determine the schema, not the source tables ')
 
     command_p.add_argument('-c', '--clean', default=False, action='store_true',
                            help='Remove all columns from existing tables')
@@ -439,33 +439,7 @@ def bundle_parser(cmd):
                                    help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
 
-    #
-    # edit
-    #
 
-    command_p = sub_cmd.add_parser('edit', help='Edit a bundle file')
-    command_p.set_defaults(subcommand='edit')
-
-    group = command_p.add_mutually_exclusive_group()
-    group.add_argument('-b', '--bundle',  default=False, action='store_const',
-                       const=File.BSFILE.BUILD, dest='file_const',
-                       help='Edit the code file')
-    group.add_argument('-m', '--meta', default=False, action='store_const',
-                       const=File.BSFILE.META, dest='file_const',
-                       help='Edit the metadata')
-    group.add_argument('-c', '--colmap', default=False, action='store_const',
-                       const=File.BSFILE.COLMAP, dest='file_const',
-                       help='Edit the column map')
-    group.add_argument('-r', '--sources', default=False, action='store_const',
-                       const=File.BSFILE.SOURCES, dest='file_const',
-                       help='Edit the sources')
-    group.add_argument('-s', '--schema', default=False, action='store_const',
-                       const=File.BSFILE.SCHEMA, dest='file_const',
-                       help='Edit the schema')
-    group.add_argument('-d', '--documentation', default=False, action='store_const',
-                       const=File.BSFILE.DOC, dest='file_const',
-                       help='Edit the documentation')
-    command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
 
     command_p = sub_cmd.add_parser('import', help='Import a source bundle. ')
     command_p.set_defaults(subcommand='import')
@@ -481,7 +455,7 @@ def bundle_parser(cmd):
 
     command_p = sub_cmd.add_parser('extract', help='Extract data from a bundle')
     command_p.set_defaults(subcommand='extract')
-    command_p.add_argument('-l', '--limit', type=int, default=None, help='Limit on number of rwos per file')
+    command_p.add_argument('-l', '--limit', type=int, default=None, help='Limit on number of rows per file')
     command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to extract')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
@@ -891,6 +865,7 @@ def bundle_build(args, l, rc):
     else:
         b.sync_code()
         b.sync_sources()
+        b.sync_schema()
 
     b = b.cast_to_subclass()
 
@@ -1000,6 +975,7 @@ def bundle_set(args, l, rc):
 
 def bundle_dump(args, l, rc):
     import datetime
+    from six import text_type
 
     ref, frm = get_bundle_ref(args, l)
 
@@ -1021,7 +997,7 @@ def bundle_dump(args, l, rc):
                 row.group,
                 row.parent_id,
                 row.key,
-                trunc(str(row.value), 22),
+                trunc(text_type(row.value), 22),
                 datetime.datetime.fromtimestamp(row.modified).isoformat(),)
             )
 
@@ -1300,115 +1276,6 @@ file_const_map = dict(
     r=File.BSFILE.SOURCES)
 
 
-def bundle_edit(args, l, rc):
-    """Runs a process that acesspt command key strokes and opens editoris for specific files. """
-    import subprocess
-
-    from ..util import getch
-    from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler
-    import threading
-
-    b = using_bundle(args, l)
-
-    prt('Found bundle {}'.format(b.identity.fqname))
-
-    EDITOR = os.environ.get('EDITOR', 'vim')  # that easy!
-
-    b.sync()
-
-    prt('Commands: q=quit, {}'.format(', '.join(k + '=' + v for k, v in list(file_const_map.items()))))
-
-    def edit(const):
-
-        bf = b.build_source_files.file(const)
-        bf.prepare_to_edit()
-
-        file_path = bf.path
-
-        prt('Editing {}'.format(file_path))
-
-        _, ext = os.path.splitext(file_path)
-
-        if sys.platform.startswith('darwin'):
-            subprocess.call(('open', file_path))
-        elif os.name == 'nt':
-            os.startfile(file_path)
-        elif os.name == 'posix':
-            subprocess.call(('xdg-open', file_path))
-
-    if args.file_const:
-        edit(args.file_const)
-
-    queue = six_queue.Queue()
-
-    class EditEventHandler(FileSystemEventHandler):
-        def on_modified(self, event):
-            queue.put(('change', event.src_path))
-
-    observer = Observer()
-    observer.schedule(EditEventHandler(), os.path.dirname(b.source_fs.getsyspath('/')))
-    observer.start()
-
-    # Thread to get commands from the user. Using a thread so that the char input can block on input
-    # and the main thread can still process change events.
-    def get_chars():
-        while True:
-            char = getch()
-
-            if char == 'q' or ord(char) == 3:  # Crtl-c
-                queue.put(('quit', None))
-                break
-            if char in ('p', 'B'):
-                queue.put(('build', char))
-            elif char in file_const_map:
-                queue.put(('edit', file_const_map[char]))
-            else:
-                queue.put(('unknown', char))
-
-    get_chars_t = threading.Thread(target=get_chars)
-    get_chars_t.start()
-
-    # Look, in this thread, that executed the commands.
-    while True:
-        try:
-            command, arg = queue.get(True)
-
-            # On OS X Terminal, the printing moves the cursor down a line, but not to the start, so these
-            # ANSI sequences fix the cursor positiing. No idea why ...
-            print("\033[0G\033[1F")
-
-            if command == 'quit':
-                observer.stop()
-                break
-
-            elif command == 'edit':
-                edit(arg)
-
-            elif command == 'change':
-                prt("Changed: {}".format(arg))
-                if b.is_buildable:
-                    b.sync()
-                else:
-                    err('Bundle is not in a buildable state; did not sync')
-
-            elif command == 'build':
-                bc = b.cast_to_subclass()
-                if b.is_buildable:
-                    if arg == 'B':
-                        bc.clean()
-                        bc.build()
-                else:
-                    err('Bundle is not in a buildable state; not building')
-
-            elif command == 'unknown':
-                warn('Unknown command char: {} '.format(arg))
-        except Exception:
-            import traceback
-            print(traceback.format_exc())
-
-    observer.join()
-    get_chars_t.join()
 
 
 def bundle_extract(args, l, rc):
@@ -1422,6 +1289,10 @@ def bundle_extract(args, l, rc):
     limit = args.limit
 
     for p in b.partitions:
+
+        if args.partition and args.partition != p.identity.vid:
+            continue
+
         b.logger.info('Extracting: {} '.format(p.name))
         with bfs.open(p.name + '.csv', 'wb') as f, p.datafile.reader as r:
             w = csv.writer(f)
@@ -1474,19 +1345,6 @@ def bundle_view(args, l, rc):
 
     main(args)
 
-
-def bundle_cluster(args, l, rc):
-
-    from ambry.etl import ClusterHeaders
-
-    b = using_bundle(args, l)
-
-    ch = ClusterHeaders()
-
-    for t in b.dataset.source_tables:
-        ch.add_header(t.name, sorted([c.source_header for c in t.columns]))
-
-    print(yaml.safe_dump({'source_sets': ch.cluster()}, indent=4, default_flow_style=False))
 
 
 def bundle_colmap(args, l, rc):
@@ -1638,6 +1496,24 @@ def bundle_docker(args, l, rc):
     import os
     import sys
     from docker.errors import NotFound, NullResource
+    from ambry.util import parse_url_to_dict, unparse_url_dict
+
+    d = parse_url_to_dict(l.database.dsn)
+
+    if not 'docker' in d['query']:
+        fatal("Database '{}' doesnt look like a docker database DSN; it should have 'docker' at the end"
+              .format(l.dsn.database))
+
+    # Create the new container DSN; in docker, the database is always known as 'db'
+    d['hostname'] = 'db'
+    d['port'] = None
+    dsn = unparse_url_dict(d)
+
+    # The username is the unique id part of all of the docker containers, so we
+    # can construct the names of the database and volumes container from it.
+    username =  d['username']
+    volumes_c = 'ambry_volumes_{}'.format(username)
+    db_c = 'ambry_db_{}'.format(username)
 
     b = using_bundle(args, l, print_loc=False)
     client = docker_client()
@@ -1668,12 +1544,11 @@ def bundle_docker(args, l, rc):
 
     bambry_cmd = ' '.join(args.args).strip()
 
-
     def run_container(bambry_cmd=None):
         """Run a new docker container"""
 
         envs = []
-        envs.append('AMBRY_DB={}'.format(l.database.dsn))
+        envs.append('AMBRY_DB={}'.format(dsn))
         envs.append('AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password))
 
         if bambry_cmd:
@@ -1695,8 +1570,6 @@ def bundle_docker(args, l, rc):
             envs.append('AMBRY_COMMAND=bambry -i {} {} {}'.format(
                 b.identity.vid, ' '.join(bambry_cmd_args), bambry_cmd))
 
-            prt("Docker Run: {}", envs[-1])
-
             detach = True
         else:
             detach = False
@@ -1704,20 +1577,29 @@ def bundle_docker(args, l, rc):
         if args.limited_run:
             envs.append('AMBRY_LIMITED_RUN=1')
 
+        try:
+            image_tag = rc.docker.ambry_image
+        except KeyError:
+            image_tag = 'civicknowledge/ambry'
 
         if args.version:
             import ambry._meta
-            image = 'civicknowledge/ambry:{}'.format(ambry._meta.__version__)
+            image = '{}:{}'.format(image_tag,ambry._meta.__version__)
         else:
-            image = 'civicknowledge/ambry'
+            image = image_tag
 
         try:
-            volumes_from = rc.docker.volumes_from
+            volumes_from = [rc.docker.volumes_from]
         except KeyError:
-            volumes_from = None
+            volumes_from = []
+
+        volumes_from.append(volumes_c)
 
         host_config = client.create_host_config(
-            volumes_from=volumes_from
+            volumes_from=volumes_from,
+            links={
+                db_c:'db'
+            }
         )
 
         kwargs = dict(
@@ -1728,8 +1610,6 @@ def bundle_docker(args, l, rc):
             environment=envs,
             host_config=host_config
         )
-
-        print kwargs
 
         r = client.create_container(**kwargs)
 
@@ -1754,13 +1634,11 @@ def bundle_docker(args, l, rc):
         else:
             warn('No container to kill')
 
-
     if bambry_cmd:
         # If there is command, run the container first so the subsequent arguments can operate on it
         last_container = run_container(bambry_cmd)
         b.buildstate.docker.last_container = last_container
         b.buildstate.commit()
-
 
     if args.docker_id:
         if last_container:
@@ -1795,7 +1673,6 @@ def bundle_docker(args, l, rc):
 
     elif args.shell:
         # Run a shell on a container
-
 
         os.execlp('docker', 'docker', 'exec', '-t','-i', last_container, '/bin/bash')
 

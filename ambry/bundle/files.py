@@ -617,7 +617,7 @@ class SourcesFile(RowBuildSourceFile):
                 d['state'] = 'synced'
 
                 try:
-                    ds = self._dataset.source_file(d['name'])
+                    ds = self._dataset.source_file(str(d['name']))
                     ds.update(**d)
                 except NotFoundError:
                     name = d['name']

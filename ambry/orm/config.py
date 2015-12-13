@@ -251,7 +251,10 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
         """Return the time the bundle was created as a datetime object"""
         from datetime import datetime
 
-        return datetime.fromtimestamp(self.state.new)
+        try:
+            return datetime.fromtimestamp(self.state.new)
+        except TypeError:
+            return None
 
     @property
     def last_datetime(self):

@@ -117,7 +117,7 @@ class Docker(Command):
         ('base', 'B', 'Build the base docker image, civicknowledge.com/ambry-base'),
         ('build', 'b', 'Build the ambry docker image, civicknowledge.com/ambry'),
         ('dev', 'd', 'Build the dev version of the ambry docker image, civicknowledge.com/ambry'),
-        ('launch', 'l', 'Run the docker image on the currently configured database'),
+        ('db', 'D', 'Build the database image, civicknowledge.com/postgres'),
         ('numbers', 'n', 'Build the numbers server docker image, civicknowledge.com/ambry-numbers'),
     ]
 
@@ -125,8 +125,8 @@ class Docker(Command):
         self.build = False
         self.dev = False
         self.base = False
-        self.launch = False
         self.numbers = False
+        self.db = False
 
     def finalize_options(self):
         pass
@@ -134,7 +134,7 @@ class Docker(Command):
     def run(self):
         import os
 
-        def tag():
+        def tag(n):
             from ambry._meta import __version__
             import subprocess
             import json
@@ -146,38 +146,33 @@ class Docker(Command):
             (out, err) = proc.communicate()
             d = json.loads(out)
 
-            self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/ambry:{}'.format(__version__)])
+            self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/{}:{}'.format(n,__version__)])
 
         if self.base:
-            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-base',
+            self.spawn(['docker', 'build', '-f', 'support/docker/base/Dockerfile',
                         '-t', 'civicknowledge/ambry-base', '.'])
 
         if self.numbers:
-            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.numbers',
+            self.spawn(['docker', 'build', '-f', 'support/docker/numbers/Dockerfile',
                         '-t', 'civicknowledge/ambry-numbers', '.'])
 
         if self.build:
-            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry',
+            self.spawn(['docker', 'build', '-f', 'support/docker/ambry/Dockerfile',
                         '-t', 'civicknowledge/ambry', '.'])
 
-            tag()
+            tag('ambry')
 
         if self.dev:
-            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-dev',
+            self.spawn(['docker', 'build', '-f', 'support/docker/dev/Dockerfile',
                         '-t', 'civicknowledge/ambry', '.'])
 
-            tag()
+            tag('ambry')
 
+        if self.db:
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/postgres', 'support/docker/postgres/'])
 
+            tag('postgres')
 
-        if self.launch:
-            from ambry import get_library
-            l = get_library()
-            args = ('docker run --rm -t -i -e AMBRY_DB={} -e AMBRY_ACCOUNT_PASSWORD={} civicknowledge/ambry'
-                    .format(l.database.dsn, l._account_password)
-                    .split())
-
-            self.spawn(args)
 
 
 tests_require = ['pytest']

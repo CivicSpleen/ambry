@@ -247,6 +247,8 @@ def update_config(config):
         'config.library.filesystem_root',
     ]
 
+
+
     for check in checks:
         try:
             _ = eval(check)

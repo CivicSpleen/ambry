@@ -135,6 +135,7 @@ class TestBase(unittest.TestCase):
         from test import bundle_tests
 
         l = self.library()
+        print l.database.dsn
 
         if clean:
             l.clean()

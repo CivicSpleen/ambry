@@ -1806,9 +1806,11 @@ class WriteToPartition(Pipe, PartitionWriter):
             writer.headers = header_mapper(self.headers)
 
         try:
-            writer.insert_row(body_mapper(row))
+            mapped_row = body_mapper(row)
+
+            writer.insert_row(mapped_row)
         except Exception as e:
-            self.bundle.logger.error("Insert failed to {}: {}\n{}".format(p.datafile.path, row, e))
+            self.bundle.logger.error("Insert failed to {}: {}\n{}".format(p.datafile.path, mapped_row, e))
             raise
 
         return row
@@ -2110,7 +2112,7 @@ class Pipeline(OrderedDict):
 
     def __setattr__(self, k, v):
         if k.startswith('_OrderedDict__') or k in (
-        'name', 'phase', 'sink', 'dest_table', 'source_name', 'source_table'):
+        'name', 'phase', 'sink', 'dest_table', 'source_name', 'source_table', 'final'):
             return super(Pipeline, self).__setattr__(k, v)
 
         self.__setitem__(k, v)

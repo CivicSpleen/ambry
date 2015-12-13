@@ -310,9 +310,7 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     source_table_name = SAColumn('ds_st_name', Text)
     _source_table = relationship(SourceTable, backref='sources')
 
-    t_vid = SAColumn(
-        'ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True,
-        doc='Table vid')
+    t_vid = SAColumn('ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True,doc='Table vid')
     dest_table_name = SAColumn('ds_dt_name', Text)
     _dest_table = relationship(Table, backref='sources')
 

@@ -362,3 +362,22 @@ def _parse_binary(v, header_d):
             return six.binary_type(v, 'utf-8').strip()
         except UnicodeEncodeError:
             return six.text_type(v).strip()
+
+
+def excel_dt_1900(v):
+    """Convert a float that representes a date in an excel file into a datetime. The float
+    is assumed to have a basis of 1900"""
+
+    from xlrd.xldate import  xldate_as_datetime
+    return xldate_as_datetime(v, 0)
+
+def excel_dt_1904(v):
+    """Convert a float that representes a date in an excel file into a datetime. The float
+    is assumed to have a basis of 1904"""
+
+    from xlrd.xldate import  xldate_as_datetime
+    return xldate_as_datetime(v, 0)
+
+def date(v):
+    """Convert a date to a datetime"""
+    return v.date()

@@ -586,7 +586,7 @@ class ConfigAccessor(object):
             for a usage example"""
         from .config import BuildConfigGroupAccessor
 
-        raise Exception('Use bundle.progress.buildstate instead')
+        raise NotImplementedError('Use bundle.buildstate instead')
 
         return BuildConfigGroupAccessor(self.dataset, 'buildstate')
 

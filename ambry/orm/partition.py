@@ -265,14 +265,16 @@ class Partition(Base, DictableMixin):
             for source_name, source in list(self.data['source_data'].items()):
                 if 'time' in source:
                     for year in expand_to_years(source['time']):
-                        tcov.add(year)
+                        if year:
+                            tcov.add(year)
 
         # From the partition name
         if self.identity.name.time:
             for year in expand_to_years(self.identity.name.time):
-                tcov.add(year)
+                if year:
+                    tcov.add(year)
 
-        self.time_coverage = tcov
+        self.time_coverage = [ t for t in tcov if t ]
 
         #
         # Grains
@@ -297,6 +299,9 @@ class Partition(Base, DictableMixin):
 
             def __repr__(self):
                 return repr(self.__dict__)
+
+            def keys(self):
+                return list(self.__dict__.keys())
 
             def items(self):
                 return list(self.__dict__.items())
@@ -375,6 +380,7 @@ class Partition(Base, DictableMixin):
                 wc.name = c.name
                 wc.description = c.description
                 wc.type = c.python_type.__name__
+                self.count = w.n_rows
             w.finalize()
 
         if self.type == self.TYPE.UNION:
@@ -385,10 +391,7 @@ class Partition(Base, DictableMixin):
 
         self._location = 'build'
 
-        self.count = self.stats_dict['id']['count']
-
         self.state = self.STATES.FINALIZED
-
 
     # =============
     # These methods are a bit non-cohesive, since they require the _bundle value to be set, which is
