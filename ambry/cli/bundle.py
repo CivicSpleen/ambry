@@ -5,29 +5,24 @@ This file is licensed under the terms of the Revised BSD License,
 included in this distribution as LICENSE.txt
 
 """
-import os
-import sys
 import yaml
-
-from fs.opener import fsopendir
-
+from six import iteritems, iterkeys, callable as six_callable, text_type, binary_type
 from tabulate import tabulate
 
-from six import iteritems, iterkeys, callable as six_callable, text_type, binary_type
-
-
-from ambry.identity import NotObjectNumberError
+import os
 from ambry.bundle import Bundle
+from ambry.identity import NotObjectNumberError
 from ambry.orm.exc import NotFoundError
 from ambry.util import drop_empty
-
-from ..cli import prt, fatal, warn, err, prt_no_format
+from . import get_docker_links, docker_client
+from fs.opener import fsopendir
+from ..cli import prt, fatal, warn, prt_no_format
 from ..orm import File
 
 
 def bundle_command(args, rc):
 
-    from ..library import Library, global_library
+    from ..library import Library
     from . import global_logger
     from ambry.orm.exc import ConflictError
     from ambry.dbexceptions import LoggedException
@@ -132,7 +127,6 @@ def using_bundle(args, l, print_loc=True, use_history=False):
 
 
 def bundle_parser(cmd):
-    import multiprocessing
     import argparse
 
     parser = cmd.add_parser('bundle', help='Manage bundle files')
@@ -328,8 +322,6 @@ def bundle_parser(cmd):
     command_p.add_argument('-s', '--source', action='append',
                            help='Sources to ingest, instead of running all sources')
 
-
-
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     #
@@ -459,8 +451,6 @@ def bundle_parser(cmd):
     command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to extract')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
-
-    #
     # Colmap
     #
 
@@ -481,8 +471,6 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='test')
     command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
 
-
-    #
     # Docker
     #
 
@@ -502,7 +490,7 @@ def bundle_parser(cmd):
     command_p.add_argument('-S', '--stats', default=False, action='store_true',
                            help='Report stats from the currently running container')
     command_p.add_argument('-v', '--version', default=False, action='store_true',
-                       help='Select a docker version that is the same as this Ambry installation')
+                           help='Select a docker version that is the same as this Ambry installation')
 
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
 
@@ -669,7 +657,7 @@ def bundle_info(args, l, rc):
             print(SingleTable(rows, title='Stats for ' + str(p.identity.name)).table)
 
     elif args.partitions:
-        from ambry.orm import Partition, Table
+        from ambry.orm import Partition
         from sqlalchemy.orm import lazyload, joinedload
 
         rows = []
@@ -784,9 +772,8 @@ def bundle_sync(args, l, rc):
         b.sync_in()
 
     if args.code:
-        synced=b.sync_code()
+        synced = b.sync_code()
         prt('Synced {} files'.format(synced))
-
 
     if args.out:
         prt('Sync out')
@@ -837,7 +824,7 @@ def bundle_schema(args, l, rc):
 
     b.sync_code()
 
-    b.ingest(sources=args.source,tables=args.table, force=args.force)
+    b.ingest(sources=args.source, tables=args.table, force=args.force)
 
     b.schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=args.build)
 
@@ -1156,7 +1143,6 @@ def bundle_dump(args, l, rc):
         records = sorted(records, key=lambda r: (r[4], r[0]))
 
     elif args.table == 'metadata':
-        import json
 
         for key, value in b.metadata.kv:
             print key, value
@@ -1481,39 +1467,13 @@ def bundle_test(args, l, rc):
 
     b.run_tests(args.tests)
 
-def docker_client():
-    from docker.client import Client
-    from docker.utils import kwargs_from_env
-
-    kwargs = kwargs_from_env()
-    kwargs['tls'].assert_hostname = False
-
-    client = Client(**kwargs)
-
-    return client
 
 def bundle_docker(args, l, rc):
     import os
     import sys
     from docker.errors import NotFound, NullResource
-    from ambry.util import parse_url_to_dict, unparse_url_dict
 
-    d = parse_url_to_dict(l.database.dsn)
-
-    if not 'docker' in d['query']:
-        fatal("Database '{}' doesnt look like a docker database DSN; it should have 'docker' at the end"
-              .format(l.dsn.database))
-
-    # Create the new container DSN; in docker, the database is always known as 'db'
-    d['hostname'] = 'db'
-    d['port'] = None
-    dsn = unparse_url_dict(d)
-
-    # The username is the unique id part of all of the docker containers, so we
-    # can construct the names of the database and volumes container from it.
-    username =  d['username']
-    volumes_c = 'ambry_volumes_{}'.format(username)
-    db_c = 'ambry_db_{}'.format(username)
+    username, dsn, volumes_c, db_c, envs = get_docker_links(l)
 
     b = using_bundle(args, l, print_loc=False)
     client = docker_client()
@@ -1547,9 +1507,6 @@ def bundle_docker(args, l, rc):
     def run_container(bambry_cmd=None):
         """Run a new docker container"""
 
-        envs = []
-        envs.append('AMBRY_DB={}'.format(dsn))
-        envs.append('AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password))
 
         if bambry_cmd:
 
@@ -1611,6 +1568,8 @@ def bundle_docker(args, l, rc):
             host_config=host_config
         )
 
+        prt('Starting container with image {} '.format(image))
+
         r = client.create_container(**kwargs)
 
         client.start(r['Id'])
@@ -1626,7 +1585,7 @@ def bundle_docker(args, l, rc):
 
             client.remove_container(last_container)
 
-            prt("Killed {}", last_container)
+            prt('Killed {}', last_container)
 
             b.buildstate.docker.last_container = None
             b.buildstate.commit()
@@ -1653,14 +1612,13 @@ def bundle_docker(args, l, rc):
 
         return
 
-
     elif args.logs:
 
         if last_container:
             for line in client.logs(last_container, stream=True):
                 print line,
         else:
-            fatal("No running container")
+            fatal('No running container')
 
     elif args.stats:
 
@@ -1673,7 +1631,8 @@ def bundle_docker(args, l, rc):
 
     elif args.shell:
         # Run a shell on a container
-
+        # This is using execlp rather than the docker API b/c we want to entirely replace the
+        # current process to get a good tty.
         os.execlp('docker', 'docker', 'exec', '-t','-i', last_container, '/bin/bash')
 
     elif not bambry_cmd and not args.kill:
@@ -1686,7 +1645,6 @@ def bundle_docker(args, l, rc):
 def bundle_log(args, l, rc):
     b = using_bundle(args, l)
     from ambry.util import drop_empty
-    from ambry.util.text import ansicolors
     from itertools import groupby
     from collections import defaultdict
     from ambry.orm import Partition
@@ -1710,7 +1668,6 @@ def bundle_log(args, l, rc):
         records = []
 
         def append(pr, edit=None):
-            from ambry.util.text import ansicolors
 
             if not isinstance(pr, dict):
                 pr = pr.dict

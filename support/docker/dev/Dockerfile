@@ -5,20 +5,20 @@ FROM civicknowledge/ambry-base
 
 MAINTAINER Eric Busboom "eric@civicknowledge.org"
 
-ENV AMBRY_IS_REMOTE 1
-
-
-WORKDIR /opt #rev7
+ENV AMBRY_IS_REMOTE 1 #rev9
 
 RUN pip install git+https://github.com/CivicKnowledge/ambry_sources.git && \
     pip install git+https://github.com/CivicKnowledge/geoid.git
 
+
 COPY . /opt/ambry/
 WORKDIR /opt/ambry/
+RUN rm -rf build
 
 RUN python setup.py install
 
-RUN pip install git+https://github.com/CivicKnowledge/censuslib.git #rev
+# AMbry must be installed first
+RUN pip install git+https://github.com/CivicKnowledge/censuslib.git
 
 WORKDIR /var/ambry
 

@@ -13,6 +13,8 @@ import traceback
 from decorator import decorator
 from six import string_types, iteritems, u, b
 from fs.errors import NoSysPathError
+from fs.wrapfs.lazyfs import LazyFS
+
 from geoid.civick import GVid
 from geoid import NotASummaryName
 from ambry.dbexceptions import BuildError, BundleError, FatalError
@@ -103,7 +105,6 @@ class Bundle(object):
 
     def __init__(self, dataset, library, source_url=None, build_url=None):
         import logging
-        import signal
 
         self._dataset = dataset
         self._vid = dataset.vid
@@ -430,7 +431,6 @@ class Bundle(object):
         def set_bundle(s):
             s._bundle = self
             return s
-
         return list(set_bundle(s) for s in self.dataset.sources)
 
     def _resolve_sources(self, sources, tables, stage=None, predicate=None):
@@ -753,8 +753,12 @@ Caster Code
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
         self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
-
-        self.build_fs.setcontents(path, v, encoding='utf8')
+        # LazyFS should handled differently because of:
+        # TypeError: lazy_fs.setcontents(..., encoding='utf-8') got an unexpected keyword argument 'encoding'
+        if isinstance(self.build_fs, LazyFS):
+            self.build_fs.wrapped_fs.setcontents(path, v, encoding='utf8')
+        else:
+            self.build_fs.setcontents(path, v, encoding='utf8')
 
     def pipeline(self, source=None, phase='build', ps=None):
         """
@@ -1073,7 +1077,7 @@ Caster Code
     def sync(self, force=None, defaults=False):
         """
 
-        :param force: Force a sync in one direction, either ftr or rtf.
+        :param force: Force a sync in one direction, either ftr (file to record) or rtf (record to file).
         :param defaults [False] If True and direction is rtf, write default source files
         :return:
         """
@@ -1132,7 +1136,7 @@ Caster Code
         for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
             bsf = self.build_source_files.file(fc)
             if bsf.fs_is_newer:
-                self.log("Syncing {}".format(bsf.file_name))
+                self.log('Syncing {}'.format(bsf.file_name))
                 bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
                 synced += 1
 
@@ -1152,7 +1156,7 @@ Caster Code
         for fc in [File.BSFILE.SOURCES]:
             bsf = self.build_source_files.file(fc)
             if bsf.fs_is_newer:
-                self.log("Syncing {}".format(bsf.file_name))
+                self.log('Syncing {}'.format(bsf.file_name))
                 bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
                 synced += 1
 
@@ -1251,17 +1255,17 @@ Caster Code
         self.progress.clean()
 
     def clean_tables(self):
-        """Like clean, but also clears out schema tables and the partitions that depend on them. . """
+        """Like clean, but also clears out schema tables and the partitions that depend on them. """
 
         self.dataset.delete_tables_partitions()
 
     def clean_partitions(self):
-        """Delete partition records and any built partition files.  """
+        """Delete partition records and any built partition files. """
         import shutil
         from ambry.orm import ColumnStat
 
         # FIXME. There is a problem with the cascades for ColumnStats that prevents them from
-        # being  deleted with the partitions. Probably, the are seen to be owed by the columns instead.
+        # being  deleted with the partitions. Probably, they are seen to be owed by the columns instead.
         self.session.query(ColumnStat).filter(ColumnStat.d_vid == self.dataset.vid).delete()
 
         self.dataset.delete_partitions()
@@ -1368,7 +1372,8 @@ Caster Code
                 s.datafile.remove()
                 return True
 
-        sources = sorted(self._resolve_sources(sources, tables, stage, predicate=not_final_or_delete), key=key)
+        sources = sorted(self._resolve_sources(sources, tables, stage, predicate=not_final_or_delete),
+                         key=key)
 
         if not sources:
             self.log("No sources left to ingest")
@@ -1433,7 +1438,8 @@ Caster Code
         errors = 0
         with self.progress.start('ingest', stage,
                                  message='Ingesting ' + ('MP' if self.multi else 'SP'),
-                                 item_total=len(sources), item_type='source', item_count=len(downloadable_sources)
+                                 item_total=len(sources), item_type='source',
+                                 item_count=len(downloadable_sources)
                                  ) as ps:
 
             # Create all of the source tables first, so we can't get contention for creating them
@@ -1468,7 +1474,7 @@ Caster Code
 
             if errors > 0:
                 from ambry.dbexceptions import IngestionError
-                raise IngestionError("Failed to ingest {} sources".format(errors))
+                raise IngestionError('Failed to ingest {} sources'.format(errors))
 
         return errors
 
@@ -1492,7 +1498,7 @@ Caster Code
             if source.is_partition:
                 # Check if the partition exists
                 try:
-                    p = self.library.partition(source.ref)
+                    self.library.partition(source.ref)
                 except NotFoundError:
                     # Maybe it is an internal reference, in which case we can just delay
                     # until the partition is built
@@ -2157,7 +2163,12 @@ Caster Code
         path = '/code/casters/{}.py'.format(source.name)
 
         self.build_fs.makedir(os.path.dirname(path), allow_recreate=True, recursive=True)
-        self.build_fs.setcontents(path, code, encoding='utf8')
+        # LazyFS should handled differently because of:
+        # TypeError: lazy_fs.setcontents(..., encoding='utf-8') got an unexpected keyword argument 'encoding'
+        if isinstance(self.build_fs, LazyFS):
+            self.build_fs.wrapped_fs.setcontents(path, code, encoding='utf8')
+        else:
+            self.build_fs.setcontents(path, code, encoding='utf8')
 
         # The abs_path is just for reporting line numbers in debuggers, etc.
         try:

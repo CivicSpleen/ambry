@@ -72,4 +72,3 @@ class Test(unittest.TestCase):
 
         for t in ds.tables:
             self.assertEqual(11, len(t.columns)) # 10 + id column
-

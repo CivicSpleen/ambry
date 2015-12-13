@@ -147,7 +147,6 @@ class Partition(Base, DictableMixin):
     def __repr__(self):
         return '<partition: {} {}>'.format(self.vid, self.vname)
 
-
     def set_stats(self, stats):
 
         self.stats[:] = []  # Delete existing stats

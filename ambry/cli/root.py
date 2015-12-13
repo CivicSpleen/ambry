@@ -106,8 +106,8 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='docker')
 
-    sp.add_argument('-b', '--build', help="Build a new docker image. Specify one of: "
-                    "'ambry','dev','numbers','db','ui'")
+    sp.add_argument('-s', '--shell', default=False, action='store_true',
+                    help="Run a shell on the current docker host, in a new container")
 
     sp.add_argument('-i', '--init', default=False, action='store_true',
                     help="Initialilze a new data volume and database")
@@ -116,11 +116,6 @@ def root_parser(cmd):
                     help="With -i, initialize a new database and volume, and report the new DSN")
 
 
-    #sp.add_argument('-r', '--run', default=False, action='store_true', help='Run the docker image')
-    #sp.add_argument('-l', '--local', default=False, action='store_true',
-    #                help='Use the local Sqlite database, not a postgress database supplied through an environmental var')
-    #sp.add_argument('-s', '--shell', default=False, action='store_true',
-    #                help='Run a shell in the docker image')
 
 def root_command(args, rc):
     from ..library import new_library
@@ -132,7 +127,13 @@ def root_command(args, rc):
         rc.set_lirbary_database('test')
 
     try:
-        l = new_library(rc)
+        from ambry.library import global_library, Library
+        global global_library
+
+        l = Library(rc, echo=args.echo)
+
+        global_library = l
+
         l.logger = global_logger
         l.sync_config()
     except DatabaseError as e:
@@ -400,18 +401,6 @@ def root_import(args, l, rc):
             b.set_file_system(source_url=None)
 
 
-def docker_client():
-    from docker.client import Client
-    from docker.utils import kwargs_from_env
-
-    kwargs = kwargs_from_env()
-
-    if 'tls' in kwargs:
-        kwargs['tls'].assert_hostname = False
-
-    client = Client(**kwargs)
-
-    return client
 
 
 def root_docker(args, l, rc):
@@ -419,6 +408,8 @@ def root_docker(args, l, rc):
 
     if args.init:
         return root_docker_init(args, l, rc)
+    elif args.shell:
+        return root_docker_shell(args, l, rc)
 
 
 def root_docker_init(args, l, rc):
@@ -429,7 +420,7 @@ def root_docker_init(args, l, rc):
     import random
     from ambry.util import parse_url_to_dict
     from docker.utils import kwargs_from_env
-    from . import fatal
+    from . import fatal, docker_client
 
     client = docker_client()
 
@@ -445,6 +436,16 @@ def root_docker_init(args, l, rc):
     except NotFound:
         fatal(('Database image {i} not in docker. Run \'python setup.py docker -D\' or '
                ' \'docker pull {i}\'').format(i=postgres_image))
+
+
+    volumes_image = 'cogniteev/echo'
+
+    try:
+        inspect = client.inspect_image(volumes_image)
+    except NotFound:
+        prt('Pulling image for volumns container: {}'.format(volumes_image))
+        client.pull(volumes_image)
+
 
     # Assume that the database host IP is also the docker host IP. This usually be true
     # externally to the docker host, and internally, we'll alter the host:port to
@@ -480,7 +481,7 @@ def root_docker_init(args, l, rc):
 
         r = client.create_container(
             name=volumes_c,
-            image='cogniteev/echo',
+            image=volumes_image,
             volumes=['/var/ambry', '/var/backups'],
             host_config = client.create_host_config()
         )
@@ -529,3 +530,75 @@ def root_docker_init(args, l, rc):
     if l and l.database.dsn != dsn:
         prt("Set the library.database configuration to this DSN:")
         prt(dsn)
+
+def root_docker_shell(args, l, rc):
+    """Run a shell in an Ambry builder image, on the current docker host"""
+
+    from . import docker_client, get_docker_links
+    from docker.errors import NotFound, NullResource
+    import os
+
+    client = docker_client()
+
+    username, dsn, volumes_c, db_c, envs = get_docker_links(l)
+
+    shell_name = 'ambry_shell_{}'.format(username)
+
+    # Check if the  image exists.
+
+    image = 'civicknowledge/ambry'
+
+    try:
+        inspect = client.inspect_image(image)
+    except NotFound:
+        fatal(('Database image {i} not in docker. Run \'python setup.py docker -b\' or '
+               ' \'docker pull {i}\'').format(i=_image))
+
+    try:
+        inspect = client.inspect_container(shell_name)
+        running = inspect['State']['Running']
+        exists = True
+    except NotFound as e:
+        running = False
+        exists = False
+
+    # If no one is using is, clear it out.
+    if exists and not running:
+        prt('Container {} exists but is not running; recreate it from latest image'.format(shell_name))
+        client.remove_container(shell_name)
+        exists = False
+
+    if not running:
+
+        kwargs = dict(
+            name=shell_name,
+            image=image,
+            detach=False,
+            tty=True,
+            stdin_open=True,
+            environment=envs,
+            host_config=client.create_host_config(
+                volumes_from=[volumes_c],
+                port_bindings={5432: ('0.0.0.0',)}
+            ),
+            command='/bin/bash'
+        )
+
+        prt('Starting container with image {} '.format(image))
+
+        r = client.create_container(**kwargs)
+
+        while True:
+            try:
+                inspect = client.inspect_container(r['Id'])
+                break
+            except NotFound:
+                prt('Waiting for container to be created')
+
+        prt('Starting {}'.format(inspect['Id']))
+        os.execlp('docker', 'docker', 'start', '-a', '-i', inspect['Id'])
+
+    else:
+
+        prt("Exec new shell on running container")
+        os.execlp('docker', 'docker', 'exec', '-t', '-i', inspect['Id'], '/bin/bash')

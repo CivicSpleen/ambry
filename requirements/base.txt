@@ -10,7 +10,6 @@ decorator>=4
 Flask-Compress==1.2.1
 Flask==0.10.1
 Flask-Session==0.1.1
-geoid>=0.1.2
 ipython==3.1.0
 isodate==0.5.1
 itsdangerous==0.24
@@ -43,9 +42,11 @@ tabulate==0.7.5
 terminaltables==1.2.1
 watchdog==0.8.3
 filelock==2.0.4
-ambry-sources>=0.1.10
 unicodecsv==0.12.0  # using 0.13.0 breaks many tests.
 pycrypto==2.6.1
 simple-crypt==4.1.7
-docker-py==1.5.0
+docker-py>=1.6.0
+git+https://github.com/CivicKnowledge/ambry_sources.git#egg=ambry_sources
+git+https://github.com/CivicKnowledge/geoid.git#egg=geoid
+
 

@@ -277,6 +277,8 @@ def get_parser():
                         help='Load only the config file specified')
     parser.add_argument('-E', '--exceptions', default=False, action='store_true',
                         help='Show full exception trace on all exceptions')
+    parser.add_argument('-e', '--echo', default=False, action='store_true',
+                        help='Echo database queries, for debugging')
     parser.add_argument('-t', '--test-library', default=False, action='store_true',
                         help='Use the test library and database')
 
@@ -368,3 +370,42 @@ def main(argsv=None, ext_logger=None):
             if args.exceptions:
                 raise
             fatal('{}: {}'.format(str(e.__class__.__name__), str(e)))
+
+
+def get_docker_links(l):
+    from ambry.util import parse_url_to_dict, unparse_url_dict
+
+    d = parse_url_to_dict(l.database.dsn)
+
+    if not 'docker' in d['query']:
+        fatal("Database '{}' doesn't look like a docker database DSN; it should have 'docker' at the end"
+              .format(l.dsn.database))
+
+    # Create the new container DSN; in docker, the database is always known as 'db'
+    d['hostname'] = 'db'
+    d['port'] = None
+    dsn = unparse_url_dict(d)
+
+    # The username is the unique id part of all of the docker containers, so we
+    # can construct the names of the database and volumes container from it.
+    username = d['username']
+    volumes_c = 'ambry_volumes_{}'.format(username)
+    db_c = 'ambry_db_{}'.format(username)
+
+    envs = []
+    envs.append('AMBRY_DB={}'.format(dsn))
+    envs.append('AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password))
+
+    return username, dsn, volumes_c, db_c, envs
+
+
+def docker_client():
+    from docker.client import Client
+    from docker.utils import kwargs_from_env
+
+    kwargs = kwargs_from_env()
+    kwargs['tls'].assert_hostname = False
+
+    client = Client(**kwargs)
+
+    return client

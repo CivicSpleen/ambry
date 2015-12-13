@@ -199,7 +199,7 @@ class TestBase(unittest.TestCase):
             build_url = 'mem://build'.format(name)
 
         for fs_url in (source_url, build_url):
-            d = parse_url_to_dict((fs_url))
+            d = parse_url_to_dict(fs_url)
 
             # For persistent fs types, make sure it is empty before the test.
             if d['scheme'] not in ('temp', 'mem'):
