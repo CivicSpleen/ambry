@@ -289,10 +289,13 @@ def get_parser():
     from .bundle import bundle_parser
     from .root import root_parser
     from .util import util_parser
+    from .dockr import docker_parser
 
-    library_parser(cmd)
-    config_parser(cmd)
     bundle_parser(cmd)
+    config_parser(cmd)
+    docker_parser(cmd)
+    library_parser(cmd)
+
     root_parser(cmd)
     util_parser(cmd)
 
@@ -305,6 +308,7 @@ def main(argsv=None, ext_logger=None):
     from .bundle import bundle_command
     from .root import root_command
     from .util import util_command
+    from .dockr import docker_command
     from ..dbexceptions import ConfigurationError
 
     parser = get_parser()
@@ -328,6 +332,7 @@ def main(argsv=None, ext_logger=None):
         'config': config_command,
         'root': root_command,
         'util': util_command,
+        'docker': docker_command,
     }
 
     global global_logger
@@ -349,7 +354,6 @@ def main(argsv=None, ext_logger=None):
             rc = get_runconfig(rc_path)
 
         except ConfigurationError as e:
-            print '!!!!', e
             fatal("Could not find configuration file \nRun 'ambry config install; to create one ")
 
         global global_run_config
@@ -392,9 +396,9 @@ def get_docker_links(l):
     volumes_c = 'ambry_volumes_{}'.format(username)
     db_c = 'ambry_db_{}'.format(username)
 
-    envs = []
-    envs.append('AMBRY_DB={}'.format(dsn))
-    envs.append('AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password))
+    envs = {}
+    envs['AMBRY_DB'] = dsn
+    envs['AMBRY_ACCOUNT_PASSWORD'] = (l._account_password)
 
     return username, dsn, volumes_c, db_c, envs
 

@@ -109,6 +109,26 @@ Docker
 :ref:`tutorial/docker`
 
 *************
+Virtual Env
+*************
+
+
+.. code-block:: bash
+
+    $ mkvirtualenv client
+    $ cdvirtualenv
+
+
+For a development environment, or bleeding-edge use:
+
+.. code-block:: bash
+
+    $ git clone https://github.com/CivicKnowledge/ambry.git
+    $ ambry config install 
+
+
+
+*************
 Post Install
 *************
   

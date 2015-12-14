@@ -114,11 +114,13 @@ class Docker(Command):
     description = "build or launch a docker image"
 
     user_options = [
-        ('base', 'B', 'Build the base docker image, civicknowledge.com/ambry-base'),
-        ('build', 'b', 'Build the ambry docker image, civicknowledge.com/ambry'),
-        ('dev', 'd', 'Build the dev version of the ambry docker image, civicknowledge.com/ambry'),
-        ('db', 'D', 'Build the database image, civicknowledge.com/postgres'),
-        ('numbers', 'n', 'Build the numbers server docker image, civicknowledge.com/ambry-numbers'),
+        ('base', 'B', 'Build the base docker image, civicknowledge/ambry-base'),
+        ('build', 'b', 'Build the ambry docker image, civicknowledge/ambry'),
+        ('dev', 'd', 'Build the dev version of the ambry docker image, civicknowledge/ambry'),
+        ('db', 'D', 'Build the database image, civicknowledge/postgres'),
+        ('numbers', 'n', 'Build the numbers server docker image, civicknowledge/numbers'),
+        ('tunnel', 't', 'Build the ssh tunnel docker image, civicknowledge/tunnel'),
+        ('ui', 'u', 'Build the user interface image, civicknowledge/ambryui'),
     ]
 
     def initialize_options(self):
@@ -127,12 +129,15 @@ class Docker(Command):
         self.base = False
         self.numbers = False
         self.db = False
+        self.tunnel = False
+        self.ui = False
 
     def finalize_options(self):
         pass
 
     def run(self):
-        import os
+        import os, sys, shutil
+
 
         def tag(n):
             from ambry._meta import __version__
@@ -173,6 +178,16 @@ class Docker(Command):
 
             tag('postgres')
 
+        if self.tunnel:
+
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/tunnel', 'support/docker/tunnel/'])
+
+            tag('tunnel')
+
+        if self.ui:
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/ambryui', 'support/docker/ui/'])
+
+            tag('ambryui')
 
 
 tests_require = ['pytest']

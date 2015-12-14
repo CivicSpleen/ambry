@@ -55,6 +55,8 @@ Note that in the first example, the data will be acessible on the host at :file:
 
 Either way, the volume container is named `ambrydocker_volumes`, which you can set in the :option:`docker.volumes_from`. Then you can use the :option:`--volumes-from` option to :command:`docker run` to use the volume in other containers.
 
+
+
 Configuration
 *************
 
@@ -87,4 +89,14 @@ If you use :command:`docker compose` to create the docker images instead of :com
     docker:
         volumes_from: ambrydocker_volumes
         ambry_image: ambrydocker_ambry
+        ui_domain: barker.local
         
+
+Other Issues
+************
+
+UI Proxies
+----------
+
+The UI containers are hard to use if you have to run :command:`docker ps` to find the host port, so it is more useful to setup a web proxy to rount we requests to the host to the UI containers. The ``jwilder/nginx-proxy`` is an easy way set up these proxies automatically. When the ui containers are created, a :envvar:`VIRTUAL_HOST` environmental value is automatically set, so the ``jwilder/nginx-proxy`` can automatically configure a proxy entry.
+

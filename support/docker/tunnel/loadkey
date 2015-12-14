@@ -1,0 +1,5 @@
+#/bin/bash
+
+echo $1 > /root/.ssh/authorized_keys
+
+echo loaded $1
