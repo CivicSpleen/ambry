@@ -24,3 +24,22 @@ bambrycd() {
 
     cd $(bambry -i $dir info -T $cd_opt)
 }
+
+#
+# Set the AMBRY_DB environmental variable based on a docker group name
+#
+ambry_switch() {
+
+    if [ -n "$1" ]; then
+        docker_db=$(ambry docker info -d $1)
+    fi
+
+
+    if [ -z "$1" ]; then
+        unset AMBRY_DB
+    elif [ -n "$docker_db" ]; then
+        export AMBRY_DB=$docker_db
+    else
+        echo Error: No database for reference \'$1\'
+    fi
+}

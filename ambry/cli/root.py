@@ -123,12 +123,10 @@ def root_command(args, rc):
 
         l.logger = global_logger
         l.sync_config()
-    except DatabaseError as e:
-        warn('No library: {}'.format(e))
-        l = None
-    except Exception as e:
 
-        warn('Failed to instantiate library: {}'.format(e))
+    except Exception as e:
+        if args.subcommand != 'info':
+            warn('Failed to instantiate library: {}'.format(e))
         l = None
 
     globals()['root_' + args.subcommand](args, l, rc)
@@ -164,6 +162,10 @@ def root_ckan_export(args, library, run_config):
 def root_list(args, l, rc):
     from tabulate import tabulate
     import json
+    from . import fatal
+
+    if not l:
+        fatal('No database')
 
     if args.fields:
         header = list(str(e).strip() for e in args.fields.split(','))
@@ -236,6 +238,8 @@ def root_info(args, l, rc):
     from ..cli import prt
     from ..dbexceptions import ConfigurationError
     from tabulate import tabulate
+    from ambry.library.filesystem import  LibraryFilesystem
+    from ambry.util.text import ansicolors
 
     import ambry
 
@@ -254,7 +258,8 @@ def root_info(args, l, rc):
         prt('Library:   {}', l.database.dsn)
         prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
     else:
-        prt('No library defined!')
+        fs = LibraryFilesystem(rc)
+        prt('Library:   {} {}(Inaccessible!){}', fs.database_dsn, ansicolors.FAIL, ansicolors.ENDC)
 
     if args.configs:
         ds = l.database.root_dataset

@@ -521,6 +521,8 @@ class Bundle(object):
                 source_url = self.library.filesystem.source(self.identity.cache_key)
                 self._source_fs = fsopendir(source_url)
 
+            self._source_fs.dir_mode = 0775
+
         return self._source_fs
 
     @property
@@ -536,6 +538,7 @@ class Bundle(object):
                 #    'Must set build URL either in the constructor or the configuration')
 
             self._build_fs = fsopendir(build_url, create_dir=True)
+            self._build_fs.dir_mode = 0775
 
         return self._build_fs
 

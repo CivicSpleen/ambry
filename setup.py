@@ -114,6 +114,7 @@ class Docker(Command):
     description = "build or launch a docker image"
 
     user_options = [
+        ('all', 'a', 'Build all of the images'),
         ('base', 'B', 'Build the base docker image, civicknowledge/ambry-base'),
         ('build', 'b', 'Build the ambry docker image, civicknowledge/ambry'),
         ('dev', 'd', 'Build the dev version of the ambry docker image, civicknowledge/ambry'),
@@ -125,18 +126,17 @@ class Docker(Command):
     ]
 
     def initialize_options(self):
-        self.build = False
-        self.dev = False
-        self.base = False
-        self.numbers = False
-        self.db = False
-        self.tunnel = False
-        self.ui = False
-        self.volumes = False
+
+        for long, short, desc in self.user_options:
+            setattr(self, long, False)
 
 
     def finalize_options(self):
-        pass
+
+        if self.all:
+            for long, short, desc in self.user_options:
+                setattr(self, long, True)
+
 
     def run(self):
         import os, sys, shutil

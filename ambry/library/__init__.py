@@ -52,6 +52,7 @@ class Library(object):
 
     def __init__(self,  config=None, search=None, echo=None, read_only = False):
         from sqlalchemy.exc import OperationalError
+        from ambry.orm.exc import DatabaseMissingError
 
 
         if config:
@@ -74,7 +75,7 @@ class Library(object):
         try:
             self._db.open()
         except OperationalError as e:
-            self.logger.error("Failed to open database '{}': {} ".format(self._db.dsn, e))
+            raise DatabaseMissingError("Failed to open database '{}': {} ".format(self._db.dsn, e))
 
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
 
