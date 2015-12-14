@@ -125,7 +125,7 @@ def docker_init(args, l, rc):
                ' \'docker pull {i}\'').format(i=postgres_image))
 
 
-    volumes_image = 'cogniteev/echo'
+    volumes_image = 'civicknowledge/volumes'
 
     try:
         inspect = client.inspect_image(volumes_image)

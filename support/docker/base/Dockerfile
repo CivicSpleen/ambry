@@ -29,5 +29,7 @@ RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 COPY requirements /tmp/requirements
 
+RUN groupadd -g 1000  ambry
+
 RUN pip install -r /tmp/requirements/base_py2.txt  && rm -rf ~/.cache/pip/
 

@@ -1524,15 +1524,15 @@ def bundle_docker(args, l, rc):
             if args.processes:
                 bambry_cmd_args.append('-p' + str(args.processes))
 
-            envs.append('AMBRY_COMMAND=bambry -i {} {} {}'.format(
-                b.identity.vid, ' '.join(bambry_cmd_args), bambry_cmd))
+            envs['AMBRY_COMMAND'] = 'bambry -i {} {} {}'.format(
+                                    b.identity.vid, ' '.join(bambry_cmd_args), bambry_cmd)
 
             detach = True
         else:
             detach = False
 
         if args.limited_run:
-            envs.append('AMBRY_LIMITED_RUN=1')
+            envs['AMBRY_LIMITED_RUN'] = '1'
 
         try:
             image_tag = rc.docker.ambry_image

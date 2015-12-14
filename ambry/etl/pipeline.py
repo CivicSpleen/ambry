@@ -801,7 +801,21 @@ class CastSourceColumns(Pipe):
             except:
                 return v
 
-        inner_code = ','.join(["cast_maybe({},row[{}])".format(c.datatype, i) for i, c in enumerate(st.columns)])
+        from dateutil import parser
+
+        def date(v):
+            return parser.parse(v).date()
+
+        def datetime(v):
+            return parser.parse(v)
+
+        def time(v):
+            return parser.parse(v).time()
+
+        inner_code = ','.join(["cast_maybe({},row[{}])"
+                              .format( c.datatype , i)
+                               for i, c in enumerate(st.columns)])
+
         self.processor = eval('lambda row: [{}]'.format(inner_code), locals())
 
         return headers

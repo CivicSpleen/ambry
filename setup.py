@@ -121,6 +121,7 @@ class Docker(Command):
         ('numbers', 'n', 'Build the numbers server docker image, civicknowledge/numbers'),
         ('tunnel', 't', 'Build the ssh tunnel docker image, civicknowledge/tunnel'),
         ('ui', 'u', 'Build the user interface image, civicknowledge/ambryui'),
+        ('volumes', 'v', 'Build the user interface image, civicknowledge/volumes'),
     ]
 
     def initialize_options(self):
@@ -131,6 +132,8 @@ class Docker(Command):
         self.db = False
         self.tunnel = False
         self.ui = False
+        self.volumes = False
+
 
     def finalize_options(self):
         pass
@@ -189,6 +192,10 @@ class Docker(Command):
 
             tag('ambryui')
 
+        if self.volumes:
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/volumes', 'support/docker/volumes/'])
+
+            tag('volumes')
 
 tests_require = ['pytest']
 
