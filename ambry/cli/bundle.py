@@ -1473,7 +1473,7 @@ def bundle_docker(args, l, rc):
     import sys
     from docker.errors import NotFound, NullResource
 
-    username, dsn, volumes_c, db_c, envs = get_docker_links(l)
+    username, dsn, volumes_c, db_c, envs = get_docker_links(rc)
 
     b = using_bundle(args, l, print_loc=False)
     client = docker_client()

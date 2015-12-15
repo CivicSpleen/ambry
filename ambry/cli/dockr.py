@@ -26,6 +26,7 @@ def docker_parser(cmd):
 
     sp = asp.add_parser('tunnel', help='Run an ssh tunnel to the current database container')
     sp.set_defaults(subcommand='tunnel')
+    sp.add_argument('-i', '--identity', help="Specify an identity file for loggin into the docker host")
     sp.add_argument('-k', '--kill', default=False, action='store_true',
                     help="Kill a running tunnel before starting a new one")
     sp.add_argument('ssh_key_file', type=str, nargs=1, help='Path to an ssh key file')
@@ -157,15 +158,15 @@ def docker_init(args, l, rc):
     if 'docker' not in d['query'] or args.new:
         groupname = id_generator()
         password = id_generator()
-        database = id_generator()
+        database = groupname
     else:
         groupname = d['username']
         password = d['password']
         database = d['path'].strip('/')
 
     # Override the username if one was provided
-    groupname = args.groupname if args.groupname else groupname
-
+    if args.groupname:
+        groupname =  database = args.groupname
 
     volumes_c = 'ambry_volumes_{}'.format(groupname)
     db_c = 'ambry_db_{}'.format(groupname)
@@ -289,7 +290,7 @@ def docker_shell(args, l, rc):
 
     client = docker_client()
 
-    username, dsn, volumes_c, db_c, envs = get_docker_links(l)
+    username, dsn, volumes_c, db_c, envs = get_docker_links(rc)
 
     shell_name = 'ambry_shell_{}'.format(username)
 
@@ -372,9 +373,9 @@ def docker_tunnel(args, l, rc):
 
     client = docker_client()
 
-    username, dsn, volumes_c, db_c, envs = get_docker_links(l)
+    groupname, dsn, volumes_c, db_c, envs = get_docker_links(rc)
 
-    shell_name = 'ambry_tunnel_{}'.format(username)
+    shell_name = 'ambry_tunnel_{}'.format(groupname)
 
     # Check if the  image exists.
 
@@ -401,7 +402,7 @@ def docker_tunnel(args, l, rc):
         name=shell_name,
         image=image,
         labels={
-            'civick.ambry.group': username,
+            'civick.ambry.group': groupname,
             'civick.ambry.role': 'tunnel'
         },
         detach=False,
@@ -442,7 +443,7 @@ def docker_tunnel(args, l, rc):
 
     p = start_tunnel(host, port)
     prt("Tunnel is running as pid: {}".format(p.pid))
-    p.wait()
+    #p.wait()
 
 
 def start_tunnel(host, port):
@@ -490,7 +491,7 @@ def docker_ui(args, l, rc, attach=True):
 
     client = docker_client()
 
-    username, dsn, volumes_c, db_c, envs = get_docker_links(l)
+    username, dsn, volumes_c, db_c, envs = get_docker_links(rc)
 
     shell_name = 'ambry_ui_{}'.format(username)
 

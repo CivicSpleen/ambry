@@ -376,14 +376,19 @@ def main(argsv=None, ext_logger=None):
             fatal('{}: {}'.format(str(e.__class__.__name__), str(e)))
 
 
-def get_docker_links(l):
+def get_docker_links(rc):
     from ambry.util import parse_url_to_dict, unparse_url_dict
+    from ambry.library.filesystem import LibraryFilesystem
 
-    d = parse_url_to_dict(l.database.dsn)
+    fs = LibraryFilesystem(rc)
+
+    dsn = fs.database_dsn
+
+    d = parse_url_to_dict(dsn)
 
     if not 'docker' in d['query']:
         fatal("Database '{}' doesn't look like a docker database DSN; it should have 'docker' at the end"
-              .format(l.dsn.database))
+              .format(dsn))
 
     # Create the new container DSN; in docker, the database is always known as 'db'
     d['hostname'] = 'db'
@@ -392,15 +397,15 @@ def get_docker_links(l):
 
     # The username is the unique id part of all of the docker containers, so we
     # can construct the names of the database and volumes container from it.
-    username = d['username']
-    volumes_c = 'ambry_volumes_{}'.format(username)
-    db_c = 'ambry_db_{}'.format(username)
+    groupname = d['username']
+    volumes_c = 'ambry_volumes_{}'.format(groupname)
+    db_c = 'ambry_db_{}'.format(groupname)
 
     envs = {}
     envs['AMBRY_DB'] = dsn
-    envs['AMBRY_ACCOUNT_PASSWORD'] = (l._account_password)
+    envs['AMBRY_ACCOUNT_PASSWORD'] = (rc.accounts.get('password'))
 
-    return username, dsn, volumes_c, db_c, envs
+    return groupname, dsn, volumes_c, db_c, envs
 
 
 def docker_client():
