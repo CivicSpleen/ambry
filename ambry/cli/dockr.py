@@ -35,7 +35,7 @@ def docker_parser(cmd):
 
     sp = asp.add_parser('kill', help='Destroy all of the containers associated with a username')
     sp.set_defaults(subcommand='kill')
-    sp.add_argument('groupname', type=str, nargs=1, help='Group name of set of containers')
+    sp.add_argument('groupname', type=str, nargs='*', help='Group name of set of containers')
 
     sp = asp.add_parser('ui', help='Run a shell in an ambryui')
     sp.set_defaults(subcommand='ui')
@@ -464,16 +464,17 @@ def docker_kill(args, l, rc):
 
     client = docker_client()
 
-    username = args.username[0]
+    for groupname in args.groupname:
 
-    ig = itemgetter('Status','Names','Image','Id')
-
-    for c in client.containers(all=True):
-        name = c['Names'][0].strip('/')
-        if username in name:
-            prt("Removing: {}".format(name))
-            client.remove_container(container=c['Id'], v=True, force=True)
-            remove_df_entry(rc, username)
+        for c in client.containers(all=True):
+            name = c['Names'][0].strip('/')
+            if groupname in name:
+                prt("Removing: {}".format(name))
+                client.remove_container(container=c['Id'], v=True, force=True)
+                try:
+                    remove_df_entry(rc, groupname)
+                except KeyError:
+                    pass
 
 
 def docker_ui(args, l, rc, attach=True):
