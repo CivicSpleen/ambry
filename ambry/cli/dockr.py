@@ -81,7 +81,11 @@ def set_df_entry(rc, name, entry):
     import os.path
 
     if os.path.exists(get_docker_file(rc)):
-        d = AttrDict.from_yaml(get_docker_file(rc))
+        try:
+            d = AttrDict.from_yaml(get_docker_file(rc))
+        except TypeError:
+            # Empty file, I guess.
+            d = AttrDict()
     else:
         d = AttrDict()
 
@@ -151,20 +155,20 @@ def docker_init(args, l, rc):
         d = {'query':''}
 
     if 'docker' not in d['query'] or args.new:
-        username = id_generator()
+        groupname = id_generator()
         password = id_generator()
         database = id_generator()
     else:
-        username = d['username']
+        groupname = d['username']
         password = d['password']
         database = d['path'].strip('/')
 
     # Override the username if one was provided
-    username = args.username if args.username else username
+    groupname = args.groupname if args.groupname else groupname
 
 
-    volumes_c = 'ambry_volumes_{}'.format(username)
-    db_c = 'ambry_db_{}'.format(username)
+    volumes_c = 'ambry_volumes_{}'.format(groupname)
+    db_c = 'ambry_db_{}'.format(groupname)
 
     #
     # Create the volume container
@@ -180,7 +184,7 @@ def docker_init(args, l, rc):
             name=volumes_c,
             image=volumes_image,
             labels={
-                'civick.ambry.group': username,
+                'civick.ambry.group': groupname,
                 'civick.ambry.message': args.message,
                 'civick.ambry.role': 'volumes'
             },
@@ -207,7 +211,7 @@ def docker_init(args, l, rc):
             name=db_c,
             image=postgres_image,
             labels={
-                'civick.ambry.group': username,
+                'civick.ambry.group': groupname,
                 'civick.ambry.message': args.message,
                 'civick.ambry.role': 'db'
 
@@ -219,7 +223,7 @@ def docker_init(args, l, rc):
                 'BACKUP_ENABLED': 'true',
                 'BACKUP_FREQUENCY': 'daily',
                 'BACKUP_EMAIL': 'eric@busboom.org',
-                'USER': username,
+                'USER': groupname,
                 'PASSWORD': password,
                 'SCHEMA': database,
                 'POSTGIS': 'true'
@@ -243,11 +247,11 @@ def docker_init(args, l, rc):
 
     if port:
         dsn = 'postgres://{username}:{password}@{host}:{port}/{database}?docker'.format(
-                username=username, password=password, database=database, host=db_host_ip, port=port)
+                username=groupname, password=password, database=database, host=db_host_ip, port=port)
 
     else:
         dsn = 'postgres://{username}:{password}@{host}:{port}/{database}?docker'.format(
-            username=username, password=password, database=database, host='localhost', port='5432')
+            username=groupname, password=password, database=database, host='localhost', port='5432')
         warn("No public port; you'll need to set up a tunnel for external access")
 
     if l and l.database.dsn != dsn:
@@ -255,8 +259,8 @@ def docker_init(args, l, rc):
         prt(dsn)
 
 
-    set_df_entry(rc, username, dict(
-        username=username,
+    set_df_entry(rc, groupname, dict(
+        username=groupname,
         password=password,
         database=database,
         db_port=int(port) if port else None,
