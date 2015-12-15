@@ -443,7 +443,7 @@ def docker_tunnel(args, l, rc):
 
     p = start_tunnel(host, port)
     prt("Tunnel is running as pid: {}".format(p.pid))
-    #p.wait()
+    p.wait()
 
 
 def start_tunnel(host, port):

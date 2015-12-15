@@ -1,7 +1,7 @@
 #
 # Base Ambry image to install the most expensive packages, allowing for faster builds and uploads
 # images built atop this one.
-FROM phusion/baseimage:0.9.17
+FROM phusion/baseimage:0.9.18
 
 MAINTAINER Eric Busboom "eric@civicknowledge.org"
 

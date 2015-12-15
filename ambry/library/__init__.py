@@ -484,13 +484,27 @@ class Library(object):
     # Remotes
     #
 
-    def sync_remote(self, remote_name):
+    def sync_remote(self, remote_name, bundle_name, list_only = False):
         remote = self.remote(remote_name)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
-        # temp = fsopendir('/tmp/ambry-import', create_dir=True)
+
+        entries = []
 
         for fn in remote.walkfiles(wildcard='*.db'):
+
+            this_name = fn.strip('/').replace('/','.').replace('.db','')
+
+            if bundle_name and this_name != bundle_name:
+                continue
+
+            if list_only:
+                entries.append(this_name)
+                self.logger.info(this_name)
+                continue
+            else:
+                self.logger.info('Sync {}'.format(this_name))
+
             temp.makedir(os.path.dirname(fn), recursive=True, allow_recreate=True)
             with remote.open(fn, 'rb') as f:
                 temp.setcontents(fn, f)
@@ -512,13 +526,18 @@ class Library(object):
 
                 self.search.index_bundle(b)
 
-                self.logger.info('Synced {}'.format(ds.vname))
+                entries.append(this_name)
+
             except Exception as e:
                 self.logger.error('Failed to sync {} from {}, {}: {}'
                                   .format(fn, remote_name, temp.getsyspath(fn), e))
-                raise
+
+            # If we synced a requested bundle, no need to check more
+            if bundle_name and this_name == bundle_name:
+                break
 
         self.database.commit()
+        return entries
 
     @property
     def remotes(self):

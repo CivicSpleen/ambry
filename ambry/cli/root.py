@@ -75,6 +75,9 @@ def root_parser(cmd):
     sp = cmd.add_parser('sync', help='Sync with the remotes')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='sync')
+    sp.add_argument('-l', '--list', default=False, action='store_true',
+                    help='List rather than sync')
+    sp.add_argument('ref', nargs='?', type=str, help='Name of a remote or a bundle reference')
 
     sp = cmd.add_parser('remove', help='Remove a bundle from the library')
     sp.set_defaults(command='root')
@@ -276,11 +279,25 @@ def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
 
-    l.logger.info('args: %s' % args)
+    name = args.ref if args.ref else None
+
+    if name in [r for r in l.remotes]:
+        remote_name = name
+        bundle_name = None
+    else:
+        remote_name = None
+        bundle_name = name
 
     for r in l.remotes:
+
+        if remote_name and remote_name != r:
+            continue
+
         prt('Sync with remote {}', r)
-        l.sync_remote(r)
+
+        entries = l.sync_remote(r, bundle_name=bundle_name, list_only = args.list)
+        if bundle_name and bundle_name in entries:
+            break
 
 
 def root_search(args, l, rc):
