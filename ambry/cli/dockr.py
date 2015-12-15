@@ -566,7 +566,7 @@ def docker_ui(args, l, rc, attach=True):
 
         prt('Starting ui container')
         prt('   Name {}'.format(shell_name))
-        prt('   Virtual host {} '.format(envs['VIRTUAL_HOST']))
+        prt('   Virtual host {} '.format(envs.get('VIRTUAL_HOST')))
         prt('   Host port: {}'.format(port))
 
 
