@@ -123,6 +123,7 @@ class Docker(Command):
         ('tunnel', 't', 'Build the ssh tunnel docker image, civicknowledge/tunnel'),
         ('ui', 'u', 'Build the user interface image, civicknowledge/ambryui'),
         ('volumes', 'v', 'Build the user interface image, civicknowledge/volumes'),
+        ('ckan', 'c', 'Build the CKAN image, civicknowledge/ckan'),
     ]
 
     def initialize_options(self):
@@ -167,35 +168,33 @@ class Docker(Command):
         if self.build:
             self.spawn(['docker', 'build', '-f', 'support/docker/ambry/Dockerfile',
                         '-t', 'civicknowledge/ambry', '.'])
-
             tag('ambry')
 
         if self.dev:
             self.spawn(['docker', 'build', '-f', 'support/docker/dev/Dockerfile',
                         '-t', 'civicknowledge/ambry', '.'])
-
             tag('ambry')
 
         if self.db:
             self.spawn(['docker', 'build', '-t', 'civicknowledge/postgres', 'support/docker/postgres/'])
-
             tag('postgres')
 
         if self.tunnel:
 
             self.spawn(['docker', 'build', '-t', 'civicknowledge/tunnel', 'support/docker/tunnel/'])
-
             tag('tunnel')
 
         if self.ui:
             self.spawn(['docker', 'build', '-t', 'civicknowledge/ambryui', 'support/docker/ui/'])
-
             tag('ambryui')
 
         if self.volumes:
             self.spawn(['docker', 'build', '-t', 'civicknowledge/volumes', 'support/docker/volumes/'])
-
             tag('volumes')
+
+        if self.ckan:
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/ckan', 'support/docker/ckan/'])
+            tag('ckan')
 
 tests_require = ['pytest']
 

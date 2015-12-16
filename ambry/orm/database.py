@@ -548,6 +548,7 @@ class Database(object):
         ds.files
         ds.stats
         ds.codes
+        ds.sources
         ds.source_tables
         ds.source_columns
         # ds.configs # We'll get these later

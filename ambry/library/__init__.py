@@ -474,7 +474,17 @@ class Library(object):
                     event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
                     event.wait()
 
-                    ps.update(state = 'done')
+                    ps.update(state='done')
+
+            ps.add(message="Setting metadata")
+            import json
+            from six import text_type
+            ident = json.dumps(b.identity.dict)
+            remote.setcontents(os.path.join('_meta', 'vid', b.identity.vid), ident)
+            remote.setcontents(os.path.join('_meta', 'id', b.identity.id), ident)
+            remote.setcontents(os.path.join('_meta', 'vname',text_type(b.identity.vname)), ident)
+            remote.setcontents(os.path.join('_meta', 'name',text_type(b.identity.name)), ident)
+            ps.update(state='done')
 
             b.dataset.commit()
 

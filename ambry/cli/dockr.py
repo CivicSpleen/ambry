@@ -38,10 +38,15 @@ def docker_parser(cmd):
     sp.set_defaults(subcommand='kill')
     sp.add_argument('groupname', type=str, nargs='*', help='Group name of set of containers')
 
-    sp = asp.add_parser('ui', help='Run a shell in an ambryui')
+    sp = asp.add_parser('ui', help='Run the user interface container')
     sp.set_defaults(subcommand='ui')
     sp.add_argument('-k', '--kill', default=False, action='store_true',
                     help="Kill a running shell before starting a new one")
+
+    sp = asp.add_parser('ckan', help='Run the ckan container')
+    sp.set_defaults(subcommand='ckan')
+    sp.add_argument('-k', '--kill', default=False, action='store_true',
+                    help="Kill a running container before starting a new one")
 
     sp = asp.add_parser('info', help='Print information about a docker group')
     sp.set_defaults(subcommand='info')
@@ -573,6 +578,102 @@ def docker_ui(args, l, rc, attach=True):
     else:
         prt('Container {} is already running'.format(shell_name))
 
+def docker_ckan(args, l, rc, attach=True):
+    """Run a shell in an Ambry builder image, on the current docker host"""
+
+    from . import docker_client, get_docker_links
+    from ambry.util import parse_url_to_dict
+    from docker.errors import NotFound, NullResource
+    import os
+
+    client = docker_client()
+
+    username, dsn, volumes_c, db_c, envs = get_docker_links(rc)
+
+    container_name = 'ambry_ckan_{}'.format(username)
+
+    # Check if the  image exists.
+
+    image = 'civicknowledge/ckan'
+
+    check_ambry_image(client, image)
+
+    try:
+        inspect = client.inspect_container(container_name)
+        running = inspect['State']['Running']
+        exists = True
+    except NotFound as e:
+        running = False
+        exists = False
+
+    # If no one is using is, clear it out.
+    if exists and (not running or args.kill):
+        prt('Killing container {}'.format(container_name))
+        client.remove_container(container_name, force = True)
+        exists = False
+        running = False
+
+    if not running:
+
+        vh_root = rc.get('docker', {}).get('ui_domain', None)
+        if vh_root:
+            envs['VIRTUAL_HOST'] = '{}.repo.{}'.format(username, vh_root)
+
+
+        envs['ADMIN_USER_EMAIL'] = 'none@example.com'
+
+        kwargs = dict(
+            name=container_name,
+            image=image,
+            labels={
+                'civick.ambry.group': username,
+                'civick.ambry.role': 'ckan',
+                'civick.ambry.virt_host': envs.get('VIRTUAL_HOST')
+            },
+            detach=False,
+            tty=True,
+            stdin_open=True,
+            environment=envs,
+            host_config=client.create_host_config(
+                volumes_from=[volumes_c],
+                links={
+                    db_c: 'db', # Mostly to get the password, etc
+                },
+                port_bindings={80: ('0.0.0.0',)}
+            )
+        )
+
+        r = client.create_container(**kwargs)
+
+        while True:
+            try:
+                inspect = client.inspect_container(r['Id'])
+                break
+            except NotFound:
+                prt('Waiting for container to be created')
+
+        client.start(r['Id'])
+
+        inspect = client.inspect_container(r['Id'])
+
+        try:
+            port = inspect['NetworkSettings']['Ports']['80/tcp'][0]['HostPort']
+        except:
+            port = None
+            print inspect['NetworkSettings']['Ports']
+
+        d = parse_url_to_dict(dsn)
+
+        prt('Starting ui container')
+        prt('   Name {}'.format(container_name))
+        prt('   Password / key: {}'.format(d['password']))
+        prt('   Virtual host http://{} '.format(envs.get('VIRTUAL_HOST')))
+        prt('   Host port: {}'.format(port))
+
+
+    else:
+        prt('Container {} is already running'.format(container_name))
+
 def docker_list(args, l, rc):
     from operator import itemgetter
     from docker.utils import kwargs_from_env
@@ -631,7 +732,7 @@ def docker_list(args, l, rc):
 
         for role in sorted([k for k,v in e.items() if isinstance(v, dict)]):
             m = e[role]
-            if role == 'ui':
+            if role in ('ui', 'ckan'):
                 message = m['vhost']
             elif role == 'db' and df:
                 message = df['dsn']

@@ -196,7 +196,8 @@ def _convert_partition(partition):
     csvfile = six.StringIO()
     writer = unicodecsv.writer(csvfile)
     headers = partition.datafile.headers
-    writer.writerow(headers)
+    if headers:
+        writer.writerow(headers)
     for row in partition:
         writer.writerow([row[h] for h in headers])
     csvfile.seek(0)
