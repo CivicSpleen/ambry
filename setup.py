@@ -31,7 +31,7 @@ def find_package_data():
     """
 
     l = list()
-    for start in ('ambry/support', 'ambry/geo/support', 'ambry/ui/templates'):
+    for start in ('ambry/support', 'ambry/bundle/default_files'):
         for root, dirs, files in os.walk(start):
 
             for f in files:
@@ -114,35 +114,38 @@ class Docker(Command):
     description = "build or launch a docker image"
 
     user_options = [
-        ('base', 'B', 'Build the base docker image, civicknowledge.com/ambry-base'),
-        ('build', 'b', 'Build the base docker image, civicknowledge.com/ambry'),
-        ('launch', 'l', 'Run the docker image on the currently configured database'),
+        ('all', 'a', 'Build all of the images'),
+        ('base', 'B', 'Build the base docker image, civicknowledge/ambry-base'),
+        ('build', 'b', 'Build the ambry docker image, civicknowledge/ambry'),
+        ('dev', 'd', 'Build the dev version of the ambry docker image, civicknowledge/ambry'),
+        ('db', 'D', 'Build the database image, civicknowledge/postgres'),
+        ('numbers', 'n', 'Build the numbers server docker image, civicknowledge/numbers'),
+        ('tunnel', 't', 'Build the ssh tunnel docker image, civicknowledge/tunnel'),
+        ('ui', 'u', 'Build the user interface image, civicknowledge/ambryui'),
+        ('volumes', 'v', 'Build the user interface image, civicknowledge/volumes'),
     ]
 
     def initialize_options(self):
-        self.build = None
-        self.base = None
-        self.launch = None
+
+        for long, short, desc in self.user_options:
+            setattr(self, long, False)
+
 
     def finalize_options(self):
-        pass
+
+        if self.all:
+            for long, short, desc in self.user_options:
+                setattr(self, long, True)
+
 
     def run(self):
-        import os
+        import os, sys, shutil
 
-        if self.base:
-            self.spawn(['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry-base',
-                        '-t', 'civicknowledge/ambry-base', '.'])
 
-        if self.build:
+        def tag(n):
             from ambry._meta import __version__
             import subprocess
             import json
-
-            args = ['docker', 'build', '-f', 'support/ambry-docker/Dockerfile.ambry',
-                        '-t', 'civicknowledge/ambry', '.']
-
-            self.spawn(args)
 
             # Inspect the image to get the image id, so we can tag it.
             # FIXME. Instead of parsing the JSON, this should be:
@@ -151,17 +154,48 @@ class Docker(Command):
             (out, err) = proc.communicate()
             d = json.loads(out)
 
-            self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/ambry:{}'.format(__version__)])
+            self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/{}:{}'.format(n,__version__)])
 
-        if self.launch:
-            from ambry import get_library
-            l = get_library()
-            args = ('docker run --rm -t -i -e AMBRY_DB={} -e AMBRY_ACCOUNT_PASSWORD={} civicknowledge/ambry'
-                    .format(l.database.dsn, l._account_password)
-                    .split())
+        if self.base:
+            self.spawn(['docker', 'build', '-f', 'support/docker/base/Dockerfile',
+                        '-t', 'civicknowledge/ambry-base', '.'])
 
-            self.spawn(args)
+        if self.numbers:
+            self.spawn(['docker', 'build', '-f', 'support/docker/numbers/Dockerfile',
+                        '-t', 'civicknowledge/ambry-numbers', '.'])
 
+        if self.build:
+            self.spawn(['docker', 'build', '-f', 'support/docker/ambry/Dockerfile',
+                        '-t', 'civicknowledge/ambry', '.'])
+
+            tag('ambry')
+
+        if self.dev:
+            self.spawn(['docker', 'build', '-f', 'support/docker/dev/Dockerfile',
+                        '-t', 'civicknowledge/ambry', '.'])
+
+            tag('ambry')
+
+        if self.db:
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/postgres', 'support/docker/postgres/'])
+
+            tag('postgres')
+
+        if self.tunnel:
+
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/tunnel', 'support/docker/tunnel/'])
+
+            tag('tunnel')
+
+        if self.ui:
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/ambryui', 'support/docker/ui/'])
+
+            tag('ambryui')
+
+        if self.volumes:
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/volumes', 'support/docker/volumes/'])
+
+            tag('volumes')
 
 tests_require = ['pytest']
 

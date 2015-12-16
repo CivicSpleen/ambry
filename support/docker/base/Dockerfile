@@ -1,7 +1,7 @@
 #
 # Base Ambry image to install the most expensive packages, allowing for faster builds and uploads
 # images built atop this one.
-FROM phusion/baseimage:0.9.17
+FROM phusion/baseimage:0.9.18
 
 MAINTAINER Eric Busboom "eric@civicknowledge.org"
 
@@ -28,6 +28,8 @@ RUN dpkg-reconfigure locales
 RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 COPY requirements /tmp/requirements
+
+RUN groupadd -g 1000  ambry
 
 RUN pip install -r /tmp/requirements/base_py2.txt  && rm -rf ~/.cache/pip/
 

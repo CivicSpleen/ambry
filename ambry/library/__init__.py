@@ -30,6 +30,7 @@ from ambry.util import get_logger
 from .filesystem import LibraryFilesystem
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
+
 global_library = None
 
 
@@ -49,9 +50,10 @@ def new_library(config=None):
 
 class Library(object):
 
-    def __init__(self,  config=None, search=None):
+    def __init__(self,  config=None, search=None, echo=None, read_only = False):
         from sqlalchemy.exc import OperationalError
-        from ambry.library.config import LibraryConfigSyncProxy
+        from ambry.orm.exc import DatabaseMissingError
+
 
         if config:
             self._config = config
@@ -60,9 +62,11 @@ class Library(object):
 
         self.logger = logger
 
+        self.read_only = read_only # allow optimizations that assume we aren't building bundles.
+
         self._fs = LibraryFilesystem(config)
 
-        self._db = Database(self._fs.database_dsn)
+        self._db = Database(self._fs.database_dsn, echo=echo)
 
         self._account_password = self.config.accounts.password
 
@@ -71,10 +75,7 @@ class Library(object):
         try:
             self._db.open()
         except OperationalError as e:
-            self.logger.error("Failed to open database '{}': {} ".format(self._db.dsn, e))
-
-        lcsp = LibraryConfigSyncProxy(self)
-        lcsp.sync()
+            raise DatabaseMissingError("Failed to open database '{}': {} ".format(self._db.dsn, e))
 
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
 
@@ -82,6 +83,27 @@ class Library(object):
             self._search = Search(self, search)
         else:
             self._search = None
+
+    def sync_config(self):
+        """Sync the file config into the library proxy data in the root dataset """
+        from ambry.library.config import LibraryConfigSyncProxy
+        lcsp = LibraryConfigSyncProxy(self)
+        lcsp.sync()
+
+    def init_debug(self):
+        """Initialize debugging features, such as a handler for USR2 to print a trace"""
+        import signal
+        from ambry.util import debug
+
+        def debug_trace(sig, frame):
+            """Interrupt running process, and provide a python prompt for interactive
+            debugging."""
+
+            self.log("Trace signal received")
+            self.log(''.join(traceback.format_stack(frame)))
+
+        signal.signal(signal.SIGUSR2, debug_trace)  # Register handler
+
 
     def resolve_object_number(self, ref):
         """Resolve a variety of object numebrs to a dataset number"""
@@ -199,7 +221,8 @@ class Library(object):
             ds = self._db.new_dataset(**identity.dict)
 
         b = Bundle(ds, self)
-
+        b.commit()
+        print b.dataset
         b.state = Bundle.STATES.NEW
         b.set_last_access(Bundle.STATES.NEW)
 
@@ -391,6 +414,8 @@ class Library(object):
         :return:
         """
 
+        from ambry.bundle.process import call_interval
+
         remote_name = self.resolve_remote(b)
 
         remote = self.remote(remote_name)
@@ -400,56 +425,86 @@ class Library(object):
         db = Database('sqlite:///{}'.format(db_path))
         ds = db.dataset(b.dataset.vid)
 
-        self.logger.info('Checking in bundle {}'.format(ds.identity.vname))
+        with b.progress.start('checkin', 0, message='Check in bundle') as ps:
 
-        # Set the location for the bundle file
-        for p in ds.partitions:
-            p.location = 'remote'
+            ps.add(message='Checking in bundle {} to {}'.format(ds.identity.vname, remote))
 
-        ds.config.build.state.current = Bundle.STATES.INSTALLED
-        ds.commit()
-        db.commit()
-        db.close()
+            # Set the location for the bundle file
+            for p in ds.partitions:
+                p.location = 'remote'
 
-        db_ck = b.identity.cache_key + '.db'
+            # Fixme; this should be on ds, not b
+            # b.buildstate.state.current = Bundle.STATES.INSTALLED
+            ds.commit()
+            db.commit()
+            db.close()
 
-        with open(db_path) as f:
-            remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
-            remote.setcontents(db_ck, f)
+            db_ck = b.identity.cache_key + '.db'
 
-        os.remove(db_path)
+            ps.add(message="Upload bundle file", item_type='bytes', item_count = 0)
+            total = [0]
+            @call_interval(5)
+            def upload_cb(n):
+                total[0] += n
+                ps.update(message="Upload bundle file", item_count=total[0])
 
-        for p in b.partitions:
+            with open(db_path) as f:
+                remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
+                self.logger.info('Send bundle file {} '.format(db_path))
+                e = remote.setcontents_async(db_ck, f, progress_callback=upload_cb)
+                e.wait()
 
-            with p.datafile.open(mode='rb') as fin:
-                self.logger.info('Checking in {}'.format(p.identity.vname))
+            ps.update(state='done')
 
-                calls = [0]
+            os.remove(db_path)
 
-                def progress(bytes):
-                    calls[0] += 1
-                    if calls[0] % 4 == 0:
-                        self.logger.info('Checking in {}; {} bytes'.format(p.identity.vname, bytes))
+            for p in b.partitions:
 
-                remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
-                event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
-                event.wait()
+                ps.add(message="Upload partition", item_type='bytes', item_count=0, p_vid=p.vid)
 
-        b.dataset.commit()
+                with p.datafile.open(mode='rb') as fin:
 
-        return remote_name, db_ck
+                    total = [0]
+                    @call_interval(5)
+                    def progress(bytes):
+                        total[0] += bytes
+                        ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0] )
+
+                    remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
+                    event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
+                    event.wait()
+
+                    ps.update(state = 'done')
+
+            b.dataset.commit()
+
+            return remote_name, db_ck
 
     #
     # Remotes
     #
 
-    def sync_remote(self, remote_name):
+    def sync_remote(self, remote_name, bundle_name, list_only = False):
         remote = self.remote(remote_name)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
-        # temp = fsopendir('/tmp/ambry-import', create_dir=True)
+
+        entries = []
 
         for fn in remote.walkfiles(wildcard='*.db'):
+
+            this_name = fn.strip('/').replace('/','.').replace('.db','')
+
+            if bundle_name and this_name != bundle_name:
+                continue
+
+            if list_only:
+                entries.append(this_name)
+                self.logger.info(this_name)
+                continue
+            else:
+                self.logger.info('Sync {}'.format(this_name))
+
             temp.makedir(os.path.dirname(fn), recursive=True, allow_recreate=True)
             with remote.open(fn, 'rb') as f:
                 temp.setcontents(fn, f)
@@ -471,13 +526,18 @@ class Library(object):
 
                 self.search.index_bundle(b)
 
-                self.logger.info('Synced {}'.format(ds.vname))
+                entries.append(this_name)
+
             except Exception as e:
                 self.logger.error('Failed to sync {} from {}, {}: {}'
                                   .format(fn, remote_name, temp.getsyspath(fn), e))
-                raise
+
+            # If we synced a requested bundle, no need to check more
+            if bundle_name and this_name == bundle_name:
+                break
 
         self.database.commit()
+        return entries
 
     @property
     def remotes(self):
@@ -565,7 +625,7 @@ class Library(object):
     def account_acessor(self):
 
         def _accessor(account_id):
-            return self.account(account_id)
+            return self.account(account_id).dict
 
         return _accessor
 
@@ -771,14 +831,17 @@ class Library(object):
     def process_pool(self, limited_run = False):
         """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
 
-        import multiprocessing
+        from multiprocessing import  cpu_count
+        from ambry.bundle.concurrent import Pool
+
         from ambry.bundle.concurrent import init_library
 
         if self.processes:
             cpus = self.processes
         else:
-            cpus = multiprocessing.cpu_count()
+            cpus = cpu_count()
 
         self.logger.info('Starting MP pool with {} processors'.format(cpus))
-        return multiprocessing.Pool(processes=cpus, initializer=init_library,
+        return Pool(self, processes=cpus, initializer=init_library,
+                                    maxtasksperchild = 1,
                                     initargs=[self.database.dsn, self._account_password, limited_run])

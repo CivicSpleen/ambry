@@ -1007,7 +1007,7 @@ class TableNumber(ObjectNumber):
             raise ValueError("Constructor requires a DatasetNumber")
 
         if table > ObjectNumber.TCMAXVAL:
-            raise ValueError("Value is too large")
+            raise ValueError("Table value '{}' is too large".format(table))
 
         self.dataset = dataset
         self.table = table

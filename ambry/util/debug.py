@@ -33,6 +33,7 @@ def listen():
     signal.signal(signal.SIGUSR1, debug_break)  # Register handler
 
 
+
 def trace(fn): # pragma: no cover
     """ Prints parameteters and return values of the each call of the wrapped function.
 

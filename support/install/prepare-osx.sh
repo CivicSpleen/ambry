@@ -10,7 +10,6 @@ sudo echo
 #  sh install_superpack.sh
 #
 
-
 command -v brew >/dev/null 2>&1
 
 if [ $? -ne 0 ]; then
@@ -107,36 +106,3 @@ if [ $gdal_version -lt 1920 ]; then
         exit 1
     fi
 fi
-
-##
-## Actually install Ambry
-##
-
-sudo easy_install pip
-
-# the ARCHFLAGS is a workaround for the Fall 2013 version of clang
-sudo ARCHFLAGS="-Wno-error=unused-command-line-argument-hard-error-in-future" \
-pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/requirements.txt
-
-###
-### Install Ambry
-###
-
-sudo mkdir -p /data/src
-user=$(whoami)
-
-cd /data/
-
-sudo pip install git+https://github.com/clarinova/ambry.git#egg=ambry
-
-sudo chown -R $user /data
-
-# Install the example sources
-mkdir /data/source
-
-cd /data/source
-git clone https://github.com/sdrdl/sdrdl-ambry-bundles.git sdrdl
-git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
-
-ambry config install # Installs a development config
-

@@ -41,9 +41,9 @@ class Dataset(Base):
     time_coverage = SAColumn('d_tcov', MutationList.as_mutable(JSONEncodedObj))
     grain_coverage = SAColumn('d_gcov', MutationList.as_mutable(JSONEncodedObj))
 
-    p_sequence_id = SAColumn('ds_p_sequence_id', Integer, default=1)
-    t_sequence_id = SAColumn('ds_t_sequence_id', Integer, default=1)
-    st_sequence_id = SAColumn('ds_st_sequence_id', Integer, default=1)
+    p_sequence_id = SAColumn('d_p_sequence_id', Integer, default=1)
+    t_sequence_id = SAColumn('d_t_sequence_id', Integer, default=1)
+    st_sequence_id = SAColumn('d_st_sequence_id', Integer, default=1)
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -119,6 +119,15 @@ class Dataset(Base):
     @property
     def session(self):
         return self._database.session
+
+    def query(self, *args, **kwargs):
+        return self.session.query(*args, **kwargs)
+
+    def close(self):
+        return self._database.close()
+
+    def close_session(self):
+        return self._database.close_session()
 
     @property
     def identity(self):
@@ -276,8 +285,6 @@ class Dataset(Base):
         if not extant:
             self.tables.append(table)
 
-        self.commit()
-
         return table
 
     def new_partition(self, table, **kwargs):
@@ -402,9 +409,13 @@ class Dataset(Base):
         return q
 
     def delete_tables_partitions(self):
+        self.t_sequence_id = 1
+        self.p_sequence_id = 1
         return self._database.delete_tables_partitions(self)
 
+
     def delete_partitions(self):
+        self.p_sequence_id = 1
         return self._database.delete_partitions(self)
 
     def new_source(self, name, **kwargs):
@@ -470,6 +481,7 @@ class Dataset(Base):
         self.source_tables.append(table)
 
         assert table.sequence_id
+
 
         return table
 
@@ -561,20 +573,6 @@ class ConfigAccessor(object):
 
         self.dataset = dataset
 
-    @property
-    def process(self):
-        """Access process configuarion values as attributes
-
-        >>> db = Database(self.dsn)
-        >>> db.open()
-        >>> ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
-        >>> ds.process.build.foo = [1,2,3,4]
-        >>> ds.process.build.bar = [5,6,7,8]
-        """
-
-        from .config import ProcessConfigGroupAccessor
-
-        return ProcessConfigGroupAccessor(self.dataset, 'process')
 
     @property
     def metadata(self):
@@ -590,6 +588,8 @@ class ConfigAccessor(object):
         """Access build configuration values as attributes. See self.process
             for a usage example"""
         from .config import BuildConfigGroupAccessor
+
+        raise NotImplementedError('Use bundle.buildstate instead')
 
         return BuildConfigGroupAccessor(self.dataset, 'buildstate')
 

@@ -6,7 +6,7 @@ __docformat__ = 'restructuredtext en'
 
 import datetime
 
-from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint, Boolean
 from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 
@@ -70,6 +70,7 @@ class SourceColumn(Base):
 
     datatype = SAColumn('sc_datatype', Text) # Basic data type, usually intuited
     valuetype = SAColumn('sc_valuetype', Text) # Describes the meaning of the value: state, county, address, etc.
+    has_codes = SAColumn('sc_has_codes', Boolean, default = False) # If True column also has codes of different type
 
     start = SAColumn('sc_start', Integer) # For fixed width, the column starting position
     width = SAColumn('sc_width', Integer) # for Fixed width, the field width
@@ -122,7 +123,8 @@ class SourceColumn(Base):
         # Use an Ordered Dict to make it friendly to creating CSV files.
 
         d = OrderedDict([('table',self.table.name)] + [(p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
-                         if p.key not in ['vid', 'st_vid', 'table','dataset', 'ds_id','d_vid', 'source', 'value_labels']])
+                         if p.key not in ['vid', 'st_vid', 'table','dataset', 'ds_id','d_vid',
+                                          'source', 'value_labels']])
 
         return d
 
@@ -209,6 +211,11 @@ class SourceTable(Base):
         datatype = 'str' if datatype == 'unicode' else datatype
 
         assert not c or not c_by_pos or c.vid == c_by_pos.vid
+
+        # Convert almost anything to True / False
+        if 'has_codes' in kwargs:
+            o = kwargs['has_codes']
+            kwargs['has_codes'] = False if kwargs['has_codes'] in ['False','false','F','f','',None,0,'0']  else True
 
         if c:
 

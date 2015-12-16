@@ -75,6 +75,9 @@ def root_parser(cmd):
     sp = cmd.add_parser('sync', help='Sync with the remotes')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='sync')
+    sp.add_argument('-l', '--list', default=False, action='store_true',
+                    help='List rather than sync')
+    sp.add_argument('ref', nargs='?', type=str, help='Name of a remote or a bundle reference')
 
     sp = cmd.add_parser('remove', help='Remove a bundle from the library')
     sp.set_defaults(command='root')
@@ -102,15 +105,7 @@ def root_parser(cmd):
                     help='Reindex the bundles')
     sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
 
-    sp = cmd.add_parser('docker', help='Manage docker images and containers')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='docker')
-    sp.add_argument('-b', '--build', default=False, action='store_true', help='Build a new docker image')
-    sp.add_argument('-r', '--run', default=False, action='store_true', help='Run the docker image')
-    sp.add_argument('-l', '--local', default=False, action='store_true',
-                    help='Use the local Sqlite database, not a postgress database supplied through an environmental var')
-    sp.add_argument('-s', '--shell', default=False, action='store_true',
-                    help='Run a shell in the docker image')
+
 
 def root_command(args, rc):
     from ..library import new_library
@@ -122,14 +117,19 @@ def root_command(args, rc):
         rc.set_lirbary_database('test')
 
     try:
-        l = new_library(rc)
-        l.logger = global_logger
-    except DatabaseError as e:
-        warn('No library: {}'.format(e))
-        l = None
-    except Exception as e:
+        from ambry.library import global_library, Library
+        global global_library
 
-        warn('Failed to instantiate library: {}'.format(e))
+        l = Library(rc, echo=args.echo)
+
+        global_library = l
+
+        l.logger = global_logger
+        l.sync_config()
+
+    except Exception as e:
+        if args.subcommand != 'info':
+            warn('Failed to instantiate library: {}'.format(e))
         l = None
 
     globals()['root_' + args.subcommand](args, l, rc)
@@ -165,6 +165,10 @@ def root_ckan_export(args, library, run_config):
 def root_list(args, l, rc):
     from tabulate import tabulate
     import json
+    from . import fatal
+
+    if not l:
+        fatal('No database')
 
     if args.fields:
         header = list(str(e).strip() for e in args.fields.split(','))
@@ -237,6 +241,8 @@ def root_info(args, l, rc):
     from ..cli import prt
     from ..dbexceptions import ConfigurationError
     from tabulate import tabulate
+    from ambry.library.filesystem import  LibraryFilesystem
+    from ambry.util.text import ansicolors
 
     import ambry
 
@@ -255,7 +261,8 @@ def root_info(args, l, rc):
         prt('Library:   {}', l.database.dsn)
         prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
     else:
-        prt('No library defined!')
+        fs = LibraryFilesystem(rc)
+        prt('Library:   {} {}(Inaccessible!){}', fs.database_dsn, ansicolors.FAIL, ansicolors.ENDC)
 
     if args.configs:
         ds = l.database.root_dataset
@@ -272,11 +279,25 @@ def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
 
-    l.logger.info('args: %s' % args)
+    name = args.ref if args.ref else None
+
+    if name in [r for r in l.remotes]:
+        remote_name = name
+        bundle_name = None
+    else:
+        remote_name = None
+        bundle_name = name
 
     for r in l.remotes:
+
+        if remote_name and remote_name != r:
+            continue
+
         prt('Sync with remote {}', r)
-        l.sync_remote(r)
+
+        entries = l.sync_remote(r, bundle_name=bundle_name, list_only = args.list)
+        if bundle_name and bundle_name in entries:
+            break
 
 
 def root_search(args, l, rc):
@@ -388,23 +409,4 @@ def root_import(args, l, rc):
         if args.detach:
             b.set_file_system(source_url=None)
 
-def root_docker(args, l, rc):
-    import os
 
-    if args.build:
-        raise NotImplementedError()
-
-    if args.run:
-
-        if args.local:
-            db = ''
-            passwd = ''
-        else:
-            db = ' -e AMBRY_DB={}'.format(l.database.dsn)
-            passwd = ' -e AMBRY_ACCOUNT_PASSWORD={}'.format(l._account_password)
-
-        args = ('docker run --rm -t -i '+db+passwd+' civicknowledge/ambry').split()
-
-        print args
-
-        os.execvp('docker', args)

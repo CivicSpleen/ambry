@@ -39,6 +39,8 @@ class Partition(Base, DictableMixin):
     STATES.PREPARED = 'prepared'
     STATES.BUILDING = 'building'
     STATES.BUILT = 'built'
+    STATES.COALESCING = 'coalescing'
+    STATES.COALESCED = 'coalesced'
     STATES.ERROR = 'error'
     STATES.FINALIZING = 'finalizing'
     STATES.FINALIZED = 'finalized'
@@ -262,14 +264,16 @@ class Partition(Base, DictableMixin):
             for source_name, source in list(self.data['source_data'].items()):
                 if 'time' in source:
                     for year in expand_to_years(source['time']):
-                        tcov.add(year)
+                        if year:
+                            tcov.add(year)
 
         # From the partition name
         if self.identity.name.time:
             for year in expand_to_years(self.identity.name.time):
-                tcov.add(year)
+                if year:
+                    tcov.add(year)
 
-        self.time_coverage = tcov
+        self.time_coverage = [ t for t in tcov if t ]
 
         #
         # Grains
@@ -294,6 +298,9 @@ class Partition(Base, DictableMixin):
 
             def __repr__(self):
                 return repr(self.__dict__)
+
+            def keys(self):
+                return list(self.__dict__.keys())
 
             def items(self):
                 return list(self.__dict__.items())
@@ -359,9 +366,9 @@ class Partition(Base, DictableMixin):
             if hasattr(self, k):
                 setattr(self, k, v)
 
-    def finalize(self):
+    def finalize(self, ps=None):
 
-        self.state = self.STATES.BUILT
+        self.state = self.STATES.FINALIZING
 
         # Write the stats for this partition back into the partition
 
@@ -372,9 +379,11 @@ class Partition(Base, DictableMixin):
                 wc.name = c.name
                 wc.description = c.description
                 wc.type = c.python_type.__name__
+                self.count = w.n_rows
             w.finalize()
 
         if self.type == self.TYPE.UNION:
+            ps.update('Running stats ', state='running')
             stats = self.datafile.run_stats()
             self.set_stats(stats)
             self.set_coverage(stats)
@@ -414,35 +423,105 @@ class Partition(Base, DictableMixin):
     def datafile(self):
         """Return the datafile for this partition, from the build directory, the remote, or the warehouse"""
         from ambry_sources import MPRowsFile
+        from fs.errors import ResourceNotFoundError
+        from ambry.orm.exc import NotFoundError
 
         if self._datafile is None:
 
-            if not self.location or self.location == 'build':
-                assert bool(self.cache_key)
+            try:
                 self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
 
-            elif self.location == 'remote':
-                from ambry_sources import MPRowsFile
-                # Get bundle for this partition
-                # Actually ... this seems way to complex. Why not self._bundle.remote()
-                # FIXME
-                b = self._bundle.library.bundle(self.identity.as_dataset().vid)
-                remote = self._bundle.library.remote(b)
+            except ResourceNotFoundError:
+                raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
 
-                self._datafile = MPRowsFile(remote, self.cache_key)
-
-            elif self.location == 'warehouse':
-                raise NotImplementedError()
-
-            else:
-                raise NotImplementedError()
 
         return self._datafile
 
     @property
+    def remote_datafile(self):
+
+        from fs.errors import ResourceNotFoundError
+        from ambry.orm.exc import NotFoundError
+
+        try:
+
+            from ambry_sources import MPRowsFile
+            # Get bundle for this partition
+            # Actually ... this seems way too complex. Why not self._bundle.remote()
+            # FIXME
+            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+            remote = self._bundle.library.remote(b)
+
+            datafile = MPRowsFile(remote, self.cache_key)
+
+        except ResourceNotFoundError as e:
+            raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
+
+        return datafile
+
+    @property
+    def is_local(self):
+        """Return ture is the partition file is local"""
+        return self.datafile.exists
+
+
+    def localize(self, ps=None):
+        """Copy a non-local partition file to the local build directory"""
+        from  filelock import FileLock
+        from ambry.util import ensure_dir_exists
+        from ambry_sources import MPRowsFile
+
+        local = self._bundle.build_fs
+
+        b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+        remote = self._bundle.library.remote(b)
+
+        lock_path = local.getsyspath(self.cache_key + '.lock')
+
+        ensure_dir_exists(lock_path)
+
+        lock = FileLock(lock_path)
+
+        if ps:
+            ps.add_update(message='Localizing {}'.format(self.identity.name),
+                          partition=self,
+                          item_type='bytes',
+                          state='downloading')
+
+        def progress(bts):
+            if ps:
+                if ps.rec.item_total is None:
+                    ps.rec.item_count = 0
+
+                item_count = ps.rec.item_count + bts
+                ps.rec.data['updates'] = ps.rec.data.get('updates', 0) + 1
+
+                if ps.rec.data['updates'] % 32 == 1:
+                    ps.update(message='Localizing {}'.format(self.identity.name),
+                          item_count=item_count )
+
+        def exception_cb(e):
+            raise e
+
+        with lock:
+            with remote.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
+                event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
+                                                f,
+                                                progress_callback=progress,
+                                                error_callback=exception_cb)
+                event.wait()
+                if ps:
+                    ps.update_done()
+
+
+    @property
     def reader(self):
+        from ambry.orm.exc import NotFoundError
+        from fs.errors import ResourceNotFoundError
         """The reader for the datafile"""
+
         return self.datafile.reader
+
 
     def select(self, predicate=None, headers=None):
         """

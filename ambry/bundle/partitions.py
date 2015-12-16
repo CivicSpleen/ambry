@@ -159,7 +159,7 @@ class Partitions(object):
     def clean(self, session):
         from ambry.orm import Partition as OrmPartition
 
-        session.query(OrmPartition).delete()
+        session.query(OrmPartition).filter(OrmPartition.d_vid == self.bundle.dataset.vid).delete()
 
         return self
 

@@ -79,6 +79,17 @@ class ExtDoc(TypedDictGroup):
     _proto = ExtDocTerm()  # Reusing
 
 
+    def group_by_source(self):
+        from collections import defaultdict
+        docs = defaultdict(list)
+
+        for k, v in self.items():
+            if 'source' in v:
+                docs[v.source].append(dict(v.items()))
+
+        return docs
+
+
 class ContactTerm(DictTerm):
     role = ScalarTerm(store_none=False)
     name = ScalarTerm(store_none=False)

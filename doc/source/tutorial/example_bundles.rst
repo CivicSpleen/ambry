@@ -22,7 +22,10 @@ If you don't already have the ambry source distribution:
 Import the Example Bundles
 **************************
 
-With the source available, import the bundle into the library, but use the '-d' option to detach the source. When the bundle source is later exported, it will be exported to the default source directory, not to the directory of the originally imported source. If you are a developer, this prevents the source tree from getting polluted with source files. 
+With the source available, import the bundle into the library, but use the '-d' option to detach the source.
+When the bundle source is later exported, it will be exported to the default source directory, not
+to the directory of the originally imported source. If you are a developer, this prevents the source
+tree from getting polluted with source files.
 
 .. code-block:: bash
 
@@ -57,10 +60,12 @@ Now, you can list the bundles:
 Using the Bambry Command
 ************************
 
-You can operate on these bundles with the :command:`bambry` program. There are a few ways to specify which bundle you want to work on:
+You can operate on these bundles with the :command:`bambry` program. There are a few ways to
+specify which bundle you want to work on:
 
 * Use the ``-i`` option to specify the bundle vid explicity. 
-* :command:`cd` to the bundle directory.  :command:`bambry` will find a bundle ref in a :file:`bundle.yaml` file in the current directory
+* :command:`cd` to the bundle directory.  :command:`bambry` will find a bundle ref in a :file:`bundle.yaml`
+file in the current directory
 * Set the `AMBRY_BUNDLE` env var.
 * For most commands, supply the vid as an argument.
 * Without any of the prior methods, :command:`bambry` will use the last bundle you worked on. 

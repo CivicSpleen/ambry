@@ -52,8 +52,8 @@ class TestBase(unittest.TestCase):
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
-    @classmethod
-    def get_rc(cls, rewrite=True):
+    @staticmethod # So it can be called from either setUp or setUpClass
+    def get_rc(rewrite=True):
         """Create a new config file for test and return the RunConfig.
 
          This method will start with the user's default Ambry configuration, but will replace the
@@ -74,8 +74,6 @@ class TestBase(unittest.TestCase):
 
         dsn = config.get('database', {}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
 
-        cls._db_type = dbname
-
         config.library.filesystem_root = root_dir
         config.library.database = dsn
         config.accounts = None
@@ -93,14 +91,33 @@ class TestBase(unittest.TestCase):
     def config(cls):
         return cls.get_rc()
 
-    def library(self, config=None):
-
+    @staticmethod # So it can be called from either setUp or setUpClass
+    def _get_library(config):
         from ambry.library import new_library
 
+        return new_library(config if config else TestBase.get_rc())
+
+    def library(self, config=None):
+
         if not self._library:
-            self._library = new_library(config if config else self.config())
+            self._library = self._get_library(config)
 
         return self._library
+
+    @staticmethod # So it can be called from either setUp or setUpClass
+    def _import_bundles(library, clean=True, force_import=False):
+
+        from test import bundle_tests
+        import os
+
+        if clean:
+            library.clean()
+            library.create()
+
+        bundles = list(library.bundles)
+
+        if len(bundles) == 0 or force_import:
+            library.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
 
     def import_bundles(self, clean=True, force_import=False):
         """
@@ -110,24 +127,15 @@ class TestBase(unittest.TestCase):
         :return:
         """
 
-        from test import bundle_tests
-        import os
+        library = self.library()
 
-        l = self.library()
-
-        if clean:
-            l.clean()
-            l.create()
-
-        bundles = list(l.bundles)
-
-        if len(bundles) == 0 or force_import:
-            l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
+        self._import_bundles(library,clean, force_import )
 
     def import_single_bundle(self, cache_path, clean=True):
         from test import bundle_tests
 
         l = self.library()
+        print l.database.dsn
 
         if clean:
             l.clean()

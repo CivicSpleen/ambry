@@ -34,6 +34,9 @@ class DataSourceBase(object):
     # reftypes for sources that should not be built or have schemas create for
     NON_PROCESS_REFTYPES = ('ref', 'template')
 
+    # reftypes for sources that should not be built or have schemas create for
+    NON_INGEST_REFTYPES = ('ref', 'template', 'partition')
+
     STATES = Constant()
     STATES.NEW = 'new'
     STATES.INGESTING = 'ingest'
@@ -203,6 +206,12 @@ class DataSourceBase(object):
         return self.urltype not in self.NON_PROCESS_REFTYPES
 
     @property
+    def is_ingestible(self):
+        """Return true if the URL is probably downloadable, and is not a reference or a template"""
+
+        return self.urltype not in self.NON_INGEST_REFTYPES
+
+    @property
     def is_reference(self):
         """Return true if the URL is probably downloadable, and is not a reference or a template"""
 
@@ -252,8 +261,11 @@ class DataSourceBase(object):
                         c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
                     else:
 
-                        c = st.add_column(col['pos'], source_header=col['name'], dest_header=col['name'],
-                                          datatype=col['resolved_type'])
+                        c = st.add_column(col['pos'],
+                                          source_header=col['name'],
+                                          dest_header=col['name'],
+                                          datatype=col['resolved_type'],
+                                          has_codes=col['has_codes'])
 
 
     def update_spec(self):
@@ -298,9 +310,7 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     source_table_name = SAColumn('ds_st_name', Text)
     _source_table = relationship(SourceTable, backref='sources')
 
-    t_vid = SAColumn(
-        'ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True,
-        doc='Table vid')
+    t_vid = SAColumn('ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True,doc='Table vid')
     dest_table_name = SAColumn('ds_dt_name', Text)
     _dest_table = relationship(Table, backref='sources')
 

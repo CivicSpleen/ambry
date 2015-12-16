@@ -11,3 +11,4 @@ Tutorial
     ingestion
     schemas
     build
+    docker

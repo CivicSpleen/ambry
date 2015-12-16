@@ -609,13 +609,12 @@ class SourcesFile(RowBuildSourceFile):
                     d['source_table_name'] = d['source_table']
                     del d['source_table']
 
-                if 'state' in d:
-                    del d['state']
-
                 d['d_vid'] = self._dataset.vid
 
+                d['state'] = 'synced'
+
                 try:
-                    ds = self._dataset.source_file(d['name'])
+                    ds = self._dataset.source_file(str(d['name']))
                     ds.update(**d)
                 except NotFoundError:
                     name = d['name']
@@ -659,7 +658,7 @@ class SchemaFile(RowBuildSourceFile):
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
-        from ambry.orm import Column, Table
+        from ambry.orm import Column, Table, Dataset
 
         def _clean_int(i):
             if i is None:
@@ -692,11 +691,19 @@ class SchemaFile(RowBuildSourceFile):
             'real': Column.DATATYPE_FLOAT,
         }
 
-        table_number = self._dataset.next_sequence_id(Table, force_query=True)
 
+        def run_progress_f(line_no):
+            self._bundle.log("Loading tables from file. Line #{}".format(line_no))
+
+        from ambry.bundle.process import CallInterval
+        run_progress_f = CallInterval(run_progress_f, 10)
+
+        table_number = self._dataset._database.next_sequence_id(Dataset, self._dataset.vid, Table)
         for row in bsfile.dict_row_reader:
 
             line_no += 1
+
+            run_progress_f(line_no)
 
             # Skip blank lines
             if not row.get('column', False) and not row.get('table', False):
@@ -748,6 +755,8 @@ class SchemaFile(RowBuildSourceFile):
                 units=row.get('units', None),
                 universe=row.get('universe'),
                 update_existing= True)
+
+        self._dataset.t_sequence_id = table_number
 
         return warnings, errors
 
@@ -830,19 +839,18 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         self._dataset.commit()
 
-        table_number = self._dataset.next_sequence_id(SourceTable, force_query=True)
-
         for row in bsfile.dict_row_reader:
             st = self._dataset.source_table(row['table'])
 
             if not st:
-                st = self._dataset.new_source_table(row['table'], table_number)
-                table_number += 1
+                st = self._dataset.new_source_table(row['table'])
+                #table_number += 1
 
             if 'datatype' not in row:
                 row['datatype'] = 'unknown'
 
             del row['table']
+
 
             st.add_column(**row)  # Create or update
 
