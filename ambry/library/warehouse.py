@@ -28,8 +28,8 @@ logger = get_logger(__name__)
 
 # debug logging
 #
-import logging
-logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
+# import logging
+# logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
 
 
 class WarehouseError(Exception):
@@ -845,22 +845,37 @@ def execute_sql(bundle, asql):
         bundle (FIXME:):
         asql (str): unified sql - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
     """
-    #installed = _install_partitions(bundle.library, asql)
-    # sql = asql
-    # for raw_name, table_name in installed:
-    #    sql = sql.replace(raw_name, table_name)
-        # sql = _convert_query(bundle.library.database, asql)
-    # if dsn.startswith('sqlite:'):
-    #    logger.debug('Initializing sqlite warehouse.')
+    def convert_materialized_view(library, statement):
+        """ Finds materialized view and converts it to sqlite format.
+
+            Note:
+                Assume virtual tables for all partitions already created.
+
+            Args:
+                FIXME:
+
+            Returns:
+        """
+        statement_str = statement.to_unicode()
+        if 'materialized view' in statement_str.lower():
+            # FIXME: Implement
+
+            # create table.
+
+            # populate table with data from select query.
+            pass
+
+        return statement_str
     backend = SQLiteWrapper(bundle.library, bundle.library.database.dsn)
     connection = backend._get_connection()
-    statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
-    for statement in statements:
-        backend.query(connection, statement.to_unicode())
-    #conn
-    # backend.--
-    #connection = bundle.library.database.connection
-    #connection.execute(sql)
+    try:
+        statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
+        for statement in statements:
+            statement_str = convert_materialized_view(bundle.library, statement)
+            if statement_str.strip():
+                backend.query(connection, statement_str)
+    finally:
+        backend.close()
 
 
 def _convert_query(database, asql):

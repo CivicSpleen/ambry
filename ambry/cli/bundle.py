@@ -1332,7 +1332,6 @@ def bundle_view(args, l, rc):
     main(args)
 
 
-
 def bundle_colmap(args, l, rc):
     """
 

@@ -144,13 +144,9 @@ class Bundle(object):
         self._ps = None  # Progress logger section, created as needed.
         self.init()
 
-
-
     def init(self):
         """An overridable initialization method, called in the Bundle constructor"""
         pass
-
-
 
     def set_file_system(self, source_url=False, build_url=False):
         """Set the source file filesystem and/or build  file system"""
@@ -161,13 +157,16 @@ class Bundle(object):
         if source_url:
             self._source_url = source_url
             self.dataset.config.library.source.url = self._source_url
+            self._source_fs = None
         elif source_url is None:
             self._source_url = None
             self.dataset.config.library.source.url = self._source_url
+            self._source_fs = None
 
         if build_url:
             self._build_url = build_url
             self.dataset.config.library.build.url = self._build_url
+            self._build_fs = None
 
         self.dataset.commit()
 
@@ -285,11 +284,9 @@ class Bundle(object):
         except NotFoundError:
             return self.library.bundle(source.url)
 
-
-
     @property
     def config(self):
-        """Return the Cofig acessors. THe returned object has properties for acessing other
+        """Return the Cofig acessors. The returned object has properties for acessing other
         groups of configuration values:
 
         - build: build state
@@ -452,7 +449,6 @@ class Bundle(object):
             else:
                 sources = self.sources
 
-
         elif not isinstance(sources, (list, tuple)):
             sources = [sources]
 
@@ -475,12 +471,12 @@ class Bundle(object):
 
     @property
     def refs(self):
+        """Iterate over downloadable sources -- references and templates"""
 
         def set_bundle(s):
             s._bundle = self
             return s
 
-        """Iterate over downloadable sources -- references and templates"""
         return list(set_bundle(s) for s in self.dataset.sources if not s.is_downloadable)
 
     @property
@@ -1039,7 +1035,6 @@ Caster Code
         self.buildstate.state.exception_type = None
         self.buildstate.commit()
 
-
     def record_stage_state(self, phase, stage):
         """Record the completion times of phases and stages"""
 
@@ -1274,8 +1269,7 @@ Caster Code
         self.dataset.delete_partitions()
 
         for s in self.sources:
-            s.state =  None
-
+            s.state = None
 
         if self.build_partition_fs.exists:
             try:
@@ -1379,7 +1373,7 @@ Caster Code
                          key=key)
 
         if not sources:
-            self.log("No sources left to ingest")
+            self.log('No sources left to ingest')
             return
 
         self.state = self.STATES.INGESTING
@@ -1439,6 +1433,7 @@ Caster Code
                                 (s.is_processable and not s.is_ingested and not s.is_built)]
 
         errors = 0
+
         with self.progress.start('ingest', stage,
                                  message='Ingesting ' + ('MP' if self.multi else 'SP'),
                                  item_total=len(sources), item_type='source',
@@ -1509,7 +1504,6 @@ Caster Code
                               .format(source.name, source.ref), state='skipped')
                     return True
 
-
             source.state = source.STATES.INGESTING
 
             iterable_source, source_pipe = self.source_pipe(source, ps)
@@ -1579,11 +1573,12 @@ Caster Code
         """
         Generate destination schemas.
 
-        :param table_sources: If specified, build only destination tables for these soruces
+        :param sources: If specified, build only destination tables for these sources
         :param tables: If specified, build only these tables
         :param clean: Delete tables and partitions first
         :param force: Population tables even if the table isn't empty
-        :param use_pipeline: If True, use the build pipeline to determine columns. If false, use the source schemas.
+        :param use_pipeline: If True, use the build pipeline to determine columns. If False,
+            use the source schemas.
 
         :return: True on success.
         """
@@ -1603,7 +1598,7 @@ Caster Code
         keyfunc = attrgetter('dest_table')
         for t, table_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
 
-            if not force and not t.is_empty:
+            if not force and not t.is_empty():
                 continue
 
             if use_pipeline:
@@ -1717,8 +1712,6 @@ Caster Code
             if self.state.endswith('error'):
                 self.error("Can't run build; bundle is in error state")
                 return False
-
-
         return True
 
     def _reset_build(self, sources):
@@ -1766,7 +1759,6 @@ Caster Code
         self.log('==== Building ====')
         self.state = self.STATES.BUILDING
 
-
         class SourceSet(object):
             """Container for sources that can reload them after they get expired from the session"""
             def __init__(self, bundle, v):
@@ -1785,11 +1777,20 @@ Caster Code
                 return len(self._s_vids)
 
         try:
+            # FIXME: Find appropriate place for sql execution.
+            from ambry.library.warehouse import execute_sql
+            for f in self.dataset.files:
+                if f.path == 'bundle.sql' and f.unpacked_contents:
+                    # close current sqlite connection (pysqlite) because virtual tables implementations
+                    # uses its own connection (apsw)
+                    self.close()
+                    execute_sql(self, f.unpacked_contents)
+                    break
 
             self._run_events(TAG.BEFORE_BUILD, 0)
 
             resolved_sources = SourceSet(self, self._resolve_sources(sources, tables, stage=stage,
-                                                               predicate=lambda s: s.is_processable))
+                                                                     predicate=lambda s: s.is_processable))
 
             with self.progress.start('build', stage, item_total=len(resolved_sources)) as ps:
 
@@ -1843,7 +1844,7 @@ Caster Code
                             ps.add("Finished MP building {} sources. Starting MP coalescing"
                                    .format(len(completed_sources)))
 
-                            partition_names = [(self.identity.vid, k) for k,v
+                            partition_names = [(self.identity.vid, k) for k, v
                                                in self.collect_segment_partitions().items()]
 
                             r = pool.map_async(unify_mp, partition_names, 1)
@@ -1926,8 +1927,8 @@ Caster Code
                     ps.update(message='Running pipeline {}: rate: {}'
                               .format(source_name, rate),
                               s_vid=s_vid,
-                              item_type = 'rows',
-                              item_count = n_records)
+                              item_type='rows',
+                              item_count=n_records)
 
             pl.run(callback=run_progress_f)
 
@@ -1935,7 +1936,6 @@ Caster Code
             for f in pl.final:
                 ps.update(message='Run final routine: {}'.format(f))
                 f(pl)
-
 
             ps.update(message='Finished running source')
 
@@ -1948,10 +1948,10 @@ Caster Code
         try:
             partitions = list(pl[ambry.etl.PartitionWriter].partitions)
             ps.update(message='Finalizing segment partition',
-                      item_type='partitions', item_total=len(partitions), item_count = 0  )
+                      item_type='partitions', item_total=len(partitions), item_count=0)
             for i, p in enumerate(partitions):
 
-                ps.update(message='Finalizing segment partition {}'.format(p.name),item_count=i, p_vid=p.vid)
+                ps.update(message='Finalizing segment partition {}'.format(p.name), item_count=i, p_vid=p.vid)
 
                 try:
                     p.finalize()
@@ -2046,9 +2046,9 @@ Caster Code
                 (desc, n_records, total, rate) = parent.datafile.report_progress()
 
                 ps.update(message='Coalescing {}: {}/{} of {}, rate: {}'
-                          .format(parent.identity.name, i,n_records, total, rate))
+                          .format(parent.identity.name, i, n_records, total, rate))
 
-            coalesce_progress_f = CallInterval(coalesce_progress_f, 10) # FIXME Should be a decorator
+            coalesce_progress_f = CallInterval(coalesce_progress_f, 10)  # FIXME Should be a decorator
 
             with parent.datafile.writer as w:
                 for seg in sorted(segments, key=lambda x: b(x.name)):
@@ -2060,9 +2060,8 @@ Caster Code
                             w.insert_row((i,) + row[1:])
                             i += 1
 
-                            if i%1000 == 1:
+                            if i % 1000 == 1:
                                 coalesce_progress_f(i)
-
 
         parent.STATES.COALESCED
         self.commit()
@@ -2077,7 +2076,6 @@ Caster Code
         self.commit()
 
         return str(partition_name)
-
 
     def exec_context(self, **kwargs):
         """Base environment for evals, the stuff that is the same for all evals. Primarily used in the
@@ -2301,7 +2299,6 @@ Caster Code
 
         self.log('Adding bundle to search index')
         self.library.search.index_bundle(self, force=True)
-
 
         self.log('Writing bundle sqlite file')
         self.finalize_write_bundle_file()
