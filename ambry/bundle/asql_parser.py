@@ -30,9 +30,9 @@ def parse_index(query):
 # Parser implementation
 #
 
-def _flat_column(t):
-    """ Populates column fields from parse result. """
-    t.name = t.parsed_name[0]
+def _flat_alias(t):
+    """ Populates token fields from parse result. """
+    t.name = t.parsed_name
     t.alias = t.parsed_alias[0] if t.parsed_alias else ''
     return t
 
@@ -70,16 +70,20 @@ column_name_list = Group(delimitedList(column_name))
 
 # column from the select statement with `as` keyword support.
 select_column = (
-    ident.setResultsName('parsed_name')
-    + Optional(as_kw.suppress() + ident.setResultsName('parsed_alias'))
-).setParseAction(_flat_column)
+    delimitedList(ident, '.', combine=True).setResultsName('parsed_name')
+    + Optional(as_kw.suppress() + delimitedList(ident, '.', combine=True)).setResultsName('parsed_alias')
+).setParseAction(_flat_alias)
+# select_column_name = delimitedList(select_column, '.', combine=True)
 
 select_column_list = OneOrMore(Group(select_column + Optional(',').suppress()))
 
 # define asql specific table name. May contain partition names: example.com-simple-simple1 for example
 table_ident = ~reserved_words + Word(alphas, alphanums + '_-$').setName('table_identifier')
-table_name = delimitedList(table_ident, '.', combine=True)
-table_name_list = Group(delimitedList(table_name))
+table_name = (
+    delimitedList(table_ident, '.', combine=True).setResultsName('parsed_name')
+    + Optional(as_kw.suppress() + ident).setResultsName('parsed_alias')
+).setParseAction(_flat_alias)
+table_name_list = OneOrMore(Group(table_name + Optional(',').suppress()))
 
 # define the select grammar
 select_stmt << (
