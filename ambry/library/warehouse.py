@@ -19,7 +19,6 @@ import psycopg2
 
 from ambry_sources.med import sqlite as sqlite_med, postgresql as postgres_med
 
-from ambry.orm.exc import NotFoundError
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
 from ambry.util import get_logger, parse_url_to_dict
 
@@ -961,10 +960,10 @@ def _convert_query(database, asql):
 
 
 def _get_table_names1(statement):
-    # Simplified version of more appropriate for ambry queryes
+    # Simplified version - is more appropriate for ambry queryes
     parts = statement.to_unicode().split()
     tables = set()
     for i, token in enumerate(parts):
         if token.lower() == 'from' or token.lower().endswith('join'):
-            tables.add(parts[i + 1])
+            tables.add(parts[i + 1].rstrip(';'))
     return list(tables)
