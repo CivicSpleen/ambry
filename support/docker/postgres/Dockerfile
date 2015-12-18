@@ -1,13 +1,12 @@
-# PostgtreSQL 9.4
+# PostgtreSQL 9.3
 #
 # VERSION    1.2.2
 
 FROM civicknowledge/ambry-base
 
-#MAINTAINER James Brink, brink.james@gmail.com
 MAINTAINER Eric Busboom "eric@civicknowledge.org"
 
-LABEL description="PostgreSQL Server 9.4"
+LABEL description="PostgreSQL Server 9.3"
 
 RUN apt-get update \
   && apt-get install -y \
