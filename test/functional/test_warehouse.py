@@ -215,23 +215,14 @@ class Mixin(object):
 
 class InMemorySQLiteTest(TestBase, Mixin):
 
-    @classmethod
-    def get_rc(cls):
+    def _get_config(self):
         rc = TestBase.get_rc()
         # use file database for library for that test case.
-        cls._real_warehouse_database = rc.library.get('warehouse')
-        cls._real_test_database = rc.library.database
+        self.__class__._real_warehouse_database = rc.library.get('warehouse')
+        self.__class__._real_test_database = rc.library.database
         rc.library.warehouse = 'sqlite://'
         rc.library.database = 'sqlite://'
         return rc
-
-    def _get_test_library(self):
-        library = self.library()
-
-        # assert it is in-memory database.
-        assert library.config.library.warehouse == 'sqlite://'
-
-        return library
 
     def _assert_is_indexed(self, warehouse, partition, column):
         assert_sqlite_index(warehouse._backend._connection, partition, column)
