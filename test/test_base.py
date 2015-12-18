@@ -52,7 +52,7 @@ class TestBase(unittest.TestCase):
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
-    @staticmethod # So it can be called from either setUp or setUpClass
+    @staticmethod  # So it can be called from either setUp or setUpClass
     def get_rc(rewrite=True):
         """Create a new config file for test and return the RunConfig.
 

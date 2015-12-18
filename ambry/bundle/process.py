@@ -167,8 +167,7 @@ class ProgressSection(object):
 class ProcessLogger(object):
     """Database connection and access object for recording build progress and build state"""
 
-    def __init__(self, dataset, logger = None, new_connection=True):
-        import signal
+    def __init__(self, dataset, logger=None, new_connection=True):
         import os.path
 
         self._vid = dataset.vid
@@ -184,23 +183,28 @@ class ProcessLogger(object):
             # Create an entirely new database. Sqlite does not like concurrent access,
             # even from multiple connections in the same process.
             from ambry.orm import Database
-            parts = os.path.split(db.dsn)
-            dsn = '/'.join(parts[:-1]+('progress.db',))
+            if db.dsn == 'sqlite://':
+                # in memory database
+                dsn = 'sqlite://'
+            else:
+                # create progress db near library db.
+                parts = os.path.split(db.dsn)
+                dsn = '/'.join(parts[:-1] + ('progress.db',))
 
             self._db = Database(dsn, foreign_keys=False)
-            self._db.create() # falls through if already exists
+            self._db.create()  # falls through if already exists
             self._engine = self._db.engine
             self._connection = self._db.connection
             self._session = self._db.session
             self._session.merge(dataset)
             self._session.commit()
 
-        elif new_connection: # For postgres, by default, create a new db connection
+        elif new_connection:  # For postgres, by default, create a new db connection
             # Make a new connection to the existing database
             self._db = db
             self._connection = self._db.engine.connect()
-            self._session = self._db.Session(bind=self._connection, expire_on_commit = False)
-        else: # When not building, ok to use existing connection
+            self._session = self._db.Session(bind=self._connection, expire_on_commit=False)
+        else:  # When not building, ok to use existing connection
             self._db = db
             self._connection = db.connection
             self._session = db.session
@@ -219,12 +223,10 @@ class ProcessLogger(object):
         if self._connection and self._new_connection:
             self._connection.close()
 
-
     @property
     def dataset(self):
         from ambry.orm import Dataset
-
-        return self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
+        return self._session.query(Dataset).filter(Dataset.vid == self._d_vid).one()
 
     def start(self, phase, stage, **kwargs):
         """Start a new routine, stage or phase"""
