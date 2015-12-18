@@ -69,11 +69,20 @@ def docker_command(args, rc):
 
 def get_docker_file(rc):
     """Get the path for a .ambry-docker file, parallel to the .ambry.yaml file"""
-    from os.path import dirname, join
+    from os.path import dirname, join, exists
+    from ambry.util import AttrDict
 
     loaded = rc['loaded'][0][0]
 
-    return join(dirname(loaded),'.ambry-docker.yaml')
+    path = join(dirname(loaded),'.ambry-docker.yaml')
+
+    if not exists(path):
+        with open(path, 'wb') as f:
+            d = AttrDict()
+            d['foo'] = dict(name='bar')
+            d.dump(f)
+
+    return path
 
 def get_df_entry(rc,name):
     from ambry.util import AttrDict
@@ -728,14 +737,17 @@ def docker_list(args, l, rc):
         group = e['group']
         rows.append([group, None, None, None, e['message'] ])
 
-        df = get_df_entry(rc, group)
+        try:
+            df = get_df_entry(rc, group)
+        except KeyError:
+            df = {}
 
         for role in sorted([k for k,v in e.items() if isinstance(v, dict)]):
             m = e[role]
             if role in ('ui', 'ckan'):
                 message = m['vhost']
             elif role == 'db' and df:
-                message = df['dsn']
+                message = df.get('dsn')
             else:
                 message = None
             rows.append(['', role, m['name'], m['ports'], message])

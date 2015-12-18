@@ -114,6 +114,7 @@ class Docker(Command):
     description = "build or launch a docker image"
 
     user_options = [
+        ('clean', 'C', 'Build without the image cache -- completely rebuild'),
         ('all', 'a', 'Build all of the images'),
         ('base', 'B', 'Build the base docker image, civicknowledge/ambry-base'),
         ('build', 'b', 'Build the ambry docker image, civicknowledge/ambry'),
@@ -142,6 +143,7 @@ class Docker(Command):
     def run(self):
         import os, sys, shutil
 
+        init_args_a = ['docker', 'build'] +(['--no-cache'] if self.clean else [] ) + ['-f' ]
 
         def tag(n):
             from ambry._meta import __version__
@@ -157,44 +159,42 @@ class Docker(Command):
 
             self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/{}:{}'.format(n,__version__)])
 
+
         if self.base:
-            self.spawn(['docker', 'build', '-f', 'support/docker/base/Dockerfile',
-                        '-t', 'civicknowledge/ambry-base', '.'])
+            self.spawn(init_args_a+[ 'support/docker/base/Dockerfile', '-t', 'civicknowledge/ambry-base', '.'])
 
         if self.numbers:
-            self.spawn(['docker', 'build', '-f', 'support/docker/numbers/Dockerfile',
-                        '-t', 'civicknowledge/ambry-numbers', '.'])
+            self.spawn(init_args_a+[ 'support/docker/numbers/Dockerfile', '-t', 'civicknowledge/ambry-numbers', '.'])
 
         if self.build:
-            self.spawn(['docker', 'build', '-f', 'support/docker/ambry/Dockerfile',
-                        '-t', 'civicknowledge/ambry', '.'])
+            self.spawn(init_args_a+[ 'support/docker/ambry/Dockerfile','-t', 'civicknowledge/ambry', '.'])
             tag('ambry')
 
         if self.dev:
-            self.spawn(['docker', 'build', '-f', 'support/docker/dev/Dockerfile',
-                        '-t', 'civicknowledge/ambry', '.'])
+            self.spawn(init_args_a+[ 'support/docker/dev/Dockerfile', '-t', 'civicknowledge/ambry', '.'])
             tag('ambry')
 
+        def d_build(name):
+            """Builder for containers that don't need the context of the while source distribution"""
+            init_args = ['docker', 'build'] +(['--no-cache'] if self.clean else [] ) + ['-t']
+
+            self.spawn(init_args + ['civicknowledge/' + name, 'support/docker/' + name + '/'])
+            tag(name)
+
         if self.db:
-            self.spawn(['docker', 'build', '-t', 'civicknowledge/postgres', 'support/docker/postgres/'])
-            tag('postgres')
+            d_build('postgres')
 
         if self.tunnel:
-
-            self.spawn(['docker', 'build', '-t', 'civicknowledge/tunnel', 'support/docker/tunnel/'])
-            tag('tunnel')
+            d_build('tunnel')
 
         if self.ui:
-            self.spawn(['docker', 'build', '-t', 'civicknowledge/ambryui', 'support/docker/ui/'])
-            tag('ambryui')
+            d_build('ambryui')
 
         if self.volumes:
-            self.spawn(['docker', 'build', '-t', 'civicknowledge/volumes', 'support/docker/volumes/'])
-            tag('volumes')
+            d_build('volumes')
 
         if self.ckan:
-            self.spawn(['docker', 'build', '-t', 'civicknowledge/ckan', 'support/docker/ckan/'])
-            tag('ckan')
+            d_build('ckan')
 
 tests_require = ['pytest']
 
