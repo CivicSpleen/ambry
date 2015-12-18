@@ -19,7 +19,6 @@ import psycopg2
 
 from ambry_sources.med import sqlite as sqlite_med, postgresql as postgres_med
 
-from ambry.orm.exc import NotFoundError
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
 from ambry.util import get_logger, parse_url_to_dict
 
@@ -406,10 +405,10 @@ class PostgreSQLWrapper(DatabaseWrapper):
             self._engine.dispose()
 
     def _get_warehouse_view(self, connection, table):
-        """ Finds and returns table view name in the db represented by given connection.
+        """ Finds and returns table view name in the postgres db represented by given connection.
 
         Args:
-            connection: connection to db where to look for partition table.
+            connection: connection to postgres db where to look for partition table.
             table (orm.Table):
 
         Raises:
@@ -432,7 +431,7 @@ class PostgreSQLWrapper(DatabaseWrapper):
                                .format(table.vid))
 
     def _get_warehouse_table(self, connection, partition):
-        """ Returns name of the table who stores partition data.
+        """ Returns name of the postgres table who stores partition data.
 
         Args:
             connection: connection to postgres db who stores warehouse data.
@@ -638,10 +637,10 @@ class SQLiteWrapper(DatabaseWrapper):
         return table.vid
 
     def _get_warehouse_view(self, connection, table):
-        """ Finds and returns table view name in the db represented by given connection.
+        """ Finds and returns view name in the sqlite db represented by given connection.
 
         Args:
-            connection: connection to db where to look for partition table.
+            connection: connection to sqlite db where to look for partition table.
             table (orm.Table):
 
         Raises:
@@ -690,7 +689,7 @@ class SQLiteWrapper(DatabaseWrapper):
         table = '{}_v'.format(virtual_table)
         logger.debug(
             'Looking for materialized table of the partition.\n    partition: {}'.format(partition.name))
-        table_exists = self._relation_exists(connection, virtual_table)
+        table_exists = self._relation_exists(connection, table)
         if table_exists:
             logger.debug(
                 'Materialized table of the partition found.\n    partition: {}, table: {}'
@@ -857,14 +856,85 @@ def execute_sql(bundle, asql):
             Returns:
         """
         statement_str = statement.to_unicode()
-        if 'materialized view' in statement_str.lower():
-            # FIXME: Implement
+        if 'create materialized view' in statement_str.lower():
+            # FIXME: Too complicated. Refactor.
+            from ambry.bundle.asql_parser import parse_view
+            view = parse_view(statement_str)
 
-            # create table.
+            # install all partitions
+            tablename = view.name.replace('-', '_').lower().replace('.', '_')
+            create_query_columns = {}
+            for column in view.columns:
+                create_query_columns[column.name] = column.alias
 
-            # populate table with data from select query.
-            pass
+            partition_name_map = {}  # key is ref found in the query, value is Partition instance.
+            partition_alias_map = {}  # key is alias of ref found in the query, value is Partition instance.
 
+            for source in view.sources:
+                partition = library.partition(source.name)
+                partition_name_map[source.name] = partition
+                if source.alias:
+                    partition_alias_map[source.alias] = partition
+
+            for join in view.joins:
+                partition = library.partition(join.source.name)
+                partition_name_map[join.source.name] = partition
+                if join.source.alias:
+                    partition_alias_map[join.source.alias] = partition
+
+            # collect view column types.
+            TYPE_MAP = {
+                'int': 'INTEGER',
+                'float': 'REAL',
+                six.binary_type.__name__: 'TEXT',
+                six.text_type.__name__: 'TEXT',
+                'date': 'DATE',
+                'datetime': 'TIMESTAMP WITHOUT TIME ZONE'
+            }
+            column_types = []
+            column_names = []
+            for column in view.columns:
+                if '.' in column.name:
+                    source_alias, column_name = column.name.split('.')
+                else:
+                    # FIXME: Test that case.
+                    source_alias = None
+                    column_name = column.name
+
+                # find column specification in the mpr file.
+                if source_alias:
+                    partition = partition_alias_map[source_alias]
+                    for part_column in partition.datafile.reader.columns:
+                        if part_column['name'] == column_name:
+                            sqlite_type = TYPE_MAP.get(part_column['type'])
+                            if not sqlite_type:
+                                raise Exception(
+                                    'Do not know how to convert {} to sql column.'
+                                    .format(column['type']))
+
+                            column_types.append(
+                                '    {} {}'
+                                .format(column.alias if column.alias else column.name, sqlite_type))
+                            column_names.append(column.alias if column.alias else column.name)
+            column_types_str = ',\n'.join(column_types)
+            column_names_str = ', '.join(column_names)
+
+            create_query = 'CREATE TABLE IF NOT EXISTS {}(\n{});'.format(tablename, column_types_str)
+
+            # drop 'create materialized view part'
+            _, select_part = statement_str.split(view.name)
+            select_part = select_part.strip()
+            assert select_part.lower().startswith('as')
+
+            # drop as
+            select_part = select_part.strip()[2:].strip()
+            assert select_part.lower().strip().startswith('select')
+
+            copy_query = 'INSERT INTO {table}(\n{columns})\n  {select}'.format(
+                table=tablename, columns=column_names_str, select=select_part)
+            if not copy_query.strip().lower().endswith(';'):
+                copy_query = copy_query + ';'
+            statement_str = '{}\n\n{}'.format(create_query, copy_query)
         return statement_str
     backend = SQLiteWrapper(bundle.library, bundle.library.database.dsn)
     connection = backend._get_connection()
@@ -879,7 +949,7 @@ def execute_sql(bundle, asql):
 
 
 def _convert_query(database, asql):
-    """ Converts simple query to database dialect.
+    """ Converts ambry query to database dialect.
 
     Args:
         connection:
@@ -890,10 +960,10 @@ def _convert_query(database, asql):
 
 
 def _get_table_names1(statement):
-    # Simplified version of more appropriate for ambry queryes
+    # Simplified version - is more appropriate for ambry queryes
     parts = statement.to_unicode().split()
     tables = set()
     for i, token in enumerate(parts):
         if token.lower() == 'from' or token.lower().endswith('join'):
-            tables.add(parts[i + 1])
+            tables.add(parts[i + 1].rstrip(';'))
     return list(tables)

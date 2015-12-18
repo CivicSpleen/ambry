@@ -274,7 +274,6 @@ class PartitionFactory(SQLAlchemyModelFactory):
             dataset=dataset)
 
         instance = super(PartitionFactory, cls)._prepare(create, **kwargs)
-        instance.set_attributes(**kwargs)
         return instance
 
     @classmethod

@@ -1,11 +1,27 @@
 # -*- coding: utf-8 -*-
 import os
 
+import pytest
+
+import apsw
+from apsw import SQLError
+
 from pysqlite2.dbapi2 import OperationalError
 
 from fs.opener import fsopendir
 
-from ambry_sources.med.sqlite import install_mpr_module
+try:
+    from ambry_sources.med.sqlite import install_mpr_module
+except ImportError as exc:
+    from semantic_version import Version
+    import ambry_sources
+    ambry_sources_version = getattr(ambry_sources, '__version__', None) or ambry_sources.__meta__.__version__
+    if Version(ambry_sources_version) < Version('0.1.10'):
+        raise ImportError(
+            '{}. You need to update ambry_sources to >= 0.1.10.'
+            .format(exc))
+    else:
+        raise
 
 from test.test_base import TestBase
 
@@ -15,13 +31,20 @@ class Test(TestBase):
     @classmethod
     def setUpClass(cls):
         TestBase.setUpClass()
-        cls._db = 'sqlite:////tmp/test-files.db'
+        cls._db = 'sqlite:////tmp/test-files-ambry-1.db'
+        try:
+            os.remove(cls._db.replace('sqlite:///', ''))
+        except OSError:
+            pass
 
     def tearDown(self):
         super(self.__class__, self).tearDown()
-        os.remove(self._db.replace('sqlite:///', ''))
+        try:
+            os.remove(self._db.replace('sqlite:///', ''))
+        except OSError:
+            pass
 
-    # FIXME: Add slow mark.
+    @pytest.mark.slow
     def test_bundle_sql(self):
         """ Tests view creation from sql file. """
         # Replace config because user may set memory database in the config, but test requires file database.
@@ -53,8 +76,6 @@ class Test(TestBase):
         # load files to library database (as File records)
         sql_bundle.sync_in()
 
-        self._assert_sql_saved(sql_bundle)
-
         # create mpr file with source rows.
         sql_bundle.ingest(force=True)
 
@@ -65,8 +86,11 @@ class Test(TestBase):
         # and load source with data from the view.
         sql_bundle.build()
 
+        # check the final state.
+        self._assert_sql_saved(sql_bundle)
         self._assert_table_created(library, 'table1')
         self._assert_view_created(library, 'view1')
+        self._assert_materialized_view_created(library, 'materialized_view1')
 
     def _assert_table_created(self, library, table):
         """ Looks for given table in the library. If not found raises AssertionError. """
@@ -79,16 +103,10 @@ class Test(TestBase):
             else:
                 raise
 
-        # Assert table for source created.
-        # FIXME:
-
     def _assert_view_created(self, library, view):
         """ Looks for given view in the library. If not found raises AssertionError. """
 
         # keep apsw imports here to prevent break if apsw is not installed.
-        import apsw
-        from apsw import SQLError
-        # FIXME: check version of the ambry_sources.
         connection = None
         try:
             # We have to use apsw because pysqlite does not support virtual tables.
@@ -111,9 +129,6 @@ class Test(TestBase):
             if connection:
                 connection.close()
 
-        # Source from view referenced in sources.csv of 'simple_with_sql' bundle created.
-        # FIXME:
-
     def _assert_materialized_view_created(self, library, view):
         """ Looks for given materialied view in the library. If not found or is not materialized
             raises AssertionError.
@@ -122,15 +137,12 @@ class Test(TestBase):
             table_rows = library.database.connection\
                 .execute('SELECT s1_id, s2_id FROM {};'.format(view))\
                 .fetchall()
-            self.assertEqual(table_rows, [])
+            self.assertEqual(table_rows, [(1, 1)])
         except OperationalError as exc:
             if 'no such table' in str(exc):
                 raise AssertionError('{} materialized view was not created.'.format(view))
             else:
                 raise
-
-        # Assert table for source created.
-        # FIXME:
 
     def _assert_sql_saved(self, bundle):
         """ Finds file record in the library and matches it agains bundle.sql content. """

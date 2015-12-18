@@ -9,11 +9,16 @@ import logging
 import os
 import sys
 import tempfile
+import traceback
+
+import json
 
 from fs.osfs import OSFS
 from fs.opener import fsopendir
 
 from sqlalchemy import or_
+
+from six import text_type
 
 from requests.exceptions import HTTPError
 
@@ -50,10 +55,9 @@ def new_library(config=None):
 
 class Library(object):
 
-    def __init__(self,  config=None, search=None, echo=None, read_only = False):
+    def __init__(self,  config=None, search=None, echo=None, read_only=False):
         from sqlalchemy.exc import OperationalError
         from ambry.orm.exc import DatabaseMissingError
-
 
         if config:
             self._config = config
@@ -62,7 +66,7 @@ class Library(object):
 
         self.logger = logger
 
-        self.read_only = read_only # allow optimizations that assume we aren't building bundles.
+        self.read_only = read_only  # allow optimizations that assume we aren't building bundles.
 
         self._fs = LibraryFilesystem(config)
 
@@ -93,17 +97,15 @@ class Library(object):
     def init_debug(self):
         """Initialize debugging features, such as a handler for USR2 to print a trace"""
         import signal
-        from ambry.util import debug
 
         def debug_trace(sig, frame):
             """Interrupt running process, and provide a python prompt for interactive
             debugging."""
 
-            self.log("Trace signal received")
+            self.log('Trace signal received')
             self.log(''.join(traceback.format_stack(frame)))
 
         signal.signal(signal.SIGUSR2, debug_trace)  # Register handler
-
 
     def resolve_object_number(self, ref):
         """Resolve a variety of object numebrs to a dataset number"""
@@ -222,7 +224,6 @@ class Library(object):
 
         b = Bundle(ds, self)
         b.commit()
-        print b.dataset
         b.state = Bundle.STATES.NEW
         b.set_last_access(Bundle.STATES.NEW)
 
@@ -441,12 +442,13 @@ class Library(object):
 
             db_ck = b.identity.cache_key + '.db'
 
-            ps.add(message="Upload bundle file", item_type='bytes', item_count = 0)
+            ps.add(message='Upload bundle file', item_type='bytes', item_count=0)
             total = [0]
+
             @call_interval(5)
             def upload_cb(n):
                 total[0] += n
-                ps.update(message="Upload bundle file", item_count=total[0])
+                ps.update(message='Upload bundle file', item_count=total[0])
 
             with open(db_path) as f:
                 remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
@@ -460,15 +462,16 @@ class Library(object):
 
             for p in b.partitions:
 
-                ps.add(message="Upload partition", item_type='bytes', item_count=0, p_vid=p.vid)
+                ps.add(message='Upload partition', item_type='bytes', item_count=0, p_vid=p.vid)
 
                 with p.datafile.open(mode='rb') as fin:
 
                     total = [0]
+
                     @call_interval(5)
                     def progress(bytes):
                         total[0] += bytes
-                        ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0] )
+                        ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0])
 
                     remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
                     event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
@@ -476,14 +479,12 @@ class Library(object):
 
                     ps.update(state='done')
 
-            ps.add(message="Setting metadata")
-            import json
-            from six import text_type
+            ps.add(message='Setting metadata')
             ident = json.dumps(b.identity.dict)
             remote.setcontents(os.path.join('_meta', 'vid', b.identity.vid), ident)
             remote.setcontents(os.path.join('_meta', 'id', b.identity.id), ident)
-            remote.setcontents(os.path.join('_meta', 'vname',text_type(b.identity.vname)), ident)
-            remote.setcontents(os.path.join('_meta', 'name',text_type(b.identity.name)), ident)
+            remote.setcontents(os.path.join('_meta', 'vname', text_type(b.identity.vname)), ident)
+            remote.setcontents(os.path.join('_meta', 'name', text_type(b.identity.name)), ident)
             ps.update(state='done')
 
             b.dataset.commit()
@@ -494,7 +495,7 @@ class Library(object):
     # Remotes
     #
 
-    def sync_remote(self, remote_name, bundle_name, list_only = False):
+    def sync_remote(self, remote_name, bundle_name, list_only=False):
         remote = self.remote(remote_name)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
@@ -503,7 +504,7 @@ class Library(object):
 
         for fn in remote.walkfiles(wildcard='*.db'):
 
-            this_name = fn.strip('/').replace('/','.').replace('.db','')
+            this_name = fn.strip('/').replace('/', '.').replace('.db', '')
 
             if bundle_name and this_name != bundle_name:
                 continue
@@ -559,9 +560,7 @@ class Library(object):
 
     def remote(self, name_or_bundle):
 
-        from fs.s3fs import S3FS
         from fs.opener import fsopendir
-        from ambry.util import parse_url_to_dict
 
         r = self.remotes[self.resolve_remote(name_or_bundle)]
 
@@ -569,7 +568,6 @@ class Library(object):
         # https://github.com/boto/boto/issues/2836
         if r.startswith('s3'):
             return self.filesystem.s3(r, self.account_acessor)
-
         else:
             return fsopendir(r, create_dir=True)
 
@@ -649,12 +647,12 @@ class Library(object):
         """
         d = {}
 
-
         if not self._account_password:
             from ambry.dbexceptions import ConfigurationError
-            raise ConfigurationError("Can't access accounts without setting an account password"
-                                     " either in the accounts.password config, or in the AMBRY_ACCOUNT_PASSWORD"
-                                     " env var.")
+            raise ConfigurationError(
+                "Can't access accounts without setting an account password"
+                " either in the accounts.password config, or in the AMBRY_ACCOUNT_PASSWORD"
+                " env var.")
 
         for act in self.database.session.query(Account).all():
             act.password = self._account_password
@@ -668,7 +666,6 @@ class Library(object):
     @property
     def services(self):
         return self.database.root_dataset.config.library['services']
-
 
     def number(self, assignment_class=None, namespace='d'):
         """
@@ -781,7 +778,7 @@ class Library(object):
                 self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
                 install(python_dir, module_name, pip_name)
 
-    def import_bundles(self, dir, detach = False, force = False):
+    def import_bundles(self, dir, detach=False, force=False):
         """
         Import bundles from a directory
 
@@ -837,14 +834,11 @@ class Library(object):
 
         return bundles
 
-
-    def process_pool(self, limited_run = False):
+    def process_pool(self, limited_run=False):
         """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
 
-        from multiprocessing import  cpu_count
-        from ambry.bundle.concurrent import Pool
-
-        from ambry.bundle.concurrent import init_library
+        from multiprocessing import cpu_count
+        from ambry.bundle.concurrent import Pool, init_library
 
         if self.processes:
             cpus = self.processes
@@ -853,5 +847,5 @@ class Library(object):
 
         self.logger.info('Starting MP pool with {} processors'.format(cpus))
         return Pool(self, processes=cpus, initializer=init_library,
-                                    maxtasksperchild = 1,
-                                    initargs=[self.database.dsn, self._account_password, limited_run])
+                    maxtasksperchild=1,
+                    initargs=[self.database.dsn, self._account_password, limited_run])

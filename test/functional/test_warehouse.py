@@ -1,25 +1,18 @@
 # -*- coding: utf-8 -*-
 import os
 import stat
-import unittest
 
-from semantic_version import Version
-
-from test.factories import PartitionFactory, TableFactory
-
-import ambry_sources
 from ambry_sources import MPRowsFile
-from ambry_sources.med import sqlite as sqlite_med
 from ambry_sources.med import postgresql as postgres_med
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
+from test.factories import PartitionFactory, TableFactory
+from test.helpers import assert_sqlite_index, assert_valid_ambry_sources
 from test.test_base import TestBase, PostgreSQLTestBase
-
-AMBRY_SOURCES_VERSION = getattr(ambry_sources, '__version__', None) or ambry_sources.__meta__.__version__
 
 
 class Mixin(object):
-    """ Requires successors to inherit from TestBase and provide _get_library method. """
+    """ Requires successors provide _get_config method returning RunConfig instance. """
 
     # helpers
 
@@ -29,10 +22,13 @@ class Mixin(object):
 
     def test_query_mpr_with_auto_install(self):
         if isinstance(self, PostgreSQLTest):
-            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
+            try:
+                assert_valid_ambry_sources('0.1.6')
+            except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
-        library = self._get_library()
+        config = self._get_config()
+        library = self._get_library(config)
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
@@ -46,15 +42,20 @@ class Mixin(object):
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
     def test_install_and_query_materialized_partition(self):
         # materialized view for postgres and readonly table for sqlite.
         if isinstance(self, PostgreSQLTest):
-            _assert_valid_ambry_sources()
+            try:
+                assert_valid_ambry_sources('0.1.6')
+            except AssertionError:
+                self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
-        library = self._get_library()
+        config = self._get_config()
+        library = self._get_library(config)
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
@@ -80,14 +81,19 @@ class Mixin(object):
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
     def test_index_creation(self):
         if isinstance(self, PostgreSQLTest):
-            _assert_valid_ambry_sources()
+            try:
+                assert_valid_ambry_sources('0.1.6')
+            except AssertionError:
+                self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
-        library = self._get_library()
+        config = self._get_config()
+        library = self._get_library(config)
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
@@ -113,18 +119,25 @@ class Mixin(object):
             rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
     def test_table_install_and_query(self):
         if isinstance(self, PostgreSQLTest):
-            _assert_valid_ambry_sources()
+            try:
+                assert_valid_ambry_sources('0.1.6')
+            except AssertionError:
+                self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
         else:
             # sqlite tests
-            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.8'):
-                self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
+            try:
+                assert_valid_ambry_sources('0.1.8')
+            except AssertionError:
+                self.SkipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
-        library = self._get_library()
+        config = self._get_config()
+        library = self._get_library(config)
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
@@ -151,18 +164,25 @@ class Mixin(object):
             # We need to sort rows before check because the order of the table partitions is unknown.
             self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
     def test_query_with_union(self):
         if isinstance(self, PostgreSQLTest):
-            _assert_valid_ambry_sources()
+            try:
+                assert_valid_ambry_sources('0.1.6')
+            except AssertionError:
+                self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
         else:
             # sqlite tests
-            if Version(AMBRY_SOURCES_VERSION) < Version('0.1.8'):
+            try:
+                assert_valid_ambry_sources('0.1.8')
+            except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
-        library = self._get_library()
+        config = self._get_config()
+        library = self._get_library(config)
 
         # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
@@ -193,32 +213,24 @@ class Mixin(object):
             # We need to sort rows before check because the order of the table partitions is unknown.
             self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
 
 class InMemorySQLiteTest(TestBase, Mixin):
 
-    @classmethod
-    def get_rc(cls):
+    def _get_config(self):
         rc = TestBase.get_rc()
         # use file database for library for that test case.
-        cls._real_warehouse_database = rc.library.get('warehouse')
-        cls._real_test_database = rc.library.database
+        self.__class__._real_warehouse_database = rc.library.get('warehouse')
+        self.__class__._real_test_database = rc.library.database
         rc.library.warehouse = 'sqlite://'
         rc.library.database = 'sqlite://'
         return rc
 
-    def _get_library(self):
-        library = self.library()
-
-        # assert it is in-memory database.
-        assert library.config.library.warehouse == 'sqlite://'
-
-        return library
-
     def _assert_is_indexed(self, warehouse, partition, column):
-        _assert_sqlite_index(warehouse, partition, column)
+        assert_sqlite_index(warehouse._backend._connection, partition, column)
 
 
 class FileSQLiteTest(TestBase, Mixin):
@@ -226,20 +238,23 @@ class FileSQLiteTest(TestBase, Mixin):
     @classmethod
     def setUpClass(cls):
         TestBase.setUpClass()
-        cls._warehouse_db = 'sqlite:////tmp/test-warehouse.db'
+        cls._warehouse_db = 'sqlite:////tmp/test-warehouse-ambry-1.db'
+        try:
+            os.remove(cls._warehouse_db.replace('sqlite:///', ''))
+        except OSError:
+            pass
 
     def tearDown(self):
         super(self.__class__, self).tearDown()
         os.remove(self._warehouse_db.replace('sqlite:///', ''))
 
-    @classmethod
-    def get_rc(cls):
+    def _get_config(self):
         rc = TestBase.get_rc()
         # use file database for library for that test case.
-        if not rc.library.warehouse == cls._warehouse_db:
-            cls._real_warehouse_database = rc.library.database
-            rc.library.warehouse = cls._warehouse_db
-            rc.library.database = cls._warehouse_db  # It's ok to use the same db file for that test case.
+        if not rc.library.warehouse == self._warehouse_db:
+            self.__class__._real_warehouse_database = rc.library.database
+            rc.library.warehouse = self._warehouse_db
+            rc.library.database = self._warehouse_db  # It's ok to use the same db file for that test case.
         return rc
 
     @classmethod
@@ -249,7 +264,7 @@ class FileSQLiteTest(TestBase, Mixin):
             # restore database
             rc.library.database = cls._real_warehouse_database
 
-    def _get_library(self):
+    def _get_test_library(self):
         library = self.library()
 
         # assert it is file database.
@@ -257,18 +272,17 @@ class FileSQLiteTest(TestBase, Mixin):
         return library
 
     def _assert_is_indexed(self, warehouse, partition, column):
-        _assert_sqlite_index(warehouse, partition, column)
+        assert_sqlite_index(warehouse._backend._connection, partition, column)
 
 
 class PostgreSQLTest(PostgreSQLTestBase, Mixin):
 
-    @classmethod
-    def get_rc(cls):
+    def _get_config(self):
         rc = TestBase.get_rc()
-        # replace database with file database.
-        cls._real_warehouse_database = rc.library.database
-        rc.library.warehouse = cls.postgres_test_db_data['test_db_dsn']
-        rc.library.database = cls.postgres_test_db_data['test_db_dsn']  # It's ok to use the same database.
+        # replace database with postgres test database.
+        self.__class__._real_warehouse_database = rc.library.database
+        rc.library.warehouse = self.__class__.postgres_test_db_data['test_db_dsn']
+        rc.library.database = self.__class__.postgres_test_db_data['test_db_dsn']  # It's ok to use the same database.
         return rc
 
     @classmethod
@@ -280,17 +294,10 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
             rc.library.database = real_warehouse_database
         PostgreSQLTestBase.tearDownClass()
 
-    def _get_library(self):
-        library = self.library()
-
-        # assert it is file database.
-        assert library.database.exists()
-        return library
-
     def _assert_is_indexed(self, warehouse, partition, column):
         table = postgres_med.table_name(partition.vid) + '_v'
         with warehouse._backend._connection.cursor() as cursor:
-            # Sometimes postgres may not use index although index exists.
+            # Sometimes postgres does not use index although index exists.
             # See https://wiki.postgresql.org/wiki/FAQ#Why_are_my_queries_slow.3F_Why_don.27t_they_use_my_indexes.3F
             # and http://stackoverflow.com/questions/9475778/postgresql-query-not-using-index-in-production
             # for details.
@@ -340,19 +347,6 @@ def is_group_readable(filepath):
 
 def get_perm(filepath):
     return stat.S_IMODE(os.lstat(filepath)[stat.ST_MODE])
-
-
-def _assert_valid_ambry_sources():
-    if Version(AMBRY_SOURCES_VERSION) < Version('0.1.6'):
-        raise unittest.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
-
-
-def _assert_sqlite_index(warehouse, partition, column):
-    table = sqlite_med.table_name(partition.vid) + '_v'
-    cursor = warehouse._backend._connection.cursor()
-    query = 'EXPLAIN QUERY PLAN SELECT * FROM {} WHERE {} > 1;'.format(table, column)
-    result = cursor.execute(query).fetchall()
-    assert 'USING INDEX' in result[0][-1]
 
 
 def _get_generator_source(rows=None):

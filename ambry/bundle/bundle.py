@@ -273,7 +273,7 @@ class Bundle(object):
         source = self.source(source_name)
 
         try:
-            p =  self.library.partition(source.url)
+            p = self.library.partition(source.url)
 
             if not p.is_local:
                 with self.progress.start('test', 0, message='localizing') as ps:
