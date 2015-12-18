@@ -53,8 +53,6 @@ class Test(TestBase):
         # load files to library database (as File records)
         sql_bundle.sync_in()
 
-        self._assert_sql_saved(sql_bundle)
-
         # create mpr file with source rows.
         sql_bundle.ingest(force=True)
 
@@ -65,8 +63,11 @@ class Test(TestBase):
         # and load source with data from the view.
         sql_bundle.build()
 
+        # check the final state.
+        self._assert_sql_saved(sql_bundle)
         self._assert_table_created(library, 'table1')
         self._assert_view_created(library, 'view1')
+        self._assert_materialized_view_created(library, 'materialized_view1')
 
     def _assert_table_created(self, library, table):
         """ Looks for given table in the library. If not found raises AssertionError. """
@@ -122,7 +123,7 @@ class Test(TestBase):
             table_rows = library.database.connection\
                 .execute('SELECT s1_id, s2_id FROM {};'.format(view))\
                 .fetchall()
-            self.assertEqual(table_rows, [])
+            self.assertEqual(table_rows, [(1, 1)])
         except OperationalError as exc:
             if 'no such table' in str(exc):
                 raise AssertionError('{} materialized view was not created.'.format(view))
