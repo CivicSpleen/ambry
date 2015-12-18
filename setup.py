@@ -176,7 +176,7 @@ class Docker(Command):
             tag('ambry')
 
         if self.db:
-            self.spawn(['docker', 'build', '-t', 'civicknowledge/postgres', 'support/docker/postgres/Dockerfile'])
+            self.spawn(['docker', 'build', '-t', 'civicknowledge/postgres', 'support/docker/postgres/'])
             tag('postgres')
 
         if self.tunnel:
