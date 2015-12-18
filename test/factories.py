@@ -238,7 +238,6 @@ class PartitionFactory(SQLAlchemyModelFactory):
     vname = factory.Sequence(lambda n: 'vname-%03d' % n)
     fqname = factory.Sequence(lambda n: 'fqname-%03d' % n)
     format = 'db'
-    cache_key = ''  # populates in the _prepare method
     space_coverage = []
     grain_coverage = []
     time_coverage = []
@@ -273,10 +272,8 @@ class PartitionFactory(SQLAlchemyModelFactory):
         kwargs['vid'] = '{id}{dataset.revision:03d}'.format(
             id=kwargs['id'],
             dataset=dataset)
-        kwargs['cache_key'] = '%s-key.%s' % (kwargs['vid'], kwargs['format'])
 
         instance = super(PartitionFactory, cls)._prepare(create, **kwargs)
-        instance.set_attributes(**kwargs)
         return instance
 
     @classmethod

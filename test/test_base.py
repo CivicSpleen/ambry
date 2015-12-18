@@ -34,9 +34,9 @@ class TestBase(unittest.TestCase):
         # WAARNING! This path and dsn is only used if it is explicitly referenced.
         # Otherwise, the get_rc() will use a database specified in the
         # test rc file.
-        self.db_path = "/tmp/ambry-test-{}.db".format(str(uuid.uuid4()))
+        self.db_path = '/tmp/ambry-test-{}.db'.format(str(uuid.uuid4()))
 
-        self.dsn = "sqlite:///{}".format(self.db_path)
+        self.dsn = 'sqlite:///{}'.format(self.db_path)
 
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
@@ -52,8 +52,8 @@ class TestBase(unittest.TestCase):
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
-    @classmethod
-    def get_rc(cls, rewrite=True):
+    @staticmethod  # So it can be called from either setUp or setUpClass
+    def get_rc(rewrite=True):
         """Create a new config file for test and return the RunConfig.
 
          This method will start with the user's default Ambry configuration, but will replace the
@@ -65,16 +65,14 @@ class TestBase(unittest.TestCase):
 
         from fs.opener import fsopendir
 
-        config = ambry.run.load() # not cached; get_config is
+        config = ambry.run.load()  # not cached; get_config is
 
         dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
 
         orig_root = config.library.filesystem_root
-        root_dir  = config.filesystem.test.format(root=orig_root)
+        root_dir = config.filesystem.test.format(root=orig_root)
 
-        dsn = config.get('database',{}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
-
-        cls._db_type = dbname
+        dsn = config.get('database', {}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
 
         config.library.filesystem_root = root_dir
         config.library.database = dsn
@@ -87,21 +85,39 @@ class TestBase(unittest.TestCase):
                 config.loaded = None
                 config.dump(f)
 
-        print "Database: ", dsn
         return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
 
     @classmethod
     def config(cls):
         return cls.get_rc()
 
-    def library(self, config=None):
-
+    @staticmethod # So it can be called from either setUp or setUpClass
+    def _get_library(config):
         from ambry.library import new_library
 
+        return new_library(config if config else TestBase.get_rc())
+
+    def library(self, config=None):
+
         if not self._library:
-            self._library = new_library(config if config else self.config())
+            self._library = self._get_library(config)
 
         return self._library
+
+    @staticmethod # So it can be called from either setUp or setUpClass
+    def _import_bundles(library, clean=True, force_import=False):
+
+        from test import bundle_tests
+        import os
+
+        if clean:
+            library.clean()
+            library.create()
+
+        bundles = list(library.bundles)
+
+        if len(bundles) == 0 or force_import:
+            library.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
 
     def import_bundles(self, clean=True, force_import=False):
         """
@@ -111,30 +127,21 @@ class TestBase(unittest.TestCase):
         :return:
         """
 
-        from test import bundle_tests
-        import os
+        library = self.library()
 
-        l = self.library()
-
-        if clean:
-            l.clean()
-            l.create()
-
-        bundles = list(l.bundles)
-
-        if len(bundles) == 0 or force_import:
-            l.import_bundles(os.path.dirname(bundle_tests.__file__), detach=True)
+        self._import_bundles(library,clean, force_import )
 
     def import_single_bundle(self, cache_path, clean=True):
         from test import bundle_tests
 
         l = self.library()
+        print l.database.dsn
 
         if clean:
             l.clean()
             l.create()
 
-        orig_source = os.path.join(os.path.dirname(bundle_tests.__file__),cache_path)
+        orig_source = os.path.join(os.path.dirname(bundle_tests.__file__), cache_path)
         l.import_bundles(orig_source, detach=True, force=True)
 
         b = next(b for b in l.bundles).cast_to_subclass()
@@ -192,7 +199,7 @@ class TestBase(unittest.TestCase):
             build_url = 'mem://build'.format(name)
 
         for fs_url in (source_url, build_url):
-            d = parse_url_to_dict((fs_url))
+            d = parse_url_to_dict(fs_url)
 
             # For persistent fs types, make sure it is empty before the test.
             if d['scheme'] not in ('temp', 'mem'):
@@ -227,8 +234,8 @@ class PostgreSQLTestBase(TestBase):
 
     @classmethod
     def _drop_postgres_test_db(cls):
-        # drop test database
         if hasattr(cls, 'postgres_test_db_data'):
+            # drop test database
             test_db_name = cls.postgres_test_db_data['test_db_name']
             assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
 
@@ -239,7 +246,7 @@ class PostgreSQLTestBase(TestBase):
             connection.execute('COMMIT;')
             connection.close()
         else:
-            # no database were created.
+            # database was not created.
             pass
 
     @classmethod
@@ -251,12 +258,12 @@ class PostgreSQLTestBase(TestBase):
             conf = TestBase.get_rc()  # get_runconfig()
 
         # we need valid postgres dsn.
-        if not ('database' in conf.dict and 'test-postgres' in conf.dict['database']):
+        if not ('database' in conf and 'test-postgres' in conf['database']):
             # example of the config
             # database:
             #     test-postgres: postgresql+psycopg2://user:pass@127.0.0.1/ambry
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-        dsn = conf.dict['database']['test-postgres']
+        dsn = conf.database['test-postgres']
         parsed_url = urlparse(dsn)
         postgres_user = parsed_url.username
         db_name = parsed_url.path.replace('/', '')

@@ -104,12 +104,27 @@ class GeoError(Exception):
     """General error doing geographic processing."""
 
 class PhaseError(Exception):
+    def __init__(self, *args, **kwargs):
+        """General error while running a pipeline phase."""
+        super(PhaseError, self).__init__(*args, **kwargs)
 
-    """General error while running a pipeline phase."""
+        self.exception = kwargs.get('exception', None)
+        self.phase = kwargs.get('phase', None)
+        self.stage = kwargs.get('stage', None)
+
 
 class BuildError(PhaseError):
 
     """General error while building a bundle."""
+
+class IngestionError(PhaseError):
+
+
+    """General error while ingesting sources."""
+
+
+
+
 
 class TestError(PhaseError):
 

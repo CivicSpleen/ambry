@@ -51,8 +51,8 @@ class Process(Base):
 
     item_type = SAColumn('pr_type', Text, doc='Item type, such as table, source or partition')
 
-    item_count = SAColumn('pr_count', Integer)
-    item_total = SAColumn('pr_items', Integer)
+    item_count = SAColumn('pr_count', Integer, doc='Number of items processed')
+    item_total = SAColumn('pr_items', Integer, doc='Number of items to be processed')
 
     message = SAColumn('pr_message', Text)
 
@@ -83,7 +83,10 @@ class Process(Base):
         import os
 
         parts = []
-        if self.hostname != platform.node() or self.pid!= os.getpid():
+
+        # This bit only gets executed when records stored in the database from one node or process are
+        # read from another. It won't print out in normall logging,
+        if self.hostname != platform.node() or self.pid != os.getpid():
             hostpid = "({}@{})".format(self.pid, self.hostname)
             parts.append(hostpid)
 
@@ -96,11 +99,46 @@ class Process(Base):
             None: '?'
         }
 
-        parts.append("{}:{}".format(self.phase if self.phase else '?', self.stage))
+        phase_str = self.phase if self.phase else '?'
 
-        parts.append(am.get(self.log_action,'')+' '+(self.message if self.message else ''))
+        if self.stage:
+            phase_str = phase_str + ':' + str(self.stage)
+
+        parts.append(phase_str)
+
+        action_char = am.get(self.log_action,'')
+
+        if self.state == 'error':
+            action_char = '!'
+
+        parts.append(action_char+' '+(self.message if self.message else ''))
+
+        if self.item_count:
+            ic = 'processed '+str(self.item_count)
+
+            if self.item_total:
+                ic += ' of {}'.format(self.item_total)
+
+            if self.item_type:
+                ic += ' '+self.item_type
+
+            parts.append(ic)
 
         return ' '.join(parts)
+
+    @property
+    def dict(self):
+        """A dict that holds key/values for all of the properties in the
+        object.
+
+        :return:
+
+        """
+        from collections import OrderedDict
+
+        return  OrderedDict( (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
+             if p.key not in ('partition', 'source', 'table','dataset', 'children', 'parent'))
+
 
     @staticmethod
     def before_insert(mapper, conn, target):

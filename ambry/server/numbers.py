@@ -1,24 +1,11 @@
 """Server application for assigning dataset numbers. Requires a redis instance
 for data storage.
 
-Run withsomething like: python -m ambry.server.numbers  -p 80 -H 162.243.194.227
-
-Requires a run_config configuration item:
-
-numbers:
-    host: gala
-    port: 7977
-    redis:
-        host: redis
-        port: 6379
-
-For Clients:
-
-numbers:
-    key: this-is-a-long-uid-key
+Run with something like: python -m ambry.server.numbers  -p 80 -H 162.243.194.227
 
 
-The key is a secret key that the client will use to assign an assignment class.
+
+The access key is a secret key that the client will use to assign an assignment class.
 The two classes are 'authority' and 'registered' Only central authority
 operators ( like Clarinova ) should use the authoritative class. Other users can
 use the 'registered' class. Without a key and class assignment, the callers us
@@ -26,7 +13,7 @@ the 'unregistered' class.
 
 Set the key for the authority class with the redis-cli:
 
-    set assignment_class:this-is-a-long-uid-key authority
+    set assignment_class:this-is-a-long-uid-key authoritative
 
 For 'registered' users, use:
 
@@ -37,6 +24,25 @@ There is only one uri to call:
     /next
 
 It returns a JSON dict, with the 'number' key mapping to the number.
+
+Running a redis server in docker
+--------------------------------
+
+Run the server, from https://hub.docker.com/_/redis/
+
+    docker run --name ambry-redis -d redis redis-server --appendonly yes
+
+
+Connect from a CLI:
+
+    docker run -it --link ambry-redis:redis --rm redis sh -c 'exec redis-cli -h "$REDIS_PORT_6379_TCP_ADDR" -p "$REDIS_PORT_6379_TCP_PORT"'
+
+Proxy
+-----
+
+You probably also want to run a web proxy, like Hipache:
+
+    docker run --name hipache --link ambry-redis:redis -p 80:8080 -p 443:4430 hipache
 
 Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -53,7 +59,6 @@ from bottle import run  # , debug  # @UnresolvedImport
 from decorator import decorator  # @UnresolvedImport
 import logging
 
-import ambry.client.exceptions as exc
 import ambry.util
 
 global_logger = ambry.util.get_logger(__name__)
@@ -63,6 +68,18 @@ global_logger.setLevel(logging.DEBUG)
 # The main number space for datasets is 'd'
 NUMBER_SPACES = ('m', 'x', 'b')
 
+
+class NotFound(Exception):
+    pass
+
+class InternalError(Exception):
+    pass
+
+class NotAuthorized(Exception):
+    pass
+
+class TooManyRequests(Exception):
+    pass
 
 def capture_return_exception(e):
 
@@ -184,12 +201,12 @@ install(AllJSONPlugin())
 @error(404)
 @CaptureException
 def error404(error):
-    raise exc.NotFound("For url: {}".format(repr(request.url)))
+    raise NotFound("For url: {}".format(repr(request.url)))
 
 
 @error(500)
 def error500(error):
-    raise exc.InternalError("For Url: {}".format(repr(request.url)))
+    raise InternalError("For Url: {}".format(repr(request.url)))
 
 
 @hook('after_request')
@@ -216,7 +233,7 @@ def request_delay(nxt, delay, delay_factor):
 
     try:
         delay = float(delay)
-    except ValueError:
+    except (ValueError, TypeError):
         delay = 1.0
 
     nxt = float(nxt) if nxt else now - 1
@@ -284,8 +301,7 @@ def get_next(redis, assignment_class=None, space=''):
         assignment_class = redis.get(assignment_class_key)
 
     if not assignment_class:
-        raise exc.NotAuthorized(
-            'Use an access key to gain access to this service')
+        raise NotAuthorized('Use an access key to gain access to this service')
 
     #
     # These are the keys that store values, so they need to be augmented with the numebr space.
@@ -330,7 +346,7 @@ def get_next(redis, assignment_class=None, space=''):
         redis.sadd(authallocated_key, dn)
 
     else:
-        raise exc.TooManyRequests(' Access will resume in {} seconds'.format(wait))
+        raise TooManyRequests(' Access will resume in {} seconds'.format(wait))
 
     return dict(ok=ok,
                 number=str(dn),
@@ -346,7 +362,7 @@ def get_next(redis, assignment_class=None, space=''):
 def get_next_space(redis, assignment_class=None, space=''):
 
     if space not in NUMBER_SPACES:
-        raise exc.NotFound('Invalid number space: {}'.format(space))
+        raise NotFound('Invalid number space: {}'.format(space))
 
     return get_next(redis, assignment_class=assignment_class, space=space)
 
@@ -412,56 +428,33 @@ def _run(host, port, redis, unregistered_key, reloader=False, **kwargs):
 
 if __name__ == '__main__':
     import argparse
-    from ambry.run import get_runconfig
+    import os
+
     from ..util import print_yaml
-    import uuid
-    rc = get_runconfig()
 
-    d = rc.servers(
-        'numbers', {
-            'host': 'localhost', 'port': 8080, 'unregistered_key': str(
-                uuid.uuid4())})
+    docker_host = os.getenv('REDIS_PORT_6379_TCP_ADDR')
+    docker_port = os.getenv('REDIS_PORT_6379_TCP_PORT', 6379)
 
-    try:
-        d = d.to_dict()
-    except:
-        pass
+    d = {
+        'host': '0.0.0.0',
+        'port': 80,
+        'redis': {
+            'host': docker_host,
+            'port': docker_port
 
-    d['redis'] = d.get('redis', {'host': 'localhost', 'port': 6379})
+        },
+        'unregistered_key': 'fe78d179-8e61-4cc5-ba7b-263d8d3602b9'
+    }
 
     parser = argparse.ArgumentParser(prog='python -mambry.server.numbers',
                                      description='Run an Ambry numbers server')
 
-    parser.add_argument(
-        '-H',
-        '--server-host',
-        default=None,
-        help="Server host. Defaults to configured value: {}".format(
-            d['host']))
-    parser.add_argument(
-        '-p',
-        '--server-port',
-        default=None,
-        help="Server port. Defaults to configured value: {}".format(
-            d['port']))
+    parser.add_argument('-H','--server-host',default=None,help="Server host. ")
 
-    parser.add_argument(
-        '-R',
-        '--redis-host',
-        default=None,
-        help="Redis host. Defaults to configured value: {}".format(
-            d['redis']['host']))
-    parser.add_argument(
-        '-r',
-        '--redis-port',
-        default=None,
-        help="Redis port. Defaults to configured value: {}".format(
-            d['redis']['port']))
-    parser.add_argument(
-        '-u',
-        '--unregistered-key',
-        default=None,
-        help="access_key value for unregistered access")
+    parser.add_argument('-p','--server-port',default=80,help="Server port.")
+    parser.add_argument('-R','--redis-host',default=docker_host,help="Redis host.")
+    parser.add_argument('-r','--redis-port',default=docker_port,help="Redis port.")
+    parser.add_argument('-u','--unregistered-key',default=None,help="access_key value for unregistered access")
 
     args = parser.parse_args()
 

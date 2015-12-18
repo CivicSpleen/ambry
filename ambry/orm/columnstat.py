@@ -53,9 +53,24 @@ class ColumnStat(Base):
         UniqueConstraint('cs_p_vid', 'cs_c_vid', name='u_cols_stats'),
     )
 
+
     @property
     def dict(self):
 
-        return {p.key: getattr(self,p.key) for p in self.__mapper__.attrs if p.key not in
-                ('data','column', 'table','partition')}
+        # Javascript does not  have these values; the spec says they are all mapped to null
+        to_nulls = [ float('nan'), float('-inf'), float('inf')]
+
+        def nullify(k, v):
+            import math
+
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) :
+                return None
+            else:
+                return v
+
+
+        d =  {p.key: nullify(p.key, getattr(self,p.key)) for p in self.__mapper__.attrs if p.key not in
+                ('data','column', 'table','partition', 'dataset')}
+
+        return  d
 

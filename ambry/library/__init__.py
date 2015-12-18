@@ -9,11 +9,16 @@ import logging
 import os
 import sys
 import tempfile
+import traceback
+
+import json
 
 from fs.osfs import OSFS
 from fs.opener import fsopendir
 
 from sqlalchemy import or_
+
+from six import text_type
 
 from requests.exceptions import HTTPError
 
@@ -22,19 +27,17 @@ from ambry.dbexceptions import ConfigurationError
 from ambry.identity import Identity, ObjectNumber, NotObjectNumberError, NumberServer, DatasetNumber
 
 from ambry.library.search import Search
-from ambry.orm import Partition, File, Config
-from ambry.orm.database import Database
-from ambry.orm.dataset import Dataset
-from ambry.orm import Account
+from ambry.orm import Partition, File, Config, Table, Database, Dataset, Account
 from ambry.orm.exc import NotFoundError, ConflictError
 from ambry.run import get_runconfig
 from ambry.util import get_logger
-from six import string_types
 
 from .filesystem import LibraryFilesystem
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
+
 global_library = None
+
 
 def new_library(config=None):
 
@@ -52,9 +55,9 @@ def new_library(config=None):
 
 class Library(object):
 
-    def __init__(self,  config=None, search=None):
+    def __init__(self,  config=None, search=None, echo=None, read_only=False):
         from sqlalchemy.exc import OperationalError
-        from ambry.library.config import LibraryConfigSyncProxy
+        from ambry.orm.exc import DatabaseMissingError
 
         if config:
             self._config = config
@@ -63,19 +66,20 @@ class Library(object):
 
         self.logger = logger
 
+        self.read_only = read_only  # allow optimizations that assume we aren't building bundles.
+
         self._fs = LibraryFilesystem(config)
 
-        self._db = Database(self._fs.database_dsn)
+        self._db = Database(self._fs.database_dsn, echo=echo)
 
         self._account_password = self.config.accounts.password
+
+        self._warehouse = None  # Will be populated in the warehouse property.
 
         try:
             self._db.open()
         except OperationalError as e:
-            self.logger.error("Failed to open database '{}': {} ".format(self._db.dsn, e))
-
-        lcsp = LibraryConfigSyncProxy(self)
-        lcsp.sync()
+            raise DatabaseMissingError("Failed to open database '{}': {} ".format(self._db.dsn, e))
 
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
 
@@ -83,6 +87,25 @@ class Library(object):
             self._search = Search(self, search)
         else:
             self._search = None
+
+    def sync_config(self):
+        """Sync the file config into the library proxy data in the root dataset """
+        from ambry.library.config import LibraryConfigSyncProxy
+        lcsp = LibraryConfigSyncProxy(self)
+        lcsp.sync()
+
+    def init_debug(self):
+        """Initialize debugging features, such as a handler for USR2 to print a trace"""
+        import signal
+
+        def debug_trace(sig, frame):
+            """Interrupt running process, and provide a python prompt for interactive
+            debugging."""
+
+            self.log('Trace signal received')
+            self.log(''.join(traceback.format_stack(frame)))
+
+        signal.signal(signal.SIGUSR2, debug_trace)  # Register handler
 
     def resolve_object_number(self, ref):
         """Resolve a variety of object numebrs to a dataset number"""
@@ -119,6 +142,13 @@ class Library(object):
     @property
     def filesystem(self):
         return self._fs
+
+    @property
+    def warehouse(self):
+        if not self._warehouse:
+            from ambry.library.warehouse import Warehouse
+            self._warehouse = Warehouse(self)
+        return self._warehouse
 
     @property
     def config(self):
@@ -193,7 +223,7 @@ class Library(object):
             ds = self._db.new_dataset(**identity.dict)
 
         b = Bundle(ds, self)
-
+        b.commit()
         b.state = Bundle.STATES.NEW
         b.set_last_access(Bundle.STATES.NEW)
 
@@ -269,6 +299,38 @@ class Library(object):
 
         b = self.bundle(p.d_vid)
         return b.wrap_partition(p)
+
+    def table(self, ref):
+        """ Finds table by ref and returns it.
+
+        Args:
+            ref (str): id, vid (versioned id) or name of the table
+
+        Raises:
+            NotFoundError: if table with given ref not found.
+
+        Returns:
+            orm.Table
+
+        """
+
+        try:
+            obj_number = ObjectNumber.parse(ref)
+            ds_obj_number = obj_number.as_dataset
+
+            dataset = self._db.dataset(ds_obj_number)  # Could do it in on SQL query, but this is easier.
+            table = dataset.table(ref)
+
+        except NotObjectNumberError:
+            q = self.database.session.query(Table)\
+                .filter(Table.name == str(ref))\
+                .order_by(Table.vid.desc())
+
+            table = q.first()
+
+        if not table:
+            raise NotFoundError("No table for ref: '{}'".format(ref))
+        return table
 
     def remove(self, bundle):
         """ Removes a bundle from the library and deletes the configuration for
@@ -353,6 +415,8 @@ class Library(object):
         :return:
         """
 
+        from ambry.bundle.process import call_interval
+
         remote_name = self.resolve_remote(b)
 
         remote = self.remote(remote_name)
@@ -362,56 +426,96 @@ class Library(object):
         db = Database('sqlite:///{}'.format(db_path))
         ds = db.dataset(b.dataset.vid)
 
-        self.logger.info('Checking in bundle {}'.format(ds.identity.vname))
+        with b.progress.start('checkin', 0, message='Check in bundle') as ps:
 
-        # Set the location for the bundle file
-        for p in ds.partitions:
-            p.location = 'remote'
+            ps.add(message='Checking in bundle {} to {}'.format(ds.identity.vname, remote))
 
-        ds.config.build.state.current = Bundle.STATES.INSTALLED
-        ds.commit()
-        db.commit()
-        db.close()
+            # Set the location for the bundle file
+            for p in ds.partitions:
+                p.location = 'remote'
 
-        db_ck = b.identity.cache_key + '.db'
+            # Fixme; this should be on ds, not b
+            # b.buildstate.state.current = Bundle.STATES.INSTALLED
+            ds.commit()
+            db.commit()
+            db.close()
 
-        with open(db_path) as f:
-            remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
-            remote.setcontents(db_ck, f)
+            db_ck = b.identity.cache_key + '.db'
 
-        os.remove(db_path)
+            ps.add(message='Upload bundle file', item_type='bytes', item_count=0)
+            total = [0]
 
-        for p in b.partitions:
+            @call_interval(5)
+            def upload_cb(n):
+                total[0] += n
+                ps.update(message='Upload bundle file', item_count=total[0])
 
-            with p.datafile.open(mode='rb') as fin:
-                self.logger.info('Checking in {}'.format(p.identity.vname))
+            with open(db_path) as f:
+                remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
+                self.logger.info('Send bundle file {} '.format(db_path))
+                e = remote.setcontents_async(db_ck, f, progress_callback=upload_cb)
+                e.wait()
 
-                calls = [0]
+            ps.update(state='done')
 
-                def progress(bytes):
-                    calls[0] += 1
-                    if calls[0] % 4 == 0:
-                        self.logger.info('Checking in {}; {} bytes'.format(p.identity.vname, bytes))
+            os.remove(db_path)
 
-                remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
-                event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
-                event.wait()
+            for p in b.partitions:
 
-        b.dataset.commit()
+                ps.add(message='Upload partition', item_type='bytes', item_count=0, p_vid=p.vid)
 
-        return remote_name, db_ck
+                with p.datafile.open(mode='rb') as fin:
+
+                    total = [0]
+
+                    @call_interval(5)
+                    def progress(bytes):
+                        total[0] += bytes
+                        ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0])
+
+                    remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
+                    event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
+                    event.wait()
+
+                    ps.update(state='done')
+
+            ps.add(message='Setting metadata')
+            ident = json.dumps(b.identity.dict)
+            remote.setcontents(os.path.join('_meta', 'vid', b.identity.vid), ident)
+            remote.setcontents(os.path.join('_meta', 'id', b.identity.id), ident)
+            remote.setcontents(os.path.join('_meta', 'vname', text_type(b.identity.vname)), ident)
+            remote.setcontents(os.path.join('_meta', 'name', text_type(b.identity.name)), ident)
+            ps.update(state='done')
+
+            b.dataset.commit()
+
+            return remote_name, db_ck
 
     #
     # Remotes
     #
 
-    def sync_remote(self, remote_name):
+    def sync_remote(self, remote_name, bundle_name, list_only=False):
         remote = self.remote(remote_name)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
-        # temp = fsopendir('/tmp/ambry-import', create_dir=True)
+
+        entries = []
 
         for fn in remote.walkfiles(wildcard='*.db'):
+
+            this_name = fn.strip('/').replace('/', '.').replace('.db', '')
+
+            if bundle_name and this_name != bundle_name:
+                continue
+
+            if list_only:
+                entries.append(this_name)
+                self.logger.info(this_name)
+                continue
+            else:
+                self.logger.info('Sync {}'.format(this_name))
+
             temp.makedir(os.path.dirname(fn), recursive=True, allow_recreate=True)
             with remote.open(fn, 'rb') as f:
                 temp.setcontents(fn, f)
@@ -433,13 +537,18 @@ class Library(object):
 
                 self.search.index_bundle(b)
 
-                self.logger.info('Synced {}'.format(ds.vname))
+                entries.append(this_name)
+
             except Exception as e:
                 self.logger.error('Failed to sync {} from {}, {}: {}'
                                   .format(fn, remote_name, temp.getsyspath(fn), e))
-                raise
+
+            # If we synced a requested bundle, no need to check more
+            if bundle_name and this_name == bundle_name:
+                break
 
         self.database.commit()
+        return entries
 
     @property
     def remotes(self):
@@ -451,9 +560,7 @@ class Library(object):
 
     def remote(self, name_or_bundle):
 
-        from fs.s3fs import S3FS
         from fs.opener import fsopendir
-        from ambry.util import parse_url_to_dict
 
         r = self.remotes[self.resolve_remote(name_or_bundle)]
 
@@ -461,7 +568,6 @@ class Library(object):
         # https://github.com/boto/boto/issues/2836
         if r.startswith('s3'):
             return self.filesystem.s3(r, self.account_acessor)
-
         else:
             return fsopendir(r, create_dir=True)
 
@@ -527,7 +633,7 @@ class Library(object):
     def account_acessor(self):
 
         def _accessor(account_id):
-            return self.account(account_id)
+            return self.account(account_id).dict
 
         return _accessor
 
@@ -541,12 +647,12 @@ class Library(object):
         """
         d = {}
 
-
         if not self._account_password:
             from ambry.dbexceptions import ConfigurationError
-            raise ConfigurationError("Can't access accounts without setting an account password"
-                                     " either in the accounts.password config, or in the AMBRY_ACCOUNT_PASSWORD"
-                                     " env var.")
+            raise ConfigurationError(
+                "Can't access accounts without setting an account password"
+                " either in the accounts.password config, or in the AMBRY_ACCOUNT_PASSWORD"
+                " env var.")
 
         for act in self.database.session.query(Account).all():
             act.password = self._account_password
@@ -560,7 +666,6 @@ class Library(object):
     @property
     def services(self):
         return self.database.root_dataset.config.library['services']
-
 
     def number(self, assignment_class=None, namespace='d'):
         """
@@ -673,7 +778,7 @@ class Library(object):
                 self.logger.info('Installing required package: {}->{}'.format(module_name, pip_name))
                 install(python_dir, module_name, pip_name)
 
-    def import_bundles(self, dir, detach = False, force = False):
+    def import_bundles(self, dir, detach=False, force=False):
         """
         Import bundles from a directory
 
@@ -729,18 +834,18 @@ class Library(object):
 
         return bundles
 
-
-    def process_pool(self, limited_run = False):
+    def process_pool(self, limited_run=False):
         """Return a pool for multiprocess operations, sized either to the number of CPUS, or a configured value"""
 
-        import multiprocessing
-        from ambry.bundle.concurrent import init_library
+        from multiprocessing import cpu_count
+        from ambry.bundle.concurrent import Pool, init_library
 
         if self.processes:
             cpus = self.processes
         else:
-            cpus = multiprocessing.cpu_count()
+            cpus = cpu_count()
 
         self.logger.info('Starting MP pool with {} processors'.format(cpus))
-        return multiprocessing.Pool(processes=cpus, initializer=init_library,
-                                    initargs=[self.database.dsn, self._account_password, limited_run])
+        return Pool(self, processes=cpus, initializer=init_library,
+                    maxtasksperchild=1,
+                    initargs=[self.database.dsn, self._account_password, limited_run])

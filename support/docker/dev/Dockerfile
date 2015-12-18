@@ -1,0 +1,39 @@
+# Like the Ambry dockerfile, but this one installs several
+# python packages from git hub, so you don't have to push them
+# to PyPi and wait to get them installed via the requirement.txt file
+FROM civicknowledge/ambry-base
+
+MAINTAINER Eric Busboom "eric@civicknowledge.org"
+
+ENV AMBRY_IS_REMOTE 1 #rev9
+
+RUN pip install git+https://github.com/CivicKnowledge/ambry_sources.git && \
+    pip install git+https://github.com/CivicKnowledge/geoid.git
+
+
+COPY . /opt/ambry/
+WORKDIR /opt/ambry/
+RUN rm -rf build
+
+RUN python setup.py install
+
+# AMbry must be installed first
+RUN pip install git+https://github.com/CivicKnowledge/censuslib.git
+
+WORKDIR /var/ambry
+
+VOLUME /var/ambry
+
+RUN mkdir -p /var/ambry/source
+
+ADD ${AMBRY_CONFIG:-ambry/support/ambry-docker.yaml} /etc/ambry.yaml
+RUN echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
+
+# The importing doesn't seem to work. It runs properly, it seems, but
+# there is nothing in the library when the container is run.
+# RUN ambry import /opt/ambry/test/bundle_tests/
+
+# Could probabaly run this out of the surrport directory too.
+ADD support/docker/ambry/ambry-init.sh /opt/ambry/ambry-init.sh
+
+CMD bash /opt/ambry/ambry-init.sh

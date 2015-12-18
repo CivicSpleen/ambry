@@ -1,13 +1,12 @@
-""" Functions and constants for events, used for running codes at points in the build process. 
+""" Functions and constants for events, used for running codes at points in the build process.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
-
-import unittest
-from ambry.util import Constant
 import functools
+
+from ambry.util import Constant
 
 PHASE = Constant()
 PHASE.INGEST = 'ingest'
@@ -31,6 +30,7 @@ TAG.AFTER_RUN = 'after_run'
 TAG.BEFORE_STAGE = 'before_stage'
 TAG.AFTER_STAGE = 'after_stage'
 
+
 def _runable_for_event(f, tag, stage):
     """Loot at the event property for a function to see if it should be run at this stage. """
 
@@ -39,8 +39,8 @@ def _runable_for_event(f, tag, stage):
 
     f_tag, f_stage = f.__ambry_event__
 
-    if not stage:
-        stage = 1
+    if stage is None:
+        stage = 0
 
     if tag != f_tag or stage != f_stage:
         return False
@@ -49,7 +49,6 @@ def _runable_for_event(f, tag, stage):
 
 
 def _wrap_for_events(tag, stage):
-
 
     if callable(stage):
         # if stage is a callable, it means the code used the decorator without invocation,
@@ -78,29 +77,38 @@ def _wrap_for_events(tag, stage):
 def before_ingest(stage=1):
     return _wrap_for_events(TAG.BEFORE_INGEST, stage)
 
+
 def after_ingest(stage=1):
     return _wrap_for_events(TAG.AFTER_INGEST, stage)
+
 
 def before_build(stage=1):
     return _wrap_for_events(TAG.BEFORE_BUILD, stage)
 
+
 def after_build(stage=1):
     return _wrap_for_events(TAG.AFTER_BUILD, stage)
+
 
 def before_schema(stage=1):
     return _wrap_for_events(TAG.BEFORE_SCHEMA, stage)
 
+
 def after_schema(stage=1):
     return _wrap_for_events(TAG.AFTER_SCHEMA, stage)
 
+
 def before_run(f):
-    return _wrap_for_events(TAG.BEFORE_RUN,1)(f)
+    return _wrap_for_events(TAG.BEFORE_RUN, 1)(f)
+
 
 def after_run(f):
-    return _wrap_for_events(TAG.AFTER_RUN,1)(f)
+    return _wrap_for_events(TAG.AFTER_RUN, 1)(f)
+
 
 def before_stage(stage=1):
     return _wrap_for_events(TAG.BEFORE_STAGE, stage)
+
 
 def after_stage(stage=1):
     return _wrap_for_events(TAG.AFTER_STAGE, stage)

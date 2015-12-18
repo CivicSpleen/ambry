@@ -11,8 +11,10 @@ import platform
 from ambry.orm import Process
 from six import string_types
 
+
 class ProgressLoggingError(Exception):
     pass
+
 
 class ProgressSection(object):
     """A handler of the records for a single routine or phase"""
@@ -30,8 +32,6 @@ class ProgressSection(object):
         self._phase = phase
         self._stage = stage
 
-        self._orig_alarm_handler = signal.SIG_DFL  # For start_progress_loggin
-
         self.rec = None
 
         self._ai_rec_id = None # record for add_update
@@ -39,16 +39,22 @@ class ProgressSection(object):
         self._group = None
         self._group = self.add(log_action='start',state='running', **kwargs)
 
+        assert self._session
+
     def __enter__(self):
+        assert self._session
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         from ambry.util import qualified_name
+        import traceback
+        assert self._session
+
         if exc_val:
             self.add(
                 message = str(exc_val),
                 exception_class = qualified_name(exc_type),
-                exception_trace = str(exc_tb),
+                exception_trace = str(traceback.format_exc(exc_tb)),
 
             )
             self.done("Failed in context with exception")
@@ -138,100 +144,37 @@ class ProgressSection(object):
 
         return self._ai_rec_id
 
+    def update_done(self, *args, **kwargs):
+        """Clear out the previous update"""
+        kwargs['state'] = 'done'
+        self.update(*args, **kwargs)
+        self.rec = None
+
+
     def done(self, *args, **kwargs):
 
         start = self._session.query(Process).filter(Process.id == self._group).one()
-        start.state = 'Done'
+        start.state = 'done'
 
+        self._session.query(Process).filter(Process.group == self._group).update({Process.state: 'done'})
+
+        kwargs['state'] = 'done'
         pr_id = self.add(*args, log_action='done', **kwargs)
 
-        self._session = None
         return pr_id
-
-class ProcessIntervals(object):
-
-    def __init__(self, f, interval=2):
-        """Context manager to start and stop context logging.
-
-        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args)
-        :param interval: Frequency to call the function, in seconds.
-        :return:
-
-        """
-        self._interval = interval
-        self._interval_f = f
-        self._orig_alarm_handler = None
-
-    def __enter__(self):
-        self.start_progress_logging(self._interval_f, self._interval)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-
-        self.stop_progress_logging()
-
-        if exc_val:
-            return False
-        else:
-            return True
-
-    def start_progress_logging(self, f, interval=2):
-        """
-        Call the function ``f`` every ``interval`` seconds to produce a logging message to be passed
-        to self.log().
-
-        NOTE: This may cause problems with IO operations:
-
-            When a signal arrives during an I/O operation, it is possible that the I/O operation raises an exception
-            after the signal handler returns. This is dependent on the underlying Unix system's
-            semantics regarding interrupted system calls.
-
-        :param f: A function to call. Returns either a string, or a tuple (format_string, format_args).
-                  The function takes no args
-        :param interval: Frequence to call the function, in seconds.
-        :return:
-        """
-
-        import signal
-
-        def handler(signum, frame):
-
-            f()
-
-            # Or, use signal.itimer()? Maybe, but this way, the handler will stop if there is
-            # an exception, rather than getting regular exceptions.
-            signal.alarm(interval)
-
-        old_handler = signal.signal(signal.SIGALRM, handler)
-
-        if not self._orig_alarm_handler:  # Only want the handlers from other outside sources
-            self._orig_alarm_handler = old_handler
-
-        signal.alarm(interval)
-
-    def stop_progress_logging(self):
-        """
-        Stop progress logging by removing the Alarm signal handler and canceling the alarm.
-        :return:
-        """
-
-        import signal
-
-        if self._orig_alarm_handler:
-            signal.signal(signal.SIGALRM, self._orig_alarm_handler)
-            self._orig_alarm_handler = None
-
-            signal.alarm(0)  # Cancel any currently active alarm.
 
 
 class ProcessLogger(object):
+    """Database connection and access object for recording build progress and build state"""
 
-    def __init__(self, dataset, logger = None):
-        import signal
+    def __init__(self, dataset, logger=None, new_connection=True):
         import os.path
 
         self._vid = dataset.vid
         self._d_vid = dataset.vid
         self._logger = logger
+        self._buildstate = None
+        self._new_connection = new_connection
 
         db = dataset._database
         schema = db._schema
@@ -240,20 +183,31 @@ class ProcessLogger(object):
             # Create an entirely new database. Sqlite does not like concurrent access,
             # even from multiple connections in the same process.
             from ambry.orm import Database
-            parts = os.path.split(db.dsn)
-            dsn = '/'.join(parts[:-1]+('progress.db',))
+            if db.dsn == 'sqlite://':
+                # in memory database
+                dsn = 'sqlite://'
+            else:
+                # create progress db near library db.
+                parts = os.path.split(db.dsn)
+                dsn = '/'.join(parts[:-1] + ('progress.db',))
 
             self._db = Database(dsn, foreign_keys=False)
-            self._db.create() # falls through if already exists
+            self._db.create()  # falls through if already exists
             self._engine = self._db.engine
             self._connection = self._db.connection
             self._session = self._db.session
+            self._session.merge(dataset)
+            self._session.commit()
 
-        else:
+        elif new_connection:  # For postgres, by default, create a new db connection
             # Make a new connection to the existing database
             self._db = db
             self._connection = self._db.engine.connect()
-            self._session = self._db.Session(bind=self._connection)
+            self._session = self._db.Session(bind=self._connection, expire_on_commit=False)
+        else:  # When not building, ok to use existing connection
+            self._db = db
+            self._connection = db.connection
+            self._session = db.session
 
         if schema:
             self._session.execute('SET search_path TO {}'.format(schema))
@@ -262,26 +216,107 @@ class ProcessLogger(object):
         if self._db.driver == 'sqlite':
             self._db.close()
         else:
-            if self._connection:
-                self._connection.close()
+            self.close()
+
+    def close(self):
+
+        if self._connection and self._new_connection:
+            self._connection.close()
 
     @property
     def dataset(self):
         from ambry.orm import Dataset
-        return self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
+        return self._session.query(Dataset).filter(Dataset.vid == self._d_vid).one()
 
     def start(self, phase, stage, **kwargs):
         """Start a new routine, stage or phase"""
         return ProgressSection(self, self._session, phase, stage, self._logger, **kwargs)
 
-    def interval(self, func, interval=2):
-        return ProcessIntervals(func, interval)
+
 
     @property
     def records(self):
         """Return all start records for this the dataset, grouped by the start record"""
 
         return (self._session.query(Process)
-                .filter(Process.d_vid==self._d_vid)
+                .filter(Process.d_vid==self._d_vid)).all()
+
+    @property
+    def starts(self):
+        """Return all start records for this the dataset, grouped by the start record"""
+
+        return (self._session.query(Process)
+                .filter(Process.d_vid == self._d_vid)
                 .filter(Process.log_action == 'start')
                 ).all()
+
+    @property
+    def query(self):
+        """Return all start records for this the dataset, grouped by the start record"""
+
+        return (self._session.query(Process).filter(Process.d_vid == self._d_vid))
+
+    @property
+    def exceptions(self):
+        """Return all start records for this the dataset, grouped by the start record"""
+
+        return (self._session.query(Process)
+                .filter(Process.d_vid == self._d_vid)
+                .filter(Process.exception_class != None)
+                .order_by(Process.modified)).all()
+
+    def clean(self):
+        """Delete all of the records"""
+
+        # Deleteing seems to be really weird and unrelable.
+        (self._session.query(Process).filter(Process.d_vid == self._d_vid)
+         ).delete(synchronize_session='fetch')
+
+        for r in self.records:
+            self._session.delete(r)
+
+        self._session.commit()
+
+    def commit(self):
+        assert self._new_connection
+        self._session.commit()
+
+    @property
+    def build(self):
+        """Access build configuration values as attributes. See self.process
+            for a usage example"""
+        from ambry.orm.config import BuildConfigGroupAccessor
+
+        # It is a lightweight object, so no need to cache
+        return BuildConfigGroupAccessor(self.dataset, 'buildstate', self._session)
+
+
+class CallInterval(object):
+    """Call the inner callback at a limited frequency"""
+
+    def __init__(self, f, freq,  **kwargs):
+        import time
+        self._f = f
+        self._freq = freq
+        self._next = time.time() + self._freq
+
+        self._kwargs = kwargs
+
+    def __call__(self, *args, **kwargs):
+        import time
+
+        if time.time() > self._next:
+            kwargs.update(self._kwargs)
+            self._f(*args, **kwargs)
+            self._next = time.time() + self._freq
+
+
+def call_interval(freq,**kwargs):
+    """Decorator for the CallInterval wrapper"""
+    def wrapper(f):
+        return CallInterval(f, freq, **kwargs)
+
+    return wrapper
+
+
+

@@ -174,8 +174,8 @@ def _convert_bundle(bundle):
     ret = {
         'name': bundle.dataset.vid.lower(),
         'title': meta.about.title,
-        'author': meta.contacts.creator.name,
-        'author_email': meta.contacts.creator.email,
+        'author': meta.contacts.wrangler.name,
+        'author_email': meta.contacts.wrangler.email,
         'maintainer': meta.contacts.maintainer.name,
         'maintainer_email': meta.contacts.maintainer.email,
         'license_id': '',
@@ -196,7 +196,8 @@ def _convert_partition(partition):
     csvfile = six.StringIO()
     writer = unicodecsv.writer(csvfile)
     headers = partition.datafile.headers
-    writer.writerow(headers)
+    if headers:
+        writer.writerow(headers)
     for row in partition:
         writer.writerow([row[h] for h in headers])
     csvfile.seek(0)

@@ -9,11 +9,11 @@ class Test(TestBase):
         import unicodecsv as csv
 
         b = self.import_single_bundle('ingest.example.com/headerstypes')
-        b.run()
+        b.ingest()
 
     def test_basic(self):
         b = self.import_single_bundle('ingest.example.com/basic')
-        b.run()
+        b.ingest()
 
     def test_stages(self):
         b = self.import_single_bundle('ingest.example.com/stages')
@@ -21,4 +21,16 @@ class Test(TestBase):
 
     def test_casters(self):
         b = self.import_single_bundle('build.example.com/casters')
+        b.ingest()
+        b.schema()
+        b.build()
+
+    def test_coverage(self):
+        b = self.import_single_bundle('build.example.com/coverage')
+        b.ingest()
+        b.schema()
+        b.build()
+
+    def test_generators(self):
+        b = self.import_single_bundle('build.example.com/generators')
         b.run()

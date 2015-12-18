@@ -277,6 +277,8 @@ def get_parser():
                         help='Load only the config file specified')
     parser.add_argument('-E', '--exceptions', default=False, action='store_true',
                         help='Show full exception trace on all exceptions')
+    parser.add_argument('-e', '--echo', default=False, action='store_true',
+                        help='Echo database queries, for debugging')
     parser.add_argument('-t', '--test-library', default=False, action='store_true',
                         help='Use the test library and database')
 
@@ -287,10 +289,13 @@ def get_parser():
     from .bundle import bundle_parser
     from .root import root_parser
     from .util import util_parser
+    from .dockr import docker_parser
 
-    library_parser(cmd)
-    config_parser(cmd)
     bundle_parser(cmd)
+    config_parser(cmd)
+    docker_parser(cmd)
+    library_parser(cmd)
+
     root_parser(cmd)
     util_parser(cmd)
 
@@ -303,6 +308,7 @@ def main(argsv=None, ext_logger=None):
     from .bundle import bundle_command
     from .root import root_command
     from .util import util_command
+    from .dockr import docker_command
     from ..dbexceptions import ConfigurationError
 
     parser = get_parser()
@@ -326,6 +332,7 @@ def main(argsv=None, ext_logger=None):
         'config': config_command,
         'root': root_command,
         'util': util_command,
+        'docker': docker_command,
     }
 
     global global_logger
@@ -347,7 +354,6 @@ def main(argsv=None, ext_logger=None):
             rc = get_runconfig(rc_path)
 
         except ConfigurationError as e:
-            print '!!!!', e
             fatal("Could not find configuration file \nRun 'ambry config install; to create one ")
 
         global global_run_config
@@ -368,3 +374,47 @@ def main(argsv=None, ext_logger=None):
             if args.exceptions:
                 raise
             fatal('{}: {}'.format(str(e.__class__.__name__), str(e)))
+
+
+def get_docker_links(rc):
+    from ambry.util import parse_url_to_dict, unparse_url_dict
+    from ambry.library.filesystem import LibraryFilesystem
+
+    fs = LibraryFilesystem(rc)
+
+    dsn = fs.database_dsn
+
+    d = parse_url_to_dict(dsn)
+
+    if not 'docker' in d['query']:
+        fatal("Database '{}' doesn't look like a docker database DSN; it should have 'docker' at the end"
+              .format(dsn))
+
+    # Create the new container DSN; in docker, the database is always known as 'db'
+    d['hostname'] = 'db'
+    d['port'] = None
+    dsn = unparse_url_dict(d)
+
+    # The username is the unique id part of all of the docker containers, so we
+    # can construct the names of the database and volumes container from it.
+    groupname = d['username']
+    volumes_c = 'ambry_volumes_{}'.format(groupname)
+    db_c = 'ambry_db_{}'.format(groupname)
+
+    envs = {}
+    envs['AMBRY_DB'] = dsn
+    envs['AMBRY_ACCOUNT_PASSWORD'] = (rc.accounts.get('password'))
+
+    return groupname, dsn, volumes_c, db_c, envs
+
+
+def docker_client():
+    from docker.client import Client
+    from docker.utils import kwargs_from_env
+
+    kwargs = kwargs_from_env()
+    kwargs['tls'].assert_hostname = False
+
+    client = Client(**kwargs)
+
+    return client

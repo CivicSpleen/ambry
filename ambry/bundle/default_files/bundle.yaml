@@ -14,7 +14,7 @@ about:
     time:
     title: Dataset Title
 contacts:
-    creator:
+    wrangler:
         email: bob@example.com
         name: Bob Bobson
         url: http://example.com

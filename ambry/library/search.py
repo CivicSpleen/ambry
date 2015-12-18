@@ -10,13 +10,13 @@ from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBacke
 BACKENDS = {
     'whoosh': WhooshSearchBackend,
     'sqlite': SQLiteSearchBackend,
-    'postgresql+psycopg2': PostgreSQLSearchBackend
+    'postgresql+psycopg2': PostgreSQLSearchBackend,
+    'postgresql': PostgreSQLSearchBackend,
+    'postgres': PostgreSQLSearchBackend
 }
 
 
-
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
-
 
 
 class Search(object):
@@ -43,6 +43,7 @@ class Search(object):
                     'Missing backend: ambry does not have {} search backend. Using whoosh search.'
                     .format(backend_name))
                 backend_name = 'whoosh'
+
 
             backend = BACKENDS[backend_name](library)
 
@@ -111,6 +112,7 @@ class Search(object):
     def search(self, search_phrase, limit=None):
         """Search for datasets, and expand to database records"""
         from ambry.identity import ObjectNumber
+        from ambry.orm.exc import NotFoundError
 
         results = self.search_datasets(search_phrase, limit)
 
@@ -119,9 +121,11 @@ class Search(object):
 
             r.vid = vid
 
-            r.bundle = self.library.bundle(r.vid)
-
-            yield r
+            try:
+                r.bundle = self.library.bundle(r.vid)
+                yield r
+            except NotFoundError:
+                pass
 
     def list_documents(self, limit=None):
         """

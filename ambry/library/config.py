@@ -44,7 +44,7 @@ class LibraryConfigSyncProxy(object):
 
         node = self.database.root_dataset.config.library.config['config_node']
 
-        if change_time > load_time and ( node is None or node == platform.node()):
+        if change_time > load_time:
 
             self.sync_accounts(self.config.accounts)
             self.sync_remotes(self.config.library.remotes)

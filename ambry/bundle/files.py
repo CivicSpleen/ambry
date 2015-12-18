@@ -2,19 +2,21 @@
 
 This module manages reading and writing files that configure a source bundle:
 
-- bundle.py: Main code file for building a bundle
-- meta.py: One-time executed code for manipulating bundle metadata.
+- bundle.py: Main code file for building a bundle.
+- bundle.sql: Set of SQL statements. The system loads the SQL file and creates all of the tables,
+    so they can be referenced during the build.
 - bundle.yaml: Main metadata file.
+- column_map.csv: Maps column names from a source file to the schema.
+- meta.py: One-time executed code for manipulating bundle metadata.
 - schema.csv: Describes tables and columns.
-- column_map.csv: Maps column names from a source file to the schema
-- sources.csv: Describes the name, description and URL of input data
+- sources.csv: Describes the name, description and URL of input data.
 
 This module connects the filesystem to the File records in a dataset. A parallel module,
 ambry.orm.files, connects between the File records and the other types of records in a Dataset
 
 Build source file data is stored in File records in msgpack format. Files that are essentially spreadsheets,
-such as schema, column_map and sources, are stored as a list of lists, one list per row.YAML files
-are stored as dicts, and python files are stored as strings. Msgpack format is used because it is
+such as schema, column_map and sources, are stored as a list of lists, one list per row. YAML files
+are stored as dicts, and python and sql files are stored as strings. Msgpack format is used because it is
 fast and small, which is important for largest schema files, such as those in the US Census.
 
 """
@@ -42,6 +44,7 @@ logger = get_logger(__name__)
 
 class FileTypeError(Exception):
     """Bad file type"""
+
 
 class BuildSourceFile(object):
 
@@ -83,7 +86,7 @@ class BuildSourceFile(object):
 
     @property
     def file_content(self):
-        """Return the contents of the file system file"""
+        """Return the contents of the system file"""
         return self._fs.getcontents(file_name(self._file_const))
 
     @property
@@ -101,10 +104,11 @@ class BuildSourceFile(object):
 
     @property
     def path(self):
+        """ Returns system path of the file. """
         return self._fs.getsyspath(file_name(self._file_const))
 
-
     def remove(self):
+        """ Removes file from filesystem. """
         from fs.errors import ResourceNotFoundError
 
         try:
@@ -127,6 +131,11 @@ class BuildSourceFile(object):
             return time.mktime(info['modified_time'].timetuple())
         except ResourceNotFoundError:
             return None
+
+    @property
+    def fs_is_newer(self):
+
+        return (self.fs_modtime or 0) > (self.record.modified or 0) and self.record.source_hash != self.fs_hash
 
     @property
     def fs_hash(self):
@@ -164,7 +173,6 @@ class BuildSourceFile(object):
 
         if (self.record.modified or 0) > (self.fs_modtime or 0):
             # Record is newer
-
             return self.SYNC_DIR.RECORD_TO_FILE
 
         return None
@@ -191,7 +199,6 @@ class BuildSourceFile(object):
             else:
                 return None
 
-
             self._dataset.config.sync[self._file_const][sd] = time.time()
             return sd
         except Exception as e:
@@ -213,6 +220,7 @@ class BuildSourceFile(object):
     def record_to_fs(self):
         """Create a filesystem file from a File"""
         raise NotImplementedError
+
 
 class RowBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -254,8 +262,6 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fr = self._dataset.bsfile(self._file_const)
 
-        fn_path = file_name(self._file_const)
-
         # Some types have special representations in spreadsheets, particularly lists and dicts
         def munge_types(v):
             if isinstance(v, (list, tuple)):
@@ -291,6 +297,7 @@ class RowBuildSourceFile(BuildSourceFile):
                 with self._fs.open(fn_path, 'w', newline='') as f:
                     self.record_to_fh(f)
 
+
 class DictBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
 
@@ -315,9 +322,6 @@ class DictBuildSourceFile(BuildSourceFile):
 
         fr = self._dataset.bsfile(self._file_const)
 
-        fn_path = file_name(self._file_const)
-
-
         if fr.contents:
             yaml.safe_dump(fr.unpacked_contents, f, default_flow_style=False, encoding='utf-8')
             fr.source_hash = self.fs_hash
@@ -334,6 +338,7 @@ class DictBuildSourceFile(BuildSourceFile):
             with self._fs.open(fn_path, 'w', encoding='utf-8') as f:
 
                 self.record_to_fh(f)
+
 
 class StringSourceFile(BuildSourceFile):
     """A Source Build File that is a single file. """
@@ -355,12 +360,11 @@ class StringSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
 
-        with self._fs.open(fn_path, 'r', encoding="utf-8") as f:
+        with self._fs.open(fn_path, 'r', encoding='utf-8') as f:
             fr.update_contents(f.read(), 'text/plain')
 
         fr.source_hash = self.fs_hash
         fr.modified = self.fs_modtime
-
 
     def record_to_fh(self, f):
         fr = self._dataset.bsfile(self._file_const)
@@ -379,6 +383,7 @@ class StringSourceFile(BuildSourceFile):
             # No UTF-Encoding! Just go directly from the the database to the file.
             with self._fs.open(file_name(self._file_const), 'wb') as f:
                 self.record_to_fh(f)
+
 
 class MetadataFile(DictBuildSourceFile):
 
@@ -427,7 +432,7 @@ class MetadataFile(DictBuildSourceFile):
                 act = self._bundle.library.config.accounts.ambry.to_dict()
 
                 if act:
-                    o['contacts']['creator'] = act
+                    o['contacts']['wrangler'] = act
 
             except ConfigurationError:
                 pass
@@ -441,6 +446,7 @@ class MetadataFile(DictBuildSourceFile):
         fr.update_contents(msgpack.packb(o), 'application/msgpack')
 
         return fr
+
 
 class PythonSourceFile(StringSourceFile):
 
@@ -468,12 +474,10 @@ class PythonSourceFile(StringSourceFile):
         :param kwargs: items to add to the module globals
         :return:
         """
-        import os
         from fs.errors import NoSysPathError
 
         try:
             import ambry.build
-
             module = sys.modules['ambry.build']
         except ImportError:
             module = imp.new_module('ambry.build')
@@ -497,7 +501,7 @@ class PythonSourceFile(StringSourceFile):
             # Has encoding, so don't decode
             contents = bf.contents
         else:
-            contents = bf.unpacked_contents # Assumes utf-8
+            contents = bf.unpacked_contents  # Assumes utf-8
 
         exec(compile(contents, abs_path, 'exec'), module.__dict__)
 
@@ -506,7 +510,6 @@ class PythonSourceFile(StringSourceFile):
     def import_bundle(self):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
-        import os
         from fs.errors import NoSysPathError
 
         try:
@@ -530,7 +533,6 @@ class PythonSourceFile(StringSourceFile):
         exec(compile(bf.contents, abs_path, 'exec'), module.__dict__)
 
         return module.Bundle
-
 
     def import_lib(self):
         """Import the lib.py file into the bundle module"""
@@ -607,13 +609,12 @@ class SourcesFile(RowBuildSourceFile):
                     d['source_table_name'] = d['source_table']
                     del d['source_table']
 
-                if 'state' in d:
-                    del d['state']
-
                 d['d_vid'] = self._dataset.vid
 
+                d['state'] = 'synced'
+
                 try:
-                    ds = self._dataset.source_file(d['name'])
+                    ds = self._dataset.source_file(str(d['name']))
                     ds.update(**d)
                 except NotFoundError:
                     name = d['name']
@@ -649,6 +650,7 @@ class SourcesFile(RowBuildSourceFile):
 
         bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
 
+
 class SchemaFile(RowBuildSourceFile):
 
     def clean_objects(self):
@@ -656,7 +658,7 @@ class SchemaFile(RowBuildSourceFile):
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
-        from ambry.orm import Column, Table
+        from ambry.orm import Column, Table, Dataset
 
         def _clean_int(i):
             if i is None:
@@ -689,11 +691,19 @@ class SchemaFile(RowBuildSourceFile):
             'real': Column.DATATYPE_FLOAT,
         }
 
-        table_number = self._dataset.next_sequence_id(Table, force_query=True)
 
+        def run_progress_f(line_no):
+            self._bundle.log("Loading tables from file. Line #{}".format(line_no))
+
+        from ambry.bundle.process import CallInterval
+        run_progress_f = CallInterval(run_progress_f, 10)
+
+        table_number = self._dataset._database.next_sequence_id(Dataset, self._dataset.vid, Table)
         for row in bsfile.dict_row_reader:
 
             line_no += 1
+
+            run_progress_f(line_no)
 
             # Skip blank lines
             if not row.get('column', False) and not row.get('table', False):
@@ -722,7 +732,6 @@ class SchemaFile(RowBuildSourceFile):
                 table_number += 1
                 extant_tables[table_name] = table
 
-
             data = {k.replace('d_', '', 1): v
                     for k, v in list(row.items()) if k and k.startswith('d_') and v}
 
@@ -746,6 +755,8 @@ class SchemaFile(RowBuildSourceFile):
                 units=row.get('units', None),
                 universe=row.get('universe'),
                 update_existing= True)
+
+        self._dataset.t_sequence_id = table_number
 
         return warnings, errors
 
@@ -803,6 +814,7 @@ class SchemaFile(RowBuildSourceFile):
         bsfile = self._dataset.bsfile(self._file_const)
         bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
 
+
 class SourceSchemaFile(RowBuildSourceFile):
 
     def clean_objects(self):
@@ -827,19 +839,18 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         self._dataset.commit()
 
-        table_number = self._dataset.next_sequence_id(SourceTable, force_query=True)
-
         for row in bsfile.dict_row_reader:
             st = self._dataset.source_table(row['table'])
 
             if not st:
-                st = self._dataset.new_source_table(row['table'], table_number)
-                table_number += 1
+                st = self._dataset.new_source_table(row['table'])
+                #table_number += 1
 
             if 'datatype' not in row:
                 row['datatype'] = 'unknown'
 
             del row['table']
+
 
             st.add_column(**row)  # Create or update
 
@@ -876,16 +887,20 @@ file_info_map = {
     File.BSFILE.META: (File.path_map[File.BSFILE.META], MetadataFile),
     File.BSFILE.SCHEMA: (File.path_map[File.BSFILE.SCHEMA], SchemaFile),
     File.BSFILE.SOURCESCHEMA: (File.path_map[File.BSFILE.SOURCESCHEMA], SourceSchemaFile),
-    File.BSFILE.SOURCES: (File.path_map[File.BSFILE.SOURCES], SourcesFile)
+    File.BSFILE.SOURCES: (File.path_map[File.BSFILE.SOURCES], SourcesFile),
+    File.BSFILE.SQL: (File.path_map[File.BSFILE.SQL], StringSourceFile)
 }
+
 
 def file_name(const):
     """Return the file name for a file constant"""
     return file_info_map[const][0]
 
+
 def file_class(const):
     """Return the class for a file constant"""
     return file_info_map[const][1]
+
 
 def file_default(const):
     """Return the default content for the file"""
@@ -903,8 +918,6 @@ def file_default(const):
         with open(path, 'rt', encoding='utf-8') as f:
             return f.read()
 
-    with open(path, 'rb') as f:
-        return f.read()
 
 class BuildSourceFileAccessor(object):
 
@@ -916,7 +929,7 @@ class BuildSourceFileAccessor(object):
 
     @property
     def build_file(self):
-        raise DeprecationWarning("Use self.build_bundle")
+        raise DeprecationWarning('Use self.build_bundle')
         return self.file(File.BSFILE.BUILD)
 
     def __getattr__(self, item):

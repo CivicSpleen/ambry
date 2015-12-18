@@ -15,8 +15,7 @@ from six import string_types
 from . import Base, MutationDict, JSONEncodedObj, MutationList
 from .config import ConfigGroupAccessor
 
-from ambry.identity import DatasetNumber
-from ambry.identity import ObjectNumber
+from ambry.identity import DatasetNumber, ObjectNumber
 from ambry.orm.file import File
 
 
@@ -42,9 +41,9 @@ class Dataset(Base):
     time_coverage = SAColumn('d_tcov', MutationList.as_mutable(JSONEncodedObj))
     grain_coverage = SAColumn('d_gcov', MutationList.as_mutable(JSONEncodedObj))
 
-    p_sequence_id = SAColumn('ds_p_sequence_id', Integer, default=1)
-    t_sequence_id = SAColumn('ds_t_sequence_id', Integer, default=1)
-    st_sequence_id = SAColumn('ds_st_sequence_id', Integer, default=1)
+    p_sequence_id = SAColumn('d_p_sequence_id', Integer, default=1)
+    t_sequence_id = SAColumn('d_t_sequence_id', Integer, default=1)
+    st_sequence_id = SAColumn('d_st_sequence_id', Integer, default=1)
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -121,6 +120,15 @@ class Dataset(Base):
     def session(self):
         return self._database.session
 
+    def query(self, *args, **kwargs):
+        return self.session.query(*args, **kwargs)
+
+    def close(self):
+        return self._database.close()
+
+    def close_session(self):
+        return self._database.close_session()
+
     @property
     def identity(self):
         from ..identity import Identity
@@ -151,7 +159,6 @@ class Dataset(Base):
         """Use next_sequence_id to create a new child of the dataset, with a unique id"""
         from sqlalchemy.exc import IntegrityError
         from sqlalchemy.orm.exc import FlushError
-        from ambry.orm import SourceTable
 
         # If a sequence ID was specified, the caller is certain
         #  that there is no potential for conflicts,
@@ -257,12 +264,13 @@ class Dataset(Base):
             if 'sequence_id' not in kwargs:
                 kwargs['sequence_id'] = self._database.next_sequence_id(Dataset, self.vid, Table)
 
-            table = Table(name=name,d_vid=self.vid,**kwargs)
+            table = Table(name=name, d_vid=self.vid, **kwargs)
 
             table.update_id()
 
         # Update possibly extant data
-        table.data = dict( (list(table.data.items()) if table.data else []) + list(kwargs.get('data', {}).items()) )
+        table.data = dict(
+            (list(table.data.items()) if table.data else []) + list(kwargs.get('data', {}).items()))
 
         for key, value in list(kwargs.items()):
 
@@ -280,11 +288,16 @@ class Dataset(Base):
         return table
 
     def new_partition(self, table, **kwargs):
-        '''
-        '''
+        """ Creates new partition and returns it.
+
+        Args:
+            table (orm.Table):
+
+        Returns:
+            orm.Partition
+        """
+
         from . import Partition
-        from sqlalchemy.exc import IntegrityError
-        from sqlalchemy.orm.exc import FlushError
 
         # Create the basic partition record, with a sequence ID.
 
@@ -292,7 +305,7 @@ class Dataset(Base):
             table = self.table(table)
 
         if 'sequence_id' in kwargs:
-            sequence_id  = kwargs['sequence_id']
+            sequence_id = kwargs['sequence_id']
             del kwargs['sequence_id']
         else:
             sequence_id = self._database.next_sequence_id(Dataset, self.vid, Partition)
@@ -396,9 +409,13 @@ class Dataset(Base):
         return q
 
     def delete_tables_partitions(self):
+        self.t_sequence_id = 1
+        self.p_sequence_id = 1
         return self._database.delete_tables_partitions(self)
 
+
     def delete_partitions(self):
+        self.p_sequence_id = 1
         return self._database.delete_partitions(self)
 
     def new_source(self, name, **kwargs):
@@ -431,7 +448,7 @@ class Dataset(Base):
             .filter(DataSource.d_vid == self.vid)\
             .first()
 
-        if not source: # Try as a source vid
+        if not source:  # Try as a source vid
             source = object_session(self) \
                 .query(DataSource) \
                 .filter(DataSource.vid == name) \
@@ -444,7 +461,7 @@ class Dataset(Base):
 
         return source
 
-    def new_source_table(self, name, sequence_id = None):
+    def new_source_table(self, name, sequence_id=None):
         from .source_table import SourceTable
 
         extant = next(iter(e for e in self.source_tables if e.name == name), None)
@@ -457,13 +474,14 @@ class Dataset(Base):
 
         assert sequence_id
 
-        table = SourceTable(name=name, d_vid=self.vid, sequence_id = sequence_id)
+        table = SourceTable(name=name, d_vid=self.vid, sequence_id=sequence_id)
 
         table.update_id()
 
         self.source_tables.append(table)
 
         assert table.sequence_id
+
 
         return table
 
@@ -537,7 +555,6 @@ class Dataset(Base):
 
         return row
 
-
     def __repr__(self):
         return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} rev={}>""".format(
             self.id,
@@ -556,20 +573,6 @@ class ConfigAccessor(object):
 
         self.dataset = dataset
 
-    @property
-    def process(self):
-        """Access process configuarion values as attributes
-
-        >>> db = Database(self.dsn)
-        >>> db.open()
-        >>> ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
-        >>> ds.process.build.foo = [1,2,3,4]
-        >>> ds.process.build.bar = [5,6,7,8]
-        """
-
-        from .config import ProcessConfigGroupAccessor
-
-        return ProcessConfigGroupAccessor(self.dataset, 'process')
 
     @property
     def metadata(self):
@@ -585,6 +588,8 @@ class ConfigAccessor(object):
         """Access build configuration values as attributes. See self.process
             for a usage example"""
         from .config import BuildConfigGroupAccessor
+
+        raise NotImplementedError('Use bundle.buildstate instead')
 
         return BuildConfigGroupAccessor(self.dataset, 'buildstate')
 

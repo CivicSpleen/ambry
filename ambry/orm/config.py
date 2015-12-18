@@ -205,9 +205,15 @@ class ConfigGroupAccessor(object):
 class BuildConfigGroupAccessor(ConfigGroupAccessor):
     """A config group acessor for the build group, which can calculate values and format times"""
 
+    def __init__(self, dataset, type_name, session):
+        super(BuildConfigGroupAccessor, self).__init__(dataset, type_name)
+        self._session = session
+
     # FIXME! These functions should return sensible value when the underlying config items are missing
     # or have non-integer values
 
+    def commit(self):
+        self._session.commit()
 
     @property
     def build_duration(self):
@@ -219,8 +225,15 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
     def build_duration_pretty(self):
         """Return the difference between build and build_done states, in a human readable format"""
         from ambry.util import pretty_time
+        from time import time
+
+        if not self.state.building:
+            return None
+
+        built = self.state.built or time()
+
         try:
-            return pretty_time(int(self.state.build_done) - int(self.state.build))
+            return pretty_time(int(built) - int(self.state.building))
         except TypeError: # one of the values is  None or not a number
             return None
 
@@ -238,7 +251,10 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
         """Return the time the bundle was created as a datetime object"""
         from datetime import datetime
 
-        return datetime.fromtimestamp(self.state.new)
+        try:
+            return datetime.fromtimestamp(self.state.new)
+        except TypeError:
+            return None
 
     @property
     def last_datetime(self):
@@ -250,50 +266,4 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
         except TypeError:
             return None
 
-class ProcessConfigGroupAccessor(ConfigGroupAccessor):
-    """A config group acessor for the build group, which can calculate values and format times"""
-
-    def __init__(self, dataset, type_name):
-        from ambry.orm import Dataset
-        import os
-
-        self._vid = dataset.vid
-        self._db  = dataset._database
-        self._conn, self._session = self._db.alt_session()
-        self._d_vid = dataset.vid
-
-        ds = self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
-
-        super(ProcessConfigGroupAccessor, self).__init__(ds, type_name)
-
-        self._pid = os.getpid()
-
-    def __del__(self):
-        pass
-        #self._session.close()
-        if self._connection:
-            self._connection.close()
-
-    def commit(self):
-        from ambry.orm import Dataset
-        self._session.commit()
-
-        if True: # Maybe don't need to do this?
-            self._session.close()
-            _, self._session = self._db.alt_session(self._conn)
-            self._dataset = self._session.query(Dataset).filter(Dataset.vid == self._d_vid ).one()
-
-
-    def exception(self, e):
-        pass
-
-    @property
-    def activity(self):
-        return self[self._pid].activity
-
-    # I really want this to be a setter, but it doesn't seem to work with the overloaded __setattr__
-    # in ConfigGroupAcessor
-    def set_activity(self, v):
-        self[self._pid].activity = v
-        self.commit()
 
