@@ -42,6 +42,7 @@ class Mixin(object):
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
@@ -80,6 +81,7 @@ class Mixin(object):
             rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
@@ -117,6 +119,7 @@ class Mixin(object):
             rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
@@ -161,6 +164,7 @@ class Mixin(object):
             # We need to sort rows before check because the order of the table partitions is unknown.
             self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
@@ -209,6 +213,7 @@ class Mixin(object):
             # We need to sort rows before check because the order of the table partitions is unknown.
             self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
         finally:
+            bundle.progress.close()
             library.warehouse.close()
             library.database.close()
 
@@ -272,13 +277,12 @@ class FileSQLiteTest(TestBase, Mixin):
 
 class PostgreSQLTest(PostgreSQLTestBase, Mixin):
 
-    @classmethod
-    def get_rc(cls):
+    def _get_config(self):
         rc = TestBase.get_rc()
-        # replace database with file database.
-        cls._real_warehouse_database = rc.library.database
-        rc.library.warehouse = cls.postgres_test_db_data['test_db_dsn']
-        rc.library.database = cls.postgres_test_db_data['test_db_dsn']  # It's ok to use the same database.
+        # replace database with postgres test database.
+        self.__class__._real_warehouse_database = rc.library.database
+        rc.library.warehouse = self.__class__.postgres_test_db_data['test_db_dsn']
+        rc.library.database = self.__class__.postgres_test_db_data['test_db_dsn']  # It's ok to use the same database.
         return rc
 
     @classmethod
@@ -290,17 +294,10 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
             rc.library.database = real_warehouse_database
         PostgreSQLTestBase.tearDownClass()
 
-    def _get_test_library(self):
-        library = self.library()
-
-        # assert it is file database.
-        assert library.database.exists()
-        return library
-
     def _assert_is_indexed(self, warehouse, partition, column):
         table = postgres_med.table_name(partition.vid) + '_v'
         with warehouse._backend._connection.cursor() as cursor:
-            # Sometimes postgres may not use index although index exists.
+            # Sometimes postgres does not use index although index exists.
             # See https://wiki.postgresql.org/wiki/FAQ#Why_are_my_queries_slow.3F_Why_don.27t_they_use_my_indexes.3F
             # and http://stackoverflow.com/questions/9475778/postgresql-query-not-using-index-in-production
             # for details.
