@@ -106,10 +106,10 @@ ContactTerm.__nonzero__ = ContactTerm.__bool__
 
 class Contacts(DictGroup):
     creator = ContactTerm()
+    wrangler = ContactTerm()
     maintainer = ContactTerm()
     source = ContactTerm()
     analyst = ContactTerm()
-
 
 class VersonTerm(DictTerm):
     """Version Description"""

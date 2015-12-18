@@ -10,6 +10,9 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__)
 
+import logging
+#logger.setLevel(logging.DEBUG)
+
 
 class PostgreSQLSearchBackend(BaseSearchBackend):
 
@@ -72,34 +75,11 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
 class DatasetPostgreSQLIndex(BaseDatasetIndex):
 
     def __init__(self, backend=None):
+        from sqlalchemy.exc import ProgrammingError
         assert backend is not None, 'backend argument can not be None.'
         super(self.__class__, self).__init__(backend=backend)
 
-        logger.debug('Creating dataset FTS table and index.')
-
-        # create table for dataset documents. Create special table for search to make it easy to replace one
-        # FTS engine with another.
-        query = """\
-            CREATE TABLE dataset_index (
-                vid VARCHAR(256) NOT NULL,
-                title TEXT,
-                keywords VARCHAR(256)[],
-                doc tsvector
-            );
-        """
-        self.backend.library.database.connection.execute(query)
-
-        # create FTS index on doc field.
-        query = """\
-            CREATE INDEX dataset_index_doc_idx ON dataset_index USING gin(doc);
-        """
-        self.backend.library.database.connection.execute(query)
-
-        # Create index on keyword field
-        query = """\
-            CREATE INDEX dataset_index_keywords_idx on dataset_index USING gin(keywords);
-        """
-        self.backend.library.database.connection.execute(query)
+        self.create()
 
     def search(self, search_phrase, limit=None):
         """ Finds datasets by search phrase.
@@ -115,22 +95,67 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
         results = self.backend.library.database.connection.execute(query, **query_params)
         datasets = {}
-        for result in results:
-            vid, dataset_score = result
+
+        def make_result(vid = None, b_score = 0, p_score = 0):
             res = DatasetSearchResult()
-            res.b_score = dataset_score
-            # p_score and partitions will be populated while gathering partitions.
-            res.p_score = 0
+            res.b_score = b_score
+            res.p_score = p_score
             res.partitions = set()
             res.vid = vid
-            datasets[vid] = res
+            return res
+
+        for result in results:
+            vid, dataset_score = result
+
+            datasets[vid] = make_result(vid, b_score = dataset_score)
 
         logger.debug('Extending datasets with partitions.')
+
         for partition in self.backend.partition_index.search(search_phrase):
+
+            if not partition.dataset_vid in datasets:
+                datasets[partition.dataset_vid] = make_result(partition.dataset_vid)
+
             datasets[partition.dataset_vid].p_score += partition.score
             datasets[partition.dataset_vid].partitions.add(partition.vid)
 
         return list(datasets.values())
+
+    def create(self):
+        # create table for dataset documents. Create special table for search to make it easy to replace one
+        # FTS engine with another.
+
+        from sqlalchemy.engine.reflection import Inspector
+
+        inspector = Inspector.from_engine(self.backend.library.database.engine)
+
+        if 'dataset_index' in inspector.get_table_names():
+            return
+
+        logger.debug('Creating dataset FTS table and index.')
+
+        query = """\
+            CREATE TABLE dataset_index (
+                vid VARCHAR(256) NOT NULL,
+                title TEXT,
+                keywords VARCHAR(256)[],
+                doc tsvector
+            );
+        """
+
+        self.backend.library.database.connection.execute(query)
+
+        # create FTS index on doc field.
+        query = """\
+            CREATE INDEX dataset_index_doc_idx ON dataset_index USING gin(doc);
+        """
+        self.backend.library.database.connection.execute(query)
+
+        # Create index on keyword field
+        query = """\
+            CREATE INDEX dataset_index_keywords_idx on dataset_index USING gin(keywords);
+        """
+        self.backend.library.database.connection.execute(query)
 
     def reset(self):
         """ Drops index table. """
@@ -225,7 +250,9 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
-        return text('\n'.join(query_parts)), query_params
+        q =  text('\n'.join(query_parts)), query_params
+        logger.debug('Dataset search query: {}'.format(q))
+        return q
 
     def _delete(self, vid=None):
         """ Deletes given dataset from index.
@@ -248,21 +275,8 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
         assert backend is not None, 'backend argument can not be None.'
         super(self.__class__, self).__init__(backend=backend)
 
-        logger.debug('Creating identifier FTS table.')
+        self.create()
 
-        query = """
-            CREATE TABLE identifier_index (
-                identifier VARCHAR(256) NOT NULL,
-                type VARCHAR(256) NOT NULL,
-                name TEXT);
-        """
-        self.backend.library.database.connection.execute(query)
-
-        # create index for name.
-        query = """
-            CREATE INDEX identifier_index_name_idx ON identifier_index USING gist (name gist_trgm_ops);
-        """
-        self.backend.library.database.connection.execute(query)
 
     def search(self, search_phrase, limit=None):
         """ Finds identifiers by search phrase.
@@ -306,6 +320,31 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
             VALUES(:identifier, :type, :name);
         """)
         self.backend.library.database.connection.execute(query, **identifier)
+
+    def create(self):
+
+        from sqlalchemy.engine.reflection import Inspector
+
+        inspector = Inspector.from_engine(self.backend.library.database.engine)
+
+        if 'identifier_index' in inspector.get_table_names():
+            return
+
+        logger.debug('Creating identifier FTS table.')
+
+        query = """
+            CREATE TABLE identifier_index (
+                identifier VARCHAR(256) NOT NULL,
+                type VARCHAR(256) NOT NULL,
+                name TEXT);
+        """
+        self.backend.library.database.connection.execute(query)
+
+        # create index for name.
+        query = """
+            CREATE INDEX identifier_index_name_idx ON identifier_index USING gist (name gist_trgm_ops);
+        """
+        self.backend.library.database.connection.execute(query)
 
     def reset(self):
         """ Drops identifier index table. """
@@ -359,8 +398,156 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         assert backend is not None, 'backend argument can not be None.'
         super(self.__class__, self).__init__(backend=backend)
 
-        logger.debug('Creating partition FTS table.')
+        self.create()
 
+    def _make_query_from_terms(self, terms, limit=None):
+        """ Creates a query for partition from decomposed search terms.
+
+        Args:
+            terms (dict or unicode or string):
+
+        Returns:
+            tuple of (str, dict): First element is str with FTS query, second is
+            parameters of the query. Element of the execution of the query is
+            tuple of three elements: (vid, dataset_vid, score).
+
+        """
+        expanded_terms = self._expand_terms(terms)
+        terms_used = 0
+
+        if expanded_terms['doc']:
+            # create query with real score.
+            query_parts = ['SELECT vid, dataset_vid, ts_rank_cd(doc, to_tsquery(:doc)) as score']
+            terms_used += 1
+        else:
+            # create query with score = 1 because query will not touch doc field.
+            query_parts = ['SELECT vid, dataset_vid, 1 as score']
+
+        query_parts.append('FROM partition_index')
+        query_params = {}
+        where_count = 0
+
+        if expanded_terms['doc']:
+            query_parts.append('WHERE doc @@ to_tsquery(:doc)')
+            query_params['doc'] = self.backend._and_join(expanded_terms['doc'])
+            where_count += 1
+            terms_used += 1
+
+        if expanded_terms['keywords']:
+            query_params['keywords'] = ' '.join(expanded_terms['keywords'])
+            if where_count:
+                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \')')
+            else:
+                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \')')
+            where_count += 1
+            terms_used += 1
+
+        if expanded_terms['from']:
+            if where_count:
+                # at least one WHERE exists
+                query_parts.append('AND from_year >= :from_year')
+            else:
+                query_parts.append('WHERE from_year >= :from_year')
+            query_params['from_year'] = expanded_terms['from']
+            where_count += 1
+            terms_used += 1
+
+        if expanded_terms['to']:
+            if where_count:
+                # at least one WHERE exists
+                query_parts.append('AND to_year <= :to_year')
+            else:
+                query_parts.append('to_year <= :to_year')
+            query_params['to_year'] = expanded_terms['to']
+            where_count += 1
+            terms_used += 1
+
+        query_parts.append('ORDER BY score DESC')
+
+        if limit:
+            query_parts.append('LIMIT :limit')
+            query_params['limit'] = limit
+
+        if not terms_used:
+            logger.debug('No terms used; not creating query')
+            return None, None
+
+        query_parts.append(';')
+        deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
+            .format(terms, query_parts, query_params)
+        logger.debug(deb_msg)
+
+
+        return text('\n'.join(query_parts)), query_params
+
+    def search(self, search_phrase, limit=None):
+        """ Finds partitions by search phrase.
+
+        Args:
+            search_phrase (str or unicode):
+            limit (int, optional): how many results to generate. None means without limit.
+
+        Generates:
+            PartitionSearchResult instances.
+        """
+        query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+
+        if query:
+
+            results = self.backend.library.database.connection.execute(query, **query_params)
+
+            for result in results:
+                vid, dataset_vid, score = result
+                yield PartitionSearchResult(
+                    vid=vid, dataset_vid=dataset_vid, score=score)
+
+    def _as_document(self, partition):
+        """ Converts partition to document indexed by to FTS index.
+
+        Args:
+            partition (orm.Partition): partition to convert.
+
+        Returns:
+            dict with structure matches to BasePartitionIndex._schema.
+
+        """
+        doc = super(self.__class__, self)._as_document(partition)
+
+        # pass time_coverage to the _index_document.
+        doc['time_coverage'] = partition.time_coverage
+        return doc
+
+    def _index_document(self, document, force=False):
+        """ Adds parition document to the index. """
+
+        time_coverage = document.pop('time_coverage', [])
+        from_year = None
+        to_year = None
+        if time_coverage:
+            from_year = int(time_coverage[0]) if time_coverage and time_coverage[0] else None
+            to_year = int(time_coverage[-1]) if time_coverage and time_coverage[-1] else None
+
+        query = text("""
+            INSERT INTO partition_index(vid, dataset_vid, title, keywords, doc, from_year, to_year)
+            VALUES(
+                :vid, :dataset_vid, :title,
+                string_to_array(:keywords, ' '),
+                to_tsvector('english', :doc),
+                :from_year, :to_year); """)
+
+        self.backend.library.database.connection.execute(
+            query, from_year=from_year, to_year=to_year, **document)
+
+    def create(self):
+
+        from sqlalchemy.engine.reflection import Inspector
+
+        inspector = Inspector.from_engine(self.backend.library.database.engine)
+
+        if 'partition_index' in inspector.get_table_names():
+            return
+
+        logger.debug('Creating partition FTS table.')
         # create table for partition documents. Create special table for search to make it easy to replace one
         # FTS engine with another.
         query = """\
@@ -387,126 +574,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             CREATE INDEX partition_index_keywords_idx on partition_index USING gin(keywords);
         """
         self.backend.library.database.connection.execute(query)
-
-    def _make_query_from_terms(self, terms, limit=None):
-        """ Creates a query for partition from decomposed search terms.
-
-        Args:
-            terms (dict or unicode or string):
-
-        Returns:
-            tuple of (str, dict): First element is str with FTS query, second is
-            parameters of the query. Element of the execution of the query is
-            tuple of three elements: (vid, dataset_vid, score).
-
-        """
-        expanded_terms = self._expand_terms(terms)
-
-        if expanded_terms['doc']:
-            # create query with real score.
-            query_parts = ['SELECT vid, dataset_vid, ts_rank_cd(doc, to_tsquery(:doc)) as score']
-        else:
-            # create query with score = 1 because query will not touch doc field.
-            query_parts = ['SELECT vid, dataset_vid, 1 as score']
-
-        query_parts.append('FROM partition_index')
-        query_params = {}
-        where_count = 0
-
-        if expanded_terms['doc']:
-            query_parts.append('WHERE doc @@ to_tsquery(:doc)')
-            query_params['doc'] = self.backend._and_join(expanded_terms['doc'])
-            where_count += 1
-
-        if expanded_terms['keywords']:
-            query_params['keywords'] = ' '.join(expanded_terms['keywords'])
-            if where_count:
-                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \')')
-            else:
-                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \')')
-            where_count += 1
-
-        if expanded_terms['from']:
-            if where_count:
-                # at least one WHERE exists
-                query_parts.append('AND from_year >= :from_year')
-            else:
-                query_parts.append('WHERE from_year >= :from_year')
-            query_params['from_year'] = expanded_terms['from']
-            where_count += 1
-
-        if expanded_terms['to']:
-            if where_count:
-                # at least one WHERE exists
-                query_parts.append('AND to_year <= :to_year')
-            else:
-                query_parts.append('to_year <= :to_year')
-            query_params['to_year'] = expanded_terms['to']
-            where_count += 1
-        query_parts.append('ORDER BY score DESC')
-        if limit:
-            query_parts.append('LIMIT :limit')
-            query_params['limit'] = limit
-        query_parts.append(';')
-        deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
-            .format(terms, query_parts, query_params)
-        logger.debug(deb_msg)
-        return text('\n'.join(query_parts)), query_params
-
-    def search(self, search_phrase, limit=None):
-        """ Finds partitions by search phrase.
-
-        Args:
-            search_phrase (str or unicode):
-            limit (int, optional): how many results to generate. None means without limit.
-
-        Generates:
-            PartitionSearchResult instances.
-        """
-        query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
-        results = self.backend.library.database.connection.execute(query, **query_params)
-
-        for result in results:
-            vid, dataset_vid, score = result
-            yield PartitionSearchResult(
-                vid=vid, dataset_vid=dataset_vid, score=score)
-
-    def _as_document(self, partition):
-        """ Converts partition to document indexed by to FTS index.
-
-        Args:
-            partition (orm.Partition): partition to convert.
-
-        Returns:
-            dict with structure matches to BasePartitionIndex._schema.
-
-        """
-        doc = super(self.__class__, self)._as_document(partition)
-
-        # pass time_coverage to the _index_document.
-        doc['time_coverage'] = partition.time_coverage
-        return doc
-
-    def _index_document(self, document, force=False):
-        """ Adds parition document to the index. """
-
-        time_coverage = document.pop('time_coverage', [])
-        from_year = None
-        to_year = None
-        if time_coverage:
-            from_year = int(time_coverage[0])
-            to_year = int(time_coverage[-1])
-
-        query = text("""
-            INSERT INTO partition_index(vid, dataset_vid, title, keywords, doc, from_year, to_year)
-            VALUES(
-                :vid, :dataset_vid, :title,
-                string_to_array(:keywords, ' '),
-                to_tsvector('english', :doc),
-                :from_year, :to_year); """)
-
-        self.backend.library.database.connection.execute(
-            query, from_year=from_year, to_year=to_year, **document)
 
     def reset(self):
         """ Drops index table. """

@@ -236,7 +236,9 @@ class Column(Base):
             raise ConfigurationError("Column '{}' has no datatype".format(self.name))
 
         # let it fail with KeyError if datatype is unknown.
-        return self.types[self.datatype][2]
+        pt = self.python_type.__name__
+        return self.types[pt][2]
+
 
     @classmethod
     def convert_numpy_type(cls, dtype):

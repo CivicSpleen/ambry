@@ -1188,7 +1188,7 @@ def bundle_new(args, l, rc):
 
     try:
         b = l.new_bundle(assignment_class=args.key, **d)
-        b.metadata.contacts.creator.email = 'eric@busboom.org'
+        b.metadata.contacts.wrangler.email = 'non@eample.com'
 
     except ConflictError:
         fatal("Can't create dataset; one with a conflicting name already exists")

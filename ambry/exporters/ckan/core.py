@@ -174,8 +174,8 @@ def _convert_bundle(bundle):
     ret = {
         'name': bundle.dataset.vid.lower(),
         'title': meta.about.title,
-        'author': meta.contacts.creator.name,
-        'author_email': meta.contacts.creator.email,
+        'author': meta.contacts.wrangler.name,
+        'author_email': meta.contacts.wrangler.email,
         'maintainer': meta.contacts.maintainer.name,
         'maintainer_email': meta.contacts.maintainer.email,
         'license_id': '',

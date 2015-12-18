@@ -432,7 +432,7 @@ class MetadataFile(DictBuildSourceFile):
                 act = self._bundle.library.config.accounts.ambry.to_dict()
 
                 if act:
-                    o['contacts']['creator'] = act
+                    o['contacts']['wrangler'] = act
 
             except ConfigurationError:
                 pass

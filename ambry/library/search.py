@@ -10,13 +10,13 @@ from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBacke
 BACKENDS = {
     'whoosh': WhooshSearchBackend,
     'sqlite': SQLiteSearchBackend,
-    'postgresql+psycopg2': PostgreSQLSearchBackend
+    'postgresql+psycopg2': PostgreSQLSearchBackend,
+    'postgresql': PostgreSQLSearchBackend,
+    'postgres': PostgreSQLSearchBackend
 }
 
 
-
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
-
 
 
 class Search(object):
@@ -43,6 +43,7 @@ class Search(object):
                     'Missing backend: ambry does not have {} search backend. Using whoosh search.'
                     .format(backend_name))
                 backend_name = 'whoosh'
+
 
             backend = BACKENDS[backend_name](library)
 

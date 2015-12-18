@@ -28,7 +28,7 @@ from ambry.util import Constant
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
 
 
-class Partition(Base, DictableMixin):
+class Partition(Base):
     __tablename__ = 'partitions'
 
     STATES = Constant()
@@ -286,6 +286,82 @@ class Partition(Base, DictableMixin):
         self.grain_coverage = sorted(str(g) for g in grains if g)
 
     @property
+    def geo_description(self):
+        """Return a description of the geographic extents, using the largest scale
+        space and grain coverages"""
+        from geoid.civick import GVid
+
+        sc = self.space_coverage
+        gc = self.grain_coverage
+
+        if sc and gc:
+            return ("{} in {}".format(
+                GVid.parse(gc[0]).level_plural.title(),
+                GVid.parse(sc[0]).geo_name))
+        elif sc:
+            return GVid.parse(sc[0]).geo_name.title()
+        elif sc:
+            return GVid.parse(gc[0]).level_plural.title()
+        else:
+            return ''
+
+
+    @property
+    def time_description(self):
+        """String description of the year or year range"""
+
+        tc = [ t for t in self.time_coverage if t]
+
+        if not tc:
+            return ''
+
+        mn = min(tc)
+        mx = max(tc)
+
+        if not mn and not mx:
+            return ''
+        elif mn == mx:
+            return mn
+        else:
+            return "{} to {}".format(mn, mx)
+
+
+    @property
+    def sub_description(self):
+        """Time and space dscription"""
+        gd = self.geo_description
+        td = self.time_description
+
+        if gd and td:
+            return '{}, {}'.format(gd, td)
+        elif gd:
+            return gd
+        elif td:
+            return td
+        else:
+            return ''
+
+    @property
+    def dict(self):
+        """A dict that holds key/values for all of the properties in the
+        object.
+
+        :return:
+
+        """
+        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs
+             if p.key not in ('table', 'dataset', '_codes', 'stats', 'data', 'process_records')}
+
+        if self.data:
+            # Copy data fields into top level dict, but don't overwrite existind values.
+            for k, v in six.iteritems(self.data):
+                if k not in d and k not in ('table', 'stats', '_codes', 'data'):
+                    d[k] = v
+
+        return d
+
+
+    @property
     def stats_dict(self):
 
         class Bunch(object):
@@ -513,15 +589,17 @@ class Partition(Base, DictableMixin):
                 if ps:
                     ps.update_done()
 
-
     @property
     def reader(self):
         from ambry.orm.exc import NotFoundError
         from fs.errors import ResourceNotFoundError
         """The reader for the datafile"""
 
-        return self.datafile.reader
-
+        try:
+            return self.datafile.reader
+        except ResourceNotFoundError:
+            raise NotFoundError("Failed to find partition file, '{}' "
+                                .format(self.datafile.path))
 
     def select(self, predicate=None, headers=None):
         """

@@ -1933,7 +1933,7 @@ Caster Code
 
             # Run the final routines at the end of the pipelin
             for f in pl.final:
-                ps.update(message='Run final routine: {}'.format(f))
+                ps.update(message='Run final routine: {}'.format(f.__name__))
                 f(pl)
 
 
