@@ -295,9 +295,12 @@ class Partition(Base):
         gc = self.grain_coverage
 
         if sc and gc:
-            return ("{} in {}".format(
-                GVid.parse(gc[0]).level_plural.title(),
-                GVid.parse(sc[0]).geo_name))
+            if GVid.parse(gc[0]).level == 'state' and GVid.parse(sc[0]).level == 'state':
+                return GVid.parse(sc[0]).geo_name
+            else:
+                return ("{} in {}".format(
+                    GVid.parse(gc[0]).level_plural.title(),
+                    GVid.parse(sc[0]).geo_name))
         elif sc:
             return GVid.parse(sc[0]).geo_name.title()
         elif sc:

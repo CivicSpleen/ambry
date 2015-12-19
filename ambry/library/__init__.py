@@ -482,7 +482,7 @@ class Library(object):
             ps.add(message='Setting metadata')
             ident = json.dumps(b.identity.dict)
             remote.setcontents(os.path.join('_meta', 'vid', b.identity.vid), ident)
-            remote.setcontents(os.path.join('_meta', 'id', b.identity.id), ident)
+            remote.setcontents(os.path.join('_meta', 'id', b.identity.id_), ident)
             remote.setcontents(os.path.join('_meta', 'vname', text_type(b.identity.vname)), ident)
             remote.setcontents(os.path.join('_meta', 'name', text_type(b.identity.name)), ident)
             ps.update(state='done')

@@ -30,6 +30,7 @@ def bundle_command(args, rc):
     if args.test_library:
         rc.set_library_database('test')
 
+
     l = Library(rc, echo=args.echo)
 
     global global_library

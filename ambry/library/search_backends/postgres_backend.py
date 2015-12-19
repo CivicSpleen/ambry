@@ -16,7 +16,28 @@ logger = get_logger(__name__)
 # logger.setLevel(logging.DEBUG)
 
 
+class PostgresExecMixin(object):
+
+    def execute(self,*args, **kwargs):
+
+        self.backend.library.database.set_connection_search_path()
+
+        return self.backend.library.database.connection.execute(*args, **kwargs)
+
+
+    def has_table(self, table_name):
+        from sqlalchemy.engine.reflection import Inspector
+
+        self.backend.library.database.set_connection_search_path()
+
+        inspector = Inspector.from_engine(self.backend.library.database.engine)
+
+        table_names = inspector.get_table_names(self.backend.library.database._schema)
+
+        return table_name in table_names
+
 class PostgreSQLSearchBackend(BaseSearchBackend):
+
 
     def _get_dataset_index(self):
         """ Returns initialized dataset index. """
@@ -74,7 +95,7 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
         return keywords
 
 
-class DatasetPostgreSQLIndex(BaseDatasetIndex):
+class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
 
     def __init__(self, backend=None):
         assert backend is not None, 'backend argument can not be None.'
@@ -95,7 +116,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
         assert isinstance(query, TextClause)
-        results = self.backend.library.database.connection.execute(query, **query_params)
+        results = self.execute(query, **query_params)
         datasets = {}
 
         def make_result(vid=None, b_score=0, p_score=0):
@@ -127,11 +148,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         # create table for dataset documents. Create special table for search to make it easy to replace one
         # FTS engine with another.
 
-        from sqlalchemy.engine.reflection import Inspector
-
-        inspector = Inspector.from_engine(self.backend.library.database.engine)
-
-        if 'dataset_index' in inspector.get_table_names():
+        if self.has_table('dataset_index'):
             return
 
         logger.debug('Creating dataset FTS table and index.')
@@ -145,26 +162,26 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             );
         """
 
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
         # create FTS index on doc field.
         query = """\
             CREATE INDEX dataset_index_doc_idx ON dataset_index USING gin(doc);
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
         # Create index on keyword field
         query = """\
             CREATE INDEX dataset_index_keywords_idx on dataset_index USING gin(keywords);
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
     def reset(self):
         """ Drops index table. """
         query = """
             DROP TABLE dataset_index;
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
     def is_indexed(self, dataset):
         """ Returns True if dataset is already indexed. Otherwise returns False.
@@ -180,7 +197,8 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             FROM dataset_index
             WHERE vid = :vid;
         """)
-        result = self.backend.library.database.connection.execute(query, vid=dataset.vid)
+        result = self.execute(query, vid=dataset.vid)
+
         return bool(result.fetchall())
 
     def all(self):
@@ -191,7 +209,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             SELECT vid
             FROM dataset_index;""")
 
-        for result in self.backend.library.database.connection.execute(query):
+        for result in self.execute(query):
             res = DatasetSearchResult()
             res.vid = result[0]
             res.b_score = 1
@@ -204,7 +222,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             INSERT INTO dataset_index(vid, title, keywords, doc)
             VALUES(:vid, :title, string_to_array(:keywords, ' '), to_tsvector('english', :doc));
         """)
-        self.backend.library.database.connection.execute(query, **document)
+        self.execute(query, **document)
 
     def _make_query_from_terms(self, terms, limit=None):
         """ Creates a query for dataset from decomposed search terms.
@@ -268,10 +286,10 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             DELETE FROM dataset_index
             WHERE vid = :vid;
         """)
-        self.backend.library.database.connection.execute(query, vid=vid)
+        self.execute(query, vid=vid)
 
 
-class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
+class IdentifierPostgreSQLIndex(BaseIdentifierIndex,PostgresExecMixin):
 
     def __init__(self, backend=None):
         assert backend is not None, 'backend argument can not be None.'
@@ -306,7 +324,9 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
 
         query = text('\n'.join(query_parts))
 
-        results = self.backend.library.database.connection.execute(query, **query_params).fetchall()
+        self.backend.library.database.set_connection_search_path()
+
+        results = self.execute(query, **query_params).fetchall()
         for result in results:
             vid, type, name, score = result
             yield IdentifierSearchResult(
@@ -320,15 +340,11 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
             INSERT INTO identifier_index(identifier, type, name)
             VALUES(:identifier, :type, :name);
         """)
-        self.backend.library.database.connection.execute(query, **identifier)
+        self.execute(query, **identifier)
 
     def create(self):
 
-        from sqlalchemy.engine.reflection import Inspector
-
-        inspector = Inspector.from_engine(self.backend.library.database.engine)
-
-        if 'identifier_index' in inspector.get_table_names():
+        if self.has_table('identifier_index'):
             return
 
         logger.debug('Creating identifier FTS table.')
@@ -339,20 +355,20 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
                 type VARCHAR(256) NOT NULL,
                 name TEXT);
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
         # create index for name.
         query = """
             CREATE INDEX identifier_index_name_idx ON identifier_index USING gist (name gist_trgm_ops);
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
     def reset(self):
         """ Drops identifier index table. """
         query = """
             DROP TABLE identifier_index;
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
     def _delete(self, identifier=None):
         """ Deletes given identifier from index.
@@ -365,7 +381,7 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
             DELETE FROM identifier_index
             WHERE identifier = :identifier;
         """)
-        self.backend.library.database.connection.execute(query, identifier=identifier)
+        self.execute(query, identifier=identifier)
 
     def is_indexed(self, identifier):
         """ Returns True if identifier is already indexed. Otherwise returns False. """
@@ -374,7 +390,7 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
             FROM identifier_index
             WHERE identifier = :identifier;
         """)
-        result = self.backend.library.database.connection.execute(query, identifier=identifier['identifier'])
+        result = self.execute(query, identifier=identifier['identifier'])
         return bool(result.fetchall())
 
     def all(self):
@@ -385,7 +401,7 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
             SELECT identifier, type, name
             FROM identifier_index;""")
 
-        for result in self.backend.library.database.connection.execute(query):
+        for result in self.execute(query):
             vid, type_, name = result
             res = IdentifierSearchResult(
                 score=1, vid=vid, type=type_, name=name)
@@ -393,7 +409,7 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
         return identifiers
 
 
-class PartitionPostgreSQLIndex(BasePartitionIndex):
+class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
 
     def __init__(self, backend=None):
         assert backend is not None, 'backend argument can not be None.'
@@ -493,9 +509,12 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
         assert isinstance(query, TextClause)
 
-        if query.text:
 
-            results = self.backend.library.database.connection.execute(query, **query_params)
+        if query is not None:
+
+            self.backend.library.database.set_connection_search_path()
+
+            results = self.execute(query, **query_params)
 
             for result in results:
                 vid, dataset_vid, score = result
@@ -536,16 +555,11 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
                 to_tsvector('english', :doc),
                 :from_year, :to_year); """)
 
-        self.backend.library.database.connection.execute(
-            query, from_year=from_year, to_year=to_year, **document)
+        self.execute(query, from_year=from_year, to_year=to_year, **document)
 
     def create(self):
 
-        from sqlalchemy.engine.reflection import Inspector
-
-        inspector = Inspector.from_engine(self.backend.library.database.engine)
-
-        if 'partition_index' in inspector.get_table_names():
+        if self.has_table('partition_index'):
             return
 
         logger.debug('Creating partition FTS table.')
@@ -562,26 +576,26 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
                 doc tsvector
             );
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
         # create FTS index on doc field.
         query = """\
             CREATE INDEX partition_index_doc_idx ON partition_index USING gin(doc);
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
         # Create index on keywords field
         query = """\
             CREATE INDEX partition_index_keywords_idx on partition_index USING gin(keywords);
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
     def reset(self):
         """ Drops index table. """
         query = """
             DROP TABLE partition_index;
         """
-        self.backend.library.database.connection.execute(query)
+        self.execute(query)
 
     def _delete(self, vid=None):
         """ Deletes partition with given vid from index.
@@ -595,7 +609,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             DELETE FROM partition_index
             WHERE vid = :vid;
         """)
-        self.backend.library.database.connection.execute(query, vid=vid)
+        self.execute(query, vid=vid)
 
     def is_indexed(self, partition):
         """ Returns True if partition is already indexed. Otherwise returns False. """
@@ -604,7 +618,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             FROM partition_index
             WHERE vid = :vid;
         """)
-        result = self.backend.library.database.connection.execute(query, vid=partition.vid)
+        result = self.execute(query, vid=partition.vid)
         return bool(result.fetchall())
 
     def all(self):
@@ -615,7 +629,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             SELECT dataset_vid, vid
             FROM partition_index;""")
 
-        for result in self.backend.library.database.connection.execute(query):
+        for result in self.execute(query):
             dataset_vid, vid = result
             partitions.append(PartitionSearchResult(dataset_vid=dataset_vid, vid=vid, score=1))
         return partitions

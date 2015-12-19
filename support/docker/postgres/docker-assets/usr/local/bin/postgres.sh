@@ -50,6 +50,10 @@ create_user () {
 
     echo "CREATE EXTENSION pg_trgm;" | psql -d $SCHEMA
 
+    # Prevents error:   operator class "gist_trgm_ops" does not exist for access method "gist"
+    echo "alter extension pg_trgm set schema pg_catalog;" | psql -d $SCHEMA
+
+
     # Create .pgpass for use with backups
     echo "localhost:5432:*:$USER:$PASSWORD" > /var/lib/postgresql/.pgpass
     chmod 0600 /var/lib/postgresql/.pgpass

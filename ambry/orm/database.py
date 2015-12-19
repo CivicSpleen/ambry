@@ -243,6 +243,11 @@ class Database(object):
 
         return self._session
 
+    def set_connection_search_path(self):
+
+        if self._schema:
+            self.connection.execute('SET search_path TO {}'.format(self._schema))
+
     def open(self):
         """ Ensure the database exists and is ready to use. """
 

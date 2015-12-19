@@ -5,7 +5,7 @@ FROM civicknowledge/ambry-base
 
 MAINTAINER Eric Busboom "eric@civicknowledge.org"
 
-ENV AMBRY_IS_REMOTE 1 #rev9
+ENV AMBRY_IS_REMOTE 1
 
 RUN pip install git+https://github.com/CivicKnowledge/ambry_sources.git && \
     pip install git+https://github.com/CivicKnowledge/geoid.git
