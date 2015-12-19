@@ -134,7 +134,6 @@ class TestBase(unittest.TestCase):
         from test import bundle_tests
 
         l = self.library()
-        print l.database.dsn
 
         if clean:
             l.clean()
@@ -224,8 +223,8 @@ class ConfigDatabaseTestBase(TestBase):
         postgres set. Do not use that class for test who requires specific version of the engine.
     """
 
-    @staticmethod  # So it can be called from either setUp or setUpClass
-    def get_rc(rewrite=True):
+    @classmethod
+    def get_rc(cls, rewrite=True):
         """Create a new config file for test and return the RunConfig.
 
          This method will start with the user's default Ambry configuration, but will replace the
@@ -239,12 +238,15 @@ class ConfigDatabaseTestBase(TestBase):
             # create test database and write it to the config.
             test_db = PostgreSQLTestBase._create_postgres_test_db()
             rc.library.database = test_db['test_db_dsn']
+            cls.__is_postgres = True
+        else:
+            cls.__is_postgres = False
         return rc
 
     def tearDown(self):
-        # FIXME: Run for postgres only.
-        # PostgreSQLTestBase._drop_postgres_test_db()
-        pass
+        super(ConfigDatabaseTestBase, self).tearDown()
+        if self.__class__.__is_postgres:
+            PostgreSQLTestBase._drop_postgres_test_db()
 
 
 class PostgreSQLTestBase(TestBase):
