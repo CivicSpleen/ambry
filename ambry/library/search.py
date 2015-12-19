@@ -4,7 +4,7 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
-from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend,PostgreSQLSearchBackend
+from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend, PostgreSQLSearchBackend
 
 # All backends.
 BACKENDS = {
@@ -25,7 +25,7 @@ class Search(object):
 
         if not backend:
             try:
-                backend_name = library.services['search']
+                backend_name = library.config.services.search
                 if not backend_name:
                     # config contains search key without value.
                     raise KeyError
@@ -43,7 +43,6 @@ class Search(object):
                     'Missing backend: ambry does not have {} search backend. Using whoosh search.'
                     .format(backend_name))
                 backend_name = 'whoosh'
-
 
             backend = BACKENDS[backend_name](library)
 
