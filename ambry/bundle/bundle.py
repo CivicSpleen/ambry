@@ -1131,7 +1131,7 @@ Caster Code
 
         synced = 0
 
-        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
+        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST, File.BSFILE.DOC]:
             bsf = self.build_source_files.file(fc)
             if bsf.fs_is_newer:
                 self.log('Syncing {}'.format(bsf.file_name))
@@ -1778,14 +1778,17 @@ Caster Code
 
         try:
             # FIXME: Find appropriate place for sql execution.
-            from ambry.library.warehouse import execute_sql
-            for f in self.dataset.files:
-                if f.path == 'bundle.sql' and f.unpacked_contents:
-                    # close current sqlite connection (pysqlite) because virtual tables implementations
-                    # uses its own connection (apsw)
-                    self.close()
-                    execute_sql(self, f.unpacked_contents)
-                    break
+            # Yes, please, because it's certainyly not here. The import apsw
+            # couses troubles, since it's hard to install on Macs.
+            if False:
+                from ambry.library.warehouse import execute_sql
+                for f in self.dataset.files:
+                    if f.path == 'bundle.sql' and f.unpacked_contents:
+                        # close current sqlite connection (pysqlite) because virtual tables implementations
+                        # uses its own connection (apsw)
+                        self.close()
+                        execute_sql(self, f.unpacked_contents)
+                        break
 
             self._run_events(TAG.BEFORE_BUILD, 0)
 

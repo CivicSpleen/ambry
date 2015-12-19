@@ -92,7 +92,7 @@ The :option:`docker.ambry_image` config specified the image that is used when ru
 
 If you use :command:`docker compose` to create the docker images instead of :command:`python setup.py docker`, these configuration values will be useful to ensure :command:`bambry docker` uses the images created by  :command:`docker compose`.
 
-The UI containers are hard to use if you have to run :command:`docker ps` to find the host port, so it is more useful to setup a web proxy to rount we requests to the host to the UI containers. The ``jwilder/nginx-proxy`` is an easy way set up these proxies automatically. When the ui containers are created, a :envvar:`VIRTUAL_HOST` environmental value is automatically set, so the ``jwilder/nginx-proxy`` can automatically configure a proxy entry. When this proxy is in place, the :option:`docker.ui_domain` is used for the root domain of the virtual host.
+The UI containers are hard to use if you have to run :command:`docker ps` to find the host port, so it is more useful to setup a web proxy to rount we requests to the host to the UI containers. The ``jwilder/nginx-proxy`` is an easy way set up these proxies automatically. When the ui containers are created, a :envvar:`VIRTUAL_HOST` environmental variable is automatically set, so the ``jwilder/nginx-proxy`` can automatically configure a proxy entry. When this proxy is in place, the :option:`docker.ui_domain` is used for the root domain of the virtual host.
 
 .. code-block:: yaml
 
@@ -107,6 +107,12 @@ Other Issues
 
 UI Proxies
 ----------
+
+To run a  UI proxy that will automatically configure from the UI containers' :envvar:`VIRTUAL_HOST` environmental variable:
+
+.. code-block:: bash
+
+    $ docker run -d -p 80:80 -v /var/run/docker.sock:/tmp/docker.sock:ro jwilder/nginx-proxy
 
 
 
