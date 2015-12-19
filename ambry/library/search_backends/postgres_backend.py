@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.sql.expression import text
 
 from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex,\
@@ -93,6 +94,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
 
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+        assert isinstance(query, TextClause)
         results = self.backend.library.database.connection.execute(query, **query_params)
         datasets = {}
 
@@ -211,7 +213,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
             terms (dict or unicode or string):
 
         Returns:
-            tuple of (str, dict): First element is str with FTS query, second is parameters
+            tuple of (TextClause, dict): First element is FTS query, second is parameters
                 of the query. Element of the execution of the query is pair: (vid, score).
 
         """
@@ -250,7 +252,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
-        q =  text('\n'.join(query_parts)), query_params
+        q = text('\n'.join(query_parts)), query_params
         logger.debug('Dataset search query: {}'.format(q))
         return q
 
@@ -276,7 +278,6 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex):
         super(self.__class__, self).__init__(backend=backend)
 
         self.create()
-
 
     def search(self, search_phrase, limit=None):
         """ Finds identifiers by search phrase.
@@ -407,7 +408,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             terms (dict or unicode or string):
 
         Returns:
-            tuple of (str, dict): First element is str with FTS query, second is
+            tuple of (TextClause, dict): First element is FTS query, second is
             parameters of the query. Element of the execution of the query is
             tuple of three elements: (vid, dataset_vid, score).
 
@@ -477,7 +478,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
 
-
         return text('\n'.join(query_parts)), query_params
 
     def search(self, search_phrase, limit=None):
@@ -491,8 +491,9 @@ class PartitionPostgreSQLIndex(BasePartitionIndex):
             PartitionSearchResult instances.
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+        assert isinstance(query, TextClause)
 
-        if query:
+        if query.text:
 
             results = self.backend.library.database.connection.execute(query, **query_params)
 
