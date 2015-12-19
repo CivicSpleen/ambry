@@ -70,6 +70,7 @@ class ConfigFactory(SQLAlchemyModelFactory):
     group = factory.Sequence(lambda n: '%03d' % n)
     key = factory.Sequence(lambda n: 'key-%03d' % n)
     value = factory.Sequence(lambda n: 'value-%03d' % n)
+    sequence_id = factory.Iterator(list(range(1, 10)))
 
     @classmethod
     def _prepare(cls, create, **kwargs):

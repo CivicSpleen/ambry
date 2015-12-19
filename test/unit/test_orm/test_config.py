@@ -5,21 +5,19 @@ from six import text_type
 
 import fudge
 
-from ambry.library import new_library
 from ambry.orm.config import Config
 
-from test.test_base import TestBase
+from test.test_base import ConfigDatabaseTestBase
 from test.factories import ConfigFactory, DatasetFactory
 
 
-class TestConfig(TestBase):
+class TestConfig(ConfigDatabaseTestBase):
 
     def setUp(self):
         super(TestConfig, self).setUp()
-        rc = self.get_rc()
-        self.library = new_library(rc)
-        ConfigFactory._meta.sqlalchemy_session = self.library.database.session
-        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
+        self._my_library = self.library()
+        ConfigFactory._meta.sqlalchemy_session = self._my_library.database.session
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
 
     # dict tests
     def test_returns_dictionary_representation_of_the_config(self):
@@ -47,7 +45,7 @@ class TestConfig(TestBase):
     # __repr__ tests
     def test_returns_config_repr(self):
         ds = DatasetFactory()
-        self.library.database.session.commit()
+        self._my_library.database.session.commit()
         config1 = ConfigFactory(d_vid=ds.vid)
         repr_str = config1.__repr__()
         self.assertIsInstance(repr_str, text_type)
@@ -58,10 +56,8 @@ class TestConfig(TestBase):
 
     # before_insert tests
     @fudge.patch(
-        'ambry.orm.config.next_sequence_id',
         'ambry.orm.config.Config.before_update')
-    def test_populates_id_field(self, fake_next, fake_before_update):
-        fake_next.expects_call().returns(1)
+    def test_populates_id_field(self, fake_before_update):
         fake_before_update.expects_call()
         ds = DatasetFactory()
         config1 = ConfigFactory.build(d_vid=ds.vid)
