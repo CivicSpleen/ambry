@@ -55,7 +55,7 @@ Postgres extensions notes (Note: If you use virtualenv see DEVEL-README.md)
 Full text search
 ~~~~~~~~~~~~~~~~
 
-Datasets search implemented on top of PostgreSQL requires postgresql-contrib and pg_trgm extension.
+Datasets search implemented on top of PostgreSQL requires postgresql-contrib package and pg_trgm extension.
 
 1. Install postgresql-contrib package.
 
@@ -67,14 +67,20 @@ Datasets search implemented on top of PostgreSQL requires postgresql-contrib and
 
 .. code-block:: bash
     
-    # switch to postgres user
+    # Switch to postgres user
     $ sudo su - postgres
 
-    # create extension
-    $ psql <db_name> -c 'CREATE EXTENSION pg_trgm;'
+    # Create schema for ambry library.
+    $ psql <db_name> -c 'CREATE SCHEMA IF NOT EXISTS ambrylib;'
 
-Foreign Data Wrapper (need to query partition files packed with msgpack.)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Grant all privileges on ambrylib schema to ambry user. Assume database user is ambry.
+    # psql <db_name> -c 'GRANT ALL PRIVILEGES ON SCHEMA ambrylib to ambry;'
+
+    # Create extension
+    $ psql <db_name> -c 'CREATE EXTENSION pg_trgm SCHEMA ambrylib;'
+
+Foreign Data Wrapper (need to query partition files packed with msgpack (mpr files).)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 1. Install multicorn:
 

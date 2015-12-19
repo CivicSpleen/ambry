@@ -10,8 +10,9 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__)
 
-import logging
-#logger.setLevel(logging.DEBUG)
+# debug logging
+# import logging
+# logger.setLevel(logging.DEBUG)
 
 
 class PostgreSQLSearchBackend(BaseSearchBackend):

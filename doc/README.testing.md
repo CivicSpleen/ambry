@@ -96,27 +96,33 @@ database:
 ```
 Note: Do not include database name to the dsn because each test creates new empty database on each run.
 
-    3. Install multicorn and ambryfdw extensions
-Ambry uses custom postgres template because of ambry tests require pg_trgm and multicorn extensions. I do not know how to install extensions on the fly so you need to create the template and install both extensions before running tests. If postgres does not have such template all postgres tests will be skipped.
+    3. Install multicorn and pg_trgm extensions (tested 19.12.2015, on ambry v0.3.1684).
+Ambry uses custom postgres template because ambry tests require pg_trgm and multicorn extensions. I do not know how to install extensions on the fly, so you need to create the template and install both extensions before running tests. If postgres does not have such template all postgres tests will be skipped.
 ```bash
 # Switch to postgres account
-$ sudo su - postgres
+sudo su - postgres
 
 # create template
-$ psql postgres -c 'CREATE DATABASE template0_ambry_test TEMPLATE template0;'
+psql postgres -c 'CREATE DATABASE template0_ambry_test TEMPLATE template0;'
+
+# create ambry library schema
+psql template0_ambry_test -c 'CREATE SCHEMA IF NOT EXISTS ambrylib;'
+
+# Grant all privileges on ambrylib schema to ambry user. Assume database user is ambry.
+psql template0_ambry_test -c 'GRANT ALL PRIVILEGES ON SCHEMA ambrylib to ambry;'
 
 # install extensions
-$ psql template0_ambry_test -c 'CREATE EXTENSION pg_trgm;'
-$ psql template0_ambry_test -c 'CREATE EXTENSION multicorn;'
+psql template0_ambry_test -c 'CREATE EXTENSION pg_trgm SCHEMA ambrylib;'
+psql template0_ambry_test -c 'CREATE EXTENSION multicorn;'
 
 # Create copy permission needed by test framework to create database.
-$ psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_ambry_test';"
+psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_ambry_test';"
 
 # User from the dsn needs USAGE permission (Assuming your db user is ambry)
-$ psql postgres -c "GRANT USAGE ON FOREIGN DATA WRAPPER multicorn TO ambry;"
+psql postgres -c 'GRANT USAGE ON FOREIGN DATA WRAPPER multicorn TO ambry;'
 
 # Exit postgres account
-$ exit
+exit
 ```
 
     4. Run all tests. Note: Do not make previous steps more than once.
