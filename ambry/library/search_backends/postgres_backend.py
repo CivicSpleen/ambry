@@ -507,6 +507,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             PartitionSearchResult instances.
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+
         
         if query is not None:
 
