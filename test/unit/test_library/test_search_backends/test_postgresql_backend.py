@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
-from ambry.library import new_library
+from ambry.orm.database import POSTGRES_SCHEMA_NAME
 from ambry.util import AttrDict
 
 from test.test_base import PostgreSQLTestBase
@@ -47,8 +47,10 @@ class PostgreSQLSearchBackendTest(PostgreSQLBackendBaseTest):
 class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_dataset_index(self):
+        # backend __init__ created the index. Just check here.
         with self._my_library.database._engine.connect() as conn:
-            result = conn.execute('SELECT * FROM dataset_index;').fetchall()
+            query = 'SELECT * FROM {}.dataset_index;'.format(POSTGRES_SCHEMA_NAME)
+            result = conn.execute(query).fetchall()
             self.assertEqual(result, [])
 
     # search() tests
@@ -133,7 +135,8 @@ class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_identifier_index(self):
         with self._my_library.database._engine.connect() as conn:
-            result = conn.execute('SELECT * FROM identifier_index;').fetchall()
+            query = 'SELECT * FROM {}.identifier_index;'.format(POSTGRES_SCHEMA_NAME)
+            result = conn.execute(query).fetchall()
             self.assertEqual(result, [])
 
     # search() tests
@@ -223,7 +226,8 @@ class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_partition_index(self):
         with self._my_library.database._engine.connect() as conn:
-            result = conn.execute('SELECT * from partition_index;').fetchall()
+            query = 'SELECT * FROM {}.partition_index;'.format(POSTGRES_SCHEMA_NAME)
+            result = conn.execute(query).fetchall()
             self.assertEqual(result, [])
 
     # search() tests
