@@ -4,17 +4,17 @@ from ambry.library import new_library
 from ambry.library.warehouse import Warehouse
 
 from test.factories import PartitionFactory
-from test.test_base import TestBase
+from test.test_base import ConfigDatabaseTestBase
 
 try:
     # py2, mock is external lib.
-    from mock import patch, MagicMock
+    from mock import patch
 except ImportError:
     # py3, mock is included
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import patch
 
 
-class WarehouseTest(TestBase):
+class WarehouseTest(ConfigDatabaseTestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
         rc = self.get_rc()
@@ -35,26 +35,31 @@ class WarehouseTest(TestBase):
         # FIXME:
         pass
 
-    @patch('ambry.library.warehouse.Warehouse._install')
-    @patch('ambry.library.warehouse.Warehouse._get_table_name')
-    def test_installs_each_ref_found_in_the_query(self, fake_get, fake_install):
+    def test_sends_query_to_database_backend(self):
         w = Warehouse(self.library)
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition = PartitionFactory()
-        fake_get.return_value = partition.vid
-        w.query('SELECT * FROM {};'.format(partition.vid))
-        fake_install.assert_called_once_with(partition.vid)
+        with patch.object(w._backend, 'query') as fake_query:
+            query = 'SELECT * FROM {};'.format(partition.vid)
+            w.query(query)
 
-    # _get_table_name tests
-    # FIXME:
+            # backend.query called once.
+            self.assertEqual(len(fake_query.mock_calls), 1)
 
-    # _install tests
-    @patch('ambry.library.warehouse.add_partition')
-    @patch('ambry.library.Library.partition')
-    def test_creates_virtual_table_for_given_partition(self, fake_partition, fake_add):
+            # second argument of the call was the same query.
+            self.assertEqual(fake_query.mock_calls[0][1][1], query)
+
+    # install tests
+    def test_finds_partition_by_refs_and_installs_partition_to_backend(self):
         w = Warehouse(self.library)
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition = PartitionFactory()
-        fake_partition.return_value = partition  # FIXME: This should be bundle partition.
-        w._install(partition.vid)
-        self.assertEqual(len(fake_add.mock_calls), 1)
+
+        with patch.object(w._backend, 'install') as fake_install:
+            w.install(partition.vid)
+
+            # backend.query called once.
+            self.assertEqual(len(fake_install.mock_calls), 1)
+
+            # second argument of the is found partition.
+            self.assertEqual(fake_install.mock_calls[0][1][1].ref, partition.ref)
