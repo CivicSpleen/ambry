@@ -4,13 +4,16 @@ This file is licensed under the terms of the Revised BSD License,
 included in this distribution as LICENSE.txt
 
 """
-from six import iteritems
 
-from ..cli import prt, err, fatal, warn, _print_info  # @UnresolvedImport
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'library'
+
+from six import iteritems
+from ..cli import prt, err, fatal, warn  # @UnresolvedImport
 from ambry.util import Progressor
 
 
-def library_parser(cmd):
+def make_parser(cmd):
     import argparse
 
     #
@@ -21,37 +24,11 @@ def library_parser(cmd):
 
     asp = lib_p.add_subparsers(title='library commands', help='command help')
 
-    sp = asp.add_parser('push', help='Push new library files')
-    sp.set_defaults(subcommand='push')
-    sp.add_argument('-w', '--watch', default=False, action='store_true',
-                    help='Check periodically for new files.')
-    sp.add_argument('-f', '--force', default=False, action='store_true', help='Push all files')
-    sp.add_argument('-n', '--dry-run', default=False, action='store_true',
-                    help="Dry run, don't actually send the files.")
-
-    sp = asp.add_parser('files', help='Print out files in the library')
-    sp.set_defaults(subcommand='files')
-    sp.add_argument('-a', '--all', default='all', action='store_const', const='all', dest='file_state',
-                    help='Print all files')
-    sp.add_argument('-n', '--new', default=False, action='store_const', const='new', dest='file_state',
-                    help='Print new files')
-    sp.add_argument('-p', '--pushed', default=False, action='store_const', const='pushed', dest='file_state',
-                    help='Print pushed files')
-    sp.add_argument('-u', '--pulled', default=False, action='store_const', const='pulled', dest='file_state',
-                    help='Print pulled files')
-    sp.add_argument('-s', '--synced', default=False, action='store_const', const='synced', dest='file_state',
-                    help='Print synced source packages')
-
-    sp = asp.add_parser('new', help='Create a new library')
-    sp.set_defaults(subcommand='new')
-
     sp = asp.add_parser('drop', help='Delete all of the tables in the library')
     sp.set_defaults(subcommand='drop')
 
     sp = asp.add_parser('clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
-
-
     sp.add_argument('-a', '--all', default=False, action='store_true', help='Sync everything')
     sp.add_argument('-l', '--library', default=False, action='store_true', help='Sync the library')
     sp.add_argument('-r', '--remote', default=False, action='store_true', help='Sync the remote')
@@ -90,10 +67,6 @@ def library_parser(cmd):
     sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
                     help='Name or ID of the bundle or partition to remove')
 
-    whsp = asp.add_parser('config', help='Configure varibles')
-    whsp.set_defaults(subcommand='config')
-    whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
-
     sp = asp.add_parser('number', help='Return a new number from the number server')
     sp.set_defaults(subcommand='number')
     sp.add_argument('-k', '--key', default='self',
@@ -106,7 +79,7 @@ def library_parser(cmd):
     sp.add_argument('-b', '--blocks', default=False, action='store_true',
                     help='List locks that are blocked or are blocking another process')
 
-def library_command(args, rc):
+def run_command(args, rc):
     from ..library import new_library
     from . import global_logger
     from ambry.orm.exc import NotFoundError
@@ -229,132 +202,12 @@ def library_remove(args, l, config):
 
         l.database.commit()
 
-
-
-def library_push(args, l, config):
-    from ..orm import Dataset
-    import time
-    from functools import partial
-    from boto.exception import S3ResponseError
-    from collections import defaultdict
-
-    if args.force:
-        files = [(f.ref, f.type_) for f in l.files.query.installed.all]
-    else:
-
-        files = [(f.ref, f.type_) for f in l.files.query.installed.state('new').all]
-
-    remote_errors = defaultdict(int)
-
-    def push_cb(rate, note, md, t):
-        if note == 'Has':
-            prt("{} {}", note, md['fqname'])
-        elif note == 'Pushing':
-            prt("{} {}  {} KB/s ", note, md['fqname'], rate)
-        elif note == 'Pushed':
-            pass
-        else:
-            prt("{} {}", note, md['fqname'])
-
-    if len(files):
-
-        total_time = 0.0
-        total_size = 0.0
-        rate = 0
-
-        # start = time.clock()
-        for ref, t in files:
-
-            if t not in (Dataset.LOCATION.LIBRARY, Dataset.LOCATION.PARTITION):
-                continue
-
-            bp = l.resolve(ref)
-
-            if not bp:
-                err("Failed to resolve file ref to bundle {} ".format(ref))
-                continue
-
-            b = l.bundle(bp.vid)
-
-            remote_name = b.metadata.about.access
-
-            if remote_name not in l.remotes:
-                err("Can't push {} (bundle: '{}' ); no remote named '{}' ".format(ref, bp.vname, remote_name))
-                continue
-
-            if remote_errors[remote_name] > 4:
-                err("Too many errors on remote '{}', skipping ".format(remote_name))
-                continue
-
-            remote = l.remotes[remote_name]
-
-            try:
-                what, start, end, size = l.push(remote, ref, cb=partial(push_cb, rate), dry_run=args.dry_run)
-            except S3ResponseError:
-                err("Failed to push to remote '{}' ".format(remote_name))
-                remote_errors[remote_name] += 1
-                continue
-
-            except Exception as e:
-                prt("Failed: {}", e)
-                raise
-
-            if what == 'pushed':
-                total_time += end - start
-                total_size += size
-
-                if total_time > 0:
-                    rate = int(float(total_size) / float(total_time) / 1024.0)
-                else:
-                    rate = 0
-
-    # Update the list file. This file is required for use with HTTP access, since you can't get
-    # a list otherwise.
-    for remote_name, remote in iteritems(l.remotes):
-        prt('  {}'.format(remote.repo_id))
-
-        if not args.dry_run:
-            remote.store_list()
-
-
-def library_get(args, l, config):
-    ident = l.resolve(args.term)
-
-    if not ident:
-        fatal("Could not resolve term {} ", args.term)
-
-    # This will fetch the data, but the return values aren't quite right
-    prt("get: {}".format(ident.vname))
-    b = l.get(
-        args.term,
-        force=args.force,
-        cb=Progressor('Download {}'.format(args.term)).progress)
-
-    if not b:
-        fatal("Download failed: {}", args.term)
-
-    ident = b.identity
-
-    if b.partition:
-        ident.add_partition(b.partition.identity)
-
-    elif b.partitions:
-        for p in b.partitions:
-            prt("get: {}".format(p.identity.vname))
-            l.get(p.identity.vid)
-
-        b.partition = None
-
-    _print_info(l, ident)
-
-    return b
-
 def library_number(args, l, config):
     print(l.number(assignment_class=args.key))
 
-
-
 def library_pg(args, l, config):
+    """Report on the operation of a Postgres Library database"""
+
     db = l.database
     import tabulate
     import terminaltables

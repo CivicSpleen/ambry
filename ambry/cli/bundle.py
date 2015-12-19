@@ -5,6 +5,10 @@ This file is licensed under the terms of the Revised BSD License,
 included in this distribution as LICENSE.txt
 
 """
+
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'bundle'
+
 import yaml
 from six import iteritems, iterkeys, callable as six_callable, text_type, binary_type
 from tabulate import tabulate
@@ -14,120 +18,14 @@ from ambry.bundle import Bundle
 from ambry.identity import NotObjectNumberError
 from ambry.orm.exc import NotFoundError
 from ambry.util import drop_empty
-from . import get_docker_links, docker_client
+
 from fs.opener import fsopendir
 from ..cli import prt, fatal, warn, prt_no_format
 from ..orm import File
 
 
-def bundle_command(args, rc):
 
-    from ..library import Library
-    from . import global_logger
-    from ambry.orm.exc import ConflictError
-    from ambry.dbexceptions import LoggedException
-
-    if args.test_library:
-        rc.set_library_database('test')
-
-
-    l = Library(rc, echo=args.echo)
-
-    global global_library
-
-    global_library = l
-
-    l.logger = global_logger
-
-    l.sync_config()
-
-    if args.debug:
-        from ..util import debug
-        warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
-        debug.listen()
-
-    if args.processes:
-        args.multi = args.processes
-        l.processes = args.processes
-
-    try:
-        globals()['bundle_' + args.subcommand](args, l, rc)
-    except ConflictError as e:
-        fatal(str(e))
-    except LoggedException as e:
-        exc = e.exc
-        b = e.bundle
-        b.fatal(str(e.message))
-
-
-def get_bundle_ref(args, l, use_history=False):
-    """ Use a variety of methods to determine which bundle to use
-
-    :param args:
-    :return:
-    """
-
-    if not use_history:
-        if args.id:
-            return (args.id, '-i argument')
-
-        try:
-            if args.ref:
-                l.bundle(args.ref)  # Exception if not exists
-                return (args.ref, 'argument')
-        except (AttributeError, NotFoundError, NotObjectNumberError):
-            pass
-
-        if 'AMBRY_BUNDLE' in os.environ:
-            return (os.environ['AMBRY_BUNDLE'], 'environment')
-
-        cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
-
-        if os.path.exists(cwd_bundle):
-
-            with open(cwd_bundle) as f:
-                config = yaml.load(f)
-                try:
-                    id_ = config['identity']['id']
-                    return (id_, 'directory')
-                except KeyError:
-                    pass
-
-    history = l.edit_history()
-
-    if history:
-        return (history[0].d_vid, 'history')
-
-    return None, None
-
-
-def using_bundle(args, l, print_loc=True, use_history=False):
-
-    ref, frm = get_bundle_ref(args, l, use_history=use_history)
-
-    if not ref:
-        fatal("Didn't get a bundle ref from the -i option, history, environment or argument")
-
-    if print_loc:
-        prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
-
-    b = l.bundle(ref, True)
-
-    b.multi = args.multi
-    b.capture_exceptions = not args.exceptions
-
-    if args.debug:
-        warn('Bundle debug mode. Send USR2 signal (kill -USR2 ) to displaya stack trace')
-        l.init_debug()
-
-    if args.limited_run:
-        b.limited_run = True
-    if print_loc:  # Try to only do this once
-        b.log_to_file('==============================')
-    return b
-
-
-def bundle_parser(cmd):
+def make_parser(cmd):
     import argparse
 
     parser = cmd.add_parser('bundle', help='Manage bundle files')
@@ -512,6 +410,114 @@ def bundle_parser(cmd):
                        help='Display states and counts of partitions and sources')
     command_p.add_argument('-a', '--all', default=None, action='store_true',
                            help='Display all records')
+
+
+def run_command(args, rc):
+
+    from ..library import Library
+    from . import global_logger
+    from ambry.orm.exc import ConflictError
+    from ambry.dbexceptions import LoggedException
+
+    if args.test_library:
+        rc.set_library_database('test')
+
+
+    l = Library(rc, echo=args.echo)
+
+    global global_library
+
+    global_library = l
+
+    l.logger = global_logger
+
+    l.sync_config()
+
+    if args.debug:
+        from ..util import debug
+        warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
+        debug.listen()
+
+    if args.processes:
+        args.multi = args.processes
+        l.processes = args.processes
+
+    try:
+        globals()['bundle_' + args.subcommand](args, l, rc)
+    except ConflictError as e:
+        fatal(str(e))
+    except LoggedException as e:
+        exc = e.exc
+        b = e.bundle
+        b.fatal(str(e.message))
+
+
+
+def get_bundle_ref(args, l, use_history=False):
+    """ Use a variety of methods to determine which bundle to use
+
+    :param args:
+    :return:
+    """
+
+    if not use_history:
+        if args.id:
+            return (args.id, '-i argument')
+
+        try:
+            if args.ref:
+                l.bundle(args.ref)  # Exception if not exists
+                return (args.ref, 'argument')
+        except (AttributeError, NotFoundError, NotObjectNumberError):
+            pass
+
+        if 'AMBRY_BUNDLE' in os.environ:
+            return (os.environ['AMBRY_BUNDLE'], 'environment')
+
+        cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
+
+        if os.path.exists(cwd_bundle):
+
+            with open(cwd_bundle) as f:
+                config = yaml.load(f)
+                try:
+                    id_ = config['identity']['id']
+                    return (id_, 'directory')
+                except KeyError:
+                    pass
+
+    history = l.edit_history()
+
+    if history:
+        return (history[0].d_vid, 'history')
+
+    return None, None
+
+
+def using_bundle(args, l, print_loc=True, use_history=False):
+
+    ref, frm = get_bundle_ref(args, l, use_history=use_history)
+
+    if not ref:
+        fatal("Didn't get a bundle ref from the -i option, history, environment or argument")
+
+    if print_loc:
+        prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
+
+    b = l.bundle(ref, True)
+
+    b.multi = args.multi
+    b.capture_exceptions = not args.exceptions
+
+    if args.debug:
+        warn('Bundle debug mode. Send USR2 signal (kill -USR2 ) to displaya stack trace')
+        l.init_debug()
+
+    if args.limited_run:
+        b.limited_run = True
+    if print_loc:  # Try to only do this once
+        b.log_to_file('==============================')
+    return b
 
 
 
@@ -1472,6 +1478,7 @@ def bundle_docker(args, l, rc):
     import os
     import sys
     from docker.errors import NotFound, NullResource
+    from dockr import get_docker_links, docker_client
 
     username, dsn, volumes_c, db_c, envs = get_docker_links(rc)
 

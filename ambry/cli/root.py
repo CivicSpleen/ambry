@@ -5,11 +5,14 @@ included in this distribution as LICENSE.txt
 
 """
 
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'root'
+
 from ..cli import warn
 from . import prt
 from six import print_
 
-def root_parser(cmd):
+def make_parser(cmd):
     import argparse
 
     sp = cmd.add_parser('list', help='List bundles and partitions')
@@ -106,8 +109,7 @@ def root_parser(cmd):
     sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
 
 
-
-def root_command(args, rc):
+def run_command(args, rc):
     from ..library import new_library
     from . import global_logger
     from ambry.orm.exc import DatabaseError

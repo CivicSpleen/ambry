@@ -6,8 +6,10 @@ included in this distribution as LICENSE.txt
 """
 from six import iteritems
 
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'util'
 
-def util_parser(cmd):
+def make_parser(cmd):
 
     #
     # Library Command
@@ -40,7 +42,7 @@ def util_parser(cmd):
     sp.add_argument('-c', '--csv', default=False, action='store_true', help='Output to CSV')
 
 
-def util_command(args, rc):
+def run_command(args, rc):
     from ..library import new_library
     from . import global_logger
 

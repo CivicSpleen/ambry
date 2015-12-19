@@ -8,15 +8,12 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 import argparse
 import logging
-import os.path
 
-from six import itervalues
-from six import print_
-
-from ambry.run import get_runconfig
 import ambry._meta
+import os.path
+from ambry.run import get_runconfig
+from six import print_
 from ..util import get_logger
-
 
 # The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set. It gets set
 # by the CLI when the user assigns a specific configuration to use instead
@@ -27,7 +24,6 @@ global_logger = None  # Set in main()
 
 # Name of the evironmental var for the config file.
 AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
-
 
 def prt_no_format(template, *args, **kwargs):
     # global global_logger
@@ -71,200 +67,9 @@ def warn(template, *args, **kwargs):
         global_logger.warning(';'.join(str(e) for e in [template] + list(args) + list(kwargs.items())))
 
 
-def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=None):
-    fields = fields or []
-    from datetime import datetime
 
-    record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
-
-    def deps(ident):
-        if not ident.data:
-            return '.'
-        if 'dependencies' not in ident.data:
-            return '.'
-        if not ident.data['dependencies']:
-            return '0'
-        return str(len(ident.data['dependencies']))
-
-    all_fields = [
-        # Name, width, d_format_string, p_format_string, extract_function
-        ('deps', '{:3s}', '{:3s}', lambda ident: deps(ident)),
-        ('order', '{:6s}', '{:6s}',
-         lambda ident: "{major:02d}:{minor:02d}".format(
-             **ident.data['order'] if 'order' in ident.data else {'major': -1, 'minor': -1})
-         ),
-        ('locations', '{:6s}', '{:6s}', lambda ident: ident.locations),
-        ('pcount', '{:5s}', '{:5s}',
-         lambda ident: str(len(ident.partitions)) if ident.partitions else ''),
-        ('vid', '{:18s}', '{:20s}', lambda ident: ident.vid),
-        ('time', '{:20s}', '{:20s}', lambda ident: datetime.fromtimestamp(
-            ident.data['time']).isoformat() if 'time' in ident.data else ''),
-        ('status', '{:20s}', '{:20s}',
-         lambda ident: ident.bundle_state if ident.bundle_state else ''),
-        ('vname', '{:40s}', '    {:40s}', lambda ident: ident.vname),
-        ('sname', '{:40s}', '    {:40s}', lambda ident: ident.sname),
-        ('fqname', '{:40s}', '    {:40s}', lambda ident: ident.fqname),
-        ('source_path', '{:s}', '    {:s}', lambda ident: ident.source_path),
-    ]
-
-    if not fields:
-        fields = ['locations', 'vid', 'vname']
-
-    d_format = ""
-    p_format = ""
-    extractors = []
-
-    for e in all_fields:
-        # Just to make the following code easier to read
-        e = dict(list(zip(record_entry_names, e)))
-
-        if e['name'] not in fields:
-            continue
-
-        d_format += e['d_format']
-        p_format += e['p_format']
-
-        extractors.append(e['extractor'])
-
-    prtf(d_format, *[f(ident) for f in extractors])
-
-    if show_partitions and ident.partitions:
-
-        for pi in itervalues(ident.partitions):
-            prtf(p_format, *[f(pi) for f in extractors])
-
-
-def _print_bundle_list(idents, subset_names=None, prtf=prt, fields=None, show_partitions=False, sort=True):
-    """Create a nice display of a list of source packages."""
-    fields = fields or []
-    if sort:
-        idents = sorted(idents, key=lambda i: i.sname)
-
-    for ident in idents:
-        _print_bundle_entry(ident, prtf=prtf, fields=fields, show_partitions=show_partitions)
-
-
-def _print_info(l, ident, list_partitions=False):
-    from ..identity import LocationRef
-
-    resolved_ident = l.resolve(
-        ident.vid,
-        None)  # Re-resolve to get the URL or Locations
-
-    if not resolved_ident:
-        fatal("Failed to resolve while trying to print: {}", ident.vid)
-
-    d = ident
-
-    prt("D --- Dataset ---")
-    prt("D Vid       : {}", d.vid)
-    prt("D Vname     : {}", d.vname)
-    prt("D Fqname    : {}", d.fqname)
-    prt("D Locations : {}", str(resolved_ident.locations))
-    prt("P Is Local  : {}",
-        (l.cache.has(d.cache_key) is not False) if d else '')
-    prt("D Rel Path  : {}", d.cache_key)
-    prt("D Abs Path  : {}", l.cache.path(d.cache_key, missing_ok=True))
-    if d.url:
-        prt("D Web Path  : {}", d)
-
-    #
-    # For Source Bundles
-    #
-
-    if resolved_ident.locations.has(LocationRef.LOCATION.SOURCE):
-
-        bundle = l.source.resolve_build_bundle(d.vid) if l.source else None
-
-        if l.source:
-            if bundle:
-                prt('B Bundle Dir: {}', bundle.bundle_dir)
-            else:
-                source_dir = l.source.source_path(d.vid)
-                prt('B Source Dir: {}', source_dir)
-
-        if bundle and bundle.is_built:
-            process = bundle.get_value_group('process')
-            prt('B Partitions: {}', bundle.partitions.count)
-            prt('B Created   : {}', process.get('dbcreated', ''))
-            prt('B Prepared  : {}', process.get('prepared', ''))
-            prt('B Built     : {}', process.get('built', ''))
-            prt('B Build time: {}',
-                str(round(float(process['buildtime']),
-                          2)) + 's' if process.get('buildtime',
-                                                   False) else '')
-
-    else:
-
-        bundle = l.get(d.vid)
-
-        process = bundle.get_value_group('process')
-        prt('B Partitions: {}', bundle.partitions.count)
-        prt('B Created   : {}', process.get('dbcreated', ''))
-        prt('B Prepared  : {}', process.get('prepared', ''))
-        prt('B Built     : {}', process.get('built', ''))
-        prt('B Build time: {}',
-            str(round(float(process['buildtime']),
-                      2)) + 's' if process.get('buildtime',
-                                               False) else '')
-
-    if ident.partitions:
-
-        if len(ident.partitions) == 1:
-
-            ds_ident = l.resolve(ident.partition.vid, location=None)
-
-            # This happens when the dataset is not in the local library, I
-            # think ...
-            if not ds_ident:
-                return
-
-            resolved_ident = ds_ident.partition
-            p = ident.partition
-            prt("P --- Partition ---")
-            prt("P Partition : {}; {}", p.vid, p.vname)
-            prt("P Is Local  : {}", (
-                l.cache.has(p.cache_key) is not False) if p else '')
-            prt("P Rel Path  : {}", p.cache_key)
-            prt("P Abs Path  : {}", l.cache.path(p.cache_key, missing_ok=True))
-            prt("P G Cover   : {}", p.data.get('geo_coverage', ''))
-            prt("P G Grain   : {}", p.data.get('geo_grain', ''))
-            prt("P T Cover   : {}", p.data.get('time_coverage', ''))
-
-            if resolved_ident.url:
-                prt("P Web Path  : {}", resolved_ident.url)
-
-        elif list_partitions:
-            prt("D Partitions: {}", len(ident.partitions))
-            for p in sorted(list(ident.partitions.values()), key=lambda x: x.vname):
-                prt("P {:15s} {}", p.vid, p.vname)
-
-
-def _print_bundle_info(bundle=None, ident=None):
-    if ident is None and bundle:
-        ident = bundle.identity
-
-    prt('Name      : {}', ident.vname)
-    prt('Id        : {}', ident.vid)
-
-    if bundle:
-        prt('Dir       : {}', bundle.bundle_dir)
-    else:
-        prt('URL       : {}', ident.url)
-
-    if bundle and bundle.is_built:
-        d = dict(bundle.db_config.dict)
-        process = d['process']
-
-        prt('Created   : {}', process.get('dbcreated', ''))
-        prt('Prepared  : {}', process.get('prepared', ''))
-        prt('Built     : {}', process.get('built', ''))
-        prt(
-            'Build time: {}',
-            ('%ss' % round(float(process['buildtime']), 2))) if process.get('buildtime') else ''
-
-
-def get_parser():
+def get_parser(commands):
+    from os.path import dirname
     parser = argparse.ArgumentParser(
         prog='ambry',
         description='Ambry {}. Management interface for ambry, libraries '
@@ -284,34 +89,37 @@ def get_parser():
 
     cmd = parser.add_subparsers(title='commands', help='command help')
 
-    from .library import library_parser
-    from .config import config_parser
-    from .bundle import bundle_parser
-    from .root import root_parser
-    from .util import util_parser
-    from .dockr import docker_parser
-
-    bundle_parser(cmd)
-    config_parser(cmd)
-    docker_parser(cmd)
-    library_parser(cmd)
-
-    root_parser(cmd)
-    util_parser(cmd)
+    for command_name, ( _, make_parser) in commands.items():
+        make_parser(cmd)
 
     return parser
 
 
+BASE_COMMANDS = ['ambry.cli.bundle', 'ambry.cli.config', 'ambry.cli.dockr',
+                 'ambry.cli.library', 'ambry.cli.root', 'ambry.cli.util']
+
+def get_commands(extra_commands=[]):
+
+    commands = {}
+
+    for module_name in BASE_COMMANDS + extra_commands:
+        m = __import__(module_name, fromlist=['command_name', 'make_parser', 'run_command'])
+
+        try:
+            commands[m.command_name] = (m.run_command,m.make_parser)
+
+        except AttributeError:
+            pass
+
+    return commands
+
+
 def main(argsv=None, ext_logger=None):
-    from .library import library_command
-    from .config import config_command
-    from .bundle import bundle_command
-    from .root import root_command
-    from .util import util_command
-    from .dockr import docker_command
     from ..dbexceptions import ConfigurationError
 
-    parser = get_parser()
+    commands =  get_commands()
+
+    parser = get_parser(commands)
 
     args = parser.parse_args()
 
@@ -326,15 +134,6 @@ def main(argsv=None, ext_logger=None):
         rc_path = args.config
 
 
-    funcs = {
-        'bundle': bundle_command,
-        'library': library_command,
-        'config': config_command,
-        'root': root_command,
-        'util': util_command,
-        'docker': docker_command,
-    }
-
     global global_logger
 
     if ext_logger:
@@ -345,7 +144,7 @@ def main(argsv=None, ext_logger=None):
 
     global_logger.setLevel(logging.INFO)
 
-    f = funcs.get(args.command, None)
+    run_command, _ = commands.get(args.command, None)
 
     if args.command == 'config' and args.subcommand == 'install':
         rc = None
@@ -359,62 +158,17 @@ def main(argsv=None, ext_logger=None):
         global global_run_config
         global_run_config = rc
 
-
     if args.test_library:
         rc.group('filesystem')['root'] = rc.group('filesystem')['test']
 
-    if f is None:
+    if run_command is None:
         fatal('Error: No command: ' + args.command)
     else:
         try:
-            f(args, rc)
+            run_command(args, rc)
         except KeyboardInterrupt:
             prt('\nExiting...')
         except ConfigurationError as e:
             if args.exceptions:
                 raise
             fatal('{}: {}'.format(str(e.__class__.__name__), str(e)))
-
-
-def get_docker_links(rc):
-    from ambry.util import parse_url_to_dict, unparse_url_dict
-    from ambry.library.filesystem import LibraryFilesystem
-
-    fs = LibraryFilesystem(rc)
-
-    dsn = fs.database_dsn
-
-    d = parse_url_to_dict(dsn)
-
-    if not 'docker' in d['query']:
-        fatal("Database '{}' doesn't look like a docker database DSN; it should have 'docker' at the end"
-              .format(dsn))
-
-    # Create the new container DSN; in docker, the database is always known as 'db'
-    d['hostname'] = 'db'
-    d['port'] = None
-    dsn = unparse_url_dict(d)
-
-    # The username is the unique id part of all of the docker containers, so we
-    # can construct the names of the database and volumes container from it.
-    groupname = d['username']
-    volumes_c = 'ambry_volumes_{}'.format(groupname)
-    db_c = 'ambry_db_{}'.format(groupname)
-
-    envs = {}
-    envs['AMBRY_DB'] = dsn
-    envs['AMBRY_ACCOUNT_PASSWORD'] = (rc.accounts.get('password'))
-
-    return groupname, dsn, volumes_c, db_c, envs
-
-
-def docker_client():
-    from docker.client import Client
-    from docker.utils import kwargs_from_env
-
-    kwargs = kwargs_from_env()
-    kwargs['tls'].assert_hostname = False
-
-    client = Client(**kwargs)
-
-    return client

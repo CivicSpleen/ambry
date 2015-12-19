@@ -1,10 +1,13 @@
 from __future__ import absolute_import
+
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'docker'
+
 from six import iterkeys, iteritems
+from . import prt, fatal, warn, err
 
-from ..cli import prt, fatal, warn, err
 
-
-def docker_parser(cmd):
+def make_parser(cmd):
     config_p = cmd.add_parser('docker', help='Install and manipulate docker containers')
     config_p.set_defaults(command='docker')
 
@@ -54,7 +57,7 @@ def docker_parser(cmd):
                     help="Display the database DSN")
     sp.add_argument('groupname', type=str, nargs=1, help='Group name of set of containers')
 
-def docker_command(args, rc):
+def run_command(args, rc):
     from ..library import new_library
     from . import global_logger
 
@@ -133,7 +136,7 @@ def docker_init(args, l, rc):
     import random
     from ambry.util import parse_url_to_dict
     from docker.utils import kwargs_from_env
-    from . import fatal, docker_client
+    from . import fatal
 
     client = docker_client()
 
@@ -298,7 +301,6 @@ def check_ambry_image(client, image):
 def docker_shell(args, l, rc):
     """Run a shell in an Ambry builder image, on the current docker host"""
 
-    from . import docker_client, get_docker_links
     from docker.errors import NotFound, NullResource
     import os
 
@@ -373,7 +375,6 @@ def docker_shell(args, l, rc):
 def docker_tunnel(args, l, rc):
     """Run a shell in an Ambry builder image, on the current docker host"""
 
-    from . import docker_client, get_docker_links
     from docker.errors import NotFound, NullResource
     from docker.utils import kwargs_from_env
     from ambry.util import parse_url_to_dict
@@ -479,7 +480,6 @@ def start_tunnel(host, port):
 def docker_kill(args, l, rc):
     from operator import itemgetter
     from docker.utils import kwargs_from_env
-    from . import docker_client, get_docker_links
 
     client = docker_client()
 
@@ -499,7 +499,6 @@ def docker_kill(args, l, rc):
 def docker_ui(args, l, rc, attach=True):
     """Run a shell in an Ambry builder image, on the current docker host"""
 
-    from . import docker_client, get_docker_links
     from docker.errors import NotFound, NullResource
     import os
 
@@ -597,7 +596,6 @@ def docker_ui(args, l, rc, attach=True):
 def docker_ckan(args, l, rc, attach=True):
     """Run a shell in an Ambry builder image, on the current docker host"""
 
-    from . import docker_client, get_docker_links
     from ambry.util import parse_url_to_dict
     from docker.errors import NotFound, NullResource
     import os
@@ -693,7 +691,6 @@ def docker_ckan(args, l, rc, attach=True):
 def docker_list(args, l, rc):
     from operator import itemgetter
     from docker.utils import kwargs_from_env
-    from . import docker_client, get_docker_links
     from collections import defaultdict
     from ambry.util import parse_url_to_dict
 
@@ -776,3 +773,47 @@ def docker_info(args, l, rc):
             # Meant for use in shell scripts, so jsut reutrn an error return code
             import sys
             sys.exit(1)
+
+
+def get_docker_links(rc):
+    from ambry.util import parse_url_to_dict, unparse_url_dict
+    from ambry.library.filesystem import LibraryFilesystem
+
+    fs = LibraryFilesystem(rc)
+
+    dsn = fs.database_dsn
+
+    d = parse_url_to_dict(dsn)
+
+    if not 'docker' in d['query']:
+        fatal("Database '{}' doesn't look like a docker database DSN; it should have 'docker' at the end"
+              .format(dsn))
+
+    # Create the new container DSN; in docker, the database is always known as 'db'
+    d['hostname'] = 'db'
+    d['port'] = None
+    dsn = unparse_url_dict(d)
+
+    # The username is the unique id part of all of the docker containers, so we
+    # can construct the names of the database and volumes container from it.
+    groupname = d['username']
+    volumes_c = 'ambry_volumes_{}'.format(groupname)
+    db_c = 'ambry_db_{}'.format(groupname)
+
+    envs = {}
+    envs['AMBRY_DB'] = dsn
+    envs['AMBRY_ACCOUNT_PASSWORD'] = (rc.accounts.get('password'))
+
+    return groupname, dsn, volumes_c, db_c, envs
+
+
+def docker_client():
+    from docker.client import Client
+    from docker.utils import kwargs_from_env
+
+    kwargs = kwargs_from_env()
+    kwargs['tls'].assert_hostname = False
+
+    client = Client(**kwargs)
+
+    return client

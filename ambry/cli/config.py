@@ -1,10 +1,13 @@
 
-from six import iterkeys, iteritems
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'config'
+command_name = 'config'
 
+from six import iterkeys, iteritems
 from ..cli import prt, fatal, warn, err
 
 
-def config_parser(cmd):
+def make_parser(cmd):
     config_p = cmd.add_parser('config', help='Install or display the configuration')
     config_p.set_defaults(command='config')
 
@@ -50,7 +53,7 @@ def config_parser(cmd):
     sp.add_argument('args', nargs='*', help='key=value entries')  # Get everything else.
 
 
-def config_command(args, rc):
+def run_command(args, rc):
     from ..library import new_library
     from . import global_logger
 
