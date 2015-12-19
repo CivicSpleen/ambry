@@ -30,7 +30,7 @@ class WarehouseTest(ConfigDatabaseTestBase):
         # FIXME:
         pass
 
-    # query tests
+    # .query() tests
     def test_uses_library_driver_backend(self):
         # FIXME:
         pass
@@ -49,7 +49,7 @@ class WarehouseTest(ConfigDatabaseTestBase):
             # second argument of the call was the same query.
             self.assertEqual(fake_query.mock_calls[0][1][1], query)
 
-    # install tests
+    # .install() tests
     def test_finds_partition_by_refs_and_installs_partition_to_backend(self):
         w = Warehouse(self.library)
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session

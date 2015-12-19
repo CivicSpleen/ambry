@@ -31,7 +31,7 @@ from test.unit.asserts import assert_spec
 from test.test_base import TestBase, PostgreSQLTestBase
 
 
-class DatabaseTest(TestBase):
+class DatabaseTest(unittest.TestCase):
 
     def setUp(self):
         self.sqlite_db = Database('sqlite://')
@@ -52,7 +52,7 @@ class DatabaseTest(TestBase):
         dsn = 'postgresql+psycopg2://ambry:secret@127.0.0.1/exampledb'
         db = Database(dsn)
         self.assertEqual(db.path, '/exampledb')
-        self.assertEqual(db.driver, 'postgresql+psycopg2')
+        self.assertEqual(db.driver, 'postgres')
 
     # .create tests
     def test_creates_new_database(self):
@@ -288,7 +288,7 @@ class DatabaseTest(TestBase):
         ColumnFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
         # Now all tables are created. Can we use ORM to create columns?
-        ColumnFactory(table=table)
+        ColumnFactory(name='id', table=table)
         self.sqlite_db.commit()
 
     def test_creates_partition_table(self):

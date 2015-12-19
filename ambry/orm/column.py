@@ -239,7 +239,6 @@ class Column(Base):
         pt = self.python_type.__name__
         return self.types[pt][2]
 
-
     @classmethod
     def convert_numpy_type(cls, dtype):
         """Convert a numpy dtype into a Column datatype. Only handles common
@@ -378,7 +377,7 @@ class Column(Base):
                   key=text_type(key),
                   ikey=cast_to_int(key),
                   value=value,
-                  source = source,
+                  source=source,
                   description=description,
                   data=data)
 
@@ -422,7 +421,6 @@ class Column(Base):
 
     @staticmethod
     def clean_transform(transform):
-        from ambry.dbexceptions import ConfigurationError
 
         segments = Column._expand_transform(transform)
 
@@ -430,7 +428,7 @@ class Column(Base):
 
             o = []
 
-            seg['init'] and o.append('^'+seg['init'])
+            seg['init'] and o.append('^' + seg['init'])
             o += seg['transforms']
             seg['exception'] and o.append('!' + seg['exception'])
 
@@ -461,13 +459,13 @@ class Column(Base):
 
                 if pipe[0] == '^':  # First, the initializer
                     if d['init']:
-                        raise ConfigurationError("Can only have one initializer in a pipeline segment")
+                        raise ConfigurationError('Can only have one initializer in a pipeline segment')
                     if i != 0:
-                        raise ConfigurationError("Can only have an initializer in the first pipeline segment")
+                        raise ConfigurationError('Can only have an initializer in the first pipeline segment')
                     d['init'] = pipe[1:]
                 elif pipe[0] == '!':  # Exception Handler
                     if d['exception']:
-                        raise ConfigurationError("Can only have one exception handler in a pipeline segment")
+                        raise ConfigurationError('Can only have one exception handler in a pipeline segment')
                     d['exception'] = pipe[1:]
                 else:  # Assume before the datatype
                     d['transforms'].append(pipe)
@@ -487,9 +485,9 @@ class Column(Base):
         }
 
         d = OrderedDict([('table', self.table.name)] +
-                        [( name_map.get(p.key, p.key), getattr(self, p.key)) for p in self.__mapper__.attrs
+                        [(name_map.get(p.key, p.key), getattr(self, p.key)) for p in self.__mapper__.attrs
                          if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
-                                          'id', 'is_primary_key','data']])
+                                          'id', 'is_primary_key', 'data']])
 
         d['transform'] = d['_transform']
         del d['_transform']
@@ -521,7 +519,7 @@ class Column(Base):
 
         if target.sequence_id is None:
             from ambry.orm.exc import DatabaseError
-            raise DatabaseError("Must have sequence_id before insertion")
+            raise DatabaseError('Must have sequence_id before insertion')
 
         # Check that the id column is always sequence id 1
         assert (target.name == 'id') == (target.sequence_id == 1), (target.name, target.sequence_id)
@@ -541,9 +539,6 @@ class Column(Base):
         target.vid = str(con)
         target.id = str(con.rev(None))
         target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
-
-
-
 
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)
