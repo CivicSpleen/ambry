@@ -3,7 +3,12 @@ from time import time
 
 from six import text_type
 
-import fudge
+try:
+    # py2, mock is external lib.
+    from mock import patch, Mock
+except ImportError:
+    # py3, mock is included
+    from unittest.mock import patch, Mock
 
 from ambry.orm.config import Config
 
@@ -55,35 +60,33 @@ class TestConfig(ConfigDatabaseTestBase):
         self.assertIn(config1.value, repr_str)
 
     # before_insert tests
-    @fudge.patch(
-        'ambry.orm.config.Config.before_update')
+    @patch('ambry.orm.config.Config.before_update')
     def test_populates_id_field(self, fake_before_update):
-        fake_before_update.expects_call()
         ds = DatasetFactory()
         config1 = ConfigFactory.build(d_vid=ds.vid)
         assert config1.id is None
 
-        mapper = fudge.Fake().is_a_stub()
-        conn = fudge.Fake().is_a_stub()
+        mapper = Mock()
+        conn = Mock()
         Config.before_insert(mapper, conn, config1)
 
         self.assertIsNotNone(config1.id)
         self.assertTrue(config1.id.startswith('Fds'))
+        self.assertEqual(len(fake_before_update.mock_calls), 1)
 
     # before_update tests
-    @fudge.patch('ambry.orm.config.time')
+    @patch('ambry.orm.config.time')
     def test_updates_modified_field(self, fake_time):
         FAKE_TIME = 111111
-        fake_time\
-            .expects_call().returns(time())\
-            .next_call().returns(FAKE_TIME)
+        fake_time.side_effect = [time(), FAKE_TIME]
 
         ds = DatasetFactory()
         config1 = ConfigFactory(d_vid=ds.vid)
         config1.value = 'new-value'
         assert config1.modified != FAKE_TIME
 
-        mapper = fudge.Fake().is_a_stub()
-        conn = fudge.Fake().is_a_stub()
+        mapper = Mock()
+        conn = Mock()
         Config.before_update(mapper, conn, config1)
         self.assertEqual(config1.modified, FAKE_TIME)
+        self.assertEqual(len(fake_time.mock_calls), 2)
