@@ -505,9 +505,9 @@ def docker_ui(args, l, rc, attach=True):
 
     client = docker_client()
 
-    username, dsn, volumes_c, db_c, envs = get_docker_links(rc)
+    groupname, dsn, volumes_c, db_c, envs = get_docker_links(rc)
 
-    shell_name = 'ambry_ui_{}'.format(username)
+    shell_name = 'ambry_ui_{}'.format(groupname)
 
     # Check if the  image exists.
 
@@ -534,14 +534,22 @@ def docker_ui(args, l, rc, attach=True):
 
         vh_root = rc.get('docker', {}).get('ui_domain', None)
         if vh_root:
-            envs['VIRTUAL_HOST'] = '{}.{}'.format(username, vh_root)
+            envs['VIRTUAL_HOST'] = '{}.{}'.format(groupname, vh_root)
+
+        try:
+            df = get_df_entry(rc, groupname)
+            if df.get('message'):
+                envs['AMBRY_UI_TITLE'] = df.get('message')
+        except KeyError:
+            pass
 
 
         kwargs = dict(
             name=shell_name,
             image=image,
             labels={
-                'civick.ambry.group': username,
+                'civick.ambry.group': groupname
+                ,
                 'civick.ambry.role': 'ui',
                 'civick.ambry.virt_host': envs.get('VIRTUAL_HOST')
             },

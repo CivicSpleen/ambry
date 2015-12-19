@@ -508,7 +508,8 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
 
-        if query:
+
+        if query is not None:
 
             self.backend.library.database.set_connection_search_path()
 
