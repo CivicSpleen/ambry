@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.sql.expression import text
 
 from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex,\
@@ -10,8 +11,9 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__)
 
-import logging
-#logger.setLevel(logging.DEBUG)
+# debug logging
+# import logging
+# logger.setLevel(logging.DEBUG)
 
 
 class PostgresExecMixin(object):
@@ -96,7 +98,6 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
 class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
 
     def __init__(self, backend=None):
-        from sqlalchemy.exc import ProgrammingError
         assert backend is not None, 'backend argument can not be None.'
         super(self.__class__, self).__init__(backend=backend)
 
@@ -114,10 +115,11 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
 
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+        assert isinstance(query, TextClause)
         results = self.execute(query, **query_params)
         datasets = {}
 
-        def make_result(vid = None, b_score = 0, p_score = 0):
+        def make_result(vid=None, b_score=0, p_score=0):
             res = DatasetSearchResult()
             res.b_score = b_score
             res.p_score = p_score
@@ -128,13 +130,13 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
         for result in results:
             vid, dataset_score = result
 
-            datasets[vid] = make_result(vid, b_score = dataset_score)
+            datasets[vid] = make_result(vid, b_score=dataset_score)
 
         logger.debug('Extending datasets with partitions.')
 
         for partition in self.backend.partition_index.search(search_phrase):
 
-            if not partition.dataset_vid in datasets:
+            if partition.dataset_vid not in datasets:
                 datasets[partition.dataset_vid] = make_result(partition.dataset_vid)
 
             datasets[partition.dataset_vid].p_score += partition.score
@@ -229,7 +231,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
             terms (dict or unicode or string):
 
         Returns:
-            tuple of (str, dict): First element is str with FTS query, second is parameters
+            tuple of (TextClause, dict): First element is FTS query, second is parameters
                 of the query. Element of the execution of the query is pair: (vid, score).
 
         """
@@ -268,7 +270,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
-        q =  text('\n'.join(query_parts)), query_params
+        q = text('\n'.join(query_parts)), query_params
         logger.debug('Dataset search query: {}'.format(q))
         return q
 
@@ -294,7 +296,6 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex,PostgresExecMixin):
         super(self.__class__, self).__init__(backend=backend)
 
         self.create()
-
 
     def search(self, search_phrase, limit=None):
         """ Finds identifiers by search phrase.
@@ -423,7 +424,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             terms (dict or unicode or string):
 
         Returns:
-            tuple of (str, dict): First element is str with FTS query, second is
+            tuple of (TextClause, dict): First element is FTS query, second is
             parameters of the query. Element of the execution of the query is
             tuple of three elements: (vid, dataset_vid, score).
 
@@ -493,7 +494,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
 
-
         return text('\n'.join(query_parts)), query_params
 
     def search(self, search_phrase, limit=None):
@@ -507,6 +507,7 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             PartitionSearchResult instances.
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+        assert isinstance(query, TextClause)
 
 
         if query is not None:

@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 # Tests of the test structure
+# FIXME: What exactly that tests are testing? Ask Eric.
 
-from test.test_base import TestBase
+from test.test_base import ConfigDatabaseTestBase
 
 
-class Test(TestBase):
+class Test(ConfigDatabaseTestBase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.import_bundles()
+    def setUp(self):
+        super(self.__class__, self).setUp()
+        self.import_bundles()
 
     def test_1(self):
         l = self.library()

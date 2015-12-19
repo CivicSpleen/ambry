@@ -25,8 +25,11 @@ ROOT_CONFIG_NAME_V = 'd000001'
 
 SCHEMA_VERSION = 115
 
-POSTGRES_SCHEMA_NAME = 'ambrylib'
-POSTGRES_PARTITION_SCHEMA_NAME = 'partitions'
+# Note: If you are going to change POSTGRES_SCHEMA_NAME do not forget to change docs:
+#   1. README.rst (search for 'Install pg_trgm extension')
+#   2. doc/README.testing.md (search for 'Install multicorn and pg_trgm extensions')
+POSTGRES_SCHEMA_NAME = 'ambrylib'  # schema for ambry library
+POSTGRES_PARTITION_SCHEMA_NAME = 'partitions'  # schema for mpr files
 
 # Database connection information
 Dbci = namedtuple('Dbc', 'dsn_template sql')
