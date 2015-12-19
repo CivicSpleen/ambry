@@ -15,7 +15,6 @@ import six
 from ambry.exporters.ckan.core import _convert_bundle, _convert_partition, export, MISSING_CREDENTIALS_MSG,\
     UnpublishedAccessError, CKAN_CONFIG
 from ambry.orm.database import Database
-from ambry.run import get_runconfig
 
 from test.factories import DatasetFactory, PartitionFactory, FileFactory
 
