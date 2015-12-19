@@ -91,11 +91,10 @@ class TestBase(unittest.TestCase):
     def config(cls):
         return cls.get_rc()
 
-    @staticmethod # So it can be called from either setUp or setUpClass
-    def _get_library(config):
+    @classmethod  # So it can be called from either setUp or setUpClass
+    def _get_library(cls, config):
         from ambry.library import new_library
-
-        return new_library(config if config else TestBase.get_rc())
+        return new_library(config if config else cls.get_rc())
 
     def library(self, config=None):
 
@@ -104,7 +103,7 @@ class TestBase(unittest.TestCase):
 
         return self._library
 
-    @staticmethod # So it can be called from either setUp or setUpClass
+    @staticmethod  # So it can be called from either setUp or setUpClass
     def _import_bundles(library, clean=True, force_import=False):
 
         from test import bundle_tests
@@ -129,7 +128,7 @@ class TestBase(unittest.TestCase):
 
         library = self.library()
 
-        self._import_bundles(library,clean, force_import )
+        self._import_bundles(library, clean, force_import)
 
     def import_single_bundle(self, cache_path, clean=True):
         from test import bundle_tests
@@ -217,8 +216,44 @@ class TestBase(unittest.TestCase):
         return b
 
 
+class ConfigDatabaseTestBase(TestBase):
+    """ Always use database engine from config as library database.
+
+    Note:
+        This means that subclasses should be ready to work on any engine from file sqlite, memory sqlite,
+        postgres set. Do not use that class for test who requires specific version of the engine.
+    """
+
+    @staticmethod  # So it can be called from either setUp or setUpClass
+    def get_rc(rewrite=True):
+        """Create a new config file for test and return the RunConfig.
+
+         This method will start with the user's default Ambry configuration, but will replace the
+         library.filesystem_root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
+         environmental variable, it will set library.database to the DSN of either database.test-sqlite or
+         database.test-postrgres
+
+        """
+        rc = TestBase.get_rc()
+        if rc.library.database.startswith('postgresql'):
+            # create test database and write it to the config.
+            test_db = PostgreSQLTestBase._create_postgres_test_db()
+            rc.library.database = test_db['test_db_dsn']
+        return rc
+
+    def tearDown(self):
+        # FIXME: Run for postgres only.
+        # PostgreSQLTestBase._drop_postgres_test_db()
+        pass
+
+
 class PostgreSQLTestBase(TestBase):
-    """ Base class for database tests who requires postgresql database. """
+    """ Base class for database tests who requires postgresql database.
+
+    Note:
+        If postgres is not installed all tests of all subclasses will be skipped.
+
+    """
 
     def setUp(self):
         super(PostgreSQLTestBase, self).setUp()
@@ -333,6 +368,14 @@ class PostgreSQLTestBase(TestBase):
             'test_db_dsn': test_db_dsn,
             'postgres_db_dsn': postgres_db_dsn}
         return cls.postgres_test_db_data
+
+    @classmethod
+    def get_rc(cls):
+        rc = TestBase.get_rc()
+        if rc.library.database.startswith('postgresql'):
+            # Force library to use test db
+            rc.library.database = cls.postgres_test_db_data['test_db_dsn']
+        return rc
 
     @classmethod
     def postgres_db_exists(cls, db_name, conn):
