@@ -126,7 +126,7 @@ class Test(unittest.TestCase):
 
         self.assertEquals(expected_sum, row_sum)
 
-    # @unittest.skip('Development Test')
+    @unittest.skip('Development Test')
     def test_apply(self):
 
         base_row = [1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9]

@@ -11,7 +11,7 @@ from six.moves.urllib.parse import urlparse
 
 class Test(TestBase):
 
-    @unittest.skip("Development Test")
+    @unittest.skip('Development Test')
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
         from boto.exception import S3ResponseError
@@ -42,7 +42,7 @@ class Test(TestBase):
 
         print(remote_name, path)
 
-    @unittest.skip("Development Test")
+    @unittest.skip('Development Test')
     def test_search(self):
         """Test copying a bundle to a remote, then streaming it back"""
         from ambry.library import new_library
@@ -74,7 +74,7 @@ class Test(TestBase):
 
         print(search.search_datasets('2010'))
 
-    @unittest.skip("Development Test")
+    @unittest.skip('Development Test')
     def test_sequence(self):
         from ambry.orm import Database
 
@@ -93,7 +93,3 @@ class Test(TestBase):
         for i in range(10):
 
             print(b.dataset.next_number('foobar'))
-
-
-
-
