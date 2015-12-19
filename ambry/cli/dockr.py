@@ -548,8 +548,7 @@ def docker_ui(args, l, rc, attach=True):
             name=shell_name,
             image=image,
             labels={
-                'civick.ambry.group': groupname
-                ,
+                'civick.ambry.group': groupname,
                 'civick.ambry.role': 'ui',
                 'civick.ambry.virt_host': envs.get('VIRTUAL_HOST')
             },

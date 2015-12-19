@@ -92,6 +92,7 @@ class Search(object):
                 tick_f('datasets: {} partitions: {}'.format(d, p))
 
         for dataset in self.library.datasets:
+
             if self.backend.dataset_index.index_one(dataset):
                 # dataset added to index
                 dataset_n += 1
@@ -101,6 +102,7 @@ class Search(object):
                     partition_n += 1
                     tick(dataset_n, partition_n)
             else:
+
                 # dataset already indexed
                 pass
 
