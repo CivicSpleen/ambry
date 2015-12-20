@@ -186,7 +186,7 @@ class TestBase(unittest.TestCase):
         from ambry.util import parse_url_to_dict
 
         if not library:
-            library = self.__class__.library()
+            library = self.library()
 
         self.db = library._db
 
