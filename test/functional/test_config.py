@@ -1,22 +1,12 @@
-
-import os
-
-import yaml
-
-from ambry.run import get_runconfig
-
-from test import bundlefiles
 from test.test_base import TestBase
 
 
 class Test(TestBase):
 
-
     def test_run_config_filesystem(self):
         rc = self.get_rc()
-        self.assertEqual('{root}/downloads', rc.filesystem.downloads)
-        self.assertEqual('{root}/extracts', rc.filesystem.extracts)
-
+        self.assertEqual('{root}/cache/downloads', rc.filesystem.downloads)
+        self.assertEqual('{root}/cache/extracts', rc.filesystem.extracts)
 
     def test_dsn_config(self):
         from ambry.dbexceptions import ConfigurationError
@@ -86,7 +76,7 @@ library:
         if 'AMBRY_DB' in os.environ:
             del os.environ['AMBRY_DB']
 
-        with open(tf,'w') as f:
+        with open(tf, 'w') as f:
             f.write("""
 library:
     category: development
@@ -103,7 +93,7 @@ library:
         config.account = None
 
         self.assertEquals('postgres://foo:bar@baz:5432/ambry', config.library.database)
-        self.assertEquals('/tmp/foo/bar',config.library.filesystem_root)
+        self.assertEquals('/tmp/foo/bar', config.library.filesystem_root)
 
         self.assertEqual(1, len(config.loaded))
         self.assertEqual(tf, config.loaded[0][0])
@@ -127,17 +117,16 @@ library:
         lf = LibraryFilesystem(config)
 
         self.assertEqual('sqlite://///tmp/foo/bar/library.db', lf.database_dsn)
-        self.assertEqual('/tmp/foo/bar/downloads/a/b',lf.downloads('a','b'))
+        self.assertEqual('/tmp/foo/bar/downloads/a/b', lf.downloads('a', 'b'))
 
     def test_library(self):
+        import os
         from ambry.util import temp_file_name
         import ambry.run
         from ambry.library import Library
-        from shutil import rmtree
         from ambry.library.filesystem import LibraryFilesystem
 
         db_path = '/tmp/foo/bar/library.db'
-        import os
         if os.path.exists(db_path):
             os.remove(db_path)
 
@@ -163,47 +152,3 @@ library:
         l = Library(config)
 
         self.assertEqual(['test', 'restricted', 'census', 'public'], l.remotes.keys())
-
-
-    def test_alt_session_not_reused(self):
-
-        l = self.library()
-
-        db = l.database
-        session = l.database.session
-        conn, alt_session = db.alt_session()
-
-        self.assertNotEqual(id(session), id(alt_session))
-
-        ds = db.root_dataset
-
-        pc = ds.config.process
-        pc.clean()
-        pc.commit()
-
-        pc.foo.bar = 'baz'
-
-        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
-
-        ds.session.refresh(ds)
-        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
-
-        pc.commit()
-
-        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
-
-        ds.session.refresh(ds)
-        self.assertIn('process.foo.bar', [c.dotted_key for c in ds.configs])
-
-        pc.set_activity('foo')
-
-        ds.session.refresh(ds)
-        self.assertEqual('foo', [ c.value for c in ds.configs if c.key == 'activity' ][0])
-
-        self.assertEqual('foo', pc.activity)
-
-        pc.set_activity('bar')
-
-        ds.session.refresh(ds)
-        self.assertEqual('bar', [c.value for c in ds.configs if c.key == 'activity'][0])
-
