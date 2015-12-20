@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
+import os
 
-from test.test_base import TestBase
+from ambry.library import new_library
+from ambry.library.config import LibraryConfigSyncProxy
+from ambry.run import get_runconfig
+
+from test.test_base import ConfigDatabaseTestBase
 
 
-class Test(TestBase):
+class Test(ConfigDatabaseTestBase):
 
     def test_accounts(self):
         """ Tests library, database and environment accounts. """
-        from ambry.library.config import LibraryConfigSyncProxy
-        from ambry.run import get_runconfig
-        from ambry.library import new_library
-        import os
-
         l = self.library()
 
         l.drop()
