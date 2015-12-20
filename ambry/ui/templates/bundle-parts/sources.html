@@ -1,0 +1,24 @@
+{%  if b.metadata.about.access != 'private' %}
+    <h2>Sources</h2>
+    <div >
+        <table id="sources-table" class="table table_condensed ">
+        <tr>
+            <th>Name</th>
+            <th>Reference</th>
+        </tr>
+        {% for s in b.sources[:25]|sort(attribute='name') %}
+            <tr>
+            <td>{{s.name}}</td>
+            <td><a href="{{ s.url }}">{{ s.abbrev_url}}</a></td>
+            </tr>
+        {% endfor -%}
+        </table>
+    </div>
+    {% if b.sources and b.sources|length > 35 -%}
+        <div>
+            <p>Too many sources to display. Download the
+                <a href="{{ url_for('bundle_file',vid=vid, name='sources.csv') }}">sources.csv</a>
+                file for a complete list.</p>
+        </div>
+    {% endif -%}
+{% endif -%}

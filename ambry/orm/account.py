@@ -10,7 +10,8 @@ from sqlalchemy import event
 from simplecrypt import encrypt, decrypt, DecryptionException
 import simplecrypt
 
-# How many times the
+# How many times the encryption should run. The default is 100,000 rounds, but that's horrifically
+# slow, and seems t be required as a defense against bad passwords.
 simplecrypt.EXPANSION_COUNT = (100,100,100)
 
 

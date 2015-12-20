@@ -108,6 +108,15 @@ def make_parser(cmd):
                     help='Reindex the bundles')
     sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
 
+    sp = cmd.add_parser('ui', help='Run the web user interface')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='ui')
+    sp.add_argument('-H', '--host', help="Server host.", default='0.0.0.0')
+    sp.add_argument('-p', '--port', help="Server port", default=8080)
+    sp.add_argument('-P', '--use-proxy', action='store_true',
+                        help="Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix")
+    sp.add_argument('-d', '--debug', action='store_true', help="Set debugging mode", default=False)
+
 
 def run_command(args, rc):
     from ..library import new_library
@@ -411,4 +420,29 @@ def root_import(args, l, rc):
         if args.detach:
             b.set_file_system(source_url=None)
 
+
+def root_ui(args, l, rc):
+
+    from ambry.ui import app
+    import ambry.ui.views
+    import webbrowser
+    import socket
+
+    if args.use_proxy:
+        from werkzeug.contrib.fixers import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app)
+
+    if not args.debug:
+        webbrowser.open("http://{}:{}".format(args.host, args.port))
+    else:
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+        log = logging.getLogger('werkzeug')
+        log.setLevel(logging.DEBUG)
+        #prt("Running at http://{}:{}".format(args.host, args.port))
+
+    try:
+        app.run(host=args.host, port=int(args.port), debug=args.debug)
+    except socket.error as e:
+        warn("Failed to start ui: {}".format(e))
 

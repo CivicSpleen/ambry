@@ -67,14 +67,12 @@ def warn(template, *args, **kwargs):
         global_logger.warning(';'.join(str(e) for e in [template] + list(args) + list(kwargs.items())))
 
 
-
 def get_parser(commands):
     from os.path import dirname
     parser = argparse.ArgumentParser(
         prog='ambry',
         description='Ambry {}. Management interface for ambry, libraries '
                     'and repositories. '.format(ambry._meta.__version__))
-
 
     parser.add_argument('-c', '--config', default=os.getenv(AMBRY_CONFIG_ENV_VAR), action='append',
                         help='Path to a run config file. Alternatively, set the AMBRY_CONFIG env var')
@@ -113,7 +111,6 @@ def get_commands(extra_commands=[]):
 
     return commands
 
-
 def main(argsv=None, ext_logger=None):
     from ..dbexceptions import ConfigurationError
 
@@ -132,7 +129,6 @@ def main(argsv=None, ext_logger=None):
         rc_path = args.config.pop()
     else:
         rc_path = args.config
-
 
     global global_logger
 

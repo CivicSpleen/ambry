@@ -1529,7 +1529,7 @@ Caster Code
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 
-            source.update_table()  # Generate the source tables.
+
             source.update_spec()  # Update header_lines, start_line, etc.
 
             ps.update(message='Ingested {}'.format(source.datafile.path), state='done')
@@ -1659,11 +1659,6 @@ Caster Code
 
         self.commit()
 
-        bsf = self.build_source_files.file(File.BSFILE.SCHEMA)
-
-        bsf.objects_to_record()
-        bsf.record_to_fs()
-
         return True
 
     def source_schema(self, sources=None, tables=None, clean=False):
@@ -1679,10 +1674,6 @@ Caster Code
 
         self.commit()
 
-        bsf = self.build_source_files.file(File.BSFILE.SOURCESCHEMA)
-
-        bsf.objects_to_record()
-        bsf.record_to_fs()
 
     #
     # Build
@@ -2092,6 +2083,7 @@ Caster Code
         import ambry.valuetype.types
         import ambry.valuetype.math
         import ambry.valuetype.string
+        import ambry.valuetype.number
         import ambry.valuetype.exceptions
         import ambry.valuetype.test
 
@@ -2120,6 +2112,7 @@ Caster Code
         test_env.update(random.__dict__)
         test_env.update(ambry.valuetype.math.__dict__)
         test_env.update(ambry.valuetype.string.__dict__)
+        test_env.update(ambry.valuetype.number.__dict__)
         test_env.update(ambry.valuetype.types.__dict__)
         test_env.update(ambry.valuetype.exceptions.__dict__)
         test_env.update(ambry.valuetype.test.__dict__)

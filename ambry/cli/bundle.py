@@ -1,5 +1,5 @@
 # coding: utf-8
-"""Copyright (c) 2013 Clarinova.
+"""Copyright (c) 2015 Civic Knowledge.
 
 This file is licensed under the terms of the Revised BSD License,
 included in this distribution as LICENSE.txt
@@ -22,7 +22,6 @@ from ambry.util import drop_empty
 from fs.opener import fsopendir
 from ..cli import prt, fatal, warn, prt_no_format
 from ..orm import File
-
 
 
 def make_parser(cmd):
@@ -174,7 +173,7 @@ def make_parser(cmd):
                            help='Clean the build directory')
     command_p.add_argument('-B', '--build-state', default=False, action='store_true',
                            help='Clean the build state configuration')
-    command_p.add_argument('-S', '--sync', default=False, action='store_true',
+    command_p.add_argument('-y', '--sync', default=False, action='store_true',
                            help='Sync in after cleaning')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Clean even built and finalized bundles')
@@ -191,35 +190,42 @@ def make_parser(cmd):
                            help='Force ingesting already ingested files')
     command_p.add_argument('-c', '--clean', default=False, action='store_true',
                            help='Clean ingested files first')
-    command_p.add_argument('-p', '--purge-tables', default=False, action='store_true',
-                           help='Completely remove all source tables. Equivalent to deleting source_scheama.csv'
-                           ' and syncing.')
+
     command_p.add_argument('-t', '--table', action='append',
                            help='Only run the schema for the named tables. ')
     command_p.add_argument('-s', '--source',  action='append',
                            help='Sources to ingest, instead of running all sources')
     command_p.add_argument('-S', '--stage', help='Ingest sources at this stage')
+    command_p.add_argument('-y', '--sync', default=False, action='store_true',help="Sync first")
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
-
 
     # Schema Command
     #
     command_p = sub_cmd.add_parser('schema', help='Generate destination schemas from the source schemas')
     command_p.set_defaults(subcommand='schema')
 
+    command_p.add_argument('-s', '--source', action='append', nargs='?',
+                           help='Sources to build source schema for, instead of building all soruces')
+
+    command_p.add_argument('-S', '--source-clean', action='store_true',
+                           help='Build the source schema, cleaning the existing schema first ')
+
+    command_p.add_argument('-d', '--dest', action='store_true',
+                           help='Build the destination schema, merging with the existing schema. ')
+    command_p.add_argument('-D', '--dest-clean', action='store_true',
+                       help='Build the destination schema, cleaning the existing schema first ')
+
     command_p.add_argument('-b', '--build', action='store_true',
                            help='For the destination schema, use the build process to '
                                 'determine the schema, not the source tables ')
 
-    command_p.add_argument('-c', '--clean', default=False, action='store_true',
-                           help='Remove all columns from existing tables')
-
-    command_p.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Re-run the schema, even if it already exists.')
     command_p.add_argument('-t', '--table', action='append',
-                           help='Only run the schema for the named tables. ')
-    command_p.add_argument('-s', '--source', action='append',
-                           help='Sources to ingest, instead of running all sources')
+                           help='Build only the destination schemfor these tables. ')
+
+    command_p.add_argument('-y', '--sync', default=False, action='store_true', help="Sync in first")
+
+    command_p.add_argument('-o', '--sync-out', default=False, action='store_true',
+                           help="Sync generated file out")
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
@@ -309,7 +315,7 @@ def make_parser(cmd):
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Force running on a built or finalized bundle')
-    command_p.add_argument('-s', '--sync', default=False, action='store_true',
+    command_p.add_argument('-y', '--sync', default=False, action='store_true',
                            help='Syncrhonize before and after')
     command_p.add_argument('method', metavar='Method', type=str, help='Name of the method to run')
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
@@ -810,36 +816,59 @@ def bundle_ingest(args, l, rc):
     if args.clean:
         b.clean_ingested()
 
-    if args.purge_tables:
-        b.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
-        b.dataset.source_tables[:] = []
-        b.commit()
-
     b.ingest(tables=args.table, sources=args.source, force=args.force)
-
-    b.sync_out()
 
     b.set_last_access(Bundle.STATES.INGESTED)
 
 
 def bundle_schema(args, l, rc):
+    from ambry.orm.file import File
+
+    # The -s/--source option can take zer or more parmas.
+    sources = []
+    if isinstance(args.source, list):
+        for s in args.source:
+            if s:
+                sources.append(s)
+
+        args.source = True
+    else:
+        args.source = False
 
     b = using_bundle(args, l).cast_to_subclass()
     b.set_last_access(Bundle.STATES.SYNCED)
     b.clean_progress()
     b.commit()
 
-    b.sync_code()
+    if args.sync:
+        b.sync_code()
 
-    b.ingest(sources=args.source, tables=args.table, force=args.force)
+    if args.source_clean:
+        b.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
+        b.dataset.source_tables[:] = []
+        b.commit()
 
-    b.schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=args.build)
+    if args.source or args.source_clean:
+        b.source_schema(sources=sources, tables=args.table)
+        prt("Created source schema")
+
+    if args.dest or args.dest_clean:
+        b.schema(tables=args.table, clean=args.source_clean, use_pipeline=args.build)
+        prt("Created destination schema")
+
+    if (args.source or args.source_clean) and args.sync_out:
+        bsf = b.build_source_files.file(File.BSFILE.SOURCESCHEMA)
+        bsf.objects_to_record()
+        bsf.record_to_fs()
+
+    if (args.dest or args.dest_clean) and args.sync_out:
+        bsf = b.build_source_files.file(File.BSFILE.SCHEMA)
+        bsf.objects_to_record()
+        bsf.record_to_fs()
 
     b.set_last_access(Bundle.STATES.SCHEMA)
 
-    b.sync_out()
 
-    prt("Created destination schema")
 
 
 def bundle_build(args, l, rc):

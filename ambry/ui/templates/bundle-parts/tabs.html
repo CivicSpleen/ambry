@@ -1,0 +1,18 @@
+{% macro is_active(this_tab, active) -%}
+    {%  if this_tab == active %}active{%endif%}
+{% endmacro -%}
+
+{% macro tabs(active, vid) -%}
+    <!-- Tab panes -->
+    <div class="nav">
+        <ul class="nav nav-tabs">
+            <li role="presentation" class="{{is_active('about',active)}}">
+                <a href="{{ url_for('bundle_about', vid=vid, ct='html') }}" >About</a></li>
+            <li role="presentation" class="{{is_active('partitions',active)}}">
+                <a href="{{ url_for('bundle_files', vid=vid, ct='html') }}" >Files</a></li>
+            <li role="presentation" class="{{is_active('meta',active)}}">
+                <a href="{{ url_for('bundle_meta', vid=vid, ct='html') }}" >Meta</a></li>
+
+        </ul>
+    </div>
+{%  endmacro %}

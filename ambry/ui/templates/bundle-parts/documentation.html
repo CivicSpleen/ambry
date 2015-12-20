@@ -1,0 +1,22 @@
+<!-- Documentation -->
+
+{% if b.metadata.external_documentation or b.documentation -%}
+    <h2>Documentation</h2>
+    {% if b.metadata.external_documentation -%}
+        <table class = 'table-condensed extdoc panel'>
+            {% for d in b.metadata.external_documentation.values()|sort(attribute='title') %}
+                <tr>
+                {%  if not d.source %}
+                    <td><a href="{{d.url}}" target="_blank">{{d.title}}</a></td>
+                    <td>{{ d.description }}</td>
+                {%  endif %}
+                </tr>
+            {% endfor -%}
+        </table>
+    {% endif -%}
+    {% if b.documentation -%}
+        <div class="'localdoc" >
+        {{ b.documentation.html|safe }}
+        </div>
+    {% endif -%}
+{% endif %}

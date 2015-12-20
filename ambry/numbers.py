@@ -4,7 +4,6 @@ for data storage.
 Run with something like: python -m ambry.server.numbers  -p 80 -H 162.243.194.227
 
 
-
 The access key is a secret key that the client will use to assign an assignment class.
 The two classes are 'authority' and 'registered' Only central authority
 operators ( like Clarinova ) should use the authoritative class. Other users can
@@ -44,7 +43,7 @@ You probably also want to run a web proxy, like Hipache:
 
     docker run --name hipache --link ambry-redis:redis -p 80:8080 -p 443:4430 hipache
 
-Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
+Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 
 """
@@ -53,9 +52,7 @@ from six import string_types
 
 from bottle import error, hook, get, request, response  # , redirect, put, post
 from bottle import HTTPResponse, install  # , static_file, url
-# from bottle import Bottle
 from bottle import run  # , debug  # @UnresolvedImport
-
 from decorator import decorator  # @UnresolvedImport
 import logging
 

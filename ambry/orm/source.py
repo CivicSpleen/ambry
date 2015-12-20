@@ -265,6 +265,7 @@ class DataSourceBase(object):
                                           source_header=col['name'],
                                           dest_header=col['name'],
                                           datatype=col['resolved_type'],
+                                          description=col['description'],
                                           has_codes=col['has_codes'])
 
 

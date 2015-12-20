@@ -1,0 +1,20 @@
+<div>
+    <table class="table table-hover table-condensed" >
+    <tr>
+        <th>#</th>
+        <th>Title</th>
+        <th class="toc_name">Name</th>
+    </tr>
+    {% for b in bundles|sort(attribute="identity.vname") -%}
+        <tr class="bundle_toc">
+            <td class="toc_n">{{loop.index}}</td>
+            <td class="toc_title"><a href="{{bundle_path(b)}}">{{b.metadata.about.title or ''}}</a><br/>
+                <small>{{(b.metadata.about.summary or '')|truncate(length=300)}}</small>
+            </td>
+            <td class="toc_name">{{b.identity.name}}<br/>
+                <small>{{b.identity.vid}} {{b.buildstate.state.current}}</small></td>
+
+        </tr>
+    {% endfor %}
+    </table>
+</div>

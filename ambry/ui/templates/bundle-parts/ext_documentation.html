@@ -1,0 +1,15 @@
+<!-- Documentation -->
+
+{% if b.metadata.external_documentation -%}
+    <div class = 'ck-extdoc '>
+        <h2>External Documentation</h2>
+        <dl>
+        {% for d in b.metadata.external_documentation.values()|sort(attribute='title') %}
+            {%  if not d.source %}
+                <dt><a href="{{d.url}}" target="_blank">{{d.title}}</a></dt><dd>{{ d.description }}</dd>
+            {%  endif %}
+        {% endfor -%}
+        </dl>
+
+    </div>
+{% endif -%}

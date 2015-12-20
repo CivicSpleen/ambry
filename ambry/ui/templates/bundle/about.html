@@ -1,0 +1,17 @@
+{% extends "bundle-parts/layout.html" %}
+{% from 'bundle-parts/tabs.html' import tabs %}
+{% block json_button %}
+    {{ json_button('bundle_json', vid=vid) }}
+{% endblock %}
+{% block body %}
+
+    {{tabs('about',vid)}}
+
+    {% include 'bundle-parts/documentation.html' -%}
+    {% include 'bundle-parts/contact.html' -%}
+    {% include 'bundle-parts/tables.html' -%}
+    {% include 'bundle-parts/sources.html' -%}
+
+{% endblock %}
+
+

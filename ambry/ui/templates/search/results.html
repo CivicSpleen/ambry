@@ -1,0 +1,24 @@
+{% for r in results -%}
+<div class="result">
+    <h2>{{r.bundle.metadata.about.title}}
+    <small>
+        <p><a href="{{bundle_path(r.bundle.identity.vid)}}">{{r.bundle.identity.vname}}</a>
+        {%  if r.partitions|length>10 %}(10 of {{r.partitions|length}})
+        {%  elif r.partitions %}({{r.partitions|length}})
+        {%  else %} {% endif %}
+        </p>
+    </small></h2>
+    {% if r.bundle.metadata.about.summary.html %} <p>{{r.bundle.metadata.about.summary.html|safe}}</p>{% endif %}
+
+    {% for p in r.partition_records  -%}
+        {%- if loop.index < 10  and p.table%}
+            <div class="search-result-partition">
+                <a href="{{partition_path(p.vid)}}">{{ p.table.description }}</a>
+                <small><p>{{ p.sub_description }} </p></small>
+            </div>
+        {% endif %}
+
+    {% endfor -%}
+
+</div>
+{% endfor -%}
