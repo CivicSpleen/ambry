@@ -1,25 +1,26 @@
 
 import os
-from . import app, aac
+from . import app, get_aac
 
 
 from flask import g, current_app, send_from_directory, send_file, request, abort, url_for
 from flask.json import jsonify
 
-@app.teardown_appcontext
-def close_connection(exception):
-    aac().renderer.library.close()
+from werkzeug.local import LocalProxy
+
+
+aac = LocalProxy(get_aac)
 
 
 @app.errorhandler(500)
 def page_not_found(e):
 
-    aac().render('500.html', e=e)
+    aac.render('500.html', e=e)
 
 @app.route('/')
 @app.route('/index')
 def index():
-    r = aac().renderer
+    r = aac.renderer
 
     cxt = dict(
         bundles=[b for b in r.library.bundles],
@@ -32,7 +33,7 @@ def index():
 @app.route('/bundles')
 def bundle_index():
 
-    r = aac().renderer
+    r = aac.renderer
 
     cxt = dict(
         bundles=[b for b in r.library.bundles],
@@ -46,7 +47,7 @@ def bundle_index():
 def bundle_index_json():
     import os
 
-    r = aac().renderer
+    r = aac.renderer
 
     def augment(b):
         o = b.dataset.dict
@@ -55,6 +56,7 @@ def bundle_index_json():
         o['summary'] = b.metadata.about.summary
         o['created'] = b.buildstate.new_datetime.isoformat() if b.buildstate.new_datetime else None
         o['updated'] = b.buildstate.last_datetime.isoformat() if b.buildstate.last_datetime else None
+        b.close()
         return o
 
     return r.json(
@@ -65,7 +67,7 @@ def bundle_index_json():
 @app.route('/bundles/<vid>.<ct>')
 def bundle_about(vid, ct):
 
-    r = aac().renderer.cts(ct)
+    r = aac.renderer.cts(ct)
 
     cxt = dict(
         vid=vid,
@@ -79,7 +81,7 @@ def bundle_about(vid, ct):
 @app.route('/json/bundle/<vid>')
 def bundle_json(vid):
 
-    r = aac().renderer
+    r = aac.renderer
 
     b = r.library.bundle(vid)
 
@@ -107,6 +109,7 @@ def bundle_json(vid):
                           .options(noload('*'), joinedload('table')).all()):
             yield p
 
+    b.close()
     return r.json(
         dataset=aug_dataset(b),
         partitions = [ aug_partition(p.dict) for p in partitions() ]
@@ -117,7 +120,7 @@ def bundle_json(vid):
 @app.route('/json/partition/<vid>')
 def partition_json(vid):
 
-    r = aac().renderer
+    r = aac.renderer
 
     p = r.library.partition(vid)
 
@@ -142,7 +145,7 @@ def partition_json(vid):
 @app.route('/bundles/<vid>/meta.<ct>')
 def bundle_meta(vid, ct):
 
-    r = aac().renderer.cts(ct)
+    r = aac.renderer.cts(ct)
 
     def flatten_dict(d):
         def expand(key, value):
@@ -171,7 +174,7 @@ def bundle_meta(vid, ct):
 @app.route('/bundles/<vid>/files.<ct>')
 def bundle_files(vid, ct):
 
-    r = aac().renderer.cts(ct)
+    r = aac.renderer.cts(ct)
 
     cxt = dict(
         vid=vid,
@@ -184,7 +187,7 @@ def bundle_files(vid, ct):
 @app.route('/bundles/<vid>/documentation.<ct>')
 def bundle_documentation(vid, ct):
 
-    r = aac().renderer.cts(ct)
+    r = aac.renderer.cts(ct)
 
     cxt = dict(
         vid=vid,
@@ -199,7 +202,7 @@ def bundle_documentation(vid, ct):
 def bundle_sources(vid, ct):
     from ambry.util import drop_empty
 
-    r = aac().renderer.cts(ct)
+    r = aac.renderer.cts(ct)
 
     b = r.library.bundle(vid)
 
@@ -226,7 +229,7 @@ def bundle_sources(vid, ct):
 @app.route('/bundles/<vid>/build.<ct>')
 def bundle_build(vid, ct):
 
-    r = aac().renderer.cts(ct)
+    r = aac.renderer.cts(ct)
 
     cxt = dict(
         vid=vid,
@@ -245,7 +248,7 @@ def bundle_file(vid,name):
 
     m = { v:k for k,v in File.path_map.items()}
 
-    b = aac().renderer.library.bundle(vid)
+    b = aac.renderer.library.bundle(vid)
 
     bs = b.build_source_files.file(m[name])
 
@@ -261,12 +264,12 @@ def bundle_file(vid,name):
 def bundle_search():
     """Search for a datasets and partitions, using a structured JSON term."""
 
-    return aac().renderer.bundle_search(terms=request.args['terms'])
+    return aac.renderer.bundle_search(terms=request.args['terms'])
 
 @app.route('/bundles/<vid>/tables/<tvid>.<ct>')
 def get_table(vid, tvid, ct):
 
-    r = aac().renderer.cts(ct)
+    r = aac.renderer.cts(ct)
     b = r.library.bundle(vid)
 
     cxt = dict(
@@ -282,7 +285,7 @@ def get_table(vid, tvid, ct):
 
 @app.route('/bundles/<bvid>/partitions/<pvid>.<ct>')
 def get_bundle_partitions(bvid, pvid, ct):
-    r = aac().renderer.cts(ct)
+    r = aac.renderer.cts(ct)
     b = r.library.bundle(bvid)
     p = b.partition(pvid)
 
@@ -324,7 +327,7 @@ def stream_csv(pvid):
     import cStringIO as StringIO
     import unicodecsv as csv
 
-    r = aac().renderer
+    r = aac.renderer
     p = r.library.partition(pvid)
 
     if p.is_local:
@@ -359,7 +362,7 @@ def stream_mpack(pvid):
     import unicodecsv as csv
     import msgpack
 
-    r = aac().renderer
+    r = aac.renderer
     p = r.library.partition(pvid)
 
     if p.is_local:
@@ -378,12 +381,12 @@ def stream_mpack(pvid):
 # is easier for now.
 @app.route('/css/<name>')
 def css_file(name):
-    return send_from_directory(aac().renderer.css_dir, name)
+    return send_from_directory(aac.renderer.css_dir, name)
 
 
 @app.route('/js/<path:path>')
 def js_file(path):
     import os.path
 
-    return send_from_directory(*os.path.split(os.path.join(aac().renderer.js_dir,path)))
+    return send_from_directory(*os.path.split(os.path.join(aac.renderer.js_dir,path)))
 

@@ -45,11 +45,14 @@ def make_parser(cmd):
     sp.set_defaults(subcommand='ui')
     sp.add_argument('-k', '--kill', default=False, action='store_true',
                     help="Kill a running shell before starting a new one")
+    sp.add_argument('-s', '--shell', default=False, action='store_true',
+                    help="Run a shell instead")
 
     sp = asp.add_parser('ckan', help='Run the ckan container')
     sp.set_defaults(subcommand='ckan')
     sp.add_argument('-k', '--kill', default=False, action='store_true',
                     help="Kill a running container before starting a new one")
+
 
     sp = asp.add_parser('info', help='Print information about a docker group')
     sp.set_defaults(subcommand='info')
@@ -123,7 +126,6 @@ def remove_df_entry(rc, name):
 
     if name in d:
         del d[name]
-
 
     with open(get_docker_file(rc), 'wb') as f:
         d.dump(f)
@@ -542,7 +544,6 @@ def docker_ui(args, l, rc, attach=True):
         except KeyError:
             pass
 
-
         kwargs = dict(
             name=shell_name,
             image=image,
@@ -564,6 +565,8 @@ def docker_ui(args, l, rc, attach=True):
             )
         )
 
+        if args.shell:
+            kwargs['command'] = '/bin/bash' # Just to turn off the call to  Gunicorn
 
         r = client.create_container(**kwargs)
 
@@ -589,9 +592,20 @@ def docker_ui(args, l, rc, attach=True):
         prt('   Virtual host http://{} '.format(envs.get('VIRTUAL_HOST')))
         prt('   Host port: {}'.format(port))
 
-
     else:
         prt('Container {} is already running'.format(shell_name))
+        inspect = client.inspect_container(shell_name)
+
+    if args.shell:
+        inspect = client.inspect_container(shell_name)
+        running = inspect['State']['Running']
+
+        if running:
+            prt('Starting {}'.format(inspect['Id']))
+            os.execlp('docker', 'docker', 'start', '-a', '-i', inspect['Id'])
+        else:
+            prt("Exec new shell on running container")
+            os.execlp('docker', 'docker', 'exec', '-t', '-i', inspect['Id'], '/bin/bash')
 
 def docker_ckan(args, l, rc, attach=True):
     """Run a shell in an Ambry builder image, on the current docker host"""
@@ -683,7 +697,6 @@ def docker_ckan(args, l, rc, attach=True):
         prt('   Password / key: {}'.format(d['password']))
         prt('   Virtual host http://{} '.format(envs.get('VIRTUAL_HOST')))
         prt('   Host port: {}'.format(port))
-
 
     else:
         prt('Container {} is already running'.format(container_name))

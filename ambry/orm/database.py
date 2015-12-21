@@ -154,27 +154,26 @@ class Database(object):
     @property
     def engine(self):
         """return the SqlAlchemy engine for this database."""
+        from sqlalchemy.pool import NullPool
 
         if not self._engine:
 
             if 'postgres' in self.driver:
-                from sqlalchemy.pool import NullPool, AssertionPool
-                # FIXME: Find another way to initiate postgres with NullPool (it is usefull for tests only.)
 
                 if not 'connect_args' in self.engine_kwargs:
                     self.engine_kwargs['connect_args'] = {
                         "application_name": "ambry:{}".format(os.getpid())
                     }
 
-                self._engine = create_engine(self.dsn, echo=self._echo,
-                                             **self.engine_kwargs) #, poolclass=AssertionPool)
-            else:
+            # For most use, a small pool is good to prevent connection exhaustion, but these settings my be
+            # too low for the main public web application
+            self._engine = create_engine(self.dsn, echo=self._echo,
+                           pool_size = 5, max_overflow = 5, **self.engine_kwargs)
 
-                self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
 
             #
             # Disconnect connections that have a different PID from the one they were created in.
-            # THis protects against re-use in multi-processing.
+            # This protects against re-use in multi-processing.
             #
             @event.listens_for(self._engine, "connect")
             def connect(dbapi_connection, connection_record):
@@ -258,12 +257,12 @@ class Database(object):
             self.create()
 
     def close(self):
-
         self.close_session()
         self.close_connection()
+
         if self._engine:
-            self._engine.dispose()
-            self._engine = None
+            self._engine.dispose() # CLose all of the connections in the pool
+            #self._engine = None
 
     def close_session(self):
 

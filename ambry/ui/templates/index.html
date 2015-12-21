@@ -1,11 +1,13 @@
 {% extends "layout.html" %}
-
+{% from "macros.html" import json_button%}
 {% block title %}{{title}}{% endblock %}
 {% block head %}
     {{ super() }}
 {% endblock %}
 {% block masthead %}{{title}}{% endblock %}
-
+{% block json_button %}
+    {{ json_button('bundle_index_json') }}
+{% endblock %}
 {% block body %}
 
 {% include 'search/single_form.html' -%}

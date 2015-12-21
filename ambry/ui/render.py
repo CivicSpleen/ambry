@@ -48,10 +48,6 @@ if 'isin' not in jinja2.tests.TESTS:
 
     jinja2.tests.TESTS['isin'] = test_isin
 
-
-
-
-
 def resolve(ref):
     if isinstance(ref, string_types):
         return ref
@@ -257,7 +253,7 @@ class Renderer(object):
 
         self.css_files = ['css/style.css', 'css/pygments.css']
 
-        self.env = env if env else Environment(loader=PackageLoader('public_search.ui', 'templates'))
+        self.env = env if env else Environment(loader=PackageLoader('ambry.ui', 'templates'))
 
         # Set to true to get Render to return json instead
         self.content_type = content_type

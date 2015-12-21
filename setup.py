@@ -31,7 +31,8 @@ def find_package_data():
     """
 
     l = list()
-    for start in ('ambry/support', 'ambry/bundle/default_files'):
+    for start in ('ambry/support', 'ambry/bundle/default_files',
+                  'ambry/ui/templates'):
         for root, dirs, files in os.walk(start):
 
             for f in files:
@@ -214,7 +215,7 @@ d = dict(
     author_email=ambry_meta.__email__,
     url='https://github.com/CivicKnowledge/ambry',
     packages=find_packages(),
-    scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh', 'scripts/ambry-ui.sh'],
+    scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh'],
     package_data=find_package_data(),
     license=ambry_meta.__license__,
     cmdclass={'test': PyTest, 'docker': Docker},

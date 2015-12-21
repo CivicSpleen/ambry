@@ -40,20 +40,28 @@ class AmbryAppContext(object):
     def render(self, template, *args, **kwargs):
         return self.renderer.render(template, *args, **kwargs)
 
-def aac(): # Ambry Application Context
+    def close(self):
+        self.library.close()
+
+def get_aac(): # Ambry Application Context
     """Opens a new database connection if there is none yet for the
     current application context.
     """
     if not hasattr(g, 'aac'):
-        g.acc = AmbryAppContext()
+        g.aac = AmbryAppContext()
 
-    return g.acc
-
+    return g.aac
 
 app = Flask(__name__)
 
 app.config.update(app_config)
 Session(app)
 
+@app.teardown_appcontext
+def close_connection(exception):
+    aac = getattr(g,'aac', None)
+    if aac is not None:
+        aac.close()
+
 # Flask Magic. The views have to be imported for Flask to use them.
-import public_search.ui.views
+import ambry.ui.views
