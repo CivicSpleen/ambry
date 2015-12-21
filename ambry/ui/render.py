@@ -273,6 +273,7 @@ class Renderer(object):
         """Return common context values. These are primarily helper functions
         that can be used from the context. """
         from functools import wraps
+        from ambry._meta import __version__
 
         # Add a prefix to the URLs when the HTML is generated for the local
         # filesystem.
@@ -284,6 +285,7 @@ class Renderer(object):
             return wrapper
 
         return {
+            'version': __version__,
             'url_for': url_for,
             'from_root': lambda x: x,
             'schema_path': schema_path,
