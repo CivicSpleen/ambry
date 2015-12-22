@@ -10,6 +10,7 @@ __docformat__ = 'restructuredtext en'
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import event
 from sqlalchemy import Text, Binary, String, ForeignKey, Float
+from sqlalchemy.orm import deferred
 
 import six
 
@@ -27,14 +28,12 @@ class File(Base, DictableMixin):
     BSFILE.BUILD = 'build_bundle'
     BSFILE.LIB = 'lib'
     BSFILE.TEST = 'test'
+    BSFILE.DOC = 'documentation'
     BSFILE.META = 'bundle_meta'
-    BSFILE.SOURCESCHEMA = 'sourceschema'
     BSFILE.SCHEMA = 'schema'
-    BSFILE.COLMAP = 'column_map'
+    BSFILE.SOURCESCHEMA = 'sourceschema'
     BSFILE.SOURCES = 'sources'
     BSFILE.SQL = 'sql'
-    BSFILE.PARTITIONS = 'partitions'
-    BSFILE.DOC = 'documentation'
 
     path_map = {
         BSFILE.BUILD: 'bundle.py',
@@ -73,9 +72,11 @@ class File(Base, DictableMixin):
     hash = SAColumn('f_hash', Text)  # Hash of the contents
     modified = SAColumn('f_modified', Float)
     size = SAColumn('f_size', BigIntegerType)
-    contents = SAColumn('f_contents', Binary)
+    contents = deferred(SAColumn('f_contents', Binary))
     source_hash = SAColumn('f_source_hash', Text)  # Hash of the source_file
     data = SAColumn('f_data', MutationDict.as_mutable(JSONEncodedObj))
+
+    synced_fs = SAColumn('f_synced_fs', Float, doc='Time of last sync from filesystem')
 
     __table_args__ = (
         UniqueConstraint('f_d_vid', 'f_path', 'f_major_type', 'f_minor_type',  name='u_ref_path'),
@@ -171,6 +172,22 @@ class File(Base, DictableMixin):
             return pretty_time(time() - self.modified)
         except TypeError:
             return None
+
+    @property
+    def dict(self):
+        """A dict that holds key/values for all of the properties in the
+        object.
+
+        :return:
+
+        """
+        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs
+             if p.key not in ('contents', 'dataset')}
+
+        d['modified_datetime'] = self.modified_datetime
+        d['modified_ago'] = self.modified_ago
+
+        return d
 
     def __init__(self,  **kwargs):
         super(File, self).__init__(**kwargs)

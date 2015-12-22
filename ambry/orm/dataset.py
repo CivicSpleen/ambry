@@ -439,6 +439,7 @@ class Dataset(Base):
 
         return source
 
+
     def source_file(self, name):
         from .source import DataSource
 
@@ -481,7 +482,6 @@ class Dataset(Base):
         self.source_tables.append(table)
 
         assert table.sequence_id
-
 
         return table
 
@@ -566,13 +566,11 @@ class Dataset(Base):
             self.variation,
             self.revision)
 
-
 class ConfigAccessor(object):
 
     def __init__(self, dataset):
 
         self.dataset = dataset
-
 
     @property
     def metadata(self):
@@ -583,15 +581,6 @@ class ConfigAccessor(object):
         top.build_from_db(self.dataset)
         return top
 
-    @property
-    def build(self):
-        """Access build configuration values as attributes. See self.process
-            for a usage example"""
-        from .config import BuildConfigGroupAccessor
-
-        raise NotImplementedError('Use bundle.buildstate instead')
-
-        return BuildConfigGroupAccessor(self.dataset, 'buildstate')
 
     @property
     def sync(self):

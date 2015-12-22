@@ -209,6 +209,9 @@ class BuildSourceFile(object):
     def clean_objects(self):
         pass
 
+    def fh_to_record(self, f):
+        raise NotImplementedError
+
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
         raise NotImplementedError
@@ -226,6 +229,14 @@ class RowBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
 
     def fs_to_record(self):
+
+        fn_path = file_name(self._file_const)
+
+        # Used to have 'rb' for Py2, 'rt' for py3. Moved Py2 to 'rt' since that seems mroe correct
+        with self._fs.open(fn_path, 'rt', encoding='utf-8') as f:
+            return self.fh_to_record(f)
+
+    def fh_to_record(self, f):
         """Load a file in the filesystem into the file record"""
         import unicodecsv as csv
 
@@ -235,19 +246,14 @@ class RowBuildSourceFile(BuildSourceFile):
         fr.path = fn_path
         rows = []
 
-        if six.PY2:
-            with self._fs.open(fn_path, 'rb') as f:
-                for row in csv.reader(f, encoding='utf-8'):
-                    row = [e if e.strip() != '' else None for e in row]
-                    if any(bool(e) for e in row):
-                        rows.append(row)
-        else:
-            # py3
-            with self._fs.open(fn_path, 'rt', encoding='utf-8') as f:
-                for row in csv.reader(f):
-                    row = [e if e.strip() != '' else None for e in row]
-                    if any(bool(e) for e in row):
-                        rows.append(row)
+        # NOTE. THere were two cases here, for PY2 and PY3. Py two had
+        # encoding='utf-8' in the reader. I've combined them b/c that's the default for
+        # unicode csv, so it shouldn't be necessary.
+
+        for row in csv.reader(f):
+            row = [e if e.strip() != '' else None for e in row]
+            if any(bool(e) for e in row):
+                rows.append(row)
         try:
             fr.update_contents(msgpack.packb(rows), 'application/msgpack')
         except AssertionError:
@@ -303,15 +309,18 @@ class DictBuildSourceFile(BuildSourceFile):
 
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
+        fn_path = file_name(self._file_const)
+
+        with self._fs.open(fn_path, mode='r', encoding='utf-8') as f:
+            return self.fh_to_record(f)
+
+    def fh_to_record(self, f):
 
         fn_path = file_name(self._file_const)
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
-        if fn_path.endswith('.yaml'):
-            with self._fs.open(fn_path, mode='r', encoding='utf-8') as f:
-                fr.update_contents(msgpack.packb(yaml.safe_load(f)), 'application/msgpack')
-        else:
-            raise FileTypeError('Unknown file type for : %s' % fn_path)
+
+        fr.update_contents(msgpack.packb(yaml.safe_load(f)), 'application/msgpack')
 
         fr.source_hash = self.fs_hash
 
@@ -354,14 +363,20 @@ class StringSourceFile(BuildSourceFile):
         pass
 
     def fs_to_record(self):
+
+        fn_path = file_name(self._file_const)
+
+        with self._fs.open(fn_path, 'r', encoding='utf-8') as f:
+            return self.fh_to_record(f)
+
+    def fh_to_record(self, f):
         """Load a file in the filesystem into the file record"""
 
         fn_path = file_name(self._file_const)
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
 
-        with self._fs.open(fn_path, 'r', encoding='utf-8') as f:
-            fr.update_contents(f.read(), 'text/plain')
+        fr.update_contents(f.read(), 'text/plain')
 
         fr.source_hash = self.fs_hash
         fr.modified = self.fs_modtime

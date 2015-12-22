@@ -23,7 +23,7 @@ from account import Account
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 115
+SCHEMA_VERSION = 116
 
 # Note: If you are going to change POSTGRES_SCHEMA_NAME do not forget to change docs:
 #   1. README.rst (search for 'Install pg_trgm extension')
@@ -167,9 +167,13 @@ class Database(object):
 
             # For most use, a small pool is good to prevent connection exhaustion, but these settings my be
             # too low for the main public web application
-            self._engine = create_engine(self.dsn, echo=self._echo,
+
+
+                self._engine = create_engine(self.dsn, echo=self._echo,
                            pool_size = 5, max_overflow = 5, **self.engine_kwargs)
 
+            else:
+                self._engine = create_engine(self.dsn, echo=self._echo, **self.engine_kwargs)
 
             #
             # Disconnect connections that have a different PID from the one they were created in.

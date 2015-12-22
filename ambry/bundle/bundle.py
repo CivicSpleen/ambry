@@ -1176,6 +1176,12 @@ Caster Code
         return synced
 
     #
+    # New Sync Model
+    #
+
+    def sync_file(self, path, contents):
+        pass
+    #
     # Clean
     #
 
