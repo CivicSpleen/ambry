@@ -256,7 +256,7 @@ _view_stmt << (
 )
 
 #
-# Define index grammar.
+# Define asql index grammar.
 #
 index_source = delimitedList(source_ident, '.', combine=True)
 index_kw = Keyword('index', caseless=True)
@@ -265,6 +265,12 @@ _index_stmt << (
     index_kw
     + index_source.setResultsName('source')
     + '(' + column_name_list.setResultsName('columns') + ')')
+# Examples:
+# index = index_stmt.parseString('INDEX partition1 (col1, col2, col3);')
+# print(index.source)
+# 'partition1'
+# print(index.columns)
+# ['col1', 'col2', 'col3']
 
 # define Oracle comment format, and ignore them
 oracle_sql_comment = '--' + restOfLine

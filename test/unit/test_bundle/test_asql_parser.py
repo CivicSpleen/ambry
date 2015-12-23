@@ -25,8 +25,10 @@ class TestViewParser(TestBase):
         view = parse_view(query)
         self.assertEqual(view.name, 'view1')
         self.assertEqual(view.sources[0].name, 'example.com-simple-simple1')
+
         self.assertEqual(view.columns[0].name, 'col1')
         self.assertEqual(view.columns[0].alias, 'c1')
+
         self.assertEqual(view.columns[1].name, 'col2')
         self.assertEqual(view.columns[1].alias, 'c2')
 
@@ -39,8 +41,10 @@ class TestViewParser(TestBase):
         self.assertEqual(view.name, 'view1')
         self.assertEqual(view.sources[0].name, 'example.com-simple-simple1')
         self.assertEqual(view.sources[0].alias, 't1')
+
         self.assertEqual(view.columns[0].name, 't1.col1')
         self.assertEqual(view.columns[0].alias, 't1_col1')
+
         self.assertEqual(view.columns[1].name, 't1.col2')
         self.assertEqual(view.columns[1].alias, 't1_col2')
 
@@ -54,9 +58,12 @@ class TestViewParser(TestBase):
         view = parse_view(query)
         self.assertEqual(view.name, 'view1')
         self.assertEqual(view.sources[0].name, 'example.com-simple-simple1')
+
         self.assertEqual(view.joins[0].source.name, 'example.com-simple-simple2')
+
         self.assertEqual(view.columns[0].name, 't1.col1')
         self.assertEqual(view.columns[0].alias, 't1_col1')
+
         self.assertEqual(view.columns[1].name, 't1.col2')
         self.assertEqual(view.columns[1].alias, 't1_col2')
 
