@@ -61,5 +61,6 @@ class TestViewParser(TestBase):
 
 class TestCreateIndexParser(TestBase):
     def test_create_index(self):
-        index = parse_index('INDEX (col1, col2);')
-        self.assertEqual(list(index['columns']), ['col1', 'col2'])
+        index = parse_index('INDEX example.com-simple-simple1 (col1, col2);')
+        self.assertEqual(index.source, 'example.com-simple-simple1')
+        self.assertEqual(index.columns, ['col1', 'col2'])
