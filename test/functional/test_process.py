@@ -19,6 +19,7 @@ class Test(TestBase):
         db = l.database
 
         pl = ProcessLogger(db.root_dataset)
+        pl.clean()
 
         ps = pl.start('bork', 0, message='Starting')
         ps.done()
@@ -31,8 +32,9 @@ class Test(TestBase):
         ps.update('Update 2')
         ps.update('Update 3')
         ps.done('Done')
+        pl.commit()
 
-        messages = [r.message for r in db.root_dataset.process_records if r.stage == 1]
+        messages = [r.message for r in pl.records if r.stage == 1]
 
         self.assertEquals([u'Starting', u'Add 1', u'Add 2', u'Update 3', u'Done'], messages)
 
@@ -48,7 +50,7 @@ class Test(TestBase):
         ps.add('5')
         ps.update('6')
 
-        messages = [r.message for r in db.root_dataset.process_records if r.stage == 2]
+        messages = [r.message for r in pl.records if r.stage == 2]
 
         self.assertEqual([u'Fronking', u'1', u'4', u'6'], messages)
         ##
@@ -58,7 +60,7 @@ class Test(TestBase):
                 raise ValueError('This is an exception')
 
         messages = [r.message for r in pl.dataset.process_records if r.stage == 3]
-        self.assertEquals([u'Get Exceptions', u'This is an exception'], messages)
+        self.assertEquals([u'Get Exceptions', u'This is an exception', 'Failed in context with exception'], messages)
 
         exc_type = [r.message for r in pl.dataset.process_records if r.stage == 3 and r.exception_trace][0]
         self.assertEqual('This is an exception', exc_type)

@@ -339,6 +339,13 @@ class SourceFileSourcePipe(Pipe):
         return "{}; {} {}".format(qualified_class_name(self), type(self.source), self.path)
 
 
+class RowGenerator(object):
+    """Base class for generator objects"""
+    def __init__(self, bundle, source=None):
+
+        self._bundle = bundle
+        self._source = source
+
 class GeneratorSourcePipe(Pipe):
     """Base class for a source pipe that implements it own iterator """
 

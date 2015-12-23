@@ -9,7 +9,8 @@ about:
   source: null
   space: null
   subject: null
-  summary: Ensure that converage values from  the partition names, metadata and datasets are included in the partition coverage information
+  summary: Ensure that converage values from  the partition names, metadata and datasets
+    are included in the partition coverage information
   tags: []
   time: null
   title: Tests of time, space and grain coverage

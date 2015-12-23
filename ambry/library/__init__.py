@@ -625,10 +625,15 @@ class Library(object):
         :param accounts_password: The password for decrypting the secret
         :return:
         """
+        from sqlalchemy.orm.exc import NoResultFound
+        from ambry.orm.exc import NotFoundError
 
-        act = self.database.session.query(Account).filter(Account.account_id == account_id).one()
-        act.password = self._account_password
-        return act
+        try:
+            act = self.database.session.query(Account).filter(Account.account_id == account_id).one()
+            act.password = self._account_password
+            return act
+        except NoResultFound:
+            raise NotFoundError("Did not find account for account id: '{}' ".format(account_id))
 
     @property
     def account_acessor(self):

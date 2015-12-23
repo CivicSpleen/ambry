@@ -546,7 +546,7 @@ class Bundle(object):
         base_path = os.path.dirname(self.identity.cache_key)
 
         if not self.build_fs.exists(base_path):
-            self.build_fs.makedir(base_path, allow_recreate=True)
+            self.build_fs.makedir(base_path, recursive=True, allow_recreate=True)
 
         return self.build_fs.opendir(base_path)
 
@@ -1064,9 +1064,20 @@ Caster Code
 
         self.ingest(sources, tables, stage, force=force)
 
+        self.source_schema(sources, tables, clean=force)
+
         self.schema(sources, tables, force=force)
 
         self.build(sources, tables, stage, force=force)
+
+    def run_stages(self):
+
+        stages = set([ source.stage for source in self.sources])
+
+        for stage in stages:
+            sources = [ source for source in self.sources if source.stage == stage ]
+
+            self.run(sources=sources)
 
     #
     # Syncing
@@ -1093,27 +1104,39 @@ Caster Code
 
         return syncs
 
-    def sync_in(self):
+    def sync_in(self, force = False):
         """Synchronize from files to records, and records to objects"""
         self.log('---- Sync In ----')
         from ambry.bundle.files import BuildSourceFile
-        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
-        self.build_source_files.record_to_objects()
+
+        for f in self.build_source_files:
+
+            if self.source_fs.exists(f.record.path):
+                #print f.path, f.fs_modtime, f.record.modified, f.record.source_hash, f.fs_hash
+                if f.fs_is_newer or force:
+                    self.log('Sync: {}'.format(f.record.path))
+                    f.fs_to_record()
+                    f.record_to_objects()
 
         self.library.commit()
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
+    def sync_out(self):
+        """Synchronize from objects to records"""
+        self.log('---- Sync Out ----')
+        from ambry.bundle.files import BuildSourceFile
+
+        for f in self.build_source_files:
+            if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE:
+                self.log('Sync: {}'.format(f.record.path))
+                f.record_to_fs()
+
+        # self.state = self.STATES.SYNCED
+
     def sync_objects_in(self):
         """Synchronize from records to objects"""
         self.build_source_files.record_to_objects()
-
-    def sync_out(self):
-        """Synchronize from objects to records"""
-        from ambry.bundle.files import BuildSourceFile
-        self.build_source_files.objects_to_record()
-        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
-        # self.state = self.STATES.SYNCED
 
     def sync_objects_out(self):
         """Synchronize from objects to records, and records to files"""
@@ -1515,7 +1538,7 @@ Caster Code
             iterable_source, source_pipe = self.source_pipe(source, ps)
 
             if not source.is_ingestible:
-                self.update(message='Not an ingestiable source: {}'.format(source.name),
+                ps.update(message='Not an ingestiable source: {}'.format(source.name),
                             state='skipped', source=source)
                 source.state = source.STATES.NOTINGESTABLE
 
@@ -1537,6 +1560,7 @@ Caster Code
 
 
             source.update_spec()  # Update header_lines, start_line, etc.
+            self.build_source_files.sources.objects_to_record()
 
             ps.update(message='Ingested {}'.format(source.datafile.path), state='done')
             source.state = source.STATES.INGESTED
@@ -1573,6 +1597,21 @@ Caster Code
     #
     # Schema
     #
+
+    @CaptureException
+    def source_schema(self, sources=None, tables=None, clean=False):
+        """Process a collection of ingested sources to make source tables. """
+        from ambry.bundle.files import BuildSourceFile
+
+        sources = self._resolve_sources(sources, tables, None,
+                                        predicate=lambda s: s.is_processable and not s.is_partition)
+
+        for source in sources:
+            source.update_table()
+            self.log('Creating source schema for: {}; {} columns'
+                     .format(source.name, len(source.source_table.columns)))
+
+        self.commit()
 
     @CaptureException
     def schema(self, sources=None, tables=None, clean=False, force=False, use_pipeline=False):
@@ -1634,9 +1673,17 @@ Caster Code
                 # with the header, then sort on the postition. This will produce a stream of header names
                 # that may have duplicates, but which is generally in the order the headers appear in the
                 # sources. The duplicates are properly handled when we add the columns in add_column()
+
+                def source_cols(source):
+                    if source.is_partition:
+                        print '!!!!', source.partition.table.columns
+                        return []
+                    else:
+                        return enumerate(source.source_table.columns)
+
                 columns = sorted(set([(i, col.dest_header, col.datatype, col.description, col.has_codes)
-                                      for source in table_sources
-                                      for i, col in enumerate(source.source_table.columns)]))
+                                      for source in table_sources for i, col in source_cols(source )]))
+
 
                 initial_count = len(t.columns)
 
@@ -1667,18 +1714,7 @@ Caster Code
 
         return True
 
-    def source_schema(self, sources=None, tables=None, clean=False):
-        """Process a collection of ingested sources to make source tables. """
-        from ambry.bundle.files import BuildSourceFile
 
-        sources = self._resolve_sources(sources, tables, None,
-                                        predicate=lambda s: s.is_processable and not s.is_partition)
-
-        for source in sources:
-            if source.datafile.exists:
-                source.update_table()
-
-        self.commit()
 
 
     #

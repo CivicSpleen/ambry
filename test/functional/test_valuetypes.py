@@ -95,20 +95,24 @@ class Test(TestBase):
 
         d = self.setup_temp_dir()
         b = self.setup_bundle('casters', build_url=d, source_url=d)
-        b.sync_in()  # Required to get bundle for cast_to_subclass to work.
+        b.sync_in(force = True)  # Required to get bundle for cast_to_subclass to work.
         b = b.cast_to_subclass()
 
         b.ingest()
-        b.schema()
+        b.source_schema()
+        b.commit()
+
+        print b.build_fs
 
         pl = b.pipeline(source=b.source('simple_stats'))
 
         ccp = pl[CastColumns]
 
         source_table = ccp.source.source_table
-        dest_table = ccp.source.dest_table
 
         source_headers = [c.source_header for c in source_table.columns]
+
+        self.assertTrue(len(source_headers) > 0)
 
         ccp.process_header(source_headers)
 

@@ -37,7 +37,10 @@ class ProgressSection(object):
         self._ai_rec_id = None # record for add_update
 
         self._group = None
+        self._start = None
         self._group = self.add(log_action='start',state='running', **kwargs)
+
+
 
         assert self._session
 
@@ -62,6 +65,18 @@ class ProgressSection(object):
         else:
             self.done("Successful context exit")
             return True
+
+    @property
+    def start(self):
+        from sqlalchemy.orm.exc import NoResultFound
+
+        if not self._start:
+            try:
+                self._start =  self._session.query(Process).filter(Process.id == self._group).one()
+            except NoResultFound:
+                self._start = None
+
+        return self._start
 
     def augment_args(self,args, kwargs):
 
@@ -91,11 +106,15 @@ class ProgressSection(object):
     def add(self, *args, **kwargs):
         """Add a new record to the section"""
 
+        if self.start and self.start.state == 'done':
+            raise ProgressLoggingError("Can't add -- process section is done")
+
         self.augment_args(args, kwargs)
 
         kwargs['log_action'] = kwargs.get('log_action', 'add')
 
         rec = Process(**kwargs)
+
 
         self._session.add(rec)
 
@@ -103,6 +122,7 @@ class ProgressSection(object):
 
         if self._logger:
             self._logger.info(self.rec.log_str)
+
         self._session.commit()
         self._ai_rec_id = None
 
@@ -153,13 +173,12 @@ class ProgressSection(object):
 
     def done(self, *args, **kwargs):
 
-        start = self._session.query(Process).filter(Process.id == self._group).one()
-        start.state = 'done'
-
-        self._session.query(Process).filter(Process.group == self._group).update({Process.state: 'done'})
 
         kwargs['state'] = 'done'
         pr_id = self.add(*args, log_action='done', **kwargs)
+
+        self._session.query(Process).filter(Process.group == self._group).update({Process.state: 'done'})
+        self.start.state = 'done'
 
         return pr_id
 

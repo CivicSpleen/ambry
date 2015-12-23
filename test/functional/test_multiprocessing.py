@@ -5,6 +5,7 @@ from test.test_base import TestBase
 from ambry.identity import DatasetNumber
 from ambry.orm import Database, Dataset
 
+@unittest.skip
 class Test(TestBase):
 
     def setUp(self):
@@ -196,17 +197,15 @@ class Test(TestBase):
 
         self.assertEquals(135, len(names))
 
-from ambry.bundle.concurrent import MPBundleMethod
 
-@MPBundleMethod
-def run_mp(args):
+
+def run_mp(b,i):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
     from ambry.identity import PartialPartitionName
 
     from ambry.identity import PartialPartitionName
     from ambry.orm.partition import Partition
 
-    b, i = args
 
     table = b.table('footable')
 
@@ -218,8 +217,7 @@ def run_mp(args):
 
     return p.name
 
-@MPBundleMethod
-def run_mp_partitions(args):
+def run_mp_partitions(b,i):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
     from ambry.identity import PartialPartitionName
     from ambry.orm.partition import Partition
@@ -234,12 +232,10 @@ def run_mp_partitions(args):
 
     return p.name
 
-@MPBundleMethod
-def run_mp_tables(args):
+
+def run_mp_tables(b,i):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
     from ambry.orm import Table
-
-    b, i = args
 
     b.commit()
     t = b.dataset.new_table(name="obj{:02d}".format(i))
@@ -251,11 +247,9 @@ def run_mp_tables(args):
         return None
 
 
-@MPBundleMethod
-def run_mp_sourcetables(args):
+def run_mp_sourcetables(b,i):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
 
-    b, i = args
 
     b.commit()
     t = b.dataset.new_source_table(name="obj{:02d}".format(i))
@@ -265,11 +259,9 @@ def run_mp_sourcetables(args):
         return t.name
     else:
         return None
-@MPBundleMethod
-def run_mp_combined(args):
-    """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
 
-    b, i = args
+def run_mp_combined(b,i):
+    """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
 
     ds = b.dataset
 

@@ -2,7 +2,6 @@
 from ambry.bundle import Bundle
 from ambry.etl import DatafileSourcePipe
 
-
 class ExampleSourcePipe(DatafileSourcePipe):
 
     def __iter__(self):
@@ -37,7 +36,6 @@ class ExampleSourcePipe(DatafileSourcePipe):
                 yield list(row.keys())
 
             yield list(row.values())
-
 
 def cst_init(v):
     return 1

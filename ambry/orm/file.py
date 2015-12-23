@@ -72,6 +72,7 @@ class File(Base, DictableMixin):
     hash = SAColumn('f_hash', Text)  # Hash of the contents
     modified = SAColumn('f_modified', Float)
     size = SAColumn('f_size', BigIntegerType)
+
     contents = deferred(SAColumn('f_contents', Binary))
     source_hash = SAColumn('f_source_hash', Text)  # Hash of the source_file
     data = SAColumn('f_data', MutationDict.as_mutable(JSONEncodedObj))

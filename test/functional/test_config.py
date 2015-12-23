@@ -5,8 +5,8 @@ class Test(TestBase):
 
     def test_run_config_filesystem(self):
         rc = self.get_rc()
-        self.assertEqual('{root}/cache/downloads', rc.filesystem.downloads)
-        self.assertEqual('{root}/cache/extracts', rc.filesystem.extracts)
+        self.assertEqual('{root}/downloads', rc.filesystem.downloads)
+        self.assertEqual('{root}/extracts', rc.filesystem.extracts)
 
     def test_dsn_config(self):
         from ambry.dbexceptions import ConfigurationError
@@ -150,5 +150,6 @@ library:
         self.assertTrue('/tmp/foo/bar', lf.root)
 
         l = Library(config)
+        l.sync_config()
 
         self.assertEqual(['test', 'restricted', 'census', 'public'], l.remotes.keys())

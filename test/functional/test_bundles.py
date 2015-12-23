@@ -17,17 +17,20 @@ class Test(TestBase):
 
     def test_stages(self):
         b = self.import_single_bundle('ingest.example.com/stages')
-        b.run()
+
+        b.run_stages()
 
     def test_casters(self):
         b = self.import_single_bundle('build.example.com/casters')
         b.ingest()
+        b.source_schema()
         b.schema()
         b.build()
 
     def test_coverage(self):
         b = self.import_single_bundle('build.example.com/coverage')
         b.ingest()
+        b.source_schema()
         b.schema()
         b.build()
 

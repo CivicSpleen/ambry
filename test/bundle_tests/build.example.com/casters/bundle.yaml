@@ -18,7 +18,7 @@ about:
   title: Casters Example
 contacts:
   analyst:
-    org: Example Com
+    org: Example Commer
     url: http://example.com
   creator:
     email: bob@bob.com
@@ -37,3 +37,5 @@ names:
   name: example.com-casters
   vid: d00casters003
   vname: example.com-casters-0.1.3
+
+

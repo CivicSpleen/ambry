@@ -47,6 +47,22 @@ class BundleTest(unittest.TestCase):
             for member in members:
                 _assert_in(member, headers)
 
+    def assertInDatafileHeaders(self, source_name, member, msg=None):
+        """
+        Fail if the member, which may be a string type or a collection, is not in the headers
+        of a datafile, given by the name of the soruce associated with the datafile.
+
+        :param table_name:
+        :param member:
+        :param msg:
+        :return:
+        """
+
+        source = self.bundle.source(source_name)
+
+        headers =[ c.name for c in source.datafile.reader.columns ]
+
+        return self._assertInHeaders(headers, member)
 
     def assertInSourceHeaders(self, table_name, member, msg = None):
         """

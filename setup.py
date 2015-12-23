@@ -75,9 +75,10 @@ class PyTest(TestCommand):
     def finalize_options(self):
         TestCommand.finalize_options(self)
 
-    def run_tests(self):
+    def run(self):
         # import here, cause outside the eggs aren't loaded
         import pytest
+
         if self.all:
             self.pytest_args += 'test'
         elif self.unit or self.regression or self.bundle or self.functional:
@@ -106,6 +107,7 @@ class PyTest(TestCommand):
         if self.sqlite:
             os.environ['AMBRY_TEST_DB'] = 'sqlite'
 
+        print self.pytest_args
         errno = pytest.main(self.pytest_args)
         sys.exit(errno)
 

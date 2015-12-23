@@ -1,5 +1,1 @@
-name,source_table_name,dest_table_name,time,space,end_line,description,reftype,ref
-source1,demo,demo,2000,nv,6001,Արամ Խաչատրյան,generator,RandomSourcePipe
-source2,demo,demo,2001,ca,6001,Вагиф Сәмәдоғлу,generator,RandomSourcePipe
-source3,demo,demo,2002,la,6001,সুকুমার রায়,generator,RandomSourcePipe
-source4,demo,demo,2003,ut,6001,ᓱᓴᓐ ᐊᒡᓗᒃᑲᖅ,generator,RandomSourcePipe
+name,title,source_table,dest_table,segment,time,space,grain,start_line,end_line,comment_lines,header_lines,description,url

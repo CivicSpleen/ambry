@@ -26,8 +26,13 @@ SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
 
 class TestBase(unittest.TestCase):
 
+    _library = None
+
     def setUp(self):
         import uuid
+
+        self.db = None
+        self._library = None
 
         super(TestBase, self).setUp()
 
@@ -41,8 +46,7 @@ class TestBase(unittest.TestCase):
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
-        self.db = None
-        self._library = None
+
 
     def tearDown(self):
 
@@ -144,7 +148,7 @@ class TestBase(unittest.TestCase):
 
         b = next(b for b in l.bundles).cast_to_subclass()
         b.clean()
-        b.sync_in()
+        b.sync_in(force = True)
         return b
 
     def new_dataset(self, n=1, source='source'):

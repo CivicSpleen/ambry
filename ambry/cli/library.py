@@ -99,8 +99,8 @@ def run_command(args, rc):
 
     globals()['library_' + args.subcommand](args, l, rc)
 
-
-    l.close()
+    if l:
+        l.close()
 
 def library_drop(args, l, config):
     prt("Drop tables")

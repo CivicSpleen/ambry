@@ -19,6 +19,10 @@ TAG.AFTER_INGEST = 'after_ingest'
 TAG.BEFORE_SCHEMA = 'before_schema'
 TAG.AFTER_SCHEMA = 'after_schema'
 
+TAG.BEFORE_SOURCESCHEMA = 'before_sourceschema'
+TAG.AFTER_SOURCESCHEMA = 'after_sourceschema'
+
+
 TAG.BEFORE_BUILD = 'before_build'
 TAG.AFTER_BUILD = 'after_build'
 
@@ -88,6 +92,14 @@ def before_build(stage=1):
 
 def after_build(stage=1):
     return _wrap_for_events(TAG.AFTER_BUILD, stage)
+
+
+def before_sourceschema(stage=1):
+    return _wrap_for_events(TAG.BEFORE_SOURCESCHEMA, stage)
+
+
+def after_sourceschema(stage=1):
+    return _wrap_for_events(TAG.AFTER_SOURCESCHEMA, stage)
 
 
 def before_schema(stage=1):

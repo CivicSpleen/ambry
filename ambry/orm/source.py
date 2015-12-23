@@ -176,6 +176,15 @@ class DataSourceBase(object):
         return SourceSpec(url, **self.dict)
 
     @property
+    def account(self):
+        """Return an account record, based on the host in the url"""
+        from ambry.util import parse_url_to_dict
+
+        d = parse_url_to_dict(self.url)
+
+        return self._bundle.library.account(d['netloc'])
+
+    @property
     def column_map(self):
         """For each column, map from the source header ( column name ) to the destination header """
         return self.source_table.column_map

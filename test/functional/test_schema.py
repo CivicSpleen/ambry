@@ -24,7 +24,7 @@ class Test(TestBase):
 
         print b.library.database.dsn
         print [ st.name for st in b.source_tables]
-        self.assertEquals(3,len(b.source_tables))
+        self.assertEquals(7,len(b.source_tables))
 
         self.assertEqual([u'int', u'float', u'string', u'time', u'date'],
                          [ c.dest_header for c in b.dataset.source_table('types1').columns])
@@ -55,8 +55,7 @@ class Test(TestBase):
 
         self.assertEqual([u'int', u'float', u'string', u'time', u'date'],
                          [ c.source_header for c in b.dataset.source_table('types1').columns])
-        self.assertEqual([u'Xint', u'Xfloat', u'Xstring', u'Xtime', u'Xdate'],
-                         [ c.dest_header for c in b.dataset.source_table('types1').columns])
+
 
         b.clean_ingested()
         b.ingest(tables=['types'])

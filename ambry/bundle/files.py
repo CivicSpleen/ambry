@@ -135,7 +135,17 @@ class BuildSourceFile(object):
     @property
     def fs_is_newer(self):
 
-        return (self.fs_modtime or 0) > (self.record.modified or 0) and self.record.source_hash != self.fs_hash
+        return ((self.fs_modtime or 0) > (self.record.modified or 0)
+                and self.record.source_hash != self.fs_hash )
+
+    @property
+    def fs_mod_since_sync(self):
+
+        return ((self.fs_modtime or 0) > (self.record.synced_fs or 0))
+
+    @property
+    def same_age(self):
+        return (self.fs_modtime or 0) == (self.record.modified or 0)
 
     @property
     def fs_hash(self):
@@ -224,6 +234,11 @@ class BuildSourceFile(object):
         """Create a filesystem file from a File"""
         raise NotImplementedError
 
+    def setcontent(self, content):
+        from cStringIO import StringIO
+
+        return self.fh_to_record(StringIO(content))
+
 
 class RowBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -232,9 +247,15 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fn_path = file_name(self._file_const)
 
-        # Used to have 'rb' for Py2, 'rt' for py3. Moved Py2 to 'rt' since that seems mroe correct
-        with self._fs.open(fn_path, 'rt', encoding='utf-8') as f:
-            return self.fh_to_record(f)
+        if six.PY2:
+            with self._fs.open(fn_path, 'rb') as f:
+                return self.fh_to_record(f)
+        else:
+
+            with self._fs.open(fn_path, 'rt', encoding='utf-8') as f:
+                return self.fh_to_record(f)
+
+
 
     def fh_to_record(self, f):
         """Load a file in the filesystem into the file record"""
@@ -260,7 +281,7 @@ class RowBuildSourceFile(BuildSourceFile):
             raise
 
         fr.source_hash = self.fs_hash
-
+        fr.synced_fs = self.fs_modtime
         fr.modified = self.fs_modtime
 
     def record_to_fh(self, f):
@@ -324,6 +345,7 @@ class DictBuildSourceFile(BuildSourceFile):
 
         fr.source_hash = self.fs_hash
 
+        fr.synced_fs = self.fs_modtime
         fr.modified = self.fs_modtime
 
     def record_to_fh(self, f):
@@ -379,6 +401,7 @@ class StringSourceFile(BuildSourceFile):
         fr.update_contents(f.read(), 'text/plain')
 
         fr.source_hash = self.fs_hash
+        fr.synced_fs = self.fs_modtime
         fr.modified = self.fs_modtime
 
     def record_to_fh(self, f):
@@ -431,6 +454,9 @@ class MetadataFile(DictBuildSourceFile):
         return ad
 
     def objects_to_record(self):
+        pass # The metadata file never gets written back from objects
+
+    def record_to_fh(self, f):
 
         # FIXME: -- this looks more like records to file
 
@@ -461,6 +487,7 @@ class MetadataFile(DictBuildSourceFile):
         fr.update_contents(msgpack.packb(o), 'application/msgpack')
 
         return fr
+
 
 
 class PythonSourceFile(StringSourceFile):
@@ -1006,38 +1033,38 @@ class BuildSourceFileAccessor(object):
                 self._bundle.logger.debug('   otr {}'.format(file_const))
                 f.objects_to_record()
 
+    def set_defaults(self):
+        """Add default content to any file record that is empty"""
+
+        for f in iter(self):
+            if not f.record.size:
+                f.setcontent(f.default)
+
     def sync(self, force=None, defaults=False):
+        raise NotImplementedError()
 
-        syncs = []
+    def put_contents(self, file_const, contents):
 
-        for file_const, (file_name, clz) in iteritems(file_info_map):
+        return self.file(file_const).fh_to_record(fh)
 
-            f = self.file(file_const)
+    def get_contents(self):
+        return self.file(file_const).record_to_fh()
 
-            sync_info = (None, None)
+    def sync_out(self, file_const, fh = None):
 
-            if defaults and force == f.SYNC_DIR.RECORD_TO_FILE and not f.record.contents:
-                sync_info = (file_const, f.prepare_to_edit())
-            elif force == f.SYNC_DIR.OBJECT_TO_FILE:
-                try:
-                    self._bundle.logger.debug('   otr {}'.format(file_const))
-                    f.objects_to_record()
-                    self._bundle.logger.debug('   rtf {}'.format(file_const))
-                    sync_info = (file_const, f.sync(f.SYNC_DIR.RECORD_TO_FILE))
-                except AttributeError:
-                    pass
-            elif force == f.SYNC_DIR.FILE_TO_RECORD:
-                self._bundle.logger.debug("   ftr {}".format(file_const))
-                sync_info = (file_const, f.sync(force))
-            else:
-                sync_info = (file_const, f.sync())
-                if sync_info[1]:
-                    self._bundle.logger.debug('   {} {}'.format(sync_info[1], file_const))
+        rtrn = False
 
-            syncs.append(sync_info)
+        if not fh:
+            from cStringIO import StringIO
+            fh = StringIO()
+            rtrn = True
 
-        return syncs
+        self.file(file_const).record_to_fh(file_const, fh)
 
-    def sync_dirs(self):
-        return [(file_const, self.file(file_const).sync_dir())
-                for file_const, (file_name, clz) in iteritems(file_info_map)]
+        if rtrn:
+            c = fh.getvalue()
+            c.close()
+            return c
+        else:
+            return None
+

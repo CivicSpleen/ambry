@@ -850,15 +850,16 @@ def bundle_schema(args, l, rc):
 
     if args.source or args.source_clean:
         b.source_schema(sources=sources, tables=args.table)
+        b.build_source_files.sourceschema.objects_to_record()
         prt("Created source schema")
 
     if args.dest or args.dest_clean:
         b.schema(tables=args.table, clean=args.source_clean, use_pipeline=args.build)
+        b.build_source_files.schema.objects_to_record()
         prt("Created destination schema")
 
     if (args.source or args.source_clean) and args.sync_out:
         bsf = b.build_source_files.file(File.BSFILE.SOURCESCHEMA)
-        bsf.objects_to_record()
         bsf.record_to_fs()
 
     if (args.dest or args.dest_clean) and args.sync_out:
@@ -867,6 +868,7 @@ def bundle_schema(args, l, rc):
         bsf.record_to_fs()
 
     b.set_last_access(Bundle.STATES.SCHEMA)
+    b.commit()
 
 
 
@@ -919,7 +921,7 @@ def bundle_run(args, l, rc):
 
     b = b.cast_to_subclass()
 
-    b.run(sources=args.source, tables=args.table, stage=args.stage, force=args.force)
+    b.run_stages()
 
     b.set_last_access(Bundle.STATES.BUILT)
 
@@ -1029,15 +1031,19 @@ def bundle_dump(args, l, rc):
     elif args.table == 'files':
 
         records = []
-        headers = 'Path Major Minor State Size Modified'.split()
-        for row in b.dataset.files:
+        headers = 'Path Major Minor State Size Modified Synced SyncDir'.split()
+
+        for f in b.build_source_files:
+            row = f.record
             records.append((
                 row.path,
                 row.major_type,
                 row.minor_type,
                 row.state,
                 row.size,
-                datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else ''
+                datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else '',
+                datetime.datetime.fromtimestamp(float(row.synced_fs)).isoformat() if row.synced_fs else '',
+                f.sync_dir()
                 )
             )
         records = sorted(records, key=lambda row: (row[0], row[1], row[2]))
@@ -1280,8 +1286,8 @@ def bundle_export(args, l, rc):
 
         b.set_file_system(source_url=source_dir)
 
-    b.sync(force='rtf', defaults=args.defaults)
 
+    b.build_source_files.set_defaults()
     b.sync_out()
 
     prt('Exported bundle: {}'.format(b.source_fs))
