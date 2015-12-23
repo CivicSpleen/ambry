@@ -8,15 +8,20 @@ from test.test_base import TestBase
 class TestViewParser(TestBase):
 
     def test_create_view(self):
-        query = 'CREATE VIEW view1 AS SELECT col1, col2 FROM example.com-simple-simple1;'
+        query = '''
+            CREATE VIEW view1 AS
+                SELECT col1, col2
+                FROM example.com-simple-simple1;'''
         view = parse_view(query)
         self.assertEqual(view.name, 'view1')
         self.assertEqual(view.sources[0].name, 'example.com-simple-simple1')
         self.assertEqual([x.name for x in view.columns], ['col1', 'col2'])
 
     def test_create_view_having_column_aliases(self):
-        query = '''CREATE VIEW view1 AS SELECT col1 as c1, col2 as c2
-            FROM example.com-simple-simple1;'''
+        query = '''
+            CREATE VIEW view1 AS
+                SELECT col1 as c1, col2 as c2
+                FROM example.com-simple-simple1;'''
         view = parse_view(query)
         self.assertEqual(view.name, 'view1')
         self.assertEqual(view.sources[0].name, 'example.com-simple-simple1')
@@ -26,8 +31,10 @@ class TestViewParser(TestBase):
         self.assertEqual(view.columns[1].alias, 'c2')
 
     def test_create_view_having_table_alias(self):
-        query = '''CREATE VIEW view1 AS SELECT t1.col1 AS t1_col1, t1.col2 AS t1_col2
-            FROM example.com-simple-simple1 AS t1'''
+        query = '''
+            CREATE VIEW view1 AS
+                SELECT t1.col1 AS t1_col1, t1.col2 AS t1_col2
+                FROM example.com-simple-simple1 AS t1'''
         view = parse_view(query)
         self.assertEqual(view.name, 'view1')
         self.assertEqual(view.sources[0].name, 'example.com-simple-simple1')
@@ -38,9 +45,11 @@ class TestViewParser(TestBase):
         self.assertEqual(view.columns[1].alias, 't1_col2')
 
     def test_create_view_having_join(self):
-        query = '''CREATE VIEW view1 AS SELECT t1.col1 AS t1_col1, t1.col2 AS t1_col2
-            FROM example.com-simple-simple1 AS t1
-            LEFT JOIN example.com-simple-simple2 AS t2 ON t1.id = t2.id;
+        query = '''
+            CREATE VIEW view1 AS
+                SELECT t1.col1 AS t1_col1, t1.col2 AS t1_col2
+                FROM example.com-simple-simple1 AS t1
+                LEFT JOIN example.com-simple-simple2 AS t2 ON t1.id = t2.id;
         '''
         view = parse_view(query)
         self.assertEqual(view.name, 'view1')
@@ -52,7 +61,10 @@ class TestViewParser(TestBase):
         self.assertEqual(view.columns[1].alias, 't1_col2')
 
     def test_create_materialized_view(self):
-        query = 'CREATE MATERIALIZED VIEW view1 AS SELECT col1, col2 FROM example.com-simple-simple1;'
+        query = '''
+            CREATE MATERIALIZED VIEW view1 AS
+                SELECT col1, col2
+                FROM example.com-simple-simple1;'''
         mat_view = parse_view(query)
         self.assertEqual(mat_view.name, 'view1')
         self.assertEqual(mat_view.sources[0].name, 'example.com-simple-simple1')
