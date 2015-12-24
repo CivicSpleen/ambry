@@ -19,12 +19,92 @@ from pyparsing import Word, delimitedList, Optional, Combine, Group, alphas, alp
 #
 
 
+class Source(object):
+    """ Parsed source - table name or partition ref. """
+
+    def __init__(self, parsed_source):
+        self.name = parsed_source.name
+        self.alias = parsed_source.alias
+
+    def __str__(self):
+        return 'name: {}, alias: {}'.format(self.name, self.alias)
+
+
+class Column(object):
+    """ Parsed column. """
+
+    def __init__(self, parsed_column):
+        self.name = parsed_column.name
+        self.alias = parsed_column.alias
+
+    def __str__(self):
+        return 'name: {}, alias: {}'.format(self.name, self.alias)
+
+
+class Join(object):
+    """ Parsed join. """
+
+    def __init__(self, parsed_join):
+        self.source = Source(parsed_join.source)
+
+    def __str__(self):
+        return self.source.__str__()
+
+
+class View(object):
+    """ Parsed view or materialized view. """
+
+    def __init__(self, parse_result):
+        self.name = parse_result.name
+        self.sources = [Source(s) for s in parse_result.sources]
+        self.columns = [Column(c) for c in parse_result.columns]
+        self.joins = [Join(j) for j in parse_result.joins]
+
+    def __str__(self):
+
+        def wr(o):
+            """ converts object to str and wraps with curly braces. """
+            return '{%s}' % o
+
+        columns_str = ', '.join([wr(c) for c in self.columns])
+        sources_str = ', '.join([wr(s) for s in self.sources])
+        joins_str = ', '.join([wr(j) for j in self.joins])
+        return 'name: {},\n sources: [{}],\n columns: [{}],\n joins: [{}]'.format(
+            self.name, sources_str, columns_str, joins_str)
+        return self.source.__str__()
+
+
+class Index(object):
+    """ Parsed index. """
+
+    def __init__(self, parse_result):
+        self.source = parse_result.source
+        self.columns = list(parse_result.columns)
+
+
 def parse_view(query):
-    return _view_stmt.parseString(query)
+    """ Parses asql query to view object.
+
+    Args:
+        query (str): asql query
+
+    Returns:
+        View instance: parsed view.
+    """
+    return View(_view_stmt.parseString(query))
 
 
 def parse_index(query):
-    return _index_stmt.parseString(query)
+    """ Parses asql query to view object.
+
+    Args:
+        query (str): asql index create query.
+            Example: 'INDEX example.com-simple-simple (id, uuid);'
+
+    Returns:
+        Index instance: parsed index.
+    """
+    return Index(_index_stmt.parseString(query))
 
 
 # Parser implementation
@@ -176,13 +256,21 @@ _view_stmt << (
 )
 
 #
-# Define index grammar.
+# Define asql index grammar.
 #
+index_source = delimitedList(source_ident, '.', combine=True)
 index_kw = Keyword('index', caseless=True)
 _index_stmt = Forward()
 _index_stmt << (
     index_kw
+    + index_source.setResultsName('source')
     + '(' + column_name_list.setResultsName('columns') + ')')
+# Examples:
+# index = index_stmt.parseString('INDEX partition1 (col1, col2, col3);')
+# print(index.source)
+# 'partition1'
+# print(index.columns)
+# ['col1', 'col2', 'col3']
 
 # define Oracle comment format, and ignore them
 oracle_sql_comment = '--' + restOfLine

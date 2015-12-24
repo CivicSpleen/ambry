@@ -1642,7 +1642,6 @@ Caster Code
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
         for t, table_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
-
             if not force and not t.is_empty():
                 continue
 
@@ -1814,7 +1813,7 @@ Caster Code
             # Yes, please, because it's certainyly not here. The import apsw
             # couses troubles, since it's hard to install on Macs.
             if False:
-                from ambry.library.warehouse import execute_sql
+                from ambry.library.warehouse.core import execute_sql
                 for f in self.dataset.files:
                     if f.path == 'bundle.sql' and f.unpacked_contents:
                         # close current sqlite connection (pysqlite) because virtual tables implementations

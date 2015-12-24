@@ -62,11 +62,15 @@ class Test(TestBase):
         """ d_vid, type, group and key are unique together. """
         db = self.new_database()
         ds = self.new_db_dataset(db, n=0)
-        conf1 = Config(d_vid=ds.vid, type='metadata', group='identity', key='key1', value='value1', sequence_id = 1)
+        conf1 = Config(
+            sequence_id=1, d_vid=ds.vid, type='metadata',
+            group='identity', key='key1', value='value1')
         db.session.add(conf1)
         db.session.commit()
 
-        dupe = Config(d_vid=ds.vid, type='metadata', group='identity', key='key1', value='value1', sequence_id = 1)
+        dupe = Config(
+            sequence_id=2, d_vid=ds.vid, type='metadata',
+            group='identity', key='key1', value='value1')
         db.session.add(dupe)
         try:
             db.session.commit()
