@@ -216,6 +216,12 @@ class BuildSourceFile(object):
             self._bundle.error("Failed to sync '{}': {}".format(self._file_const, e))
             raise
 
+    def sync_out(self):
+        """Sync out from objects to the file system"""
+        self.objects_to_record()
+        self.record_to_fs()
+
+
     def clean_objects(self):
         pass
 
@@ -238,6 +244,16 @@ class BuildSourceFile(object):
         from cStringIO import StringIO
 
         return self.fh_to_record(StringIO(content))
+
+    def getcontent(self):
+        from cStringIO import StringIO
+
+        sio = StringIO()
+
+        self.record_to_fh(sio)
+
+        return sio.getvalue()
+
 
 
 class RowBuildSourceFile(BuildSourceFile):
@@ -336,6 +352,7 @@ class DictBuildSourceFile(BuildSourceFile):
             return self.fh_to_record(f)
 
     def fh_to_record(self, f):
+        from ambry.util import md5_for_stream
 
         fn_path = file_name(self._file_const)
         fr = self._dataset.bsfile(self._file_const)
@@ -343,7 +360,7 @@ class DictBuildSourceFile(BuildSourceFile):
 
         fr.update_contents(msgpack.packb(yaml.safe_load(f)), 'application/msgpack')
 
-        fr.source_hash = self.fs_hash
+        fr.source_hash = self.fs_hash # FIXME! Assumes a file system entry, but may only be a file handle!
 
         fr.synced_fs = self.fs_modtime
         fr.modified = self.fs_modtime

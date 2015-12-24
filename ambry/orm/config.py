@@ -168,7 +168,6 @@ class ConfigTypeGroupAccessor(object):
     def __len__(self):
         return len(self._configs)
 
-
 class ConfigGroupAccessor(object):
 
     def __init__(self, dataset, type_name):
@@ -180,6 +179,11 @@ class ConfigGroupAccessor(object):
 
         for config in [config for config in self._dataset.configs if config.type == self._type_name]:
             self._dataset.configs.remove(config)
+
+    def delete_group(self, group):
+
+        ssq = self._dataset.session.query
+        ssq(Config).filter(Config.type == self._type_name).filter(Config.group == group).delete()
 
     def __iter__(self):
         for config in [config for config in self._dataset.configs if config.type == self._type_name]:

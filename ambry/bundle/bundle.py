@@ -465,7 +465,7 @@ class Bundle(object):
             sources = [s for s in sources if predicate(s)]
 
         if stage:
-            sources = [s for s in sources if s.stage == stage]
+            sources = [s for s in sources if str(s.stage) == str(stage)]
 
         return sources
 
@@ -1122,13 +1122,13 @@ Caster Code
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
-    def sync_out(self):
+    def sync_out(self, file_name=None):
         """Synchronize from objects to records"""
         self.log('---- Sync Out ----')
         from ambry.bundle.files import BuildSourceFile
 
         for f in self.build_source_files:
-            if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE:
+            if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path==file_name:
                 self.log('Sync: {}'.format(f.record.path))
                 f.record_to_fs()
 
@@ -1831,12 +1831,12 @@ Caster Code
             with self.progress.start('build', stage, item_total=len(resolved_sources)) as ps:
 
                 if len(resolved_sources) == 0:
-                    ps.done(message='No sources', state='skipped')
+                    ps.update(message='No sources', state='skipped')
                     self.log('No processable sources, skipping build stage {}'.format(stage))
                     return True
 
                 if not self.pre_build(force):
-                    ps.done(message='Pre-build failed', state='skipped')
+                    ps.update(message='Pre-build failed', state='skipped')
                     return False
 
                 if force:

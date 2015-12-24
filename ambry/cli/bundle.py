@@ -139,7 +139,7 @@ def make_parser(cmd):
     #
     command_p = sub_cmd.add_parser('sync', help='Sync with a source representation')
     command_p.set_defaults(subcommand='sync')
-    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+    command_p.add_argument('file_name', nargs='?', type=str, help='File reference')
     command_p.add_argument('-i', '--in', default=False, action='store_true',
                            help='Sync from files to records')
     command_p.add_argument('-o', '--out', default=False, action='store_true',
@@ -790,7 +790,7 @@ def bundle_sync(args, l, rc):
 
     if args.out:
         prt('Sync out')
-        b.sync_out()
+        b.sync_out(file_name=args.file_name)
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
@@ -1263,7 +1263,7 @@ def bundle_import(args, l, rc):
 
     b.set_file_system(source_url=source_dir)
 
-    b.sync()
+    b.sync_in(force=True)
 
     prt('Loaded bundle: {}'.format(b.identity.fqname))
 

@@ -109,6 +109,7 @@ class PyTest(TestCommand):
 
         print self.pytest_args
         errno = pytest.main(self.pytest_args)
+
         sys.exit(errno)
 
 

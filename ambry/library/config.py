@@ -67,8 +67,15 @@ class LibraryConfigSyncProxy(object):
 
         self.commit()
 
-    def sync_remotes(self, remotes):
+    def sync_remotes(self, remotes, clear = False):
+
         root = self.database.root_dataset
+
+        if clear:
+            root.config.library.delete_group('remotes')
+            self.commit()
+
+
         rc = root.config.library.remotes
 
         self.commit()

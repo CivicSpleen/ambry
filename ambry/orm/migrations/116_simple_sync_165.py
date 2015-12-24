@@ -9,4 +9,4 @@ class Migration(BaseMigration):
         connection.execute('ALTER TABLE files ADD COLUMN f_synced_fs REAL ')
         
     def _migrate_postgresql(self, connection):
-        connection.execute('ALTER TABLE ambrylib.files ADD COLUMN f_synced_fs REAL ')
+        connection.execute('ALTER TABLE ambrylib.files ADD COLUMN f_synced_fs float8 ')

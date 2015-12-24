@@ -8,3 +8,4 @@ contexttimer
 fudge
 requirements-parser
 mock
+ambry_client

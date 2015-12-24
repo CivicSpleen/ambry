@@ -390,3 +390,115 @@ def js_file(path):
 
     return send_from_directory(*os.path.split(os.path.join(aac.renderer.js_dir,path)))
 
+
+#
+# Administration Interfaces
+#
+
+@app.route('/config/remotes', methods = ['GET'])
+def config_remotes_put():
+    """Return remotes configured on the Library"""
+    r = aac.renderer
+
+    return r.json(
+        remotes=r.library.remotes
+    )
+
+@app.route('/config/remotes', methods = ['PUT'])
+def config_remotes_get():
+    """Replace all of the remotes in the library with new ones"""
+    r = aac.renderer
+
+    from ambry.library.config import LibraryConfigSyncProxy
+
+    lsp = LibraryConfigSyncProxy(r.library)
+
+    lsp.sync_remotes(request.get_json(), clear = True)
+
+    return r.json(
+        remotes=r.library.remotes
+    )
+
+@app.route('/config/accounts', methods = ['PUT'])
+def config_accounts_put():
+    pass
+
+@app.route('/config/services', methods = ['PUT'])
+def config_services_put():
+    pass
+
+@app.route('/config/services', methods = ['GET'])
+def config_services_get():
+    pass
+
+@app.route('/bundles/<vid>/build/files', methods = ['GET'])
+def bundle_build_files(vid):
+    """Returns the file records, excluding the content"""
+
+    r = aac.renderer
+
+    b = r.library.bundle(vid)
+
+    def make_dict(f):
+        d = f.record.dict
+        del d['modified_datetime']
+        return d
+
+    return r.json(
+        files=[ make_dict(f) for f in b.build_source_files ]
+    )
+
+@app.route('/bundles/<vid>/build/files/<name>', methods = ['GET'])
+def bundle_build_file(vid, name):
+    """Returns the file records, excluding the content"""
+
+    r = aac.renderer
+
+    b = r.library.bundle(vid)
+
+    try:
+        fs = b.build_source_files.file(name)
+    except KeyError:
+        abort(404)
+
+    def make_dict(f):
+        d = f.record.dict
+        del d['modified_datetime']
+        return d
+
+    return r.json(file= make_dict(fs))
+
+
+@app.route('/bundles/<vid>/build/files/<name>/content', methods = ['GET'])
+def bundle_build_files_get(vid, name):
+    from flask import Response
+
+    r = aac.renderer
+    b = r.library.bundle(vid)
+
+    try:
+        fs = b.build_source_files.file(name)
+    except KeyError:
+        abort(404)
+
+    mt = 'text/csv' if 'csv' in fs.record.path else 'text/plain'
+
+    return Response(fs.getcontent(), mimetype=mt)
+
+@app.route('/bundles/<vid>/build/files/<name>/content', methods = ['PUT'])
+def bundle_build_files_put(vid, name):
+    r = aac.renderer
+    b = r.library.bundle(vid)
+
+    try:
+        fs = b.build_source_files.file(name)
+    except KeyError:
+        abort(404)
+
+    mt = 'text/csv' if 'csv' in fs.record.path else 'text/plain'
+
+    fs.setcontent(request.content)
+
+    return r.json(
+        file=fs.record.dict
+    )
