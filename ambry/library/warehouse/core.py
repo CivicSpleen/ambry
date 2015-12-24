@@ -63,7 +63,7 @@ or via SQLAlchemy, to return datasets.
         """
         # FIXME: If query is empty, return a Sqlalchemy query or select object
         logger.debug(
-            'Executing warehouse query using {} backend. \n    query: {}'
+            'Executing warehouse query using {} backend.\n    query: {}'
             .format(self._backend._dsn, query))
         connection = self._backend._get_connection()
         return self._backend.query(connection, query)
@@ -168,16 +168,23 @@ def _preprocess_view(asql_query, library, backend, connection):
         Assume virtual tables for all partitions already created.
 
     Args:
-        FIXME:
+        asql_query (str): asql query
+        library (ambry.Library):
+        backend (SQLiteBackend):
+        connection (apsw.Connection):
 
     Returns:
+        str: valid sql query containing create table and insert into queries if asql_query contains
+            'create materialized view'. If asql_query does not contain 'create materialized view' returns
+            asql_query as is.
     """
     new_query = None
     if 'create materialized view' in asql_query.lower():
-        # FIXME: Too complicated. Refactor.
+        logger.debug(
+            '_preprocess_view: materialized view found.\n    asql query: {}'
+            .format(asql_query))
         view = parse_view(asql_query)
 
-        # install all partitions
         tablename = view.name.replace('-', '_').lower().replace('.', '_')
         create_query_columns = {}
         for column in view.columns:
@@ -186,19 +193,21 @@ def _preprocess_view(asql_query, library, backend, connection):
         partition_name_map = {}  # key is ref found in the query, value is Partition instance.
         partition_alias_map = {}  # key is alias of ref found in the query, value is Partition instance.
 
+        # collect sources from select statement of the view.
         for source in view.sources:
             partition = library.partition(source.name)
             partition_name_map[source.name] = partition
             if source.alias:
                 partition_alias_map[source.alias] = partition
 
+        # collect sources from joins of the view.
         for join in view.joins:
             partition = library.partition(join.source.name)
             partition_name_map[join.source.name] = partition
             if join.source.alias:
                 partition_alias_map[join.source.alias] = partition
 
-        # collect view column types.
+        # collect and convert columns.
         TYPE_MAP = {
             'int': 'INTEGER',
             'float': 'REAL',
@@ -237,20 +246,24 @@ def _preprocess_view(asql_query, library, backend, connection):
 
         create_query = 'CREATE TABLE IF NOT EXISTS {}(\n{});'.format(tablename, column_types_str)
 
-        # drop 'create materialized view part'
+        # drop 'create materialized view' part
         _, select_part = asql_query.split(view.name)
         select_part = select_part.strip()
         assert select_part.lower().startswith('as')
 
-        # drop as
+        # drop 'as' keyword
         select_part = select_part.strip()[2:].strip()
         assert select_part.lower().strip().startswith('select')
 
+        # Create query to copy data from mpr to just created table.
         copy_query = 'INSERT INTO {table}(\n{columns})\n  {select}'.format(
             table=tablename, columns=column_names_str, select=select_part)
         if not copy_query.strip().lower().endswith(';'):
             copy_query = copy_query + ';'
         new_query = '{}\n\n{}'.format(create_query, copy_query)
+    logger.debug(
+        '_preprocess_view: preprocess finished.\n    asql query: {}\n\n    new query: {}'
+        .format(asql_query, new_query))
     return new_query or asql_query
 
 
@@ -258,16 +271,27 @@ def _preprocess_index(asql_query, library, backend, connection):
     """ Creates materialized view for each indexed partition found in the query.
 
     Args:
+        asql_query (str): asql query
+        library (ambry.Library):
+        backend (SQLiteBackend):
+        connection (apsw.Connection):
 
     Returns:
         str: converted asql if it contains index query. If not, returns asql_query as is.
     """
     new_query = None
     if asql_query.strip().lower().startswith('index'):
+        logger.debug(
+            '_preprocess_index: create index query found.\n    asql query: {}'
+            .format(asql_query))
         index = parse_index(asql_query)
         partition = library.partition(index.source)
         table = backend.install(connection, partition, materialize=True)
         index_name = '{}_{}_ind'.format(partition.vid, '_'.join(index.columns))
         new_query = 'CREATE INDEX IF NOT EXISTS {index} ON {table} ({columns});'.format(
             index=index_name, table=table, columns=','.join(index.columns))
+
+    logger.debug(
+        '_preprocess_index: preprocess finished.\n    asql query: {}\n    new query: {}'
+        .format(asql_query, new_query))
     return new_query or asql_query
