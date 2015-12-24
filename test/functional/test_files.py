@@ -24,6 +24,7 @@ except ImportError as exc:
         raise
 
 from test.test_base import TestBase
+from test.helpers import assert_sqlite_index
 
 
 class Test(TestBase):
@@ -91,6 +92,10 @@ class Test(TestBase):
         self._assert_table_created(library, 'table1')
         self._assert_view_created(library, 'view1')
         self._assert_materialized_view_created(library, 'materialized_view1')
+        assert_sqlite_index(
+            library.database.engine.raw_connection(),
+            simple_bundle.partition('example.com-simple-simple'),
+            'id')
 
     def _assert_table_created(self, library, table):
         """ Looks for given table in the library. If not found raises AssertionError. """

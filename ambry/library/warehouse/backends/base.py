@@ -90,7 +90,7 @@ class DatabaseBackend(object):
 
                     if partition:
                         logger.debug(
-                            'Searching partition table in the warehouse database. \n    partition: {}'
+                            'Searching partition table in the warehouse database.\n    partition: {}'
                             .format(partition.name))
                         try:
                             # try to use existing fdw or materialized view.

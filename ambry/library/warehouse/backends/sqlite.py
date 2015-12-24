@@ -21,7 +21,7 @@ class SQLiteBackend(DatabaseBackend):
     """ Warehouse backend to SQLite database. """
 
     def install(self, connection, partition, materialize=False):
-        """ Creates virtual table or read-only table for given partition.
+        """ Creates virtual table or read-only table for gion.
 
         Args:
             ref (str): id, vid, name or versioned name of the partition.
@@ -31,11 +31,14 @@ class SQLiteBackend(DatabaseBackend):
             str: name of the created table.
 
         """
-        self._add_partition(connection, partition)
         virtual_table = sqlite_med.table_name(partition.vid)
+
+        if not self._relation_exists(connection, virtual_table):
+            self._add_partition(connection, partition)
         table = '{}_v'.format(virtual_table)
 
         if materialize:
+
             if self._relation_exists(connection, table):
                 logger.debug(
                     'Materialized table of the partition already exists.\n    partition: {}, table: {}'
