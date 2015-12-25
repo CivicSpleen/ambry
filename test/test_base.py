@@ -18,6 +18,7 @@ from ambry.identity import DatasetNumber
 from ambry.orm import Database, Dataset
 from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
 import ambry.run
+from ambry.util import parse_url_to_dict, unparse_url_dict
 
 MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add test-postgres '\
     'to the database section of the ambry config.'
@@ -31,7 +32,7 @@ class TestBase(unittest.TestCase):
 
         super(TestBase, self).setUp()
 
-        # WAARNING! This path and dsn is only used if it is explicitly referenced.
+        # WARNING! This path and dsn is only used if it is explicitly referenced.
         # Otherwise, the get_rc() will use a database specified in the
         # test rc file.
         self.db_path = '/tmp/ambry-test-{}.db'.format(str(uuid.uuid4()))
@@ -48,6 +49,12 @@ class TestBase(unittest.TestCase):
 
         if self._library:
             self._library.close()
+            # FIXME: Ensure you are dropping test database.
+            if self._library.database.dsn.startswith('sqlite://'):
+                try:
+                    os.remove(self._library.database.dsn.replace('sqlite:///', ''))
+                except OSError:
+                    pass
 
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
@@ -56,10 +63,10 @@ class TestBase(unittest.TestCase):
     def get_rc(rewrite=True):
         """Create a new config file for test and return the RunConfig.
 
-         This method will start with the user's default Ambry configuration, but will replace the
-         library.filesystem_root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
-         environmental variable, it will set library.database to the DSN of either database.test-sqlite or
-         database.test-postrgres
+        This method will start with the user's default Ambry configuration, but will replace the
+        library.filesystem_root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
+        environmental variable, it will set library.database to the DSN of either database.test-sqlite or
+        database.test-postrgres
 
         """
 
@@ -72,10 +79,33 @@ class TestBase(unittest.TestCase):
         orig_root = config.library.filesystem_root
         root_dir = config.filesystem.test.format(root=orig_root)
 
-        dsn = config.get('database', {}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
+        # First try to get dsn from test database setting: test_sqlite for sqlite
+        # or test_postgres for postgres.
+        test_dsn_key = 'test-{}'.format(dbname)
+        library_test_dsn = config.get('database', {}).get(test_dsn_key)
+        # warehouse_test_dsn  # FIXME:
+        if not library_test_dsn:
+            # config with test database does not exist. Create new dsn for tests.
+            if dbname == 'sqlite':
+                library_test_dsn = config.library.database
+                d = parse_url_to_dict(config.library.database)
+                last_part = d['path'].split('/')[-1]
+                if last_part.endswith('.db'):
+                    new_last_part = last_part.replace('.db', '_test_1k.db')
+                else:
+                    new_last_part = last_part + '_test_1k'
+                d['path'] = d['path'].rstrip(last_part) + new_last_part
+                library_test_dsn = unparse_url_dict(d)
+            elif dbname == 'postgres':
+                raise Exception('Not implemented')
+            else:
+                raise Exception('Do not know how to create test dsn for {} database.'.format(dbname))
+
+        if config.library.database == library_test_dsn:
+            raise Exception('production database and test database can not be the same.')
 
         config.library.filesystem_root = root_dir
-        config.library.database = dsn
+        config.library.database = library_test_dsn
         config.accounts = None
 
         test_root = fsopendir(root_dir, create_dir=True)
@@ -173,6 +203,7 @@ class TestBase(unittest.TestCase):
 
     def new_database(self):
         # FIXME: this connection will not be closed properly in a postgres case.
+        # FIXME: DEPRECATED. Use self.library.database instead.
         db = Database(self.dsn)
         db.open()
         return db
@@ -183,7 +214,6 @@ class TestBase(unittest.TestCase):
         from os.path import dirname, join
         from fs.opener import fsopendir
         import yaml
-        from ambry.util import parse_url_to_dict
 
         if not library:
             library = self.library()
@@ -215,6 +245,7 @@ class TestBase(unittest.TestCase):
         return b
 
 
+# FIXME: DEPRECATED: Use TestBase instead.
 class ConfigDatabaseTestBase(TestBase):
     """ Always use database engine from config as library database.
 

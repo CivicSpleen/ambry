@@ -49,7 +49,7 @@ class SQLiteBackend(DatabaseBackend):
                 # create table
                 create_query = self.__class__._get_create_query(partition, table)
                 logger.debug(
-                    'Creating new materialized view of the partition.'
+                    'Creating new materialized view for partition mpr.'
                     '\n    partition: {}, view: {}, query: {}'
                     .format(partition.name, table, create_query))
                 cursor.execute(create_query)
@@ -57,7 +57,7 @@ class SQLiteBackend(DatabaseBackend):
                 # populate just created table with data from virtual table.
                 copy_query = '''INSERT INTO {} SELECT * FROM {};'''.format(table, virtual_table)
                 logger.debug(
-                    'Populating sqlite table of the partition.'
+                    'Populating sqlite table with rows from partition mpr.'
                     '\n    partition: {}, view: {}, query: {}'
                     .format(partition.name, table, copy_query))
                 cursor.execute(copy_query)
