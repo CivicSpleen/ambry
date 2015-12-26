@@ -251,18 +251,6 @@ class PostgreSQLTestBase(TestBase):
         if not self.__class__._is_postgres:
             raise unittest.SkipTest('Postgres tests are disabled.')
 
-    def __setUp(self):
-        super(PostgreSQLTestBase, self).setUp()
-        # Create database and populate required fields.
-        self._create_postgres_test_db()
-        self.dsn = self.__class__.postgres_test_db_data['test_db_dsn']
-        self.postgres_dsn = self.__class__.postgres_test_db_data['postgres_db_dsn']
-        self.postgres_test_db = self.__class__.postgres_test_db_data['test_db_name']
-
-    def __tearDown(self):
-        super(PostgreSQLTestBase, self).tearDown()
-        self._drop_postgres_test_db()
-
     @classmethod
     def _drop_postgres_test_db(cls):
         if hasattr(cls, 'postgres_test_db_data'):
@@ -361,14 +349,6 @@ class PostgreSQLTestBase(TestBase):
             'test_db_dsn': test_db_dsn,
             'postgres_db_dsn': postgres_db_dsn}
         return cls.postgres_test_db_data
-
-    @classmethod
-    def get_rc(cls):
-        rc = TestBase.get_rc()
-        if rc.library.database.startswith('postgresql'):
-            # Force library to use test db
-            rc.library.database = cls.postgres_test_db_data['test_db_dsn']
-        return rc
 
     @classmethod
     def postgres_db_exists(cls, db_name, conn):
