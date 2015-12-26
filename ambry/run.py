@@ -70,18 +70,16 @@ from ambry.util import Constant
 
 ENVAR = Constant()
 ENVAR.CONFIG = 'AMBRY_CONFIG'
-ENVAR.ACCT = 'AMBRY_ACCOUNTS'
 ENVAR.PASSWORD = 'AMBRY_ACCOUNT_PASSWORD'
 ENVAR.DB =  'AMBRY_DB'
 ENVAR.ROOT =  'AMBRY_ROOT'
 ENVAR.EDIT = 'AMBRY_CONFIG_EDIT'
 ENVAR.VIRT = 'VIRTUAL_ENV'
 
-BASE_FILE = '.ambry.yaml'
-ROOT_FILE = '/etc/ambry.yaml'
-USER_FILE = '~/'+BASE_FILE
-ACCOUNTS_FILE = '.ambry-accounts.yaml'
-USER_ACCOUNTS_FILE = '~/'+ACCOUNTS_FILE
+ROOT_DIR = '/etc/ambry'
+USER_DIR = '~/ambry'
+CONFIG_FILE = 'config.yaml'
+ACCOUNTS_FILE = 'accounts.yaml'
 
 filesystem_defaults = {
     'build': '{root}/build',
@@ -95,28 +93,60 @@ filesystem_defaults = {
     'test': '{root}/test',
 }
 
+def find_config_dir(extra_path=None):
+    """
+    Find a configuration directory Tries directories in this order:
+
+    - A path provided as an argument
+    - A path specified by the AMBRY_CONFIG environmenal variable
+    - ambry in a path specified by the VIRTUAL_ENV environmental variable
+    - ~/ambry
+    - /etc/ambry
+
+
+    To be considered valid, the directory must contain a config.yaml file
+
+    :param path:
+    :return:
+    """
+
+    paths = []
+
+    if extra_path is not None:
+        paths.append(extra_paths)
+
+    if os.getenv(ENVAR.CONFIG):
+        paths.append(os.getenv(ENVAR.CONFIG))
+
+    if os.getenv(ENVAR.VIRT):
+        paths.append(os.getenv(ENVAR.VIRT))
+
+    paths += [
+        os.path.expanduser(USER_DIR),
+        ROOT_DIR
+    ]
+
+    for path in paths:
+        if os.path.isdir(path) and os.path.exists(os.path.join(path, CONFIG_FILE)):
+            return path
+
+    raise ConfigurationError('Failed to find configuration directory. Looked for : {} '.format(paths))
+
 def load_accounts():
-    """Load one Yaml file of account information.
+    """Load the yaml account files
 
     :return: An `AttrDict`
     """
+
     from os.path import join
     from os.path import getmtime
 
     config = AttrDict()
 
-    if os.getenv(ENVAR.ACCT):
-        accts_file = os.getenv(ENVAR.ACCT)
-
-    elif os.getenv(ENVAR.VIRT) and os.path.exists(join(os.getenv(ENVAR.VIRT), ACCOUNTS_FILE)):
-        accts_file = join(os.getenv(ENVAR.VIRT), ACCOUNTS_FILE)
-
-    else:
-        accts_file = os.path.expanduser(USER_ACCOUNTS_FILE)
+    accts_file = os.path.join(find_config_dir(), ACCOUNTS_FILE)
 
     if os.path.exists(accts_file):
         config.update_yaml(accts_file)
-
         config.accounts.loaded = [accts_file, getmtime(accts_file)]
 
     else:
@@ -124,18 +154,19 @@ def load_accounts():
         config.accounts.loaded = [None, 0]
 
 
-
     return config
+
+
 
 def load_config(path=None):
     """
-    Load configuration information from one or more files. Tries to load from, in this order:
+    Load configuration information from a config directory. Tries directories in this order:
 
-    - /etc/ambry.yaml
-    - ~/.ambry.yaml
+    - A path provided as an argument
     - A path specified by the AMBRY_CONFIG environmenal variable
-    - .ambry.yaml in the directory specified by the VIRTUAL_ENV environmental variable
-    - .ambry.yaml in the current working directory
+    - ambry in a path specified by the VIRTUAL_ENV environmental variable
+    - /etc/ambry
+    - ~/ambry
 
 
     :param path: An iterable of additional paths to load.
@@ -147,47 +178,16 @@ def load_config(path=None):
 
     config = AttrDict()
 
-    files = []
+    config_file = os.path.join(find_config_dir(), CONFIG_FILE)
 
-    if not path:
-        files.append(ROOT_FILE)
+    if os.path.exists(config_file):
+        config.update_yaml(config_file)
+        config.loaded = [config_file, getmtime(config_file)]
 
-        files.append(os.path.expanduser(USER_FILE))
-
-        if os.getenv(ENVAR.CONFIG):
-            files.append(os.getenv(ENVAR.CONFIG))
-
-        if os.getenv(ENVAR.VIRT):
-            files.append(join(os.getenv(ENVAR.VIRT), BASE_FILE))
-
-        try:
-            files.append(join(os.getcwd(), BASE_FILE))
-        except OSError:
-            pass # In webservers, there is no cwd
-
-    if isinstance(path, (list, tuple, set)):
-        for p in path:
-            files.append(p)
     else:
-        files.append(path)
-
-    files = list(set(files))
-    loaded = []
-
-    for f in files:
-        if f is not None and os.path.exists(f):
-
-            try:
-                config.update_yaml(f)
-                loaded.append((f,getmtime(f) ))
-
-            except TypeError:
-                pass  # Empty files will produce a type error
-
-    #if not config:
-    #    raise ConfigurationError("Failed to load any config from: {}".format(files))
-
-    config.loaded = loaded
+        # Probably never get here, since the find_config_dir would have thrown a ConfigurationError
+        config = AttrDict()
+        config.loaded = [None, 0]
 
     return config
 
