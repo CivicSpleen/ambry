@@ -13,14 +13,21 @@ from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSe
 from test.factories import PartitionFactory, DatasetFactory
 
 
-class SQLiteSearchBackendTest(TestBase):
+class SQLiteSearchTestBase(TestBase):
+
+    @classmethod
+    def setUpClass(cls):
+        super(SQLiteSearchTestBase, cls).setUpClass()
+        if not cls._is_sqlite:
+            raise unittest.SkipTest('SQLite tests are disabled.')
 
     def setUp(self):
-        super(self.__class__, self).setUp()
-        if not self.__class__._is_sqlite:
-            raise unittest.SkipTest('SQLite tests are disabled.')
+        super(SQLiteSearchTestBase, self).setUp()
         self.my_library = self.library()
         self.backend = SQLiteSearchBackend(self.my_library)
+
+
+class SQLiteSearchBackendTest(SQLiteSearchTestBase):
 
     # _and_join tests
     def test_joins_terms(self):
@@ -34,14 +41,7 @@ class SQLiteSearchBackendTest(TestBase):
             'term1')
 
 
-class DatasetSQLiteIndexTest(TestBase):
-
-    def setUp(self):
-        super(self.__class__, self).setUp()
-        if not self.__class__._is_sqlite:
-            raise unittest.SkipTest('SQLite tests are disabled.')
-        self.my_library = self.library()
-        self.backend = SQLiteSearchBackend(self.my_library)
+class DatasetSQLiteIndexTest(SQLiteSearchTestBase):
 
     def test_initializes_index(self):
         _assert_table_exists(self.backend, 'dataset_index')
@@ -102,14 +102,7 @@ class DatasetSQLiteIndexTest(TestBase):
         self.assertEqual(result, [])
 
 
-class IdentifierSQLiteIndexTest(TestBase):
-
-    def setUp(self):
-        super(self.__class__, self).setUp()
-        if not self.__class__._is_sqlite:
-            raise unittest.SkipTest('SQLite tests are disabled.')
-        self.my_library = self.library()
-        self.backend = SQLiteSearchBackend(self.my_library)
+class IdentifierSQLiteIndexTest(SQLiteSearchTestBase):
 
     def test_initializes_index(self):
         _assert_table_exists(self.backend, 'identifier_index')
@@ -184,14 +177,7 @@ class IdentifierSQLiteIndexTest(TestBase):
         self.assertEqual(result, [])
 
 
-class PartitionSQLiteIndexTest(TestBase):
-
-    def setUp(self):
-        super(self.__class__, self).setUp()
-        if not self.__class__._is_sqlite:
-            raise unittest.SkipTest('SQLite tests are disabled.')
-        self.my_library = self.library()
-        self.backend = SQLiteSearchBackend(self.my_library)
+class PartitionSQLiteIndexTest(SQLiteSearchTestBase):
 
     def test_initializes_index(self):
         _assert_table_exists(self.backend, 'partition_index')
