@@ -5,10 +5,10 @@ from ambry.library import new_library
 from ambry.library.config import LibraryConfigSyncProxy
 from ambry.run import get_runconfig
 
-from test.test_base import ConfigDatabaseTestBase
+from test.test_base import TestBase
 
 
-class Test(ConfigDatabaseTestBase):
+class Test(TestBase):
 
     def test_accounts(self):
         """ Tests library, database and environment accounts. """

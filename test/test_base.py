@@ -237,41 +237,6 @@ class TestBase(unittest.TestCase):
         return b
 
 
-# FIXME: DEPRECATED: Use TestBase instead.
-class ConfigDatabaseTestBase(TestBase):
-    """ Always use database engine from config as library database.
-
-    Note:
-        This means that subclasses should be ready to work on any engine from file sqlite, memory sqlite,
-        postgres set. Do not use that class for test who requires specific version of the engine.
-    """
-
-    @classmethod
-    def get_rc(cls, rewrite=True):
-        """Create a new config file for test and return the RunConfig.
-
-         This method will start with the user's default Ambry configuration, but will replace the
-         library.filesystem_root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
-         environmental variable, it will set library.database to the DSN of either database.test-sqlite or
-         database.test-postgres
-
-        """
-        rc = TestBase.get_rc()
-        if rc.library.database.startswith('postgresql'):
-            # create test database and write it to the config.
-            test_db = PostgreSQLTestBase._create_postgres_test_db()
-            rc.library.database = test_db['test_db_dsn']
-            cls._is_postgres = True
-        else:
-            cls._is_postgres = False
-        return rc
-
-    def tearDown(self):
-        super(ConfigDatabaseTestBase, self).tearDown()
-        if self.__class__._is_postgres:
-            PostgreSQLTestBase._drop_postgres_test_db()
-
-
 class PostgreSQLTestBase(TestBase):
     """ Base class for database tests who requires postgresql database.
 
