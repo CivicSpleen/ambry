@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
+from unittest import TestCase
+
 from ambry.bundle.asql_parser import parse_view, parse_index
 
-from test.test_base import TestBase
 
-
-class TestViewParser(TestBase):
+class TestViewParser(TestCase):
 
     def test_create_view(self):
         query = '''
@@ -78,7 +78,7 @@ class TestViewParser(TestBase):
         self.assertEqual([x.name for x in mat_view.columns], ['col1', 'col2'])
 
 
-class TestCreateIndexParser(TestBase):
+class TestCreateIndexParser(TestCase):
     def test_create_index(self):
         index = parse_index('INDEX example.com-simple-simple1 (col1, col2);')
         self.assertEqual(index.source, 'example.com-simple-simple1')

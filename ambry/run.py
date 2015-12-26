@@ -18,41 +18,6 @@ from .dbexceptions import ConfigurationError
 def get_runconfig(path=None):
     """Load the main configuration files and accounts file.
 
-    Load the main configuration files and accounts file from a variety of potential places,
-    and update the configuration with values from environmental variables.
-
-    The routine attempts to load the configuration from these locations, in this order:
-
-    - /etc/ambry.yaml
-    - ~/.ambry.yaml
-    - A path specified by the AMBRY_CONFIG environmenal variable
-    - .ambry.yaml in the directory specified by the VIRTUAL_ENV environmental variable
-    - .ambry.yaml in the current working directory
-
-    Or, if `path` is specified, it load that path and ignores the standard locations.
-
-    The routines also loads the accounts file from one of these locations:
-
-    - A path specified by the AMBRY_ACCOUNTS environmenal variable
-    - .ambry-accounts.yaml in the directory specified by the VIRTUAL_ENV environmental variable
-    - ~/.ambry-accounts.yaml
-
-    After loading the configuation, the config is updated from environmental variables:
-
-    - `config.library.database` from `AMBRY_DB`
-    - `config.library.filesystem_root` from `AMBRY_ROOT`
-    - `config.accounts.password` from `AMBRY_PASSWORD`
-
-    The config file can be empty or missing if  the config has already been loaded into the database, and the
-    database, root and password are specified in environmental variables.
-
-    The typical use cases are that for a single machine installation, or the head of a multi-machine installation,
-    there is a full configuation file and accounts file. In a multi-machine installation, on;y the environmental
-    varaibles AMBRY_DB, AMBRY_ROOT and AMBRY_PASSWORD are specified, allowing satellite machines to get information
-    about remotes and accounts from the database. Since the filesystem entries can be taken from the defaults,
-    the satellite machines  do not need a configuration file.
-
-    :param path: The path to a configuration file to use instead of the standard locataions.
     """
 
     return load(path)
@@ -77,9 +42,11 @@ ENVAR.EDIT = 'AMBRY_CONFIG_EDIT'
 ENVAR.VIRT = 'VIRTUAL_ENV'
 
 ROOT_DIR = '/etc/ambry'
-USER_DIR = '~/ambry'
+USER_DIR = '.ambry'
 CONFIG_FILE = 'config.yaml'
 ACCOUNTS_FILE = 'accounts.yaml'
+REMOTES_FILE = 'accounts.yaml'
+DOCKER_FILE = 'docker.yaml'
 
 filesystem_defaults = {
     'build': '{root}/build',
@@ -93,18 +60,15 @@ filesystem_defaults = {
     'test': '{root}/test',
 }
 
-def find_config_dir(extra_path=None):
+def find_config_file(file_name, extra_path=None):
     """
-    Find a configuration directory Tries directories in this order:
+    Find a configuration file in one of these directories, tried in this order:
 
     - A path provided as an argument
     - A path specified by the AMBRY_CONFIG environmenal variable
     - ambry in a path specified by the VIRTUAL_ENV environmental variable
     - ~/ambry
     - /etc/ambry
-
-
-    To be considered valid, the directory must contain a config.yaml file
 
     :param path:
     :return:
@@ -119,18 +83,19 @@ def find_config_dir(extra_path=None):
         paths.append(os.getenv(ENVAR.CONFIG))
 
     if os.getenv(ENVAR.VIRT):
-        paths.append(os.getenv(ENVAR.VIRT))
+        paths.append(os.path.join(os.getenv(ENVAR.VIRT), USER_DIR))
 
     paths += [
-        os.path.expanduser(USER_DIR),
+        os.path.expanduser("~/"+USER_DIR),
         ROOT_DIR
     ]
 
     for path in paths:
-        if os.path.isdir(path) and os.path.exists(os.path.join(path, CONFIG_FILE)):
-            return path
 
-    raise ConfigurationError('Failed to find configuration directory. Looked for : {} '.format(paths))
+        if os.path.isdir(path) and os.path.exists(os.path.join(path, file_name)):
+            return os.path.join(path, file_name)
+
+    raise ConfigurationError("Failed to find configuration file '{}'. Looked for : {} ".format(file_name, paths))
 
 def load_accounts():
     """Load the yaml account files
@@ -143,9 +108,12 @@ def load_accounts():
 
     config = AttrDict()
 
-    accts_file = os.path.join(find_config_dir(), ACCOUNTS_FILE)
+    try:
+        accts_file = find_config_file(ACCOUNTS_FILE)
+    except ConfigurationError:
+        accts_file = None
 
-    if os.path.exists(accts_file):
+    if accts_file is not None and os.path.exists(accts_file):
         config.update_yaml(accts_file)
         config.accounts.loaded = [accts_file, getmtime(accts_file)]
 
@@ -155,6 +123,7 @@ def load_accounts():
 
 
     return config
+
 
 
 
@@ -178,14 +147,36 @@ def load_config(path=None):
 
     config = AttrDict()
 
-    config_file = os.path.join(find_config_dir(), CONFIG_FILE)
+    config_file = find_config_file(CONFIG_FILE)
 
     if os.path.exists(config_file):
+
         config.update_yaml(config_file)
         config.loaded = [config_file, getmtime(config_file)]
 
     else:
         # Probably never get here, since the find_config_dir would have thrown a ConfigurationError
+        config = AttrDict()
+        config.loaded = [None, 0]
+
+    return config
+
+def load_docker():
+    from os.path import join
+    from os.path import getmtime
+
+    config = AttrDict()
+
+    try:
+        docker_file = find_config_file(DOCKER_FILE)
+    except ConfigurationError:
+        docker_file = None
+
+    if docker_file is not None and os.path.exists(docker_file):
+        config.update_yaml(docker_file)
+        config.loaded = [docker_file, getmtime(docker_file)]
+
+    else:
         config = AttrDict()
         config.loaded = [None, 0]
 
@@ -262,7 +253,7 @@ def update_config(config):
         if k not in config.filesystem:
             config.filesystem[k] = v
 
-    config.modtime = max([l[1] for l in  config.loaded ] + [config.accounts.loaded[1]])
+    config.modtime = config.loaded[1]
 
 
 

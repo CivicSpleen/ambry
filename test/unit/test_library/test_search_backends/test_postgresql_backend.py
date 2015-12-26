@@ -4,8 +4,8 @@ from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBacke
 from ambry.orm.database import POSTGRES_SCHEMA_NAME
 from ambry.util import AttrDict
 
-from test.test_base import PostgreSQLTestBase
 from test.factories import PartitionFactory
+from test.test_base import PostgreSQLTestBase
 
 from sqlalchemy.exc import ProgrammingError
 
@@ -14,12 +14,7 @@ class PostgreSQLBackendBaseTest(PostgreSQLTestBase):
     def setUp(self):
         super(PostgreSQLBackendBaseTest, self).setUp()
         self._my_library = self.library()
-        assert self._my_library.database.dsn.startswith('postgresql')
         self.backend = PostgreSQLSearchBackend(self._my_library)
-
-    def tearDown(self):
-        self._my_library.database.close()
-        super(PostgreSQLBackendBaseTest, self).tearDown()
 
 
 class PostgreSQLSearchBackendTest(PostgreSQLBackendBaseTest):

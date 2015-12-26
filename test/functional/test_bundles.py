@@ -6,7 +6,6 @@ from test.test_base import TestBase
 class Test(TestBase):
 
     def test_headerstypes(self):
-        import unicodecsv as csv
 
         b = self.import_single_bundle('ingest.example.com/headerstypes')
         b.ingest()

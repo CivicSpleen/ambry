@@ -5,10 +5,10 @@ from ambry.library import new_library
 from ambry.library.config import LibraryConfigSyncProxy
 from ambry.run import get_runconfig
 
-from test.test_base import ConfigDatabaseTestBase
+from test.test_base import TestBase
 
 
-class Test(ConfigDatabaseTestBase):
+class Test(TestBase):
 
     def test_accounts(self):
         """ Tests library, database and environment accounts. """
@@ -54,14 +54,16 @@ class Test(ConfigDatabaseTestBase):
         self.assertEqual(l.database.dsn, os.getenv('AMBRY_DB'))
 
         l = new_library()
+        try:
+            for k, v in l.accounts.items():
+                act = l.account(k)
+                if k in ('ambry', 'google_spreadsheets',):
+                    continue
+                self.assertTrue(bool(act.secret))
+                self.assertTrue(bool(act.account_id))
 
-        for k, v in l.accounts.items():
-            act = l.account(k)
-            if k in ('ambry', 'google_spreadsheets',):
-                continue
-            self.assertTrue(bool(act.secret))
-            self.assertTrue(bool(act.account_id))
-
-        for k, v in l.remotes.items():
-            self.assertTrue(bool(k))
-            self.assertTrue(bool(v))
+            for k, v in l.remotes.items():
+                self.assertTrue(bool(k))
+                self.assertTrue(bool(v))
+        finally:
+            l.close()

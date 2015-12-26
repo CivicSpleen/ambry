@@ -1,12 +1,35 @@
 from test.test_base import TestBase
 
+class TempDirContext(object):
+    """Setup and tear down a chroot jail. """
+
+    def __init__(self):
+        from tempfile import mkdtemp
+
+        self.tmp_dir = mkdtemp()
+
+    def __enter__(self):
+        return self.tmp_dir
+
+    def __exit__(self, type, value, traceback):
+        from shutil import rmtree
+        rmtree(self.tmp_dir)
+
 
 class Test(TestBase):
 
+
     def test_run_config_filesystem(self):
+        from os import chroot, makedirs, chroot
+        from os.path import join, dirname
+        from shutil import copyfile
+        from test import bundlefiles
+
         rc = self.get_rc()
-        self.assertEqual('{root}/cache/downloads', rc.filesystem.downloads)
-        self.assertEqual('{root}/cache/extracts', rc.filesystem.extracts)
+        self.assertEqual('{root}/downloads', rc.filesystem.downloads)
+        self.assertEqual('{root}/extracts', rc.filesystem.extracts)
+
+        from ambry.run import load_docker
 
     def test_dsn_config(self):
         from ambry.dbexceptions import ConfigurationError

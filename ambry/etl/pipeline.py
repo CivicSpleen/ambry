@@ -336,7 +336,7 @@ class SourceFileSourcePipe(Pipe):
     def __str__(self):
         from ..util import qualified_class_name
 
-        return "{}; {} {}".format(qualified_class_name(self), type(self.source), self.path)
+        return '{}; {} {}'.format(qualified_class_name(self), type(self.source), self.path)
 
 
 class GeneratorSourcePipe(Pipe):

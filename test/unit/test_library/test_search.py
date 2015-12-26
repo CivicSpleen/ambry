@@ -2,8 +2,6 @@
 import fudge
 from fudge.inspector import arg
 
-from test.test_base import ConfigDatabaseTestBase
-
 from ambry.library.search import Search
 from ambry.library.search_backends.whoosh_backend import DatasetWhooshIndex, PartitionWhooshIndex,\
     WhooshSearchBackend
@@ -11,9 +9,10 @@ from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
 
 from test.factories import PartitionFactory, DatasetFactory
+from test.test_base import TestBase
 
 
-class SearchTest(ConfigDatabaseTestBase):
+class SearchTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
         self._my_library = self.library()
@@ -85,9 +84,12 @@ class SearchTest(ConfigDatabaseTestBase):
             search.index_library_datasets()
 
     def test_feeds_tick_function_with_indexed(self):
-        ds1 = self.new_db_dataset(self._my_library.database, n=1)
-        self.assertEqual(len(self._my_library.datasets), 1)
+        # ds1 = self.new_db_dataset(self._my_library.database, n=1)
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
         PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+        ds1 = DatasetFactory()
+        self._my_library.database.session.commit()
+        self.assertEqual(len(self._my_library.datasets), 1)
 
         PartitionFactory(dataset=ds1)
         self._my_library.database.session.commit()
