@@ -1813,9 +1813,11 @@ Caster Code
 
         try:
             # FIXME: Find appropriate place for sql execution.
-            # Yes, please, because it's certainyly not here. The import apsw
-            # couses troubles, since it's hard to install on Macs.
-            if True:
+            # Yes, please, because it's certainly not here. The import apsw
+            # causes troubles, since it's hard to install on Macs.
+            # The multicorn intsallation is also hard, and should not be required for
+            # bundles that don't use SQL or the warehouse.
+            if False:
                 from ambry.library.warehouse.core import execute_sql
                 for f in self.dataset.files:
                     if f.path == 'bundle.sql' and f.unpacked_contents:
