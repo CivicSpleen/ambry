@@ -54,14 +54,16 @@ class Test(TestBase):
         self.assertEqual(l.database.dsn, os.getenv('AMBRY_DB'))
 
         l = new_library()
+        try:
+            for k, v in l.accounts.items():
+                act = l.account(k)
+                if k in ('ambry', 'google_spreadsheets',):
+                    continue
+                self.assertTrue(bool(act.secret))
+                self.assertTrue(bool(act.account_id))
 
-        for k, v in l.accounts.items():
-            act = l.account(k)
-            if k in ('ambry', 'google_spreadsheets',):
-                continue
-            self.assertTrue(bool(act.secret))
-            self.assertTrue(bool(act.account_id))
-
-        for k, v in l.remotes.items():
-            self.assertTrue(bool(k))
-            self.assertTrue(bool(v))
+            for k, v in l.remotes.items():
+                self.assertTrue(bool(k))
+                self.assertTrue(bool(v))
+        finally:
+            l.close()
