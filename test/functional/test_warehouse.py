@@ -221,7 +221,7 @@ class Mixin(object):
 class InMemorySQLiteTest(TestBase, Mixin):
 
     def _get_config(self):
-        rc = TestBase.get_rc()
+        rc = self.get_rc()
         # use file database for library for that test case.
         self.__class__._real_warehouse_database = rc.library.get('warehouse')
         self.__class__._real_test_database = rc.library.database
@@ -244,6 +244,14 @@ class FileSQLiteTest(TestBase, Mixin):
         except OSError:
             pass
 
+    @classmethod
+    def tearDownClass(cls):
+        super(FileSQLiteTest, cls).tearDownClass()
+        rc = cls.get_rc()
+        if rc.library.database != cls._real_warehouse_database:
+            # restore database
+            rc.library.database = cls._real_warehouse_database
+
     def tearDown(self):
         super(self.__class__, self).tearDown()
         os.remove(self._warehouse_db.replace('sqlite:///', ''))
@@ -257,20 +265,6 @@ class FileSQLiteTest(TestBase, Mixin):
             rc.library.database = self._warehouse_db  # It's ok to use the same db file for that test case.
         return rc
 
-    @classmethod
-    def tearDownClass(cls):
-        rc = TestBase.get_rc()
-        if rc.library.database != cls._real_warehouse_database:
-            # restore database
-            rc.library.database = cls._real_warehouse_database
-
-    def _get_test_library(self):
-        library = self.library()
-
-        # assert it is file database.
-        assert library.database.exists()
-        return library
-
     def _assert_is_indexed(self, warehouse, partition, column):
         assert_sqlite_index(warehouse._backend._connection, partition, column)
 
@@ -278,7 +272,7 @@ class FileSQLiteTest(TestBase, Mixin):
 class PostgreSQLTest(PostgreSQLTestBase, Mixin):
 
     def _get_config(self):
-        rc = TestBase.get_rc()
+        rc = self.get_rc()
         # replace database with postgres test database.
         self.__class__._real_warehouse_database = rc.library.database
         rc.library.warehouse = self.__class__.postgres_test_db_data['test_db_dsn']
@@ -292,7 +286,7 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
         if real_warehouse_database and rc.library.database != real_warehouse_database:
             # restore database
             rc.library.database = real_warehouse_database
-        PostgreSQLTestBase.tearDownClass()
+        super(PostgreSQLTestBase, cls).tearDownClass()
 
     def _assert_is_indexed(self, warehouse, partition, column):
         table = postgres_med.table_name(partition.vid) + '_v'
