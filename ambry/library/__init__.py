@@ -408,7 +408,7 @@ class Library(object):
 
         return nb
 
-    def checkin(self, b):
+    def checkin(self, b, no_partitions=False):
         """
         Copy a bundle to a new Sqlite file, then store the file on the remote.
 
@@ -461,24 +461,25 @@ class Library(object):
 
             os.remove(db_path)
 
-            for p in b.partitions:
+            if not no_partitions:
+                for p in b.partitions:
 
-                ps.add(message='Upload partition', item_type='bytes', item_count=0, p_vid=p.vid)
+                    ps.add(message='Upload partition', item_type='bytes', item_count=0, p_vid=p.vid)
 
-                with p.datafile.open(mode='rb') as fin:
+                    with p.datafile.open(mode='rb') as fin:
 
-                    total = [0]
+                        total = [0]
 
-                    @call_interval(5)
-                    def progress(bytes):
-                        total[0] += bytes
-                        ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0])
+                        @call_interval(5)
+                        def progress(bytes):
+                            total[0] += bytes
+                            ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0])
 
-                    remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
-                    event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
-                    event.wait()
+                        remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
+                        event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
+                        event.wait()
 
-                    ps.update(state='done')
+                        ps.update(state='done')
 
             ps.add(message='Setting metadata')
             ident = json.dumps(b.identity.dict)

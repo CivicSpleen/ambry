@@ -2444,7 +2444,7 @@ Caster Code
     # Check in to remote
     #
 
-    def checkin(self):
+    def checkin(self, no_partitions=False):
 
         if self.is_built:
             self.finalize()
@@ -2454,7 +2454,7 @@ Caster Code
             return False, False
 
         self.commit()
-        remote, path = self.library.checkin(self)
+        remote, path = self.library.checkin(self, no_partitions=no_partitions)
 
         return remote, path
 

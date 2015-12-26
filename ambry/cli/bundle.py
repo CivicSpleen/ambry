@@ -286,6 +286,8 @@ def make_parser(cmd):
     #
     command_p = sub_cmd.add_parser('checkin', help='Commit the bundle to the remote store')
     command_p.set_defaults(subcommand='checkin')
+    command_p.add_argument('-n', '--no-partitions', default=False, action='store_true',
+                           help="Don't check in partitions")
 
     #
     # Update Command
@@ -980,7 +982,7 @@ def bundle_checkin(args, l, rc):
     remote_name = l.resolve_remote(b)
     remote = l.remote(remote_name)
 
-    remote, path = b.checkin()
+    remote, path = b.checkin(no_partitions=args.no_partitions)
 
     if path:
         b.log("Checked in to remote '{}' path '{}'".format(remote, path))
