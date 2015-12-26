@@ -380,22 +380,21 @@ class GetVersionTest(TestBase):
         self.assertEqual(version, 22)
 
     def test_returns_user_version_from_postgres_table(self):
-        try:
-            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
-            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
-            with engine.connect() as conn:
-                create_table_query = '''
-                    CREATE TABLE {}.user_version (
-                        version INTEGER NOT NULL); '''\
-                    .format(POSTGRES_SCHEMA_NAME)
+        if not self.__class__._is_postgres:
+            raise unittest.SkipTest('Postgres tests are disabled.')
 
-                conn.execute(create_table_query)
-                conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
-                conn.execute('commit')
-                version = get_stored_version(conn)
-                self.assertEqual(version, 22)
-        finally:
-            PostgreSQLTestBase._drop_postgres_test_db()
+        engine = create_engine(self.__class__.library_test_dsn,  poolclass=NullPool)
+        with engine.connect() as conn:
+            create_table_query = '''
+                CREATE TABLE {}.user_version (
+                    version INTEGER NOT NULL); '''\
+                .format(POSTGRES_SCHEMA_NAME)
+
+            conn.execute(create_table_query)
+            conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
+            conn.execute('COMMIT;')
+            version = get_stored_version(conn)
+            self.assertEqual(version, 22)
 
 
 class ValidateVersionTest(unittest.TestCase):
@@ -457,39 +456,35 @@ class UpdateVersionTest(TestBase):
         self.assertEqual(stored_version, 122)
 
     def test_creates_user_version_postgresql_table(self):
-        try:
-            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
-            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
-            with engine.connect() as conn:
-                _update_version(conn, 123)
-                version = conn\
-                    .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
-                    .fetchone()[0]
-                self.assertEqual(version, 123)
-        finally:
-            PostgreSQLTestBase._drop_postgres_test_db()
+        if not self.__class__._is_postgres:
+            raise unittest.SkipTest('Postgres tests are disabled.')
+        engine = create_engine(self.__class__.library_test_dsn,  poolclass=NullPool)
+        with engine.connect() as conn:
+            _update_version(conn, 123)
+            version = conn\
+                .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                .fetchone()[0]
+            self.assertEqual(version, 123)
 
     def test_updates_user_version_postgresql_table(self):
-        try:
-            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
-            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
-            with engine.connect() as conn:
-                create_table_query = '''
-                    CREATE TABLE {}.user_version (
-                        version INTEGER NOT NULL); '''\
-                    .format(POSTGRES_SCHEMA_NAME)
+        if not self.__class__._is_postgres:
+            raise unittest.SkipTest('Postgres tests are disabled.')
+        engine = create_engine(self.__class__.library_test_dsn,  poolclass=NullPool)
+        with engine.connect() as conn:
+            create_table_query = '''
+                CREATE TABLE {}.user_version (
+                    version INTEGER NOT NULL); '''\
+                .format(POSTGRES_SCHEMA_NAME)
 
-                conn.execute(create_table_query)
-                conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
-                conn.execute('commit')
+            conn.execute(create_table_query)
+            conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
+            conn.execute('COMMIT;')
 
-                _update_version(conn, 123)
-                version = conn\
-                    .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
-                    .fetchone()[0]
-                self.assertEqual(version, 123)
-        finally:
-            PostgreSQLTestBase._drop_postgres_test_db()
+            _update_version(conn, 123)
+            version = conn\
+                .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                .fetchone()[0]
+            self.assertEqual(version, 123)
 
     def test_raises_DatabaseMissingError_error(self):
         with patch.object(self.sqlite_connection, 'engine', Mock(name='foo')):
