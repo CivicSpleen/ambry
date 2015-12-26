@@ -838,6 +838,7 @@ class Library(object):
                 b.sync_out()
 
             bundles.append(b)
+            b.close()
 
         return bundles
 

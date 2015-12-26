@@ -14,6 +14,8 @@ class Test(TestBase):
     @classmethod
     def setUpClass(cls):
 
+        TestBase.setUpClass()
+
         cls.db_type = os.environ.get('AMBRY_TEST_DB', 'sqlite')
         cls.config = TestBase.get_rc()
         cls.l = TestBase._get_library(cls.config)
@@ -27,7 +29,7 @@ class Test(TestBase):
         super(TestBase, self).setUp()
 
     def tearDown(self):
-        pass
+        self.l.close()
 
     def run_bundle(self, name, reimport=False):
         """

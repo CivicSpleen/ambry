@@ -32,8 +32,10 @@ class TestBase(unittest.TestCase):
         cls.dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
         config = ambry.run.load()  # not cached; get_config is
         cls.test_dsn_key = 'test-{}'.format(cls.dbname)
+
         cls.library_test_dsn = config.get('database', {}).get(cls.test_dsn_key)
         cls.library_prod_dsn = config.library.database
+
         if not cls.library_test_dsn:
             if cls.dbname == 'sqlite':
                 d = parse_url_to_dict(config.library.database)
