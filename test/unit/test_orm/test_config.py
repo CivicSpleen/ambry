@@ -12,11 +12,11 @@ except ImportError:
 
 from ambry.orm.config import Config
 
-from test.test_base import ConfigDatabaseTestBase
+from test.test_base import TestBase
 from test.factories import ConfigFactory, DatasetFactory
 
 
-class TestConfig(ConfigDatabaseTestBase):
+class TestConfig(TestBase):
 
     def setUp(self):
         super(TestConfig, self).setUp()

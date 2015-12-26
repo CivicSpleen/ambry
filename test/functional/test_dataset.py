@@ -3,10 +3,10 @@
 from ambry.identity import DatasetNumber
 from ambry.orm.exc import ConflictError
 
-from test.test_base import ConfigDatabaseTestBase
+from test.test_base import TestBase
 
 
-class Test(ConfigDatabaseTestBase):
+class Test(TestBase):
 
     def setUp(self):
 

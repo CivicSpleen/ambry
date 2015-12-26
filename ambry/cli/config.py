@@ -130,7 +130,7 @@ def config_install(args, l, rc):
     from os.path import join, dirname
     import getpass
     import ambry.support
-    from ambry.run import ROOT_FILE, USER_FILE, BASE_FILE, USER_ACCOUNTS_FILE
+    from ambry.run import ROOT_DIR, USER_DIR, BASE_FILE, USER_ACCOUNTS_FILE
     from ambry.util import AttrDict
 
     user = getpass.getuser()
@@ -141,7 +141,7 @@ def config_install(args, l, rc):
     d = AttrDict().update_yaml(default_config_file)
 
     if user == 'root': # Root user
-        install_file = ROOT_FILE
+        install_file = ROOT_DIR
         default_root = d.library.filesystem_root
 
     elif os.getenv('VIRTUAL_ENV'):  # Special case for python virtual environments
@@ -149,7 +149,7 @@ def config_install(args, l, rc):
         default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
 
     else: # Non-root user, outside of virtualenv
-        install_file = USER_FILE
+        install_file = USER_DIR
         warn(("Installing as non-root, to '{}'\n" +
               "Run as root to install for all users.").format(install_file))
         default_root = os.path.join(os.path.expanduser('~'), 'ambry')

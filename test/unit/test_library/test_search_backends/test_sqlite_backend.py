@@ -1,24 +1,33 @@
 # -*- coding: utf-8 -*-
 
+import unittest
+
 from sqlalchemy.sql.expression import text
 
 from test.test_base import TestBase
 
 from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
-from ambry.library import new_library
 from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult,\
     PartitionSearchResult
 
 from test.factories import PartitionFactory, DatasetFactory
 
 
-class SQLiteSearchBackendTest(TestBase):
+class SQLiteSearchTestBase(TestBase):
+
+    @classmethod
+    def setUpClass(cls):
+        super(SQLiteSearchTestBase, cls).setUpClass()
+        if not cls._is_sqlite:
+            raise unittest.SkipTest('SQLite tests are disabled.')
 
     def setUp(self):
-        super(self.__class__, self).setUp()
-        rc = self.get_rc()
-        self.library = new_library(rc)
-        self.backend = SQLiteSearchBackend(self.library)
+        super(SQLiteSearchTestBase, self).setUp()
+        self.my_library = self.library()
+        self.backend = SQLiteSearchBackend(self.my_library)
+
+
+class SQLiteSearchBackendTest(SQLiteSearchTestBase):
 
     # _and_join tests
     def test_joins_terms(self):
@@ -32,13 +41,7 @@ class SQLiteSearchBackendTest(TestBase):
             'term1')
 
 
-class DatasetSQLiteIndexTest(TestBase):
-
-    def setUp(self):
-        super(self.__class__, self).setUp()
-        rc = self.get_rc()
-        self.library = new_library(rc)
-        self.backend = SQLiteSearchBackend(self.library)
+class DatasetSQLiteIndexTest(SQLiteSearchTestBase):
 
     def test_initializes_index(self):
         _assert_table_exists(self.backend, 'dataset_index')
@@ -51,9 +54,9 @@ class DatasetSQLiteIndexTest(TestBase):
     def test_returns_found_dataset(self):
 
         # add dataset to backend.
-        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
         dataset = DatasetFactory()
-        self.library.database.session.commit()
+        self.my_library.database.session.commit()
         self.backend.dataset_index.index_one(dataset)
 
         # search just added document.
@@ -64,7 +67,7 @@ class DatasetSQLiteIndexTest(TestBase):
 
     # _index_document tests
     def test_adds_dataset_document_to_the_index(self):
-        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
         dataset = DatasetFactory()
         self.backend.dataset_index.index_one(dataset)
 
@@ -78,7 +81,7 @@ class DatasetSQLiteIndexTest(TestBase):
 
     # _delete tests
     def test_deletes_dataset_from_index(self):
-        DatasetFactory._meta.sqlalchemy_session = self.library.database.session
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
         dataset = DatasetFactory()
         self.backend.dataset_index.index_one(dataset)
 
@@ -99,13 +102,7 @@ class DatasetSQLiteIndexTest(TestBase):
         self.assertEqual(result, [])
 
 
-class IdentifierSQLiteIndexTest(TestBase):
-
-    def setUp(self):
-        super(self.__class__, self).setUp()
-        rc = self.get_rc()
-        self.library = new_library(rc)
-        self.backend = SQLiteSearchBackend(self.library)
+class IdentifierSQLiteIndexTest(SQLiteSearchTestBase):
 
     def test_initializes_index(self):
         _assert_table_exists(self.backend, 'identifier_index')
@@ -180,13 +177,7 @@ class IdentifierSQLiteIndexTest(TestBase):
         self.assertEqual(result, [])
 
 
-class PartitionSQLiteIndexTest(TestBase):
-
-    def setUp(self):
-        super(self.__class__, self).setUp()
-        rc = self.get_rc()
-        self.library = new_library(rc)
-        self.backend = SQLiteSearchBackend(self.library)
+class PartitionSQLiteIndexTest(SQLiteSearchTestBase):
 
     def test_initializes_index(self):
         _assert_table_exists(self.backend, 'partition_index')
@@ -198,9 +189,9 @@ class PartitionSQLiteIndexTest(TestBase):
     # search tests
     def test_returns_found_partition(self):
         # create partition and add it to the index to backend.
-        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self.my_library.database.session
         partition1 = PartitionFactory()
-        self.library.database.session.commit()
+        self.my_library.database.session.commit()
 
         self.backend.partition_index.index_one(partition1)
 
@@ -220,9 +211,9 @@ class PartitionSQLiteIndexTest(TestBase):
 
     # _index_document tests
     def test_adds_partition_document_to_the_index(self):
-        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self.my_library.database.session
         partition1 = PartitionFactory()
-        self.library.database.session.commit()
+        self.my_library.database.session.commit()
         self.backend.partition_index.index_one(partition1)
 
         # search just added document.
@@ -235,9 +226,9 @@ class PartitionSQLiteIndexTest(TestBase):
 
     # _delete tests
     def test_deletes_partition_from_index(self):
-        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self.my_library.database.session
         partition1 = PartitionFactory()
-        self.library.database.session.commit()
+        self.my_library.database.session.commit()
 
         self.backend.partition_index.index_one(partition1)
 

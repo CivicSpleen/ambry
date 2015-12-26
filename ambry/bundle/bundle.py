@@ -936,6 +936,9 @@ Caster Code
             s = source.partition
             sp = GeneratorSourcePipe(self, source, s)
 
+        # elif source.reftype == 'sql':
+            # FIXME: Implement
+        #    print source.reftype
         elif source.reftype == 'generator':
             import sys
 
@@ -977,7 +980,7 @@ Caster Code
                     'add credentials:\n' \
                     '{location}:\n' \
                     '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
-                raise ConfigurationError(msg+'\nOriginal Exception: '+str(exc))
+                raise ConfigurationError(msg + '\nOriginal Exception: ' + str(exc))
 
             if isinstance(s, FixedSource):
                 from ambry_sources.sources.spec import ColumnSpec
@@ -1558,7 +1561,7 @@ Caster Code
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 
-
+            source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
             self.build_source_files.sources.objects_to_record()
 
@@ -1812,7 +1815,7 @@ Caster Code
             # FIXME: Find appropriate place for sql execution.
             # Yes, please, because it's certainyly not here. The import apsw
             # couses troubles, since it's hard to install on Macs.
-            if False:
+            if True:
                 from ambry.library.warehouse.core import execute_sql
                 for f in self.dataset.files:
                     if f.path == 'bundle.sql' and f.unpacked_contents:

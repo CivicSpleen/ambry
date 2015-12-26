@@ -2,9 +2,15 @@
 from ambry.metadata.schema import Top
 
 from test.test_base import TestBase
+from test.factories import DatasetFactory
 
 
 class TopTest(TestBase):
+
+    def setUp(self):
+        super(self.__class__, self).setUp()
+        self.my_library = self.library()
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
 
     # helpers
     def _assert_fields_match(self, expected_fields, dest):
@@ -59,9 +65,8 @@ class TopTest(TestBase):
         """ Test about group fields values. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.about.access = 'restricted'
         top.about.footnote = 'the-footnote'
@@ -120,9 +125,8 @@ class TopTest(TestBase):
         """ Test contacts group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.identity.bspace = 'b-space'
         top.identity.btime = 'b-time'
@@ -163,9 +167,8 @@ class TopTest(TestBase):
         """ Test Top.dependencies group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.dependencies.counties = 'census.gov-index-counties'
         top.dependencies.facility_index = 'oshpd.ca.gov-facilities-index-facilities_index-2010e2014'
@@ -203,9 +206,8 @@ class TopTest(TestBase):
         """ Test Top.requirements group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.requirements.xlrd = 'xlrd'
         top.requirements.requests = 'requests'
@@ -240,9 +242,8 @@ class TopTest(TestBase):
         """ Test Top.external_documentation group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.external_documentation.any_field.url = 'http://example.com'
         top.external_documentation.any_field.title = 'the-title'
@@ -284,9 +285,8 @@ class TopTest(TestBase):
         """ Test Top().build group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.build.key1 = 'value1'
         top.build.key2 = 'value2'
@@ -321,9 +321,8 @@ class TopTest(TestBase):
         """ Test Top().names group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.names.fqname = 'fq-name'
         top.names.name = 'name'
@@ -354,9 +353,8 @@ class TopTest(TestBase):
         """ Test contacts group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.contacts.creator.role = 'c-developer'
         top.contacts.creator.org = 'c-home'
@@ -389,9 +387,8 @@ class TopTest(TestBase):
         """ Test Top().versions group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        top.link_config(db.session, dataset)
+        dataset = DatasetFactory()
+        top.link_config(self.my_library.database.session, dataset)
 
         top.versions['1'].date = '2015-04-12T15:49:55.077036'
         top.versions['1'].description = 'Adding coverage'

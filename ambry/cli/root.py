@@ -266,7 +266,7 @@ def root_info(args, l, rc):
     except (ConfigurationError, AttributeError) as e:
         prt('Source :   No source directory')
 
-    prt('Configs:   {}', [e[0] for e in rc.loaded])
+    prt('Config:    {}', rc.loaded[0])
     prt('Accounts:  {}', rc.accounts.loaded[0])
     if l:
         prt('Library:   {}', l.database.dsn)

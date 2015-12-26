@@ -29,30 +29,15 @@ from test.helpers import assert_sqlite_index
 
 class Test(TestBase):
 
-    @classmethod
-    def setUpClass(cls):
-        TestBase.setUpClass()
-        cls._db = 'sqlite:////tmp/test-files-ambry-1.db'
-        try:
-            os.remove(cls._db.replace('sqlite:///', ''))
-        except OSError:
-            pass
-
-    def tearDown(self):
-        super(self.__class__, self).tearDown()
-        try:
-            os.remove(self._db.replace('sqlite:///', ''))
-        except OSError:
-            pass
-
     @pytest.mark.slow
     def test_bundle_sql(self):
         """ Tests view creation from sql file. """
-        # Replace config because user may set memory database in the config, but test requires file database.
-        rc = TestBase.get_rc()
-        rc.library.database = self._db
 
-        library = self.library(config=rc)
+        library = self.library()
+        if not library.database.exists():
+            raise Exception(
+                'The test requires file database. {} looks like in-memory db.'
+                .format(library.database.dsn))
 
         # First load 'simple' dataset because simple_with_sql dataset requires it.
         test_root = fsopendir('temp://')

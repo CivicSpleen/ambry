@@ -37,12 +37,13 @@ or via SQLAlchemy, to return datasets.
     """
 
     def __init__(self, library):
-        # If keep_connection is true, do not close the connection until close method call.
         self._library = library
 
         warehouse_dsn = library.config.library.get('warehouse')
         if not warehouse_dsn:
             warehouse_dsn = library.config.library.database
+
+        # Initialize appropriate backend.
         if warehouse_dsn.startswith('sqlite:'):
             logger.debug('Initializing sqlite warehouse.')
             self._backend = SQLiteBackend(library, warehouse_dsn)
@@ -190,22 +191,22 @@ def _preprocess_view(asql_query, library, backend, connection):
         for column in view.columns:
             create_query_columns[column.name] = column.alias
 
-        partition_name_map = {}  # key is ref found in the query, value is Partition instance.
-        partition_alias_map = {}  # key is alias of ref found in the query, value is Partition instance.
+        ref_to_partition_map = {}  # key is ref found in the query, value is Partition instance.
+        alias_to_partition_map = {}  # key is alias of ref found in the query, value is Partition instance.
 
         # collect sources from select statement of the view.
         for source in view.sources:
             partition = library.partition(source.name)
-            partition_name_map[source.name] = partition
+            ref_to_partition_map[source.name] = partition
             if source.alias:
-                partition_alias_map[source.alias] = partition
+                alias_to_partition_map[source.alias] = partition
 
         # collect sources from joins of the view.
         for join in view.joins:
             partition = library.partition(join.source.name)
-            partition_name_map[join.source.name] = partition
+            ref_to_partition_map[join.source.name] = partition
             if join.source.alias:
-                partition_alias_map[join.source.alias] = partition
+                alias_to_partition_map[join.source.alias] = partition
 
         # collect and convert columns.
         TYPE_MAP = {
@@ -228,7 +229,7 @@ def _preprocess_view(asql_query, library, backend, connection):
 
             # find column specification in the mpr file.
             if source_alias:
-                partition = partition_alias_map[source_alias]
+                partition = alias_to_partition_map[source_alias]
                 for part_column in partition.datafile.reader.columns:
                     if part_column['name'] == column_name:
                         sqlite_type = TYPE_MAP.get(part_column['type'])

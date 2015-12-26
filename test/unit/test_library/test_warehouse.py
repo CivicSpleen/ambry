@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from ambry.library import new_library
 from ambry.library.warehouse import Warehouse
 
 from test.factories import PartitionFactory
-from test.test_base import ConfigDatabaseTestBase
+from test.test_base import TestBase
 
 try:
     # py2, mock is external lib.
@@ -14,12 +13,11 @@ except ImportError:
     from unittest.mock import patch
 
 
-class WarehouseTest(ConfigDatabaseTestBase):
+class WarehouseTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
-        rc = self.get_rc()
-        self.library = new_library(rc)
-        self.warehouse = Warehouse(self.library)
+        self.my_library = self.library()
+        self.warehouse = Warehouse(self.my_library)
 
     # __init__ tests
     def _test_uses_library_db(self):
@@ -36,8 +34,8 @@ class WarehouseTest(ConfigDatabaseTestBase):
         pass
 
     def test_sends_query_to_database_backend(self):
-        w = Warehouse(self.library)
-        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        w = Warehouse(self.my_library)
+        PartitionFactory._meta.sqlalchemy_session = self.my_library.database.session
         partition = PartitionFactory()
         with patch.object(w._backend, 'query') as fake_query:
             query = 'SELECT * FROM {};'.format(partition.vid)
@@ -51,8 +49,8 @@ class WarehouseTest(ConfigDatabaseTestBase):
 
     # .install() tests
     def test_finds_partition_by_refs_and_installs_partition_to_backend(self):
-        w = Warehouse(self.library)
-        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        w = Warehouse(self.my_library)
+        PartitionFactory._meta.sqlalchemy_session = self.my_library.database.session
         partition = PartitionFactory()
 
         with patch.object(w._backend, 'install') as fake_install:
