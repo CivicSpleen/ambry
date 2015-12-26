@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from ambry.orm.config import Config
 
 from test.test_base import TestBase
-from test.factories import ConfigFactory, DatasetFactory
+from test.factories import DatasetFactory
 
 
 class Test(TestBase):
@@ -14,7 +14,6 @@ class Test(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
         self._my_library = self.library()
-        ConfigFactory._meta.sqlalchemy_session = self._my_library.database.session
         DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
 
     def test_id_generation(self):
