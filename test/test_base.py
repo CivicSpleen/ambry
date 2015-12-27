@@ -37,6 +37,13 @@ class TestBase(unittest.TestCase):
         cls.library_prod_dsn = config.library.database
 
         if not cls.library_test_dsn:
+            if cls.dbname not in config.library.database:
+                raise Exception(
+                    'Can not run tests on {dbname} database without credentials.\n'
+                    '  HINT: Set library.database or database.test-{dbname} keys '
+                    '  in the ~/.ambry/config.yaml'
+                    .format(dbname=cls.dbname))
+
             if cls.dbname == 'sqlite':
                 d = parse_url_to_dict(config.library.database)
                 last_part = d['path'].split('/')[-1]
