@@ -125,17 +125,10 @@ class Mixin(object):
             library.database.close()
 
     def test_table_install_and_query(self):
-        if isinstance(self, PostgreSQLTest):
-            try:
-                assert_valid_ambry_sources('0.1.6')
-            except AssertionError:
-                self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
-        else:
-            # sqlite tests
-            try:
-                assert_valid_ambry_sources('0.1.8')
-            except AssertionError:
-                self.SkipTest('Need ambry_sources >= 0.1.8. Update your installation.')
+        try:
+            assert_valid_ambry_sources('0.1.8')
+        except AssertionError:
+            self.SkipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
         config = self._get_config()
         library = self._get_library(config)
@@ -278,19 +271,8 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
     def _get_config(self):
         rc = self.get_rc()
         # replace database with postgres test database.
-        self.__class__._real_warehouse_database = rc.library.database
-        rc.library.warehouse = self.__class__.postgres_test_db_data['test_db_dsn']
-        rc.library.database = self.__class__.postgres_test_db_data['test_db_dsn']  # It's ok to use the same database.
+        rc.library.warehouse = self.library_test_dsn  # It's ok to use the same database.
         return rc
-
-    @classmethod
-    def tearDownClass(cls):
-        rc = TestBase.get_rc()
-        real_warehouse_database = getattr(cls, '_real_warehouse_database', None)
-        if real_warehouse_database and rc.library.database != real_warehouse_database:
-            # restore database
-            rc.library.database = real_warehouse_database
-        super(PostgreSQLTestBase, cls).tearDownClass()
 
     def _assert_is_indexed(self, warehouse, partition, column):
         table = postgres_med.table_name(partition.vid) + '_v'

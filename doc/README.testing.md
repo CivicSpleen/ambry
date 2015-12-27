@@ -119,7 +119,7 @@ psql template0_ambry_test -c 'CREATE EXTENSION multicorn;'
 psql postgres -c "UPDATE pg_database SET datistemplate = TRUE WHERE datname='template0_ambry_test';"
 
 # User from the dsn needs USAGE permission (Assuming your db user is ambry)
-psql postgres -c 'GRANT USAGE ON FOREIGN DATA WRAPPER multicorn TO ambry;'
+psql template0_ambry_test -c 'GRANT USAGE ON FOREIGN DATA WRAPPER multicorn TO ambry;'
 
 # Exit postgres account
 exit
