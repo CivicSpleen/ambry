@@ -308,6 +308,12 @@ class WhooshTest(TestBase, AmbryReadyMixin):
 class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
     """ Library database is in-memory sqlite, search backend is in-memory sqlite. """
 
+    @classmethod
+    def setUpClass(cls):
+        super(InMemorySQLiteTest, cls).setUpClass()
+        if not cls._is_sqlite:
+            raise unittest.SkipTest('SQLite tests are disabled.')
+
     def setUp(self):
         super(self.__class__, self).setUp()
         self.rc = self.get_rc()
@@ -324,12 +330,19 @@ class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
         self.assertEqual(self._my_library.database.dsn, 'sqlite://')
 
     def tearDown(self):
+        super(self.__class__, self).tearDown()
         if self.rc.library.database != self._CONFIG_DATABASE:
             self.rc.library.database = self._CONFIG_DATABASE
 
 
 class FileSQLiteTest(TestBase, AmbryReadyMixin):
     """ Library database is file-based sqlite, search backend is file-based sqlite. """
+
+    @classmethod
+    def setUpClass(cls):
+        super(FileSQLiteTest, cls).setUpClass()
+        if not cls._is_sqlite:
+            raise unittest.SkipTest('SQLite tests are disabled.')
 
     def setUp(self):
         super(self.__class__, self).setUp()
@@ -339,8 +352,6 @@ class FileSQLiteTest(TestBase, AmbryReadyMixin):
         self.rc.services.search = None
 
         self._my_library = self.library()
-        if not self.__class__._is_sqlite:
-            self.skipTest('SQLite tests are disabled.')
         assert isinstance(self._my_library.search.backend, SQLiteSearchBackend)
         self.assertIn('.db', self._my_library.database.dsn)
 
