@@ -15,9 +15,6 @@ from test.test_base import TestBase
 
 class Test(TestBase):
 
-    def tearDown(self):
-        pass
-
     def test_id(self):
         dnn = 1000000
         rev = 100
@@ -434,7 +431,6 @@ class Test(TestBase):
 
         ds_name = Name(source='source', dataset='dataset')
 
-        # TODO: What is testing here?
         for s in list(combinations(name_parts, 3)):
             p = PartialPartitionName(**dict(list(zip(s, s))))
             self.assertIn('name', p.promote(ds_name).dict)
@@ -466,5 +462,5 @@ class Test(TestBase):
 
         p = PartialPartitionName(time=10, space="CA", table='table', format='format')
 
-        print(p.promote(ds_name).cache_key)
+        # print(p.promote(ds_name).cache_key)
         # self.assertEquals('', p.promote(ds_name).cache_key)
