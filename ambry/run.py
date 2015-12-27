@@ -118,7 +118,6 @@ def load_accounts():
     if accts_file is not None and os.path.exists(accts_file):
         config.update_yaml(accts_file)
         config.accounts.loaded = [accts_file, getmtime(accts_file)]
-
     else:
         config.accounts = AttrDict()
         config.accounts.loaded = [None, 0]
@@ -143,8 +142,10 @@ def load_config(path=None):
     from os.path import getmtime
 
     config = AttrDict()
+    if not path:
+        path = CONFIG_FILE
 
-    config_file = find_config_file(CONFIG_FILE)
+    config_file = find_config_file(path)
 
     if os.path.exists(config_file):
 
@@ -240,7 +241,7 @@ def update_config(config):
             _ = eval(check)
         except KeyError:
             raise ConfigurationError("Configuration is missing '{}'; loaded from {} "
-                                     .format(check, [l[0] for l in config.loaded]))
+                                     .format(check, config.loaded[0]))
 
     _, config.library.database = normalize_dsn_or_dict(config.library.database)
 

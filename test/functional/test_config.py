@@ -1,4 +1,13 @@
+import os
+
+from ambry.dbexceptions import ConfigurationError
+from ambry.library import Library
+from ambry.library.filesystem import LibraryFilesystem
+import ambry.run
+from ambry.util import temp_file_name
+
 from test.test_base import TestBase
+
 
 class TempDirContext(object):
     """Setup and tear down a chroot jail. """
@@ -18,22 +27,17 @@ class TempDirContext(object):
 
 class Test(TestBase):
 
+    def tearDown(self):
+        super(self.__class__, self).tearDown()
+        if hasattr(self, '_temp_file'):
+            os.remove(self._temp_file)
 
     def test_run_config_filesystem(self):
-        from os import chroot, makedirs, chroot
-        from os.path import join, dirname
-        from shutil import copyfile
-        from test import bundlefiles
-
         rc = self.get_rc()
         self.assertEqual('{root}/downloads', rc.filesystem.downloads)
         self.assertEqual('{root}/extracts', rc.filesystem.extracts)
 
-        from ambry.run import load_docker
-
     def test_dsn_config(self):
-        from ambry.dbexceptions import ConfigurationError
-
         from ambry.run import normalize_dsn_or_dict as n
 
         self.assertEqual('sqlite://', n(dict(driver='sqlite', dbname=''))[1])
@@ -74,15 +78,9 @@ class Test(TestBase):
 
     def test_basic_config(self):
 
-        from ambry.util import temp_file_name
-        import ambry.run
-        from ambry.dbexceptions import ConfigurationError
-        import os
-        from ambry.library.filesystem import LibraryFilesystem
+        self._temp_file = temp_file_name()
 
-        tf = temp_file_name()
-
-        with open(tf, 'w') as f:
+        with open(self._temp_file, 'w') as f:
             f.write("""
 library:
     category: development
@@ -94,12 +92,12 @@ library:
                     """)
 
         with self.assertRaises(ConfigurationError):
-            config = ambry.run.load(tf)
+            config = ambry.run.load(self._temp_file)
 
         if 'AMBRY_DB' in os.environ:
             del os.environ['AMBRY_DB']
 
-        with open(tf, 'w') as f:
+        with open(self._temp_file, 'w') as f:
             f.write("""
 library:
     category: development
@@ -112,16 +110,16 @@ library:
         test: s3://test.library.civicknowledge.com/test
             """)
 
-        config = ambry.run.load(tf)
+        config = ambry.run.load(self._temp_file)
         config.account = None
 
         self.assertEquals('postgres://foo:bar@baz:5432/ambry', config.library.database)
         self.assertEquals('/tmp/foo/bar', config.library.filesystem_root)
 
-        self.assertEqual(1, len(config.loaded))
-        self.assertEqual(tf, config.loaded[0][0])
+        self.assertEqual(2, len(config.loaded))
+        self.assertEqual(self._temp_file, config.loaded[0])
 
-        with open(tf, 'w') as f:
+        with open(self._temp_file, 'w') as f:
             f.write("""
 library:
     filesystem_root: /foo/root
@@ -129,13 +127,13 @@ library:
 
         os.environ['AMBRY_DB'] = 'sqlite:////library.db'
 
-        with open(tf, 'w') as f:
+        with open(self._temp_file, 'w') as f:
             f.write("""""")
 
         os.environ['AMBRY_DB'] = 'sqlite:////{root}/library.db'
         os.environ['AMBRY_ROOT'] = '/tmp/foo/bar'
 
-        config = ambry.run.load(tf)
+        config = ambry.run.load(self._temp_file)
 
         lf = LibraryFilesystem(config)
 
@@ -143,19 +141,15 @@ library:
         self.assertEqual('/tmp/foo/bar/downloads/a/b', lf.downloads('a', 'b'))
 
     def test_library(self):
-        import os
-        from ambry.util import temp_file_name
-        import ambry.run
-        from ambry.library import Library
-        from ambry.library.filesystem import LibraryFilesystem
 
         db_path = '/tmp/foo/bar/library.db'
         if os.path.exists(db_path):
             os.remove(db_path)
 
-        tf = temp_file_name()
+        # Initialize as instance field to allow tearDown to delete file after test.
+        self._temp_file = temp_file_name()
 
-        with open(tf, 'w') as f:
+        with open(self._temp_file, 'w') as f:
             f.write("""
 library:
     category: development
@@ -166,7 +160,7 @@ library:
         restricted: s3://test.library.civicknowledge.com/restricted
         test: s3://test.library.civicknowledge.com/test""")
 
-        config = ambry.run.load(tf)
+        config = ambry.run.load(self._temp_file)
 
         lf = LibraryFilesystem(config)
 

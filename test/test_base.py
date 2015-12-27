@@ -15,7 +15,7 @@ from six.moves.urllib.parse import urlparse
 from six.moves import input as six_input
 
 from ambry.identity import DatasetNumber
-from ambry.orm import Database, Dataset
+from ambry.orm import Dataset
 from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
 import ambry.run
 from ambry.util import parse_url_to_dict, unparse_url_dict
@@ -199,13 +199,6 @@ class TestBase(unittest.TestCase):
     def dump_database(self, table, db):
         for row in db.connection.execute('SELECT * FROM {};'.format(table)):
             print(row)
-
-    def new_database(self):
-        # FIXME: this connection will not be closed properly in a postgres case.
-        # FIXME: DEPRECATED. Use self.library.database instead.
-        db = Database(self.__class__.library_test_dsn)
-        db.open()
-        return db
 
     def setup_bundle(self, name, source_url=None, build_url=None, library=None):
         """Configure a bundle from existing sources"""

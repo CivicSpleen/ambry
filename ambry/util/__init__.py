@@ -351,7 +351,7 @@ class AttrDict(OrderedDict):
             return cls()
 
         with open(path) as f:
-            return cls(yaml.load(f, OrderedDictYAMLLoader))
+            return cls(yaml.load(f, OrderedDictYAMLLoader) or {})
 
     @staticmethod
     def flatten_dict(data, path=tuple()):
