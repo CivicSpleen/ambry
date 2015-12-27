@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import stat
+import unittest
 
 from ambry_sources import MPRowsFile
 from ambry_sources.med import postgresql as postgres_med
@@ -238,6 +239,9 @@ class FileSQLiteTest(TestBase, Mixin):
     @classmethod
     def setUpClass(cls):
         TestBase.setUpClass()
+        if not cls._is_sqlite:
+            raise unittest.SkipTest('SQLite tests are disabled.')
+
         cls._warehouse_db = 'sqlite:////tmp/test-warehouse-ambry-1.db'
         try:
             os.remove(cls._warehouse_db.replace('sqlite:///', ''))
