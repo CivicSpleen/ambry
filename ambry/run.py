@@ -5,12 +5,11 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-import copy
 import os.path
 
-from six import StringIO, string_types
+from six import string_types
 
-from ambry.util import AttrDict, lru_cache, parse_url_to_dict, unparse_url_dict
+from ambry.util import AttrDict, lru_cache, parse_url_to_dict
 from .dbexceptions import ConfigurationError
 
 
@@ -22,7 +21,8 @@ def get_runconfig(path=None):
 
     return load(path)
 
-def load(path = None):
+
+def load(path=None):
 
     config = load_config(path)
     config.update(load_accounts())
@@ -36,8 +36,8 @@ from ambry.util import Constant
 ENVAR = Constant()
 ENVAR.CONFIG = 'AMBRY_CONFIG'
 ENVAR.PASSWORD = 'AMBRY_ACCOUNT_PASSWORD'
-ENVAR.DB =  'AMBRY_DB'
-ENVAR.ROOT =  'AMBRY_ROOT'
+ENVAR.DB = 'AMBRY_DB'
+ENVAR.ROOT = 'AMBRY_ROOT'
 ENVAR.EDIT = 'AMBRY_CONFIG_EDIT'
 ENVAR.VIRT = 'VIRTUAL_ENV'
 
@@ -60,6 +60,7 @@ filesystem_defaults = {
     'test': '{root}/test',
 }
 
+
 def find_config_file(file_name, extra_path=None):
     """
     Find a configuration file in one of these directories, tried in this order:
@@ -77,7 +78,7 @@ def find_config_file(file_name, extra_path=None):
     paths = []
 
     if extra_path is not None:
-        paths.append(extra_paths)
+        paths.append(extra_path)
 
     if os.getenv(ENVAR.CONFIG):
         paths.append(os.getenv(ENVAR.CONFIG))
@@ -86,7 +87,7 @@ def find_config_file(file_name, extra_path=None):
         paths.append(os.path.join(os.getenv(ENVAR.VIRT), USER_DIR))
 
     paths += [
-        os.path.expanduser("~/"+USER_DIR),
+        os.path.expanduser('~/' + USER_DIR),
         ROOT_DIR
     ]
 
@@ -95,7 +96,9 @@ def find_config_file(file_name, extra_path=None):
         if os.path.isdir(path) and os.path.exists(os.path.join(path, file_name)):
             return os.path.join(path, file_name)
 
-    raise ConfigurationError("Failed to find configuration file '{}'. Looked for : {} ".format(file_name, paths))
+    raise ConfigurationError(
+        "Failed to find configuration file '{}'. Looked for : {} ".format(file_name, paths))
+
 
 def load_accounts():
     """Load the yaml account files
@@ -103,7 +106,6 @@ def load_accounts():
     :return: An `AttrDict`
     """
 
-    from os.path import join
     from os.path import getmtime
 
     config = AttrDict()
@@ -121,10 +123,7 @@ def load_accounts():
         config.accounts = AttrDict()
         config.accounts.loaded = [None, 0]
 
-
     return config
-
-
 
 
 def load_config(path=None):
@@ -137,12 +136,10 @@ def load_config(path=None):
     - /etc/ambry
     - ~/ambry
 
-
     :param path: An iterable of additional paths to load.
     :return: An `AttrDict` of configuration information
     """
 
-    from os.path import join
     from os.path import getmtime
 
     config = AttrDict()
@@ -161,8 +158,8 @@ def load_config(path=None):
 
     return config
 
+
 def load_docker():
-    from os.path import join
     from os.path import getmtime
 
     config = AttrDict()
@@ -182,6 +179,7 @@ def load_docker():
 
     return config
 
+
 def update_config(config):
     """Update the configuration from environmental variables. Updates:
 
@@ -191,7 +189,6 @@ def update_config(config):
 
     :param config: An `attrDict` of configuration information.
     """
-
 
     try:
         _ = config.accounts
@@ -225,7 +222,7 @@ def update_config(config):
     try:
         _ = config.library.remotes
     except KeyError:
-        config.library.remotes = AttrDict() # Default empty
+        config.library.remotes = AttrDict()  # Default empty
 
     # Set a default for the library database
     try:
@@ -238,8 +235,6 @@ def update_config(config):
         'config.library.filesystem_root',
     ]
 
-
-
     for check in checks:
         try:
             _ = eval(check)
@@ -247,16 +242,13 @@ def update_config(config):
             raise ConfigurationError("Configuration is missing '{}'; loaded from {} "
                                      .format(check, [l[0] for l in config.loaded]))
 
-    _, config.library.database =  normalize_dsn_or_dict(config.library.database)
+    _, config.library.database = normalize_dsn_or_dict(config.library.database)
 
     for k, v in filesystem_defaults.items():
         if k not in config.filesystem:
             config.filesystem[k] = v
 
     config.modtime = config.loaded[1]
-
-
-
 
 
 def normalize_dsn_or_dict(d):
@@ -315,9 +307,7 @@ def normalize_dsn_or_dict(d):
                 password=d.get('password', None),
                 username=d.get('username', None)
             )
-
     else:
-        
         up = d.get('username', '') or ''
 
         if d.get('password'):
@@ -325,7 +315,7 @@ def normalize_dsn_or_dict(d):
             up += ':' + d.get('password', '')
 
         if up:
-            up += "@"
+            up += '@'
 
         if up and not d.get('server'):
             raise ConfigurationError("Can't construct a DSN with a username or password without a hostname")
@@ -335,12 +325,12 @@ def normalize_dsn_or_dict(d):
         if d.get('dbname', False):
             path_part = '/' + d.get('dbname')
 
-            #if d['driver'] in ('sqlite3', 'sqlite', 'spatialite'):
-            #    path_part = '/' + path_part
+            # if d['driver'] in ('sqlite3', 'sqlite', 'spatialite'):
+            #     path_part = '/' + path_part
 
         else:
-            path_part = '' # w/ no dbname, Sqlite should use memory, which required 2 slash. Rel dir is 3, abs dir is 4
+            path_part = ''  # w/ no dbname, Sqlite should use memory, which required 2 slash. Rel dir is 3, abs dir is 4
 
-        dsn = "{}://{}{}".format(d['driver'], host_part, path_part)
+        dsn = '{}://{}{}'.format(d['driver'], host_part, path_part)
 
     return config, dsn
