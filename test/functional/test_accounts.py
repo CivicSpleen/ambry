@@ -43,9 +43,11 @@ class Test(TestBase):
         # library DSN.
         rc = self.config()
         # print 'Removing', rc.loaded[0][0]
-        os.remove(rc.loaded[0][0])
+        to_remove = rc.loaded[0]
+        assert to_remove.startswith('/tmp')
+        os.remove(to_remove)
 
-        self.assertFalse(os.path.exists(rc.loaded[0][0]))
+        self.assertFalse(os.path.exists(rc.loaded[0]))
         get_runconfig.clear()  # Clear the LRU cache on the function
 
         os.environ['AMBRY_DB'] = l.database.dsn
