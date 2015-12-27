@@ -16,7 +16,7 @@ from ambry.util import get_logger
 
 MISSING_CREDENTIALS_MSG = '''Missing CKAN credentials.
 HINT:
-Add `ckan` section to the ~/.ambry_accounts.yaml. Example:
+Add `ckan` section to the ~/.ambry/accounts.yaml. Example:
 
 ckan:
     host: http://demo.ckan.org  # host with the ckan instance
