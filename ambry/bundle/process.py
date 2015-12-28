@@ -40,8 +40,6 @@ class ProgressSection(object):
         self._start = None
         self._group = self.add(log_action='start',state='running', **kwargs)
 
-
-
         assert self._session
 
     def __enter__(self):
@@ -170,17 +168,20 @@ class ProgressSection(object):
         self.update(*args, **kwargs)
         self.rec = None
 
-
     def done(self, *args, **kwargs):
-
 
         kwargs['state'] = 'done'
         pr_id = self.add(*args, log_action='done', **kwargs)
 
         self._session.query(Process).filter(Process.group == self._group).update({Process.state: 'done'})
         self.start.state = 'done'
+        self._session.commit()
 
         return pr_id
+
+
+    def get(self, id_):
+        return self._session.query(Process).get(id_)
 
 
 class ProcessLogger(object):

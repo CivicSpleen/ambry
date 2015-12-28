@@ -1903,9 +1903,12 @@ Caster Code
                     else:
 
                         for i, source in enumerate(stage_sources):
-                            ps.add(message='Running source {}'.format(source.name),
+                            id_ = ps.add(message='Running source {}'.format(source.name),
                                    source=source, item_count=i, state='running')
                             self.build_source(stage, source, ps, force=force)
+                            ps.update(message='Finished processing source', state='done')
+                            ps.get(id_).state = 'done'
+                            self.progress.commit()
 
                         self.unify_partitions()
 
@@ -1966,9 +1969,7 @@ Caster Code
                 if n_records > 0:
                     ps.update(message='Running pipeline {}: rate: {}'
                               .format(source_name, rate),
-                              s_vid=s_vid,
-                              item_type='rows',
-                              item_count=n_records)
+                              s_vid=s_vid,item_type='rows',item_count=n_records)
 
             pl.run(callback=run_progress_f)
 
@@ -1977,7 +1978,7 @@ Caster Code
                 ps.update(message='Run final routine: {}'.format(f.__name__))
                 f(pl)
 
-            ps.update(message='Finished running source')
+            ps.update(message='Finished building source')
 
         except:
             self.log_pipeline(pl)
@@ -2013,7 +2014,7 @@ Caster Code
 
         self.commit()
 
-        ps.update(message='Finished source', state='done')
+
         return source.name
 
     def collect_segment_partitions(self):
