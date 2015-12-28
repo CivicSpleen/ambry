@@ -113,92 +113,6 @@ class PyTest(TestCommand):
         sys.exit(errno)
 
 
-class Docker(Command):
-
-    description = "build or launch a docker image"
-
-    user_options = [
-        ('clean', 'C', 'Build without the image cache -- completely rebuild'),
-        ('all', 'a', 'Build all of the images'),
-        ('base', 'B', 'Build the base docker image, civicknowledge/ambry-base'),
-        ('build', 'b', 'Build the ambry docker image, civicknowledge/ambry'),
-        ('dev', 'd', 'Build the dev version of the ambry docker image, civicknowledge/ambry'),
-        ('db', 'D', 'Build the database image, civicknowledge/postgres'),
-        ('numbers', 'n', 'Build the numbers server docker image, civicknowledge/numbers'),
-        ('tunnel', 't', 'Build the ssh tunnel docker image, civicknowledge/tunnel'),
-        ('ui', 'u', 'Build the user interface image, civicknowledge/ambryui'),
-        ('volumes', 'v', 'Build the user interface image, civicknowledge/volumes'),
-        ('ckan', 'c', 'Build the CKAN image, civicknowledge/ckan'),
-    ]
-
-    def initialize_options(self):
-
-        for long, short, desc in self.user_options:
-            setattr(self, long, False)
-
-
-    def finalize_options(self):
-
-        if self.all:
-            for long, short, desc in self.user_options:
-                setattr(self, long, True)
-
-
-    def run(self):
-        import os, sys, shutil
-
-        init_args_a = ['docker', 'build'] +(['--no-cache'] if self.clean else [] ) + ['-f' ]
-
-        def tag(n):
-            from ambry._meta import __version__
-            import subprocess
-            import json
-
-            # Inspect the image to get the image id, so we can tag it.
-            # FIXME. Instead of parsing the JSON, this should be:
-            # docker inspect --format='{{.Id}}' civicknowledge/ambry
-            proc = subprocess.Popen("docker inspect civicknowledge/ambry:latest", stdout=subprocess.PIPE, shell=True)
-            (out, err) = proc.communicate()
-            d = json.loads(out)
-
-            self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/{}:{}'.format(n,__version__)])
-
-
-        if self.base:
-            self.spawn(init_args_a+[ 'support/docker/base/Dockerfile', '-t', 'civicknowledge/ambry-base', '.'])
-
-        if self.numbers:
-            self.spawn(init_args_a+[ 'support/docker/numbers/Dockerfile', '-t', 'civicknowledge/ambry-numbers', '.'])
-
-        if self.build:
-            self.spawn(init_args_a+[ 'support/docker/ambry/Dockerfile','-t', 'civicknowledge/ambry', '.'])
-            tag('ambry')
-
-        if self.dev:
-            self.spawn(init_args_a+[ 'support/docker/dev/Dockerfile', '-t', 'civicknowledge/ambry', '.'])
-            tag('ambry')
-
-        def d_build(name):
-            """Builder for containers that don't need the context of the while source distribution"""
-            init_args = ['docker', 'build'] +(['--no-cache'] if self.clean else [] ) + ['-t']
-
-            self.spawn(init_args + ['civicknowledge/' + name, 'support/docker/' + name + '/'])
-            tag(name)
-
-        if self.db:
-            d_build('postgres')
-
-        if self.tunnel:
-            d_build('tunnel')
-
-        if self.ui:
-            d_build('ambryui')
-
-        if self.volumes:
-            d_build('volumes')
-
-        if self.ckan:
-            d_build('ckan')
 
 tests_require = ['pytest']
 
@@ -221,7 +135,7 @@ d = dict(
     scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh'],
     package_data=find_package_data(),
     license=ambry_meta.__license__,
-    cmdclass={'test': PyTest, 'docker': Docker},
+    cmdclass={'test': PyTest},
     platforms='Posix; MacOS X; Linux',
     classifiers=[
         'Development Status :: 3 - Alpha',

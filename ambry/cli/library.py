@@ -40,32 +40,6 @@ def make_parser(cmd):
     sp.add_argument('-F', '--bundle-list',
                     help='File of bundle VIDs. Sync only VIDs listed in this file')
 
-    sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. '
-                                    'Possible download the file from the remote library')
-    sp.set_defaults(subcommand='get')
-    sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-p', '--partitions', default=False, action='store_true',
-                    help='Also get all of the partitions. ')
-    sp.add_argument('-f', '--force', default=False, action='store_true',
-                    help='Force retrieving from the remote')
-
-    sp = asp.add_parser('open', help='Open a bundle or partition file with sqlite3')
-    sp.set_defaults(subcommand='open')
-    sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-f', '--force', default=False, action='store_true',
-                    help='Force retrieving from the remote')
-
-    sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
-    sp.set_defaults(subcommand='remove')
-    sp.add_argument('-a', '--all', default=False, action='store_true', help='Remove all records')
-    sp.add_argument('-b', '--bundle', default=False, action='store_true',
-                    help='Remove the dataset and partition records')
-    sp.add_argument('-l', '--library', default=False, action='store_true',
-                    help='Remove the library file record and library files')
-    sp.add_argument('-r', '--remote', default=False, action='store_true', help='Remove the remote record')
-    sp.add_argument('-s', '--source', default=False, action='store_true', help='Remove the source record')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
-                    help='Name or ID of the bundle or partition to remove')
 
     sp = asp.add_parser('number', help='Return a new number from the number server')
     sp.set_defaults(subcommand='number')
@@ -121,88 +95,6 @@ def library_clean(args, l, config):
     prt("Clean tables in {}".format(l.database.dsn))
     l.clean()
     l.sync_config()
-
-def library_remove(args, l, config):
-    from ambry.orm.exc import NotFoundError
-
-    cache_keys = set()
-    refs = set()
-
-    def remove_by_ident(ident):
-
-        try:
-
-            if ident.partition:
-                cache_keys.add(ident.partition.cache_key)
-                refs.add(ident.partition.vid)
-
-            # The reference is to a bundle, so we have to delete everything
-            else:
-                cache_keys.add(ident.cache_key)
-                refs.add(ident.vid)
-
-                b = l.get(ident.vid)
-
-                if b:
-                    for p in b.partitions:
-                        cache_keys.add(p.cache_key)
-                        refs.add(p.vid)
-
-        except NotFoundError:
-            pass
-
-    for name in args.terms:
-
-        ident = l.resolve(name, location=None)
-
-        if ident:
-            remove_by_ident(ident)
-            continue
-
-        if name.startswith('s'):
-            l.remove_store(name)
-
-        elif name.startswith('m'):
-            l.remove_manifest(name)
-
-        else:
-            warn("Found no references to term {}".format(name))
-
-    if args.library or args.all:
-        for ck in cache_keys:
-            l.cache.remove(ck, propagate=True)
-            prt("Remove file {}".format(ck))
-
-    for ref in refs:
-
-        if args.bundle or args.all:
-            prt("Remove bundle record {}".format(ref))
-            if ref.startswith('d'):
-                l.database.remove_dataset(ref)
-            if ref.startswith('p'):
-                l.database.remove_partition_record(ref)
-
-            # We also need to delete everything in this case; no point in having
-            # a file record if there there is no bundle or partition.
-            l.files.query.ref(ref).delete()
-
-        if args.library or args.all:
-            prt("Remove library record {}".format(ref))
-            if ref.startswith('d'):
-                l.files.query.ref(ref).type(l.files.TYPE.BUNDLE).delete()
-            if ref.startswith('p'):
-                l.files.query.ref(ref).type(l.files.TYPE.PARTITION).delete()
-
-        if args.remote or args.all:
-            prt("Remove remote record {}".format(ref))
-            l.files.query.ref(ref).type(l.files.TYPE.REMOTE).delete()
-            l.files.query.ref(ref).type(l.files.TYPE.REMOTEPARTITION).delete()
-
-        if (args.source or args.all) and ref.startswith('d'):
-            prt("Remove source record {}".format(ref))
-            l.files.query.ref(ref).type(l.files.TYPE.SOURCE).delete()
-
-        l.database.commit()
 
 def library_number(args, l, config):
     print(l.number(assignment_class=args.key))

@@ -1785,7 +1785,30 @@ def bundle_log(args, l, rc):
             prt_no_format(tabulate(rows, headers))
 
 
+def bundle_scrape(args, l, config):
+    from ambry.util import scrape
+    from tabulate import tabulate
+    import re
 
+    raise NotImplementedError
+
+    d = scrape(l, args.url[0], as_html=True)[args.group]
+
+    headers = 'name description url'.split()
+    rows = []
+    for k, v in iteritems(d):
+        v['description'] = re.sub(r'\s+', ' ', v['description']).strip()
+        rows.append([k, v['description'], v['url']])
+
+    if args.csv:
+        import csv
+        import sys
+        w = csv.writer(sys.stdout)
+        w.writerow(headers)
+        w.writerows(rows)
+        sys.stdout.flush()
+    else:
+        print(tabulate(rows, headers))
 
 
 
