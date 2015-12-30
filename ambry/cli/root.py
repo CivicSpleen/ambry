@@ -49,6 +49,8 @@ def make_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
     group = sp.add_mutually_exclusive_group()
+    group.add_argument('-C', '--config-path', default=False, action='store_true',
+                       help='Print just the main config path')
     group.add_argument('-c', '--configs', default=False, action='store_true',
                        help=' Also dump the root config entries')
     group.add_argument('-r', '--remote', default=False, action='store_true',
@@ -142,6 +144,10 @@ def run_command(args, rc):
         if args.subcommand != 'info':
             warn('Failed to instantiate library: {}'.format(e))
         l = None
+
+        if args.exceptions:
+            raise
+
 
     globals()['root_' + args.subcommand](args, l, rc)
 
@@ -256,6 +262,10 @@ def root_info(args, l, rc):
     from ambry.util.text import ansicolors
 
     import ambry
+
+    if args.config_path:
+        prt(rc.loaded[0])
+        return
 
     prt('Version:   {}', ambry._meta.__version__)
     prt('Root dir:  {}', rc.library.filesystem_root)
@@ -425,8 +435,11 @@ def root_ui(args, l, rc):
 
     from ambry.ui import app
     import ambry.ui.views
+    import ambry.ui.jsonviews
+    import ambry.ui.api
     import webbrowser
     import socket
+    from ambry.orm.exc import NotFoundError
 
     if args.use_proxy:
         from werkzeug.contrib.fixers import ProxyFix
@@ -440,6 +453,16 @@ def root_ui(args, l, rc):
         log = logging.getLogger('werkzeug')
         log.setLevel(logging.DEBUG)
         #prt("Running at http://{}:{}".format(args.host, args.port))
+
+    try:
+        api_account = l.account('localhost')
+        print api_account.decrypt_secret()
+        app.config['API_TOKEN'] = api_account.decrypt_secret()
+    except NotFoundError:
+        pass
+
+    prt('UI Secret: {}'.format(app.config['SECRET_KEY']))
+    prt('API Token: {}'.format(app.config['API_TOKEN']))
 
     try:
         app.run(host=args.host, port=int(args.port), debug=args.debug)

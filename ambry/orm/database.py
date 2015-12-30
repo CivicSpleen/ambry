@@ -16,9 +16,9 @@ from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, Co
 from ambry.util import get_logger, parse_url_to_dict
 from . import Column, Partition, Table, Dataset, Config, File,\
     Code, ColumnStat, DataSource, SourceColumn, SourceTable
+from ambry.orm.remote import Remote
+from ambry.orm.account import Account
 from ambry.orm.process import Process
-
-from account import Account
 
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
@@ -376,7 +376,7 @@ class Database(object):
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
-            ColumnStat, SourceTable, SourceColumn, DataSource, Account, Process]
+            ColumnStat, SourceTable, SourceColumn, DataSource, Account, Process, Remote]
 
         try:
             self.drop()
@@ -550,42 +550,70 @@ class Database(object):
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
+
     def copy_dataset(self, ds):
+        from ambry.orm import Table, Column, Partition, File, ColumnStat, Code,\
+            DataSource, SourceTable, SourceColumn, Dataset, Config
+        from sqlalchemy.orm import noload
         from ..util import toposort
 
-        # Make sure everything we want to copy is loaded
-        ds.tables
-        ds.partitions
-        ds.files
-        ds.stats
-        ds.codes
-        ds.sources
-        ds.source_tables
-        ds.source_columns
+        source_session = ds.session
+        dest_session = self.session
+
+        i = [0]
+        def merge(table_class):
+
+            for o in source_session.query(table_class).filter(table_class.d_vid == ds.vid).options(noload('*')).all():
+
+                dest_session.merge(o)
+
+                i[0] +=1
+
+                if i[0]%1000 == 0:
+                    self.logger.info("Copied {} records".format(i[0]))
+
+                    dest_session.commit()
+
+        ds = source_session.query(Dataset).filter(Dataset.vid == ds.vid).options(noload('*')).first()
+        dest_session.merge(ds)
+        dest_session.commit()
+
+        merge(Table)
+        merge(Column)
+        merge(Partition)
+        merge(File)
+        merge(ColumnStat)
+        merge(Code)
+        merge(SourceTable)
+        merge(SourceColumn)
+        merge(DataSource)
+
         # ds.configs # We'll get these later
 
         # Put the partitions in dependency order so the merge won't throw a Foreign key integrity error
         # The non-segment partitions go first, then the segments.
-        ds.partitions = [p for p in ds.partitions if not p.is_segment] + [p for p in ds.partitions if p.is_segment]
+        #ds.partitions = [p for p in ds.partitions if not p.is_segment] + [p for p in ds.partitions if p.is_segment]
 
-        self.session.merge(ds)
 
         # FIXME: Oh, this is horrible. Sqlalchemy inserts all of the configs as a group, but they are self-referential,
         # so some with a reference to a parent get inserted before their parent. The topo sort solves this,
         # but there must be a better way to do it.
 
-        dag = {c.id: set([c.parent_id]) for c in ds.configs}
+        configs = source_session.query(Config).filter(Config.d_vid == ds.vid).options(noload('*')).all()
 
-        refs = {c.id: c for c in ds.configs}
+        dag = {c.id: set([c.parent_id]) for c in configs}
+        refs = {c.id: c for c in configs}
+        ordered = []
 
         for e in toposort(dag):
             for ref in e:
                 if ref:
-                    self.session.merge(refs[ref])
+                    dest_session.merge(refs[ref])
 
-        self.session.commit()
+        dest_session.commit()
 
         return self.dataset(ds.vid)
+
 
     def next_sequence_id(self, parent_table_class, parent_vid, child_table_class):
         """Get the next sequence id for child objects for a parent object that has a child sequence

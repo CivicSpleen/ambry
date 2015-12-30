@@ -282,12 +282,20 @@ def make_parser(cmd):
     command_p = sub_cmd.add_parser('finalize', help='Finalize the bundle, preventing further changes')
     command_p.set_defaults(subcommand='finalize')
 
+    # Package Command
+    #
+    command_p = sub_cmd.add_parser('package', help='Package the bundle into a sqlite file.')
+    command_p.set_defaults(subcommand='package')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Rebuild if is already exists ')
+
     # Checkin Command
     #
     command_p = sub_cmd.add_parser('checkin', help='Commit the bundle to the remote store')
     command_p.set_defaults(subcommand='checkin')
     command_p.add_argument('-n', '--no-partitions', default=False, action='store_true',
                            help="Don't check in partitions")
+    command_p.add_argument('-r', '--remote', help='Specify remote, rather than using default for bundle')
 
     #
     # Update Command
@@ -692,6 +700,12 @@ def bundle_duplicate(args, l, rc):
     prt('New Bundle: {} '.format(nb.identity.vname))
 
 
+def bundle_package(args, l, rc):
+    b = using_bundle(args, l)
+    prt('Packaging bundle into sqlite file')
+    path = b.package(rebuild=args.force)
+
+
 def bundle_finalize(args, l, rc):
     b = using_bundle(args, l)
     b.finalize()
@@ -957,13 +971,12 @@ def bundle_checkin(args, l, rc):
 
     b = l.bundle(ref, True)
 
-    remote_name = l.resolve_remote(b)
-    remote = l.remote(remote_name)
-
-    remote, path = b.checkin(no_partitions=args.no_partitions)
+    remote_instance, path = b.checkin(args.remote)
 
     if path:
-        b.log("Checked in to remote '{}' path '{}'".format(remote, path))
+        b.log("Checked in to remote '{}' path '{}'".format(remote_instance, b.identity.fqname))
+    else:
+        b.error("Failed to get a path while checking in {}".format(b.identity.fqname))
 
 
 def bundle_set(args, l, rc):
@@ -1496,6 +1509,31 @@ def bundle_log(args, l, rc):
     from collections import defaultdict
     from ambry.orm import Partition
     from tabulate import tabulate
+    from ambry.orm import Process
+    import time
+    from collections import OrderedDict
+    from sqlalchemy.sql import and_
+
+    def append(pr, edit=None):
+
+        if not isinstance(pr, dict):
+            pr = pr.dict
+
+        d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.items() if k in
+                        ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
+                         'phase', 'stage', 'modified', 'item_count',
+                         'message'])
+
+        d['modified'] = round(float(d['modified']) - time.time(), 1)
+
+        if edit:
+            for k, v in edit.items():
+                d[k] = v(d[k])
+
+        if not records:
+            records.append(d.keys())
+
+        records.append(d.values())
 
 
     if args.exceptions:
@@ -1506,35 +1544,9 @@ def bundle_log(args, l, rc):
 
     elif args.progress:
         print '=== PROGRESS ===='
-        from ambry.orm import Process
-        import time
-        from collections import OrderedDict
-        from sqlalchemy.sql import and_
 
 
         records = []
-
-        def append(pr, edit=None):
-
-            if not isinstance(pr, dict):
-                pr = pr.dict
-
-            d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.items() if k in
-                            ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
-                             'phase', 'stage', 'modified', 'item_count',
-                             'message'])
-
-            d['modified'] = round(float(d['modified']) - time.time(),1)
-
-
-            if edit:
-                for k, v in edit.items():
-                    d[k] = v(d[k])
-
-            if not records:
-                records.append(d.keys())
-
-            records.append(d.values())
 
         q = b.progress.query.order_by(Process.modified.desc())
 
@@ -1545,15 +1557,30 @@ def bundle_log(args, l, rc):
 
         # Add old running rows, which may indicate a dead process.
         q = (b.progress.query.filter(Process.s_vid != None)
-             .filter(and_(Process.state == 'running',Process.modified < time.time() - 60)))
+             .filter(and_(Process.state == 'running',Process.modified < time.time() - 60))
+             .filter(Process.group != None))
 
         for pr in q.all():
+
             append(pr, edit={'modified': lambda e: (str(e)+' (dead?)') })
 
         records = drop_empty(records)
 
         if records:
             prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]),records[0]))
+
+    elif args.all:
+        records = []
+
+        q = b.progress.query.order_by(Process.id.asc())
+
+        for pr in q.all():
+            append(pr)
+
+        records = drop_empty(records)
+
+        if records:
+            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]), records[0]))
 
     if args.stats:
         print '=== STATS ===='

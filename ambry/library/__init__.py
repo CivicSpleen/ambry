@@ -408,7 +408,30 @@ class Library(object):
 
         return nb
 
-    def checkin(self, b, no_partitions=False):
+    def checkin_bundle(self, db_path):
+        """Add a bundle, as a Sqlite file, to this library"""
+
+        db = Database('sqlite:///{}'.format(db_path))
+        db.open()
+
+        ds = db.dataset(db.datasets[0].vid) # There should only be one
+
+        assert ds is not None
+        assert ds._database
+
+        try:
+            self.dataset(ds.vid) # Skip loading bundles we already have
+        except NotFoundError:
+            self.database.copy_dataset(ds)
+
+        b = self.bundle(ds.vid) # It had better exist now.
+        b.state = Bundle.STATES.INSTALLED
+        b.commit()
+
+        self.search.index_bundle(b)
+
+
+    def send_to_remote(self, b, no_partitions=False):
         """
         Copy a bundle to a new Sqlite file, then store the file on the remote.
 
@@ -422,24 +445,11 @@ class Library(object):
 
         remote = self.remote(remote_name)
 
-        db_path = self.create_bundle_file(b)
-
-        db = Database('sqlite:///{}'.format(db_path))
-        ds = db.dataset(b.dataset.vid)
+        db_path = b.package()
 
         with b.progress.start('checkin', 0, message='Check in bundle') as ps:
 
             ps.add(message='Checking in bundle {} to {}'.format(ds.identity.vname, remote))
-
-            # Set the location for the bundle file
-            for p in ds.partitions:
-                p.location = 'remote'
-
-            # Fixme; this should be on ds, not b
-            # b.buildstate.state.current = Bundle.STATES.INSTALLED
-            ds.commit()
-            db.commit()
-            db.close()
 
             db_ck = b.identity.cache_key + '.db'
 
@@ -459,7 +469,6 @@ class Library(object):
 
             ps.update(state='done')
 
-            os.remove(db_path)
 
             if not no_partitions:
                 for p in b.partitions:
@@ -494,6 +503,9 @@ class Library(object):
             return remote_name, db_ck
 
     #
+    #
+
+    #
     # Remotes
     #
 
@@ -523,21 +535,7 @@ class Library(object):
                 temp.setcontents(fn, f)
 
             try:
-                db = Database('sqlite:///{}'.format(temp.getsyspath(fn)))
-                db.open()
-
-                ds = list(db.datasets)[0]
-
-                try:
-                    self.dataset(ds.vid)
-                except NotFoundError:
-                    self.database.copy_dataset(ds)
-
-                b = self.bundle(ds.vid)
-                b.state = Bundle.STATES.INSTALLED
-                b.commit()
-
-                self.search.index_bundle(b)
+                self.checkin_bundle(temp.getsyspath(fn))
 
                 entries.append(this_name)
 
@@ -555,56 +553,47 @@ class Library(object):
     @property
     def remotes(self):
         """Return the names and URLs of the remotes"""
-        root = self.database.root_dataset
-        rc = root.config.library.remotes
+        from ambry.orm import Remote
+        return self.database.session.query(Remote).all()
 
-        return dict(rc.items())
+    def _remote(self, name):
+        from ambry.orm import Remote
+
+        return self.database.session.query(Remote).filter(Remote.short_name == name).one()
 
     def remote(self, name_or_bundle):
 
         from fs.opener import fsopendir
+        from sqlalchemy.orm.exc import NoResultFound
 
-        r = self.remotes[self.resolve_remote(name_or_bundle)]
+        r = None
 
-        # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
-        # https://github.com/boto/boto/issues/2836
-        if r.startswith('s3'):
-            return self.filesystem.s3(r, self.account_acessor)
-        else:
-            return fsopendir(r, create_dir=True)
+        if not isinstance(name_or_bundle, Bundle):
+            try:
+                r = self._remote(text_type(name_or_bundle))
+            except NoResultFound:
+                r = None
 
-        return self.filesystem.remote(self.resolve_remote(name_or_bundle))
 
-    def resolve_remote(self, name_or_bundle):
-        """Determine the remote name for a name that is either a remote name, or the name
-        of a bundle, which references a remote"""
-        fails = []
+        if not r:
+            try:
+                r = self._remote(name_or_bundle.metadata.about.remote)
+            except (NoResultFound, AttributeError, KeyError):
+                r = None
 
-        remote_names = self.remotes.keys()
+        if not r:
+            try:
+                r = self._remote(name_or_bundle.metadata.about.access)
+            except (NoResultFound, AttributeError, KeyError):
+                r = None
 
-        try:
-            if name_or_bundle in remote_names:
-                return name_or_bundle
-        except KeyError:
-            fails.append(name_or_bundle)
+        if not r:
+            raise NotFoundError("Failed to find remote for ref: {}".format(name_or_bundle))
 
-        try:
-            if name_or_bundle.metadata.about.remote in remote_names:
-                return name_or_bundle.metadata.about.remote
-        except AttributeError:
-            pass
-        except KeyError:
-            fails.append(name_or_bundle.metadata.about.access)
+        r.account_accessor = self.account_accessor
 
-        try:
-            if name_or_bundle.metadata.about.access in remote_names:
-                return name_or_bundle.metadata.about.access
-        except AttributeError:
-            pass
-        except KeyError:
-            fails.append(name_or_bundle.metadata.about.access)
+        return r
 
-        raise ConfigurationError('Failed to find remote for key values: {}'.format(fails))
 
     #
     # Accounts
@@ -631,13 +620,13 @@ class Library(object):
 
         try:
             act = self.database.session.query(Account).filter(Account.account_id == account_id).one()
-            act.password = self._account_password
+            act.secret_password = self._account_password
             return act
         except NoResultFound:
             raise NotFoundError("Did not find account for account id: '{}' ".format(account_id))
 
     @property
-    def account_acessor(self):
+    def account_accessor(self):
 
         def _accessor(account_id):
             return self.account(account_id).dict
@@ -654,7 +643,7 @@ class Library(object):
         """
         d = {}
 
-        if not self._account_password:
+        if False and not self._account_password:
             from ambry.dbexceptions import ConfigurationError
             raise ConfigurationError(
                 "Can't access accounts without setting an account password"
@@ -662,10 +651,10 @@ class Library(object):
                 " env var.")
 
         for act in self.database.session.query(Account).all():
-            act.password = self._account_password
+            if self._account_password:
+                act.secret_password = self._account_password
             e = act.dict
             a_id = e['account_id']
-            del e['account_id']
             d[a_id] = e
 
         return d

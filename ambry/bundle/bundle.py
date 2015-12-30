@@ -968,7 +968,7 @@ Caster Code
             try:
                 s = get_source(
                     source.spec, self.library.download_cache,
-                    account_accessor=self.library.account_acessor, callback=progress)
+                    account_accessor=self.library.account_accessor, callback=progress)
 
             except MissingCredentials as exc:
                 from ambry.dbexceptions import ConfigurationError
@@ -1906,7 +1906,11 @@ Caster Code
                             id_ = ps.add(message='Running source {}'.format(source.name),
                                    source=source, item_count=i, state='running')
                             self.build_source(stage, source, ps, force=force)
+
                             ps.update(message='Finished processing source', state='done')
+
+                            # This bit seems to solve a problem where the records from the ps.add above
+                            # never gets closed out.
                             ps.get(id_).state = 'done'
                             self.progress.commit()
 
@@ -2232,13 +2236,45 @@ Caster Code
 
     def finalize_write_bundle_file(self):
 
-        path = self.library.create_bundle_file(self)
+        return self.package()
 
-        with open(path) as f:
-            self.build_fs.makedir(os.path.dirname(self.identity.cache_key), allow_recreate=True)
-            self.build_fs.setcontents(self.identity.cache_key + '.db', data=f)
 
-        self.log('Wrote bundle sqlite file to {}'.format(path))
+    def package(self, rebuild=True, partition_location='remote'):
+        from ambry.orm import Database, Partition
+
+        self.build_fs.makedir(os.path.dirname(self.identity.cache_key), allow_recreate=True)
+
+        path = self.build_fs.getsyspath(self.identity.cache_key + '.db')
+
+        if not rebuild and os.path.exists(path):
+            self.log('Bundle sqlite file {} exists'.format(path))
+            return path
+
+        if os.path.exists(path):
+            os.remove(path)
+            try:
+                os.remove(path+'-shm')
+                os.remove(path+'-wal')
+            except IOError:
+                pass
+
+        db = Database('sqlite:///{}'.format(path))
+        db.open()
+        db.clean()
+
+        self.commit()
+        ds = db.copy_dataset(self.dataset)
+        ds.commit()
+
+        db.session.query(Partition).update({'_location':partition_location})
+        db.session.commit()
+
+        db.close()
+
+        self.log('Wrote bundle sqlite file to {}'.format(db.path))
+
+        return db.path
+
 
     def post_build_test(self):
 
@@ -2450,19 +2486,24 @@ Caster Code
     # Check in to remote
     #
 
-    def checkin(self, no_partitions=False):
+    def checkin(self, no_partitions=False, remote_name = None, cb=None):
+        from ambry.bundle.process import call_interval
 
-        if self.is_built:
-            self.finalize()
+        if not cb:
+            @call_interval(10)
+            def cb(message, bytes):
+                self.log("{}; {} bytes".format(message, bytes))
 
-        if not self.is_finalized:
-            self.error("Can't checkin; bundle state must be either finalized or prepared")
-            return False, False
+        if remote_name:
+            remote = self.library.remote(remote_name)
+        else:
+            remote = self.library.remote(self)
 
-        self.commit()
-        remote, path = self.library.checkin(self, no_partitions=no_partitions)
+        remote.account_accessor = self.library.account_accessor
 
-        return remote, path
+        remote_instance, path = remote.checkin(self, cb=cb)
+
+        return remote_instance, path
 
     @property
     def is_installed(self):

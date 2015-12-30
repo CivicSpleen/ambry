@@ -36,3 +36,4 @@ class Test(TestBase):
     def test_generators(self):
         b = self.import_single_bundle('build.example.com/generators')
         b.run()
+

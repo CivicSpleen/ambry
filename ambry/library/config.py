@@ -9,15 +9,19 @@ from ambry.dbexceptions import ConfigurationError
 
 class LibraryConfigSyncProxy(object):
 
-    def __init__(self, library):
+    def __init__(self, library, password=None):
         self.library = library
         self.config = library.config
         self.database = self.library.database
 
-        try:
-            self.password = self.config.accounts.password
-        except AttributeError:
-            self.password = None
+        if password:
+            self.password = password
+        else:
+            try:
+                self.password = self.config.accounts.password
+            except AttributeError:
+                self.password = None
+
 
         self.root_dir = None # Set when file systems are synced
 
@@ -32,7 +36,7 @@ class LibraryConfigSyncProxy(object):
     def accounts(self):
         return self.library.accounts
 
-    def sync(self):
+    def sync(self, force=False):
         import time
         import platform
 
@@ -44,8 +48,7 @@ class LibraryConfigSyncProxy(object):
 
         node = self.database.root_dataset.config.library.config['config_node']
 
-        if change_time > load_time:
-
+        if force or change_time > load_time:
             self.sync_accounts(self.config.accounts)
             self.sync_remotes(self.config.library.remotes)
 
@@ -68,6 +71,8 @@ class LibraryConfigSyncProxy(object):
         self.commit()
 
     def sync_remotes(self, remotes, clear = False):
+        from ambry.orm.exc import NotFoundError
+        from ambry.orm import Remote
 
         root = self.database.root_dataset
 
@@ -78,14 +83,22 @@ class LibraryConfigSyncProxy(object):
 
         rc = root.config.library.remotes
 
-        self.commit()
+        s = self.library.database.session
 
         for name, url in remotes.items():
-            rc[name] = url
+            try:
+                extant = self.library.remote(name)
+                extant.url = url
+                s.merge(extant)
+            except NotFoundError:
+                remote = Remote(short_name=name, url=url)
+                s.add(remote)
+
 
         self.commit()
 
-    def sync_accounts(self, accounts_data):
+
+    def sync_accounts(self, accounts_data, clear = False, password=None):
         """
         Load all of the accounts from the account section of the config
         into the database.
@@ -95,23 +108,12 @@ class LibraryConfigSyncProxy(object):
         :return:
         """
 
-        kmap = {
-            'service': 'major_type',
-            'host': 'url',
-            'organization': 'org',
-            'apikey': 'secret',
-
-            'access': 'access_key',
-            'access_key': 'access_key',
-            'secret': 'secret',
-            'name': 'name',
-            'org': 'org',
-            'url': 'url',
-            'email': 'email'
-        }
+        # Map common values into the accounts records
 
 
         all_accounts = self.accounts
+
+        kmap = Account.prop_map()
 
         for account_id, values in accounts_data.items():
 
@@ -120,11 +122,16 @@ class LibraryConfigSyncProxy(object):
 
             d = {}
             a = Account(account_id=account_id)
-            a.password = self.password
+
+            a.secret_password = password or self.password
+
 
             for k, v in values.items():
                 try:
-                    setattr(a, kmap[k], v)
+                    if kmap[k] == 'secret':
+                        a.encrypt_secret(v)
+                    else:
+                        setattr(a, kmap[k], v)
                 except KeyError:
                     d[k] = v
 

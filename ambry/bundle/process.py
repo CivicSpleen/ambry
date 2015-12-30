@@ -169,7 +169,7 @@ class ProgressSection(object):
         self.rec = None
 
     def done(self, *args, **kwargs):
-
+        """Mark the whole ProgressSection as done"""
         kwargs['state'] = 'done'
         pr_id = self.add(*args, log_action='done', **kwargs)
 

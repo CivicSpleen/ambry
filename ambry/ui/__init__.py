@@ -8,17 +8,20 @@ import os
 import functools
 from flask import Flask, g
 from flask.ext.session import Session
+from uuid import uuid4
 
 
 # Default configuration
 app_config = {
-    'host': os.getenv('AMBRYDOC_HOST', 'localhost'),
-    'port': os.getenv('AMBRYDOC_PORT', 8081),
-    'use_proxy': bool(os.getenv('AMBRYDOC_USE_PROXY', False)),
-    'debug': bool(os.getenv('AMBRYDOC_HOST', False)),
+    'host': os.getenv('AMBRY_UI_HOST', 'localhost'),
+    'port': os.getenv('AMBRY_UI_PORT', 8081),
+    'use_proxy': bool(os.getenv('AMBRY_UI_USE_PROXY', False)),
+    'debug': bool(os.getenv('AMBRY_UI_DEBUG', False)),
     'SESSION_TYPE': 'filesystem',
     'SESSION_FILE_DIR': '/tmp/ambrydoc/sessions/',
     'website_title': os.getenv('AMBRY_UI_TITLE', 'Civic Knowledge Data Search'),
+    'SECRET_KEY': os.getenv('AMBRY_UI_SECRET', str(uuid4())),
+    'API_TOKEN': os.getenv('AMBRY_API_TOKEN', str(uuid4())),
 }
 
 class AmbryAppContext(object):
@@ -40,6 +43,20 @@ class AmbryAppContext(object):
     def render(self, template, *args, **kwargs):
         return self.renderer.render(template, *args, **kwargs)
 
+
+    def bundle(self, ref):
+        from flask import abort
+        from ambry.orm.exc import NotFoundError
+
+        try:
+            return self.library.bundle(ref)
+        except NotFoundError:
+            abort(404)
+
+
+    def json(self,*args, **kwargs):
+        return self.renderer.json(*args, **kwargs)
+
     def close(self):
         self.library.close()
 
@@ -57,6 +74,7 @@ app = Flask(__name__)
 app.config.update(app_config)
 Session(app)
 
+
 @app.teardown_appcontext
 def close_connection(exception):
     aac = getattr(g,'aac', None)
@@ -65,3 +83,5 @@ def close_connection(exception):
 
 # Flask Magic. The views have to be imported for Flask to use them.
 import ambry.ui.views
+import ambry.ui.jsonviews
+import ambry.ui.api

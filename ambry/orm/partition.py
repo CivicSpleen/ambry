@@ -572,6 +572,11 @@ class Partition(Base):
                 if ps.rec.item_total is None:
                     ps.rec.item_count = 0
 
+                if not ps.rec.data:
+                    ps.rec.data = {}# Should not need to do this.
+                    return
+
+
                 item_count = ps.rec.item_count + bts
                 ps.rec.data['updates'] = ps.rec.data.get('updates', 0) + 1
 
@@ -681,6 +686,7 @@ class Partition(Base):
             segment=self.segment
         )
 
+
         assert self.dataset
 
         name = PartialPartitionName(**d).promote(self.dataset.identity.name)
@@ -696,6 +702,9 @@ class Partition(Base):
         object and create an ObjectNumber value for the id_"""
 
         target._set_ids()
+
+        if target.name and target.vname and target.cache_key and target.fqname and not target.dataset:
+            return
 
         Partition.before_update(mapper, conn, target)
 
