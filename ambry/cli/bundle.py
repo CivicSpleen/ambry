@@ -971,7 +971,7 @@ def bundle_checkin(args, l, rc):
 
     b = l.bundle(ref, True)
 
-    remote_instance, path = b.checkin(args.remote)
+    remote_instance, path = b.checkin(remote_name=args.remote)
 
     if path:
         b.log("Checked in to remote '{}' path '{}'".format(remote_instance, b.identity.fqname))

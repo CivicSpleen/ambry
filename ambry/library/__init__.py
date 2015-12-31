@@ -428,6 +428,8 @@ class Library(object):
         b.state = Bundle.STATES.INSTALLED
         b.commit()
 
+        #self.search.index_library_datasets(tick)
+
         self.search.index_bundle(b)
 
 
@@ -593,6 +595,34 @@ class Library(object):
         r.account_accessor = self.account_accessor
 
         return r
+
+    def add_remote(self, r):
+        self.database.session.add(r)
+        self.commit()
+
+    def find_or_new_remote(self, name, **kwargs):
+
+        try:
+            r = self.remote(name)
+        except NotFoundError:
+            from ambry.orm import Remote
+            r = Remote(short_name = name, **kwargs)
+            self.database.session.add(r)
+
+        return r
+
+    def remove_remote(self, r_or_name):
+        from ambry.orm import Remote
+
+        if isinstance(Remote, r_or_name):
+            r = r_or_name
+        else:
+            r = remote(r_or_name)
+
+        self.database.session.delete(r)
+        self.commit()
+
+
 
 
     #

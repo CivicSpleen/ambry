@@ -182,7 +182,7 @@ class Remote(Base):
 
         c = self._api_client()
 
-        c.library.checkin(b, cb)
+        return c.library.checkin(bundle, cb)
 
 
     def _put_metadata(self, fs_remote,bundle):
@@ -337,12 +337,13 @@ class Remote(Base):
 
         url = target.url
 
-        if url.startswith('s3:'):
-            target.service = 's3'
-        elif url.startswith('http'):
-            target.service = 'ambry'
-        else:
-            target.service = 'fs'
+        if not target.service:
+            if url.startswith('s3:'):
+                target.service = 's3'
+            elif url.startswith('http'):
+                target.service = 'ambry'
+            else:
+                target.service = 'fs'
 
 
 
