@@ -28,24 +28,25 @@ class Account(Base):
     __tablename__ = 'accounts'
 
     id = SAColumn('ac_id', Integer, primary_key=True)
-
     d_vid = SAColumn('ac_d_vid', String(20), ForeignKey('datasets.d_vid'),  index=True)
+    user_id = SAColumn('ac_user_id', Text, index=True)  # Ambry User
+    organization_id = SAColumn('ac_org_id', Text, index=True)  # Ambry Organization
+
+    major_type = SAColumn('ac_major_type', Text)  # Major type, often name of service or account providing company
+    minor_type = SAColumn('ac_minor_type', Text)  # Minor type, subtype of the major type
 
     # Foreign account identifier, often a bucket name or domain name.
     # The key used to reference the account
     account_id = SAColumn('ac_account_id', Text, unique = True)
+
+    url = SAColumn('ac_org', Text)  # URL of service
     access_key = SAColumn('ac_access', Text)  # Access token or username
 
-    user_id = SAColumn('ac_user_id', Text, index=True) # Ambry User
-    organization_id = SAColumn('ac_org_id', Text, index=True) # Ambry Organization
-    major_type = SAColumn('ac_major_type', Text)  # Major type, often name of service or account providing company
-    minor_type = SAColumn('ac_minor_type', Text)  # Minor type, subtype of the major type
-
     encrypted_secret = SAColumn('ac_secret', Text) # Secret or password, symmetrically encrypted
+
     name = SAColumn('ac_name', Text)  # Person's name
     email = SAColumn('ac_email', Text)  # Email for foreign account
     org = SAColumn('ac_url', Text)  # Organization name
-    url = SAColumn('ac_org', Text)  # General URL, maybe the login URL
     comment = SAColumn('ac_comment', Text)  # Access token or username
     data = SAColumn('ac_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -63,12 +64,11 @@ class Account(Base):
         if self.major_type == 'user':
             return None # These can't be decrypted, only tested.
 
-
         if self.secret_password:
             try:
                 return decrypt(self.secret_password, self.encrypted_secret.decode('base64'))
             except SC_DecryptionException as e:
-                raise AccountDecryptionError("Bad password")
+                raise AccountDecryptionError("Bad password "+self.secret_password)
         else:
             raise MissingPasswordError("Must have a password to get or set the secret")
 
@@ -87,10 +87,13 @@ class Account(Base):
                 raise MissingPasswordError("Must have a password to get or set the secret")
 
     def test(self, v):
-        from passlib.hash import pbkdf2_sha256
 
-        return pbkdf2_sha256.verify(v, self.encrypted_secret)
+        if self.major_type == 'user':
+            from passlib.hash import pbkdf2_sha256
 
+            return pbkdf2_sha256.verify(v, self.encrypted_secret)
+        else:
+            return v == self.decrypt_secret()
 
     @staticmethod
     def before_insert(mapper, conn, target):

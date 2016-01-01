@@ -35,22 +35,29 @@ class Remote(Base):
     docker_tls_cert = SAColumn('rm_docker_cert', Text)
     docker_tls_key = SAColumn('rm_docker_key', Text)
 
-    group_name = SAColumn('rm_group_name', Text)
     db_name = SAColumn('rm_db_name', Text)
     vol_name = SAColumn('rm_vol_name', Text)
     ui_name = SAColumn('rm_ui_name', Text)
 
     db_dsn = SAColumn('rm_db_dsn', Text)
-    api_token = SAColumn('rm_api_token', Text, doc='Access token for API')
+    api_token = SAColumn('rm_api_token', Text, doc='Encryption secret for JWT')
 
-    message = SAColumn('rm_message', Text)
-
-    account_password = SAColumn('rm_account_password', Text)
+    account_password = SAColumn('rm_account_password', Text, doc='Password for encryption secrets in the database')
 
     comment = SAColumn('ac_comment', Text)  # Access token or username
+    message = SAColumn('rm_message', Text)
+
     data = SAColumn('rm_data', MutationDict.as_mutable(JSONEncodedObj))
 
+    # Temp variables, not stored
+
     account_accessor = None # Set externally to allow access to the account credentials
+
+    tr_db_password = None
+
+    @property
+    def is_api(self):
+        return self.service in ('ambry','docker')
 
     @property
     def dict(self):
@@ -70,25 +77,46 @@ class Remote(Base):
 
         return d
 
-    def _api_client(self):
-        from ambry_client import Client
+    @property
+    def db_password(self):
         from ambry.util import parse_url_to_dict
 
-        c = Client(self.url)
+        d = parse_url_to_dict(self.db_dsn)
+
+        return d['password']
+
+    @property
+    def db_host(self):
+        from ambry.util import parse_url_to_dict
+
+        d = parse_url_to_dict(self.db_dsn)
+
+        return d['hostname']
+
+    def _api_client(self):
+        from ambry_client import Client
+        from ambry.util import parse_url_to_dict, set_url_part
+
+        username = 'api'
 
         try:
-            d = parse_url_to_dict(self.url)
-            account = self.account_accessor(d['hostname'])
-            c.auth('api', account['secret'])
+            account = self.account_accessor(set_url_part(self.url, username=username))
+
         except KeyError:
             pass
 
+        c = Client(self.url,self.api_token, username, account['secret'])
+
         return c
+
+    @property
+    def api_client(self):
+        return self._api_client()
 
     def list(self):
         """List all of the bundles in the remote"""
 
-        if self.service == 'ambry':
+        if self.is_api:
             return self._list_api()
         else:
             return self._list_fs()
@@ -110,7 +138,7 @@ class Remote(Base):
 
     def find(self, ref):
 
-        if self.service == 'ambry':
+        if self.is_api:
             return self._find_api(ref)
         else:
             return self._find_fs(ref)
@@ -144,7 +172,7 @@ class Remote(Base):
     def checkin(self, bundle,  cb=None):
         """Check in a bundle to the remote"""
 
-        if self.service == 'ambry':
+        if self.is_api:
             return self._checkin_api(bundle, cb)
         else:
             return self._checkin_fs(bundle, cb)
@@ -238,7 +266,7 @@ class Remote(Base):
     def remove(self, ref, cb=None):
         """Check in a bundle to the remote"""
 
-        if self.service == 'ambry':
+        if self.is_api:
             return self._remove_api(ref, cb)
         else:
             return self._remove_fs(ref, cb)

@@ -7,10 +7,10 @@ from test.test_base import TestBase
 # neither of which is automatic yet.
 
 # These tests require running the UI with these env vars:
-# AMBRY_API_TOKEN=7bd79f83-78c5-4bb3-b93a-dd3057847dfc AMBRY_ACCOUNT_PASSWORD=secret_password
+# AMBRY_API_TOKEN=api_secret AMBRY_ACCOUNT_PASSWORD=secret_password
 
 
-api_token = '7bd79f83-78c5-4bb3-b93a-dd3057847dfc'
+api_secret = 'api_secret'
 secret_password='secret_password'
 
 class Test(TestBase):
@@ -20,25 +20,23 @@ class Test(TestBase):
         import time
 
         c = Client('http://localhost:8080')
-        l = c.library()
+        l = c.library
 
+        b = None
         for d in c.list():
             b = d.bundle
             print b.vname
 
         remotes = l.remotes
 
-        remotes['time'] = time.time()
-
         l.remotes = remotes
 
-        print remotes
+        if b:
+            for k, v in  b.files.items():
+                print k
 
-        for k, v in  b.files.items():
-            print k
-
-        print b.files.schema.hash
-        print b.files.build_bundle.content
+            print b.files.schema.hash
+            print b.files.build_bundle.content
 
     def test_auth(self):
         """
@@ -49,8 +47,7 @@ class Test(TestBase):
         import time
         import yaml
 
-        c = Client('http://localhost:8080')
-        c.auth('api',api_token)
+        c = Client('http://localhost:8080', api_secret, 'api', api_secret)
 
         a = Account(account_id='user1', major_type='ambry')
         a.secret_password = secret_password
@@ -58,7 +55,10 @@ class Test(TestBase):
 
         accounts = { 'user1': a.dict }
 
+
         c.library.accounts = accounts
+
+        return
 
         c = Client('http://localhost:8080')
         c.auth('user1', 'foobar')
@@ -78,6 +78,6 @@ class Test(TestBase):
         import yaml
 
         c = Client('http://localhost:8080')
-        c.auth('api', api_token)
+        c.auth('api', api_secret)
 
         c.library.checkin('/tmp/foo.txt')

@@ -10,6 +10,7 @@ from flask import Flask, g
 from flask.ext.session import Session
 from uuid import uuid4
 
+import logging
 
 # Default configuration
 app_config = {
@@ -17,11 +18,9 @@ app_config = {
     'port': os.getenv('AMBRY_UI_PORT', 8081),
     'use_proxy': bool(os.getenv('AMBRY_UI_USE_PROXY', False)),
     'debug': bool(os.getenv('AMBRY_UI_DEBUG', False)),
-    'SESSION_TYPE': 'filesystem',
-    'SESSION_FILE_DIR': '/tmp/ambrydoc/sessions/',
     'website_title': os.getenv('AMBRY_UI_TITLE', 'Civic Knowledge Data Search'),
-    'SECRET_KEY': os.getenv('AMBRY_UI_SECRET', str(uuid4())),
     'API_TOKEN': os.getenv('AMBRY_API_TOKEN', str(uuid4())),
+
 }
 
 class AmbryAppContext(object):
@@ -73,6 +72,7 @@ app = Flask(__name__)
 
 app.config.update(app_config)
 Session(app)
+
 
 
 @app.teardown_appcontext

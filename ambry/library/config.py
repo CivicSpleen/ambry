@@ -80,7 +80,6 @@ class LibraryConfigSyncProxy(object):
             root.config.library.delete_group('remotes')
             self.commit()
 
-
         rc = root.config.library.remotes
 
         s = self.library.database.session

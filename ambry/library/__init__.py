@@ -611,18 +611,16 @@ class Library(object):
 
         return r
 
-    def remove_remote(self, r_or_name):
+    def delete_remote(self, r_or_name):
         from ambry.orm import Remote
 
-        if isinstance(Remote, r_or_name):
+        if isinstance(r_or_name, Remote):
             r = r_or_name
         else:
-            r = remote(r_or_name)
+            r = self.remote(r_or_name)
 
         self.database.session.delete(r)
         self.commit()
-
-
 
 
     #
@@ -688,6 +686,26 @@ class Library(object):
             d[a_id] = e
 
         return d
+
+    def add_account(self, a):
+        self.database.session.add(a)
+        self.commit()
+
+    def delete_account(self, a):
+        self.database.session.delete(a)
+        self.commit()
+
+    def find_or_new_account(self, name, **kwargs):
+
+        try:
+            a = self.account(name)
+        except NotFoundError:
+            from ambry.orm import Account
+            a = Account(account_id=name, **kwargs)
+            self.database.session.add(a)
+            a.secret_password = self._account_password
+
+        return a
 
     @property
     def services(self):

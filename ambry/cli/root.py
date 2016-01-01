@@ -55,6 +55,8 @@ def make_parser(cmd):
                        help=' Also dump the root config entries')
     group.add_argument('-r', '--remote', default=False, action='store_true',
                        help='Information about the remotes')
+    group.add_argument('-a', '--accounts', default=False, action='store_true',
+                       help='Information about accounts')
 
 
     sp = cmd.add_parser('doc', help='Start the documentation server')
@@ -260,6 +262,8 @@ def root_info(args, l, rc):
     from tabulate import tabulate
     from ambry.library.filesystem import  LibraryFilesystem
     from ambry.util.text import ansicolors
+    from ambry.util import drop_empty
+    from ambry.orm import Account
 
     import ambry
 
@@ -280,7 +284,7 @@ def root_info(args, l, rc):
     prt('Accounts:  {}', rc.accounts.loaded[0])
     if l:
         prt('Library:   {}', l.database.dsn)
-        prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
+        prt('Remotes:   {}', ', '.join([str(r.short_name) for r in l.remotes]) if l.remotes else '')
     else:
         fs = LibraryFilesystem(rc)
         prt('Library:   {} {}(Inaccessible!){}', fs.database_dsn, ansicolors.FAIL, ansicolors.ENDC)
@@ -294,6 +298,27 @@ def root_info(args, l, rc):
             records.append((config.dotted_key,config.value))
 
         print tabulate(sorted(records, key=lambda e: e[0]), headers=['key','value'])
+
+    if args.accounts:
+
+        headers = 'Id Service User Access Url'.split()
+
+        records = []
+
+        for k in l.accounts.keys():
+
+            acct = l.account(k)
+
+            records.append([acct.account_id, acct.major_type, acct.user_id, acct.access_key, acct.url])
+
+        accounts = [v for k, v in l.accounts.items()]
+
+        if not records:
+            return
+
+        records = drop_empty([headers] + records)
+
+        print tabulate(sorted(records[1:]), records[0])
 
 
 def root_sync(args, l, config):
@@ -440,6 +465,9 @@ def root_ui(args, l, rc):
     import webbrowser
     import socket
     from ambry.orm.exc import NotFoundError
+    import os
+    from uuid import uuid4
+    from ambry.util import random_string, set_url_part
 
     if args.use_proxy:
         from werkzeug.contrib.fixers import ProxyFix
@@ -454,14 +482,37 @@ def root_ui(args, l, rc):
         log.setLevel(logging.DEBUG)
         #prt("Running at http://{}:{}".format(args.host, args.port))
 
-    try:
-        api_account = l.account('localhost')
-        print api_account.decrypt_secret()
-        app.config['API_TOKEN'] = api_account.decrypt_secret()
-    except NotFoundError:
-        pass
+    # Setup remotes and accounts.
 
-    prt('UI Secret: {}'.format(app.config['SECRET_KEY']))
+    remote = l.find_or_new_remote('localhost', service='ambry')
+    remote.url = "http://{}:{}".format(args.host, args.port)
+
+    if not remote.api_token:
+        from ambry.util import random_string
+        remote.api_token = random_string(16)
+
+    # Create a local user account entry for accessing the API
+    account = l.find_or_new_account(set_url_part(remote.url, username='api'), major_type='api')
+    if not account.access_key:
+        account.url = remote.url
+        account.access_key = 'api'
+        secret = random_string(20)
+        account.encrypt_secret(secret)
+    else:
+        secret = account.decrypt_secret()
+
+    assert secret
+
+    # Create the corresponding account in the UI's database
+    account = l.find_or_new_account('api', major_type='user')
+    account.access_key = 'api'
+    account.encrypt_secret(secret)
+
+    l.commit()
+
+    # The is the token for creating JWT tokens.
+    app.config['API_TOKEN'] = remote.api_token
+
     prt('API Token: {}'.format(app.config['API_TOKEN']))
 
     try:

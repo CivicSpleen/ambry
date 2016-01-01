@@ -3,18 +3,19 @@ API Views, return javascript rendietions of objects and allowing modification of
 """
 
 import os
-from . import app, get_aac
+import logging
 
+from . import app, get_aac
 
 from flask import Flask, g, current_app, send_from_directory, send_file, request, abort, url_for
 from flask.json import jsonify
-from flask_jwt import JWT, jwt_required, current_identity
 from werkzeug.security import safe_str_cmp
 
 from werkzeug.local import LocalProxy
 
-
 aac = LocalProxy(get_aac)
+
+app.logger.setLevel(logging.INFO)
 
 
 class User(object):
@@ -30,16 +31,11 @@ class User(object):
 def authenticate(username, password):
     from ambry.orm.exc import NotFoundError
 
-    if username == 'api':
-        if safe_str_cmp(password.encode('utf-8'), app.config['API_TOKEN'].encode('utf-8')):
-            return User(username,username, password)
-
-
     # Try one of the accounts from the accounts file.
     try:
         account = aac.library.account(username)
 
-        if account.major_type == 'ambry' and account.test(password):
+        if account.major_type == 'user' and account.test(password):
             return User(username, username, password)
     except (KeyError,NotFoundError):
 
@@ -47,13 +43,53 @@ def authenticate(username, password):
 
     return None
 
-
 def identity(payload):
     user_id = payload['identity']
     return user_id
 
 
-jwt = JWT(app, authenticate, identity)
+def _jwt_required():
+    from jose import jwt
+    from flask import request
+    auth = request.headers.get('Authorization')
+
+    if not auth:
+        app.logger.info("AuthError: No auth")
+        abort(403)
+
+    form, token = auth.split(' ',1) if auth else (None, None)
+
+    if form != 'JWT':
+        app.logger.info("AuthError: Didn't get JWT for auth type")
+        abort(403)
+
+    claims =  jwt.decode(token,app.config['API_TOKEN'], algorithms='HS256')
+
+    if not authenticate(claims['u'], claims['p']):
+        app.logger.info("Didn't authenticate: {} {} ".format(claims['u'], claims['p']))
+        abort(403)
+
+def jwt_required(fn):
+    """View decorator that requires a valid JWT token to be present in the request
+
+    """
+    from functools import wraps
+    @wraps(fn)
+    def decorator(*args, **kwargs):
+        _jwt_required()
+        return fn(*args, **kwargs)
+    return decorator
+
+
+@app.route('/test', methods = ['GET'])
+@jwt_required
+def test_get():
+
+    r = aac.renderer
+
+    return r.json(
+        ok = True
+    )
 
 
 #
@@ -61,43 +97,46 @@ jwt = JWT(app, authenticate, identity)
 #
 
 @app.route('/config/remotes', methods = ['GET'])
-@jwt_required()
-def config_remotes_put():
+@jwt_required
+def config_remotes_get():
     """Return remotes configured on the Library"""
     r = aac.renderer
 
     return r.json(
-        remotes=r.library.remotes
+        remotes=[ rmt.dict for rmt in r.library.remotes]
     )
 
 @app.route('/config/remotes', methods = ['PUT'])
-@jwt_required()
-def config_remotes_get():
+@jwt_required
+def config_remotes_put():
     """Replace all of the remotes in the library with new ones"""
     r = aac.renderer
+    l = aac.library
 
-    from ambry.library.config import LibraryConfigSyncProxy
+    for r_d in request.get_json():
+        rmt = l.find_or_new_remote(r_d['short_name'])
 
-    lsp = LibraryConfigSyncProxy(r.library)
-
-    lsp.sync_remotes(request.get_json(), clear = True)
+        for k, v in r_d.items():
+            if hasattr(rmt,k):
+                setattr(rmt, k, v)
 
     return r.json(
-        remotes=r.library.remotes
+        remotes=[ rmt.dict for rmt in r.library.remotes]
     )
 
+
+def proc_account(a):
+    if 'encrypted_secret' in a:
+        del a['encrypted_secret']
+    if 'secret' in a:
+        del a['secret']
+    return a
+
 @app.route('/config/accounts', methods = ['GET'])
-@jwt_required()
+@jwt_required
 def config_accounts_get():
 
     r = aac.renderer
-
-    def proc_account(a):
-        if 'encrypted_secret' in a:
-            del a['encrypted_secret']
-        if 'secret' in a:
-            del a['secret']
-        return  a
 
     return r.json(
         accounts={ k:proc_account(a) for k, a in r.library.accounts.items()}
@@ -105,7 +144,7 @@ def config_accounts_get():
 
 
 @app.route('/config/accounts', methods = ['PUT'])
-@jwt_required()
+@jwt_required
 def config_accounts_put():
     from ambry.orm.account import AccountDecryptionError, MissingPasswordError
     r = aac.renderer
@@ -128,20 +167,22 @@ def config_accounts_put():
         abort(400)
 
 
-    return config_accounts_get()
+    return r.json(
+        accounts={k: proc_account(a) for k, a in r.library.accounts.items()}
+    )
 
 @app.route('/config/services', methods = ['PUT'])
-@jwt_required()
+@jwt_required
 def config_services_put():
     pass
 
 @app.route('/config/services', methods = ['GET'])
-@jwt_required()
+@jwt_required
 def config_services_get():
     pass
 
 @app.route('/bundles/<ref>', methods = ['DELETE'])
-@jwt_required()
+@jwt_required
 def bundle_delete(ref):
     """Returns the file records, excluding the content"""
     from ambry.orm.exc import NotFoundError
@@ -156,7 +197,7 @@ def bundle_delete(ref):
     )
 
 @app.route('/bundles/<vid>/build/files', methods = ['GET'])
-@jwt_required()
+@jwt_required
 def bundle_build_files(vid):
     """Returns the file records, excluding the content"""
 
@@ -174,7 +215,7 @@ def bundle_build_files(vid):
     )
 
 @app.route('/bundles/<vid>/build/files/<name>', methods = ['GET'])
-@jwt_required()
+@jwt_required
 def bundle_build_file(vid, name):
     """Returns the file records, excluding the content"""
 
@@ -196,7 +237,7 @@ def bundle_build_file(vid, name):
 
 
 @app.route('/bundles/<vid>/build/files/<name>/content', methods = ['GET'])
-@jwt_required()
+@jwt_required
 def bundle_build_files_get(vid, name):
     from flask import Response
 
@@ -213,7 +254,7 @@ def bundle_build_files_get(vid, name):
     return Response(fs.getcontent(), mimetype=mt)
 
 @app.route('/bundles/<vid>/build/files/<name>/content', methods = ['PUT'])
-@jwt_required()
+@jwt_required
 def bundle_build_files_put(vid, name):
     r = aac.renderer
     b = r.library.bundle(vid)
@@ -232,7 +273,7 @@ def bundle_build_files_put(vid, name):
     )
 
 @app.route('/bundles/<vid>/checkin', methods = ['POST'])
-@jwt_required()
+@jwt_required
 def bundle_build_checkin_post(vid):
     """Checkin a bundle to this library, as a sqlite file"""
     from ambry.util.flo import copy_file_or_flo
@@ -252,13 +293,13 @@ def bundle_build_checkin_post(vid):
     )
 
 @app.route('/bundles/<vid>/checkout', methods = ['GET'])
-@jwt_required()
+@jwt_required
 def bundle_build_checkout_get(vid):
     """Checkout a bundle from this library, as a Sqlite file"""
     pass
 
 @app.route('/bundles/sync/<ref>', methods = ['POST'])
-@jwt_required()
+@jwt_required
 def bundle_build_sync_post(ref):
     """Command the library to install a bundle. Optionally send information about the remote to use.
 
