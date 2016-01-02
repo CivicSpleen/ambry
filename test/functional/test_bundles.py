@@ -6,7 +6,6 @@ from test.test_base import TestBase
 class Test(TestBase):
 
     def test_headerstypes(self):
-
         b = self.import_single_bundle('ingest.example.com/headerstypes')
         b.ingest()
 
@@ -16,7 +15,6 @@ class Test(TestBase):
 
     def test_stages(self):
         b = self.import_single_bundle('ingest.example.com/stages')
-
         b.run_stages()
 
     def test_casters(self):

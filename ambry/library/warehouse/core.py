@@ -136,9 +136,18 @@ def execute_sql(bundle, asql):
         bundle (FIXME:):
         asql (str): unified sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
     """
-
-    backend = SQLiteBackend(bundle.library, bundle.library.database.dsn)
+    engine_name = bundle.library.database.engine.name
+    if engine_name == 'sqlite':
+        backend = SQLiteBackend(bundle.library, bundle.library.database.dsn)
+    elif engine_name == 'postgresql':
+        backend = PostgreSQLBackend(bundle.library, bundle.library.database.dsn)
+    else:
+        raise Exception('Do not know backend for {} database.'.format(engine_name))
     connection = backend._get_connection()
+    if engine_name == 'postgresql':
+        with connection.cursor() as cursor:
+            # TODO: Move to backend methods.
+            cursor.execute('SET search_path TO {};'.format(bundle.library.database._schema))
     pipe = [_preprocess_view, _preprocess_index]
     try:
         statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
@@ -146,8 +155,8 @@ def execute_sql(bundle, asql):
             statement_str = statement.to_unicode()
             for preprocessor in pipe:
                 statement_str = preprocessor(statement_str, bundle.library, backend, connection)
-            if statement_str:
-                backend.query(connection, statement_str)
+            if statement_str.strip():
+                backend.query(connection, statement_str, fetch=False)
     finally:
         backend.close()
 

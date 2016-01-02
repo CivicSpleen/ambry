@@ -54,11 +54,12 @@ class DatabaseBackend(object):
         logger.debug('Creating view for table.\n    table: {}\n    query: {}'.format(table.vid, query))
         self._execute(connection, query, fetch=False)
 
-    def query(self, connection, query):
+    def query(self, connection, query, fetch=True):
         """ Creates virtual tables for all partitions found in the query and executes query.
 
         Args:
             query (str): sql query
+            fetch (bool): fetch result from database if True, do not fetch overwise.
 
         """
         statements = sqlparse.parse(sqlparse.format(query, strip_comments=True))
@@ -127,7 +128,7 @@ class DatabaseBackend(object):
             'Executing updated query after partition install.'
             '\n    query before update: {}\n    query to execute (updated query): {}'
             .format(query, new_query))
-        return self._execute(connection, new_query)
+        return self._execute(connection, new_query, fetch=fetch)
 
     def index(self, connection, partition, columns):
         """ Create an index on the columns.

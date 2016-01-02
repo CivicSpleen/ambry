@@ -222,8 +222,11 @@ class PostgreSQLBackend(DatabaseBackend):
             cursor.execute(query)
             if fetch:
                 return cursor.fetchall()
+            else:
+                cursor.execute('COMMIT;')
 
-    def _relation_exists(self, connection, relation):
+    @classmethod
+    def _relation_exists(cls, connection, relation):
         """ Returns True if relation exists in the postgres db. Otherwise returns False.
 
         Args:
