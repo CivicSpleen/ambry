@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import os
 
 import pytest
 
@@ -24,9 +23,10 @@ except ImportError as exc:
         raise
 
 from ambry.library.warehouse.backends.postgresql import PostgreSQLBackend
+from ambry_sources.med import postgresql as postgres_med
 
 from test.test_base import TestBase
-from test.helpers import assert_sqlite_index
+from test.helpers import assert_sqlite_index, assert_postgres_index
 
 
 class InspectorBase(object):
@@ -137,6 +137,11 @@ class PostgreSQLInspector(InspectorBase):
         relation = '{}.{}'.format(library.database._schema, view)
         assert PostgreSQLBackend._relation_exists(library.database.engine.raw_connection(), relation)
 
+    @classmethod
+    def assert_index(cls, library, partition, column):
+        table = '{}_v'.format(postgres_med.table_name(partition.vid))
+        assert_postgres_index(library.database.engine.raw_connection(), table, column)
+
 
 class BundleSQLTest(TestBase):
     """ Test bundle.sql handling. """
@@ -160,7 +165,7 @@ class BundleSQLTest(TestBase):
                 'The test requires file database. {} looks like in-memory db.'
                 .format(library.database.dsn))
 
-        # First load 'simple' dataset because simple_with_sql dataset requires it.
+        # First load 'simple' dataset because simple_with_sql dataset uses partition from there.
         test_root = fsopendir('temp://')
         test_root.makedir('build')
         test_root.makedir('source')
@@ -199,7 +204,7 @@ class BundleSQLTest(TestBase):
         self.inspector.assert_table_created(library, 'table1')
         self.inspector.assert_view_created(library, 'view1')
         self.inspector.assert_materialized_view_created(library, 'materialized_view1')
-        #self.inspector.assert_index(
-        #    library,
-        #    simple_bundle.partition('example.com-simple-simple'),
-        #    'id')
+        self.inspector.assert_index(
+            library,
+            simple_bundle.partition('example.com-simple-simple'),
+            'id')

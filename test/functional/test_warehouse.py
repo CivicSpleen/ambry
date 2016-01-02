@@ -8,7 +8,7 @@ from ambry_sources.med import postgresql as postgres_med
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
 from test.factories import PartitionFactory, TableFactory
-from test.helpers import assert_sqlite_index, assert_valid_ambry_sources
+from test.helpers import assert_sqlite_index, assert_valid_ambry_sources, assert_postgres_index
 from test.test_base import TestBase, PostgreSQLTestBase
 
 
@@ -276,17 +276,7 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
 
     def _assert_is_indexed(self, warehouse, partition, column):
         table = postgres_med.table_name(partition.vid) + '_v'
-        with warehouse._backend._connection.cursor() as cursor:
-            # Sometimes postgres does not use index although index exists.
-            # See https://wiki.postgresql.org/wiki/FAQ#Why_are_my_queries_slow.3F_Why_don.27t_they_use_my_indexes.3F
-            # and http://stackoverflow.com/questions/9475778/postgresql-query-not-using-index-in-production
-            # for details.
-            # So, force postgres always to use existing indexes.
-            cursor.execute('SET enable_seqscan TO \'off\';')
-            query = 'EXPLAIN SELECT * FROM {} WHERE {} > 1 and {} < 3;'.format(table, column, column)
-            cursor.execute(query)
-            result = cursor.fetchall()
-            self.assertIn('Index Scan', result[0][0])
+        assert_postgres_index(warehouse._backend._connection, table, column)
 
 
 def assert_shares_group(user=''):

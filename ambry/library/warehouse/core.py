@@ -139,10 +139,10 @@ def execute_sql(bundle, asql):
     engine_name = bundle.library.database.engine.name
     if engine_name == 'sqlite':
         backend = SQLiteBackend(bundle.library, bundle.library.database.dsn)
-        pipe = [_preprocess_view, _preprocess_index]
+        pipe = [_preprocess_sqlite_view, _preprocess_sqlite_index]
     elif engine_name == 'postgresql':
         backend = PostgreSQLBackend(bundle.library, bundle.library.database.dsn)
-        pipe = [_preprocess_index]
+        pipe = [_preprocess_postgres_index]
     else:
         raise Exception('Do not know backend for {} database.'.format(engine_name))
     connection = backend._get_connection()
@@ -172,7 +172,7 @@ def _get_table_names1(statement):
     return list(tables)
 
 
-def _preprocess_view(asql_query, library, backend, connection):
+def _preprocess_sqlite_view(asql_query, library, backend, connection):
     """ Finds materialized view and converts it to sqlite format.
 
     Note:
@@ -192,7 +192,7 @@ def _preprocess_view(asql_query, library, backend, connection):
     new_query = None
     if 'create materialized view' in asql_query.lower():
         logger.debug(
-            '_preprocess_view: materialized view found.\n    asql query: {}'
+            '_preprocess_sqlite_view: materialized view found.\n    asql query: {}'
             .format(asql_query))
         view = parse_view(asql_query)
 
@@ -273,18 +273,18 @@ def _preprocess_view(asql_query, library, backend, connection):
             copy_query = copy_query + ';'
         new_query = '{}\n\n{}'.format(create_query, copy_query)
     logger.debug(
-        '_preprocess_view: preprocess finished.\n    asql query: {}\n\n    new query: {}'
+        '_preprocess_sqlite_view: preprocess finished.\n    asql query: {}\n\n    new query: {}'
         .format(asql_query, new_query))
     return new_query or asql_query
 
 
-def _preprocess_index(asql_query, library, backend, connection):
+def _preprocess_sqlite_index(asql_query, library, backend, connection):
     """ Creates materialized view for each indexed partition found in the query.
 
     Args:
         asql_query (str): asql query
         library (ambry.Library):
-        backend (SQLiteBackend or PostgreSQLBackend):
+        backend (SQLiteBackend):
         connection (apsw.Connection):
 
     Returns:
@@ -304,5 +304,35 @@ def _preprocess_index(asql_query, library, backend, connection):
 
     logger.debug(
         '_preprocess_index: preprocess finished.\n    asql query: {}\n    new query: {}'
+        .format(asql_query, new_query))
+    return new_query or asql_query
+
+
+def _preprocess_postgres_index(asql_query, library, backend, connection):
+    """ Creates materialized view for each indexed partition found in the query.
+
+    Args:
+        asql_query (str): asql query
+        library (ambry.Library):
+        backend (PostgreSQLBackend):
+        connection ():
+
+    Returns:
+        str: converted asql if it contains index query. If not, returns asql_query as is.
+    """
+    new_query = None
+    if asql_query.strip().lower().startswith('index'):
+        logger.debug(
+            '_preprocess_postgres_index: create index query found.\n    asql query: {}'
+            .format(asql_query))
+        index = parse_index(asql_query)
+        partition = library.partition(index.source)
+        table = backend.install(connection, partition, materialize=True)
+        # do not give index name to allow postgres care about name of the index. Postgres will do it better.
+        new_query = 'CREATE INDEX my_ind ON {table} ({columns});'.format(
+            table=table, columns=','.join(index.columns))
+
+    logger.debug(
+        '_preprocess_postgres_index: preprocess finished.\n    asql query: {}\n    new query: {}'
         .format(asql_query, new_query))
     return new_query or asql_query
