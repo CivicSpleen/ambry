@@ -27,7 +27,116 @@ from test.test_base import TestBase
 from test.helpers import assert_sqlite_index
 
 
-class Test(TestBase):
+class InspectorBase(object):
+    """ Set of asserts to test database state. """
+
+    @classmethod
+    def assert_sql_saved(cls, sql_bundle):
+        raise NotImplementedError
+
+    @classmethod
+    def assert_table_created(cls, library, table):
+        raise NotImplementedError
+
+    @classmethod
+    def assert_view_created(cls, library, view):
+        raise NotImplementedError
+
+    @classmethod
+    def assert_materialized_view_created(cls, library, mat_view):
+        raise NotImplementedError
+
+    @classmethod
+    def assert_index(cls, library, partition, column):
+        raise NotImplementedError
+
+
+class SQLiteInspector(InspectorBase):
+    """ Set of asserts to test sqlite state. """
+
+    @classmethod
+    def assert_table_created(cls, library, table):
+        """ Looks for given table in the library. If not found raises AssertionError. """
+        try:
+            table_rows = library.database.connection.execute('SELECT col1, col2 FROM table1;').fetchall()
+            assert table_rows == []
+        except OperationalError as exc:
+            if 'no such table' in str(exc):
+                raise AssertionError('table1 was not created.')
+            else:
+                raise
+
+    @classmethod
+    def assert_view_created(cls, library, view):
+        """ Looks for given view in the library. If not found raises AssertionError. """
+
+        # keep apsw imports here to prevent break if apsw is not installed.
+        connection = None
+        try:
+            # We have to use apsw because pysqlite does not support virtual tables.
+            dsn = library.database.dsn.replace('sqlite:///', '')
+            connection = apsw.Connection(dsn)
+
+            # add mod_partition to allow query on mpr through view.
+            install_mpr_module(connection)
+
+            # get data from mpr through view.
+            cursor = connection.cursor()
+            rows_from_view = cursor.execute('SELECT s1_id, s2_id FROM {};'.format(view)).fetchall()
+            assert rows_from_view == [(1, 1)]
+        except SQLError as exc:
+            if 'no such table' in str(exc):
+                raise AssertionError('{} view was not created.'.format(view))
+            else:
+                raise
+        finally:
+            if connection:
+                connection.close()
+
+    @classmethod
+    def assert_materialized_view_created(cls, library, view):
+        """ Looks for given materialied view in the library. If not found or is not materialized
+            raises AssertionError.
+        """
+        try:
+            table_rows = library.database.connection\
+                .execute('SELECT s1_id, s2_id FROM {};'.format(view))\
+                .fetchall()
+            assert table_rows == [(1, 1)]
+        except OperationalError as exc:
+            if 'no such table' in str(exc):
+                raise AssertionError('{} materialized view was not created.'.format(view))
+            else:
+                raise
+
+    @classmethod
+    def assert_sql_saved(cls, bundle):
+        """ Finds file record in the library and matches it agains bundle.sql content. """
+        # Content of the File record should match to bundle.sql file content.
+        file_record = [x for x in bundle.dataset.files if x.path == 'bundle.sql'][0]
+        assert file_record.unpacked_contents == bundle._source_fs.getcontents('bundle.sql')
+
+    @classmethod
+    def assert_index(cls, library, partition, column):
+        assert_sqlite_index(library.database.engine.raw_connection(), partition, 'id')
+
+
+class PostgreSQLInspector(InspectorBase):
+    """ Set of asserts to test postgresql state. """
+    # FIXME: Implement.
+
+
+class BundleSQLTest(TestBase):
+    """ Test bundle.sql handling. """
+
+    def setUp(self):
+        super(BundleSQLTest, self).setUp()
+        if self.dbname == 'sqlite':
+            self.inspector = SQLiteInspector
+        elif self.dbname == 'postgres':
+            self.inspector = PostgreSQLInspector
+        else:
+            raise Exception('Do not know inspector for {} database.'.format(self.dbname))
 
     @pytest.mark.slow
     def test_bundle_sql(self):
@@ -47,6 +156,7 @@ class Test(TestBase):
             'simple', source_url=test_root.getsyspath('source'),
             build_url=test_root.getsyspath('build'), library=library)
 
+        # simple_bundle.run(force=True)
         simple_bundle.sync_in()
         simple_bundle.ingest(force=True)
         simple_bundle.schema()
@@ -73,71 +183,11 @@ class Test(TestBase):
         sql_bundle.build()
 
         # check the final state.
-        self._assert_sql_saved(sql_bundle)
-        self._assert_table_created(library, 'table1')
-        self._assert_view_created(library, 'view1')
-        self._assert_materialized_view_created(library, 'materialized_view1')
-        assert_sqlite_index(
-            library.database.engine.raw_connection(),
+        self.inspector.assert_sql_saved(sql_bundle)
+        self.inspector.assert_table_created(library, 'table1')
+        self.inspector.assert_view_created(library, 'view1')
+        self.inspector.assert_materialized_view_created(library, 'materialized_view1')
+        self.inspector.assert_index(
+            library,
             simple_bundle.partition('example.com-simple-simple'),
             'id')
-
-    def _assert_table_created(self, library, table):
-        """ Looks for given table in the library. If not found raises AssertionError. """
-        try:
-            table_rows = library.database.connection.execute('SELECT col1, col2 FROM table1;').fetchall()
-            self.assertEqual(table_rows, [])
-        except OperationalError as exc:
-            if 'no such table' in str(exc):
-                raise AssertionError('table1 was not created.')
-            else:
-                raise
-
-    def _assert_view_created(self, library, view):
-        """ Looks for given view in the library. If not found raises AssertionError. """
-
-        # keep apsw imports here to prevent break if apsw is not installed.
-        connection = None
-        try:
-            # We have to use apsw because pysqlite does not support virtual tables.
-            dsn = library.database.dsn.replace('sqlite:///', '')
-            connection = apsw.Connection(dsn)
-
-            # add mod_partition to allow query on mpr through view.
-            install_mpr_module(connection)
-
-            # get data from mpr through view.
-            cursor = connection.cursor()
-            rows_from_view = cursor.execute('SELECT s1_id, s2_id FROM {};'.format(view)).fetchall()
-            self.assertEqual(rows_from_view, [(1, 1)])
-        except SQLError as exc:
-            if 'no such table' in str(exc):
-                raise AssertionError('{} view was not created.'.format(view))
-            else:
-                raise
-        finally:
-            if connection:
-                connection.close()
-
-    def _assert_materialized_view_created(self, library, view):
-        """ Looks for given materialied view in the library. If not found or is not materialized
-            raises AssertionError.
-        """
-        try:
-            table_rows = library.database.connection\
-                .execute('SELECT s1_id, s2_id FROM {};'.format(view))\
-                .fetchall()
-            self.assertEqual(table_rows, [(1, 1)])
-        except OperationalError as exc:
-            if 'no such table' in str(exc):
-                raise AssertionError('{} materialized view was not created.'.format(view))
-            else:
-                raise
-
-    def _assert_sql_saved(self, bundle):
-        """ Finds file record in the library and matches it agains bundle.sql content. """
-        # Content of the File record should match to bundle.sql file content.
-        file_record = [x for x in bundle.dataset.files if x.path == 'bundle.sql'][0]
-        self.assertEqual(
-            file_record.unpacked_contents,
-            bundle._source_fs.getcontents('bundle.sql'))
