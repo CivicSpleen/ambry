@@ -75,14 +75,10 @@ class PostgreSQLBackend(DatabaseBackend):
             columns (list of str):
 
         """
-        query_tmpl = '''
-            CREATE INDEX {index_name} ON {table_name} ({column});
-        '''
+        query_tmpl = 'CREATE INDEX ON {table_name} ({column});'
         table_name = '{}_v'.format(postgres_med.table_name(partition.vid))
         for column in columns:
-            query = query_tmpl.format(
-                index_name='{}_{}_i'.format(partition.vid, column), table_name=table_name,
-                column=column)
+            query = query_tmpl.format(table_name=table_name, column=column)
             logger.debug('Creating postgres index.\n    column: {}, query: {}'.format(column, query))
             with connection.cursor() as cursor:
                 cursor.execute(query)
