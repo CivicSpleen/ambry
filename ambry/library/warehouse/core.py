@@ -139,8 +139,10 @@ def execute_sql(bundle, asql):
     engine_name = bundle.library.database.engine.name
     if engine_name == 'sqlite':
         backend = SQLiteBackend(bundle.library, bundle.library.database.dsn)
+        pipe = [_preprocess_view, _preprocess_index]
     elif engine_name == 'postgresql':
         backend = PostgreSQLBackend(bundle.library, bundle.library.database.dsn)
+        pipe = [_preprocess_index]
     else:
         raise Exception('Do not know backend for {} database.'.format(engine_name))
     connection = backend._get_connection()
@@ -148,7 +150,6 @@ def execute_sql(bundle, asql):
         with connection.cursor() as cursor:
             # TODO: Move to backend methods.
             cursor.execute('SET search_path TO {};'.format(bundle.library.database._schema))
-    pipe = [_preprocess_view, _preprocess_index]
     try:
         statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
         for statement in statements:
@@ -283,7 +284,7 @@ def _preprocess_index(asql_query, library, backend, connection):
     Args:
         asql_query (str): asql query
         library (ambry.Library):
-        backend (SQLiteBackend):
+        backend (SQLiteBackend or PostgreSQLBackend):
         connection (apsw.Connection):
 
     Returns:

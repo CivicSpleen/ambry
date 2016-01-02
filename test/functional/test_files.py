@@ -132,6 +132,11 @@ class PostgreSQLInspector(InspectorBase):
         relation = '{}.{}'.format(library.database._schema, view)
         assert PostgreSQLBackend._relation_exists(library.database.engine.raw_connection(), relation)
 
+    @classmethod
+    def assert_materialized_view_created(cls, library, view):
+        relation = '{}.{}'.format(library.database._schema, view)
+        assert PostgreSQLBackend._relation_exists(library.database.engine.raw_connection(), relation)
+
 
 class BundleSQLTest(TestBase):
     """ Test bundle.sql handling. """
@@ -193,7 +198,7 @@ class BundleSQLTest(TestBase):
         self.inspector.assert_sql_saved(sql_bundle)
         self.inspector.assert_table_created(library, 'table1')
         self.inspector.assert_view_created(library, 'view1')
-        #self.inspector.assert_materialized_view_created(library, 'materialized_view1')
+        self.inspector.assert_materialized_view_created(library, 'materialized_view1')
         #self.inspector.assert_index(
         #    library,
         #    simple_bundle.partition('example.com-simple-simple'),
