@@ -81,6 +81,7 @@ class Bundle(object):
     STATES.INGESTING = 'ingest'
     STATES.INGESTED = 'ingested'
     STATES.NOTINGESTABLE = 'not_ingestable'
+    STATES.SOURCE = 'source'
 
     # Other things that can be part of the 'last action'
     STATES.INFO = 'info'
@@ -135,7 +136,6 @@ class Bundle(object):
         self.is_subprocess = False  # Externally set in child processes.
         # AMBRY_IS_REMOTE is set in the docker file for the builder container
         self.is_remote_process = os.getenv('AMBRY_IS_REMOTE', False)
-        assert bool(library)
 
         # Test class imported from the test.py file
         self.test_class = None
@@ -887,8 +887,10 @@ Caster Code
 
         # Modify for special fields
         for i, f in enumerate(fields):
-            if f == 'state':
+            if f == 'bstate':
                 row[i] = self.state
+            elif f == 'dstate':
+                row[i] = self.dstate
             elif f == 'source_fs':
                 row[i] = self.source_fs
             elif f.startswith('about'):  # all metadata in the about section, ie: about.title
@@ -1005,10 +1007,6 @@ Caster Code
         self.buildstate.commit()
         return
 
-    @property
-    def state(self):
-        """Return the current build state"""
-        return self.buildstate.state.current
 
     @property
     def error_state(self):
@@ -1023,9 +1021,22 @@ Caster Code
 
         return self.progress.build
 
+    @property
+    def state(self):
+        """Return the current build state.
+
+        Note! This is different from the dataset state.
+        """
+        return self.buildstate.state.current
+
     @state.setter
     def state(self, state):
-        """Set the current build state and record the time to maintain history"""
+        """Set the current build state and record the time to maintain history.
+
+        Note! This is different from the dataset state. Setting the build set is commiteed to the
+        progress table/database immediately. The dstate is also set, but is not committed until the
+        bundle is committed. So, the dstate changes more slowly.
+        """
 
         assert state != 'build_bundle'
 
@@ -1037,6 +1048,35 @@ Caster Code
         self.buildstate.state.exception = None
         self.buildstate.state.exception_type = None
         self.buildstate.commit()
+
+        if state in (self.STATES.NEW, self.STATES.CLEANED, self.STATES.BUILT, self.STATES.FINALIZED,
+                     self.STATES.SOURCE):
+            state = state if state != self.STATES.CLEANED else self.STATES.NEW
+            self.dstate = state
+
+
+    @property
+    def dstate(self):
+        """Return the current dataset state.
+
+        Note! This is different from the build state.
+        """
+        return self.dataset.state
+
+        if False: # Here is an alternate idea
+            if ds is not None:
+                return ds
+            else:
+                return self.state
+
+
+    @dstate.setter
+    def dstate(self, v):
+        """Return the current dataset state.
+
+        Note! This is different from the build state.
+        """
+        self.dataset.state = v
 
     def record_stage_state(self, phase, stage):
         """Record the completion times of phases and stages"""
@@ -1094,6 +1134,8 @@ Caster Code
         :return:
         """
 
+        self.dstate = self.STATES.BUILDING
+
         if self.is_finalized:
             self.error("Can't sync; bundle is finalized")
             return False
@@ -1105,12 +1147,15 @@ Caster Code
 
         self.library.search.index_bundle(self, force=True)
 
+        self.commit()
         return syncs
 
     def sync_in(self, force = False):
         """Synchronize from files to records, and records to objects"""
         self.log('---- Sync In ----')
         from ambry.bundle.files import BuildSourceFile
+
+        self.dstate = self.STATES.BUILDING
 
         for f in self.build_source_files:
 
@@ -1121,32 +1166,71 @@ Caster Code
                     f.fs_to_record()
                     f.record_to_objects()
 
-        self.library.commit()
+        self.commit()
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
+
+    def sync_in_files(self, force=False):
+        """Synchronize from files to records"""
+        self.log('---- Sync Files ----')
+        from ambry.bundle.files import BuildSourceFile
+
+        self.dstate = self.STATES.BUILDING
+
+        for f in self.build_source_files:
+
+            if self.source_fs.exists(f.record.path):
+                # print f.path, f.fs_modtime, f.record.modified, f.record.source_hash, f.fs_hash
+                if f.fs_is_newer or force:
+                    self.log('Sync: {}'.format(f.record.path))
+                    f.fs_to_record()
+
+        self.commit()
+
+    def sync_in_records(self, force=False):
+        """Synchronize from files to records"""
+        self.log('---- Sync Files ----')
+        from ambry.bundle.files import BuildSourceFile
+
+        for f in self.build_source_files:
+            f.record_to_objects()
+
+        # Only the metadata needs to be driven to the objects, since the other files are used as code,
+        # directly from the file record.
+        self.build_source_files.file(File.BSFILE.META).record_to_objects()
+
+        self.commit()
+
 
     def sync_out(self, file_name=None):
         """Synchronize from objects to records"""
         self.log('---- Sync Out ----')
         from ambry.bundle.files import BuildSourceFile
 
+        self.dstate = self.STATES.BUILDING
+
         for f in self.build_source_files:
             if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path==file_name:
                 self.log('Sync: {}'.format(f.record.path))
                 f.record_to_fs()
 
+        self.commit()
+
         # self.state = self.STATES.SYNCED
 
     def sync_objects_in(self):
         """Synchronize from records to objects"""
+        self.dstate = self.STATES.BUILDING
         self.build_source_files.record_to_objects()
 
     def sync_objects_out(self):
         """Synchronize from objects to records, and records to files"""
         self.log('---- Sync Out ----')
+        self.dstate = self.STATES.BUILDING
         self.build_source_files.objects_to_record()
 
     def sync_objects(self):
+        self.dstate = self.STATES.BUILDING
         self.build_source_files.record_to_objects()
         self.build_source_files.objects_to_record()
 
@@ -1154,6 +1238,8 @@ Caster Code
         """Sync in code files and the meta file, avoiding syncing the larger files"""
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
+
+        self.dstate = self.STATES.BUILDING
 
         synced = 0
 
@@ -1175,6 +1261,8 @@ Caster Code
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
 
+        self.dstate = self.STATES.BUILDING
+
         synced = 0
 
         for fc in [File.BSFILE.SOURCES]:
@@ -1191,6 +1279,8 @@ Caster Code
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
 
+        self.dstate = self.STATES.BUILDING
+
         synced = 0
         for fc in [File.BSFILE.SCHEMA, File.BSFILE.SOURCESCHEMA]:
             bsf = self.build_source_files.file(fc)
@@ -1201,12 +1291,7 @@ Caster Code
 
         return synced
 
-    #
-    # New Sync Model
-    #
 
-    def sync_file(self, path, contents):
-        pass
     #
     # Clean
     #
@@ -1225,6 +1310,7 @@ Caster Code
 
         self.log('---- Cleaning ----')
         self.state = self.STATES.CLEANING
+        self.dstate = self.STATES.BUILDING
 
         self.commit()
 
@@ -1387,6 +1473,8 @@ Caster Code
 
         self.log('---- Ingesting ----')
 
+        self.dstate = self.STATES.BUILDING
+
         key = lambda s: s.stage if s.stage else 1
 
         def not_final_or_delete(s):
@@ -1449,6 +1537,8 @@ Caster Code
             self._run_events(TAG.AFTER_INGEST, 0)
 
         self.log("Ingested {} sources".format(count))
+
+        self.commit()
 
         if errors == 0:
             return True
@@ -1634,6 +1724,8 @@ Caster Code
         from operator import attrgetter
         from ambry.etl import Collect, Head
 
+        self.dstate = self.STATES.BUILDING
+
         self.log('---- Schema ----')
 
         resolved_sources = self._resolve_sources(sources, tables, predicate=lambda s: s.is_processable)
@@ -1712,6 +1804,7 @@ Caster Code
                     self.log("Populated destination table '{}' from source table '{}' with {} columns"
                              .format(t.name, source.source_table.name, diff))
 
+
         self.commit()
 
         return True
@@ -1778,7 +1871,7 @@ Caster Code
         self.commit()
 
     #@CaptureException
-    def build(self, sources=None, tables=None, stage=None, force=False, finalize=True):
+    def build(self, sources=None, tables=None, stage=None, force=False):
         """
         :param phase:
         :param stage:
@@ -1920,9 +2013,6 @@ Caster Code
 
             self.state = self.STATES.BUILT
 
-            if finalize:
-                self.finalize()
-
         finally:
             self._run_events(TAG.AFTER_BUILD, 0)
 
@@ -1930,6 +2020,8 @@ Caster Code
 
         self.log('==== Done Building ====')
         self.buildstate.commit()
+        self.state = self.STATES.BUILT
+        self.commit()
         return True
 
     def build_table(self, table, force=False):
@@ -2239,41 +2331,7 @@ Caster Code
         return self.package()
 
 
-    def package(self, rebuild=True, partition_location='remote'):
-        from ambry.orm import Database, Partition
 
-        self.build_fs.makedir(os.path.dirname(self.identity.cache_key), allow_recreate=True)
-
-        path = self.build_fs.getsyspath(self.identity.cache_key + '.db')
-
-        if not rebuild and os.path.exists(path):
-            self.log('Bundle sqlite file {} exists'.format(path))
-            return path
-
-        if os.path.exists(path):
-            os.remove(path)
-            try:
-                os.remove(path+'-shm')
-                os.remove(path+'-wal')
-            except IOError:
-                pass
-
-        db = Database('sqlite:///{}'.format(path))
-        db.open()
-        db.clean()
-
-        self.commit()
-        ds = db.copy_dataset(self.dataset)
-        ds.commit()
-
-        db.session.query(Partition).update({'_location':partition_location})
-        db.session.commit()
-
-        db.close()
-
-        self.log('Wrote bundle sqlite file to {}'.format(db.path))
-
-        return db.path
 
 
     def post_build_test(self):
@@ -2368,10 +2426,6 @@ Caster Code
 
         return self.state == self.STATES.FINALIZED or self.state == self.STATES.INSTALLED
 
-    def do_finalize(self):
-        """Call's finalize(); for similarity with other process commands. """
-        return self.finalize()
-
     def finalize(self):
 
         self.state = self.STATES.FINALIZING
@@ -2381,8 +2435,9 @@ Caster Code
 
         self.log('Writing bundle sqlite file')
         self.finalize_write_bundle_file()
-        self.state = self.STATES.FINALIZED
+        self.dstate = self.state = self.STATES.FINALIZED
 
+        self.commit()
         return True
 
     def import_tests(self):
@@ -2486,8 +2541,73 @@ Caster Code
     # Check in to remote
     #
 
-    def checkin(self, no_partitions=False, remote_name = None, cb=None):
+    def package(self, rebuild=True, partition_location='remote', incver=False, source_only=False):
+        from ambry.orm import Database, Partition, Config
+
+        identity = self.identity
+
+        if incver:
+            identity = self.identity.rev(identity.on.revision + 1)
+
+        self.build_fs.makedir(os.path.dirname(identity.cache_key), allow_recreate=True)
+
+        path = self.build_fs.getsyspath(identity.cache_key + '.db')
+
+        if not rebuild and os.path.exists(path):
+            self.log('Bundle sqlite file {} exists'.format(path))
+            return Database('sqlite:///{}'.format(path))
+
+        if os.path.exists(path):
+            os.remove(path)
+            try:
+                os.remove(path + '-shm')
+                os.remove(path + '-wal')
+            except IOError:
+                pass
+
+        db = Database('sqlite:///{}'.format(path))
+        db.open()
+        db.clean()
+
+        self.commit()
+
+        if source_only:
+            ds = db.copy_dataset_files(self.dataset, incver=incver)
+            ds.state = Bundle.STATES.SOURCE
+
+            # Hack, but I'm tired of fighting with it.
+            ds.session.query(Config).filter(Config.type == 'buildstate').filter(Config.group == 'state').delete()
+            ds.commit()
+
+            pl = ProcessLogger(ds, self.logger, new_connection=False, new_sqlite_db = False)
+            pl.clean()
+            pl.build.state.current = ds.state
+            pl.build.state[ds.state] = 0
+            pl.build.state.lasttime = 0
+
+            pl.build.state.error = False
+            pl.build.state.exception = None
+            pl.build.state.exception_type = None
+            pl.build.commit()
+            db.commit()
+
+
+
+        else:
+            ds = db.copy_dataset(self.dataset, incver=incver)
+
+        db.session.query(Partition).update({'_location': partition_location})
+        db.session.commit()
+        db.close()
+
+        self.log('Wrote bundle package file to {}'.format(db.path))
+
+        return db
+
+    def checkin(self, no_partitions=False, remote_name = None, source_only = False, cb=None):
         from ambry.bundle.process import call_interval
+
+        package = self.package(source_only=source_only)
 
         if not cb:
             @call_interval(10)
@@ -2501,9 +2621,9 @@ Caster Code
 
         remote.account_accessor = self.library.account_accessor
 
-        remote_instance, path = remote.checkin(self, cb=cb)
+        remote_instance, path = remote.checkin(package, cb=cb)
 
-        return remote_instance, path
+        return remote_instance, package
 
     @property
     def is_installed(self):

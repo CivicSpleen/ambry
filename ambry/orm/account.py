@@ -56,6 +56,12 @@ class Account(Base):
 
     secret_password = None # Must be set to encrypt or decrypt secret
 
+    def incver(self):
+        """Increment all of the version numbers and return a new object"""
+        from . import  incver
+        return incver(self, ['d_vid'])
+
+
     def decrypt_secret(self):
 
         if not self.encrypted_secret:

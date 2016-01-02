@@ -425,13 +425,14 @@ class Library(object):
             self.database.copy_dataset(ds, cb=cb)
 
         b = self.bundle(ds.vid) # It had better exist now.
-        b.state = Bundle.STATES.INSTALLED
+        #b.state = Bundle.STATES.INSTALLED
         b.commit()
 
         #self.search.index_library_datasets(tick)
 
         self.search.index_bundle(b)
 
+        return b
 
     def send_to_remote(self, b, no_partitions=False):
         """

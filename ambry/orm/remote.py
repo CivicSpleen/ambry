@@ -172,60 +172,74 @@ class Remote(Base):
 
         return c.dataset(ref)
 
-    def checkin(self, bundle,  cb=None):
-        """Check in a bundle to the remote"""
+    def checkin(self, package,  cb=None):
+        """
+        Check in a bundle package to the remote.
+
+        :param package: A Database, referencing a sqlite database holding the bundle
+        :param cb: a two argument progress callback: cb(message, num_records)
+        :return:
+        """
+        from ambry.orm.exc import NotFoundError
+
+        if not os.path.exists(package.path):
+            raise NotFoundError("Package path does not exist: '{}' ".format(package.path))
 
         if self.is_api:
-            return self._checkin_api(bundle, cb)
+            return self._checkin_api(package, cb)
         else:
-            return self._checkin_fs(bundle, cb)
+            return self._checkin_fs(package, cb)
 
-    def _checkin_fs(self, bundle, cb=None):
-
-        db_path = bundle.package()
+    def _checkin_fs(self, package, cb=None):
 
         assert self.account_accessor
 
         remote = self.s3(self.url, self.account_accessor)
 
-        db_ck = bundle.identity.cache_key + '.db'
+        ds = package.package_dataset
+
+        db_ck = ds.identity.cache_key + '.db'
 
         if cb:
             def cb_one_arg(n):
-                cb('Uploading bundle', n)
+                cb('Uploading package', n)
         else:
             cb_one_arg = None
 
-        with open(db_path) as f:
+        with open(package.path) as f:
             remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
             e = remote.setcontents_async(db_ck, f, progress_callback=cb_one_arg)
             e.wait()
 
-        for p in bundle.partitions:
-            self._put_partition_fs(remote, p, cb=cb)
+        if package.library:
+            from ambry.orm import Bundle
+            bundle = Bundle(ds, package.library)
 
-        self._put_metadata(remote, bundle)
+            for p in bundle.partitions:
+                self._put_partition_fs(remote, p, cb=cb)
+
+        self._put_metadata(remote, ds)
 
         return remote, remote.getpathurl(db_ck)
 
-    def _checkin_api(self, bundle, cb=None):
+    def _checkin_api(self, package, cb=None):
         from ambry_client import Client
 
         c = self._api_client()
 
-        return c.library.checkin(bundle, cb)
+        return c.library.checkin(package, cb)
 
 
-    def _put_metadata(self, fs_remote,bundle):
+    def _put_metadata(self, fs_remote, ds):
         """Store metadata on a pyfs remote"""
         import json
         from six import text_type
 
-        identity = bundle.identity
+        identity = ds.identity
         d = identity.dict
 
-        d['summary'] = bundle.metadata.about.summary
-        d['title'] = bundle.metadata.about.title
+        d['summary'] = ds.config.metadata.about.summary
+        d['title'] = ds.config.metadata.about.title
 
         ident = json.dumps(d)
 

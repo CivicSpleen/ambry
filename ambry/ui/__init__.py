@@ -19,8 +19,8 @@ app_config = {
     'use_proxy': bool(os.getenv('AMBRY_UI_USE_PROXY', False)),
     'debug': bool(os.getenv('AMBRY_UI_DEBUG', False)),
     'website_title': os.getenv('AMBRY_UI_TITLE', 'Civic Knowledge Data Search'),
-    'JWT_SECRET': os.getenv('AMBRY_JWT_SECRET', os.getenv('AMBRY_API_TOKEN',str(uuid4())))
-
+    'JWT_SECRET': os.getenv('AMBRY_JWT_SECRET', os.getenv('AMBRY_API_TOKEN',str(uuid4()))),
+    'MAX_CONTENT_LENGTH': 1024*1024*512
 }
 
 class AmbryAppContext(object):
@@ -72,7 +72,6 @@ app = Flask(__name__)
 
 app.config.update(app_config)
 Session(app)
-
 
 
 @app.teardown_appcontext

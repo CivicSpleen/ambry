@@ -179,15 +179,13 @@ class ProgressSection(object):
 
         return pr_id
 
-
     def get(self, id_):
         return self._session.query(Process).get(id_)
-
 
 class ProcessLogger(object):
     """Database connection and access object for recording build progress and build state"""
 
-    def __init__(self, dataset, logger=None, new_connection=True):
+    def __init__(self, dataset, logger=None, new_connection=True, new_sqlite_db = True):
         import os.path
 
         self._vid = dataset.vid
@@ -199,7 +197,7 @@ class ProcessLogger(object):
         db = dataset._database
         schema = db._schema
 
-        if db.driver == 'sqlite':
+        if db.driver == 'sqlite' and new_sqlite_db :
             # Create an entirely new database. Sqlite does not like concurrent access,
             # even from multiple connections in the same process.
             from ambry.orm import Database

@@ -12,7 +12,7 @@
                 <small>{{(b.metadata.about.summary or '')|truncate(length=300)}}</small>
             </td>
             <td class="toc_name">{{b.identity.name}}<br/>
-                <small>{{b.identity.vid}} {{b.buildstate.state.current}}</small></td>
+                <small>{{b.identity.vid}} {{b.dstate}}</small></td>
 
         </tr>
     {% endfor %}

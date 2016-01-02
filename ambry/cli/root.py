@@ -11,6 +11,8 @@ command_name = 'root'
 from ..cli import warn
 from . import prt
 from six import print_
+from ambry.orm.exc import NotFoundError
+from . import fatal
 
 def make_parser(cmd):
     import argparse
@@ -89,7 +91,7 @@ def make_parser(cmd):
     sp = cmd.add_parser('remove', help='Remove a bundle from the library')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='remove')
-    sp.add_argument('term', nargs='?', type=str, help='bundle reference')
+    sp.add_argument('term', nargs='*', type=str, help='bundle reference')
 
     sp = cmd.add_parser('import', help='Import multiple source directories')
     sp.set_defaults(command='root')
@@ -197,9 +199,9 @@ def root_list(args, l, rc):
 
     elif not args.partitions:
         display_header = True
-        header = ['vid', 'vname', 'state', 'about.title']
+        header = ['vid', 'vname', 'dstate', 'bstate', 'about.title']
     else:
-        header = ['vid', 'vname', 'state', 'table']
+        header = ['vid', 'vname', 'dstate', 'bstate', 'table']
 
     records = []
 
@@ -224,9 +226,10 @@ def root_list(args, l, rc):
                 records.append
 
 
-    if args.sort:
-        idx = header.index(args.sort)
-        records = sorted(records, key=lambda r: r[idx])
+
+    idx = header.index(args.sort) if args.sort else 0
+    records = sorted(records, key=lambda r: r[idx])
+
 
     if args.term:
 
@@ -405,13 +408,18 @@ def root_doc(args, l, rc):
 
 def root_remove(args, l, rc):
 
-    b = l.bundle(args.term)
+    for term in args.term:
 
-    fqname = b.identity.fqname
+        try:
+            b = l.bundle(term)
+        except NotFoundError:
+            warn("Didn't find bundle for reference '{}'".format(term))
 
-    l.remove(b)
+        fqname = b.identity.fqname
 
-    prt('Removed {}'.format(fqname))
+        l.remove(b)
+
+        prt('Removed {}'.format(fqname))
 
 
 def root_import(args, l, rc):

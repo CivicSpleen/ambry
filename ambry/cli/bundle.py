@@ -103,7 +103,7 @@ def make_parser(cmd):
     group.add_argument('-m', '--metadata', default=False, action='store_const',
                        const='metadata', dest='table',
                        help='Dump metadata as json')
-    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle or file reference')
 
     # Set command
     #
@@ -141,7 +141,11 @@ def make_parser(cmd):
     command_p.set_defaults(subcommand='sync')
     command_p.add_argument('file_name', nargs='?', type=str, help='File reference')
     command_p.add_argument('-i', '--in', default=False, action='store_true',
+                           help='Sync from files to records, and records to objects')
+    command_p.add_argument('-f', '--files', default=False, action='store_true',
                            help='Sync from files to records')
+    command_p.add_argument('-r', '--records', default=False, action='store_true',
+                           help='Sync from records to objects')
     command_p.add_argument('-o', '--out', default=False, action='store_true',
                            help='Sync from records to files')
     command_p.add_argument('-c', '--code', default=False, action='store_true',
@@ -287,7 +291,11 @@ def make_parser(cmd):
     command_p = sub_cmd.add_parser('package', help='Package the bundle into a sqlite file.')
     command_p.set_defaults(subcommand='package')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Rebuild if is already exists ')
+                           help='Rebuild if is already exists')
+    command_p.add_argument('-s', '--source', default=False, action='store_true',
+                           help='Only package source files')
+    command_p.add_argument('-i', '--incver', default=False, action='store_true',
+                           help='Increment the revision number')
 
     # Checkin Command
     #
@@ -296,7 +304,8 @@ def make_parser(cmd):
     command_p.add_argument('-n', '--no-partitions', default=False, action='store_true',
                            help="Don't check in partitions")
     command_p.add_argument('-r', '--remote', help='Specify remote, rather than using default for bundle')
-
+    command_p.add_argument('-s', '--source', default=False, action='store_true',
+                           help='Only package source files')
     #
     # Update Command
     #
@@ -582,8 +591,10 @@ def bundle_info(args, l, rc):
     inf(0, 'VID', b.identity.vid)
     inf(0, 'VName', b.identity.vname)
 
-    inf(1, 'Build State', b.buildstate.state.current)
-    inf(1, 'Build Time', b.buildstate.build_duration_pretty)
+    inf(1, 'Dataset State', b.dstate)
+    inf(1, 'Build State', (b.buildstate.state.current if  b.buildstate.state.current else '') +
+        (', '+str(b.buildstate.build_duration_pretty) if b.buildstate.build_duration_pretty else '') )
+
     try:
         inf(1, 'Geo cov', str(list(b.metadata.coverage.geo)))
         inf(1, 'Grain cov', str(list(b.metadata.coverage.grain)))
@@ -681,7 +692,7 @@ def bundle_info(args, l, rc):
 
 def check_built(b):
     """Exit if the bundle is built or finalized"""
-    if b.is_built or b.is_finalized:
+    if b.is_finalized:
         fatal("Can't perform operation; state = '{}'. "
               "Call `bambry clean` explicitly or build with -f option".format(b.state))
 
@@ -690,21 +701,17 @@ def bundle_duplicate(args, l, rc):
 
     b = using_bundle(args, l)
 
-    if not b.is_finalized:
-        fatal("Can't increment a bundle unless it is finalized")
-
-    nb = l.duplicate(b)
-
-    nb.set_last_access(Bundle.STATES.NEW)
-
-    prt('New Bundle: {} '.format(nb.identity.vname))
-
+    prt('Building bundle package')
+    package = b.package(rebuild=True, source_only=True, incver=True)
+    prt('Wrote package to {}'.format(package.path))
+    b = l.checkin_bundle(package.path)
+    prt('Checked in: {}'.format(b.identity.fqname))
 
 def bundle_package(args, l, rc):
     b = using_bundle(args, l)
     prt('Packaging bundle into sqlite file')
-    path = b.package(rebuild=args.force)
-
+    package = b.package(rebuild=args.force, source_only = args.source, incver=args.incver)
+    prt('Package writen to: {} '.format(package.path))
 
 def bundle_finalize(args, l, rc):
     b = using_bundle(args, l)
@@ -772,7 +779,7 @@ def bundle_sync(args, l, rc):
 
     b = using_bundle(args, l)
 
-    sync_in = getattr(args, 'in') or not any((getattr(args, 'in'), args.code,  args.out))
+    sync_in = getattr(args, 'in') or not any((getattr(args, 'in'), args.code,  args.out, args.files, args.records))
 
     if sync_in:
         prt('Sync in')
@@ -785,6 +792,13 @@ def bundle_sync(args, l, rc):
     if args.out:
         prt('Sync out')
         b.sync_out(file_name=args.file_name)
+
+    if args.files:
+        b.sync_in_files()
+
+
+    if args.records:
+        b.sync_in_records()
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
@@ -971,7 +985,7 @@ def bundle_checkin(args, l, rc):
 
     b = l.bundle(ref, True)
 
-    remote_instance, path = b.checkin(remote_name=args.remote)
+    remote_instance, path = b.checkin(remote_name=args.remote, source_only=args.source)
 
     if path:
         b.log("Checked in to remote '{}' path '{}'".format(remote_instance, b.identity.fqname))
@@ -1023,23 +1037,35 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'files':
 
-        records = []
-        headers = 'Path Major Minor State Size Modified Synced SyncDir'.split()
+        if args.ref:
+            from ambry.orm import File
+            from sqlalchemy.orm.exc import NoResultFound
+            records = None
+            try:
+                f = b.build_source_files.file_by_path(args.ref)
+                print f.contents
+            except (NotFoundError, AttributeError):
+                fatal("Did not find file for path '{}' ".format(args.ref))
 
-        for f in b.build_source_files:
-            row = f.record
-            records.append((
-                row.path,
-                row.major_type,
-                row.minor_type,
-                row.state,
-                row.size,
-                datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else '',
-                datetime.datetime.fromtimestamp(float(row.synced_fs)).isoformat() if row.synced_fs else '',
-                f.sync_dir()
+
+        else:
+            records = []
+            headers = 'Path Major Minor State Size Modified Synced SyncDir'.split()
+
+            for f in b.build_source_files:
+                row = f.record
+                records.append((
+                    row.path,
+                    row.major_type,
+                    row.minor_type,
+                    row.state,
+                    row.size,
+                    datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else '',
+                    datetime.datetime.fromtimestamp(float(row.synced_fs)).isoformat() if row.synced_fs else '',
+                    f.sync_dir()
+                    )
                 )
-            )
-        records = sorted(records, key=lambda row: (row[0], row[1], row[2]))
+            records = sorted(records, key=lambda row: (row[0], row[1], row[2]))
 
     elif args.table == 'partitions':
 
@@ -1240,23 +1266,29 @@ def bundle_import(args, l, rc):
 
     source_dir = os.path.abspath(source_dir)
 
-    fs = fsopendir(source_dir)
+    if source_dir.endswith('.db'): # it's a database package
+        prt('Loading bundle package')
+        b = l.checkin_bundle(source_dir)
 
-    config = yaml.load(fs.getcontents('bundle.yaml'))
+    else: # It's a source directory
 
-    if not config:
-        fatal("Failed to get a valid bundle configuration from '{}'".format(source_dir))
+        fs = fsopendir(source_dir)
 
-    bid = config['identity']['id']
+        config = yaml.load(fs.getcontents('bundle.yaml'))
 
-    try:
-        b = l.bundle(bid, True)
-    except NotFoundError:
-        b = l.new_from_bundle_config(config)
+        if not config:
+            fatal("Failed to get a valid bundle configuration from '{}'".format(source_dir))
 
-    b.set_file_system(source_url=source_dir)
+        bid = config['identity']['id']
 
-    b.sync_in(force=True)
+        try:
+            b = l.bundle(bid, True)
+        except NotFoundError:
+            b = l.new_from_bundle_config(config)
+
+        b.set_file_system(source_url=source_dir)
+
+        b.sync_in(force=True)
 
     prt('Loaded bundle: {}'.format(b.identity.fqname))
 

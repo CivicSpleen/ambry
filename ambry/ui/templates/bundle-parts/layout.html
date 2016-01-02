@@ -8,7 +8,7 @@
 {% block pageheader %}
 <div class="page-header">
     <div class="summary">{% if b.metadata.about.summary -%}{{b.metadata.about.summary.html|safe}}{% endif -%}</div>
-    <div><small>{{b.identity.fqname}}</small></div>
+    <div><small>{{b.identity.fqname}} {{ b.dstate }}</small></div>
 </div>
 {% endblock %}
 

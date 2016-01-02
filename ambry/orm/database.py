@@ -23,7 +23,7 @@ from ambry.orm.process import Process
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 116
+SCHEMA_VERSION = 117
 
 # Note: If you are going to change POSTGRES_SCHEMA_NAME do not forget to change docs:
 #   1. README.rst (search for 'Install pg_trgm extension')
@@ -93,6 +93,8 @@ class Database(object):
             self._schema = None
 
         self.logger = logger
+
+        self.library = None # Set externally when checking in in
 
     def create(self):
         """Create the database from the base SQL."""
@@ -460,6 +462,12 @@ class Database(object):
         """Return the root dataset, which hold configuration values for the library"""
         return self.dataset(ROOT_CONFIG_NAME_V)
 
+    @property
+    def package_dataset(self):
+        """For sqlite bundle packages, return the first ( and only ) dataset"""
+
+        return self.session.query(Dataset).filter(Dataset.vid != ROOT_CONFIG_NAME_V).one()
+
     def dataset(self, ref, load_all=False, exception=True):
         """Return a dataset, given a vid or id
 
@@ -551,56 +559,87 @@ class Database(object):
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
 
-    def copy_dataset(self, ds, cb=None):
-        from ambry.orm import Table, Column, Partition, File, ColumnStat, Code,\
+    def copy_dataset(self, ds, incver=False, cb=None):
+        """
+        Copy a dataset into the database.
+        :param ds: The source dataset to copy
+        :param cb: A progress callback, taking two parameters: cb(message, num_records)
+        :return:
+        """
+        from ambry.orm import Table, Column, Partition, File, ColumnStat, Code, \
             DataSource, SourceTable, SourceColumn, Dataset, Config
+
+        tables = [ Table, Column, Partition, File, ColumnStat, Code, SourceTable, SourceColumn, DataSource ]
+
+        return self._copy_dataset_copy(ds, tables, incver, cb)
+
+    def copy_dataset_files(self, ds, incver=False, cb=None):
+        """
+        Copy only files and configs into the database.
+        :param ds: The source dataset to copy
+        :param cb: A progress callback, taking two parameters: cb(message, num_records)
+        :return:
+        """
+        from ambry.orm import File
+
+        tables = [File]
+
+        return self._copy_dataset_copy(ds, tables, incver, cb)
+
+    def _copy_dataset_copy(self, ds, tables, incver, cb=None):
         from sqlalchemy.orm import noload
-        from ..util import toposort
 
         source_session = ds.session
         dest_session = self.session
 
-        i = [0]
-        def merge(table_class):
-
-            for o in source_session.query(table_class).filter(table_class.d_vid == ds.vid).options(noload('*')).all():
-
-                dest_session.merge(o)
-
-                i[0] +=1
-
-                if i[0]%1000 == 0:
-                    if cb:
-                        cb('Copy dataset', i[0])
-                    else:
-                        self.logger.info("Copied {} records".format(i[0]))
-
-                    dest_session.commit()
-
         ds = source_session.query(Dataset).filter(Dataset.vid == ds.vid).options(noload('*')).first()
-        dest_session.merge(ds)
+
+        dso = ds.incver() if incver else ds
+
+        dest_session.merge(dso)
         dest_session.commit()
 
-        merge(Table)
-        merge(Column)
-        merge(Partition)
-        merge(File)
-        merge(ColumnStat)
-        merge(Code)
-        merge(SourceTable)
-        merge(SourceColumn)
-        merge(DataSource)
 
-        # ds.configs # We'll get these later
+        for table_class in tables:
+            self._copy_dataset_merge(ds, source_session, dest_session, table_class, incver)
 
-        # Put the partitions in dependency order so the merge won't throw a Foreign key integrity error
-        # The non-segment partitions go first, then the segments.
-        #ds.partitions = [p for p in ds.partitions if not p.is_segment] + [p for p in ds.partitions if p.is_segment]
+        self._copy_dataset_configs(ds, source_session, dest_session, incver)
 
+        return self.dataset(dso.vid)
 
+    def _copy_dataset_merge(self, ds, source_session, dest_session, table_class, incver):
+        from sqlalchemy.orm import noload, undefer
+
+        i = [0]
+
+        options = [noload('*')]
+        if table_class == File:
+            options.append(undefer('contents'))
+
+        for o in source_session.query(table_class).filter(table_class.d_vid == ds.vid).options(*options).all():
+
+            if incver:
+                o = o.incver()
+
+            dest_session.merge(o)
+
+            i[0] += 1
+
+            if i[0] % 1000 == 0:
+                if cb:
+                    cb('Copy dataset', i[0])
+                else:
+                    self.logger.info("Copied {} records".format(i[0]))
+
+                dest_session.commit()
+
+    def _copy_dataset_configs(self, ds, source_session, dest_session, incver):
         # FIXME: Oh, this is horrible. Sqlalchemy inserts all of the configs as a group, but they are self-referential,
         # so some with a reference to a parent get inserted before their parent. The topo sort solves this,
         # but there must be a better way to do it.
+
+        from ..util import toposort
+        from sqlalchemy.orm import noload
 
         configs = source_session.query(Config).filter(Config.d_vid == ds.vid).options(noload('*')).all()
 
@@ -611,11 +650,12 @@ class Database(object):
         for e in toposort(dag):
             for ref in e:
                 if ref:
-                    dest_session.merge(refs[ref])
+                    config = refs[ref]
+                    if incver:
+                        config = config.incver()
+                    dest_session.merge(config)
 
         dest_session.commit()
-
-        return self.dataset(ds.vid)
 
 
     def next_sequence_id(self, parent_table_class, parent_vid, child_table_class):

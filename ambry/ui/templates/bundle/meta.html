@@ -47,15 +47,18 @@
         </small>
     </h2>
     <table class="table meta-table">
+        <tr>
+            <th>File</th><th>Size</th><th>Modified</th><th>Modified Ago</th>
+        </tr>
         {% for bs in b.build_source_files -%}
-            {%  if bs.exists() %}
-                <tr>
+            {% if bs.record.size %}
+            <tr>
                 <td><a href="{{ url_for('bundle_file',vid=vid, name=bs.file_name) }}">{{ bs.file_name }}</a></td>
+                <td>{{ bs.record.size }}</td>
                 <td>{{ bs.record.modified_datetime }}</td>
                 <td>{{ bs.record.modified_ago }} ago</td>
-                </tr>
-
-            {% endif  -%}
+            </tr>
+            {% endif %}
         {% endfor %}
     </table>
 

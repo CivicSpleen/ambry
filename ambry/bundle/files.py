@@ -1020,6 +1020,12 @@ class BuildSourceFileAccessor(object):
 
         return bsfile
 
+    def file_by_path(self, path):
+
+        s = self._dataset._database.session
+
+        return s.query(File).filter(File.path == path).filter(File.d_vid == self._dataset.vid).first()
+
     def record_to_objects(self, preference=None):
         """Create objects from files, or merge the files into the objects. """
         from ambry.orm.file import File

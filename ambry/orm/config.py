@@ -46,6 +46,12 @@ class Config(Base):
     parent = relationship('Config',  remote_side=[id])
     children = relationship('Config')
 
+    def incver(self):
+        """Increment all of the version numbers and return a new object"""
+        from . import  incver
+        return incver(self, ['d_vid', 'id','parent_id'])
+
+
     @property
     def dict(self):
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}

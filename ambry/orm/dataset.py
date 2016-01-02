@@ -45,9 +45,9 @@ class Dataset(Base):
     t_sequence_id = SAColumn('d_t_sequence_id', Integer, default=1)
     st_sequence_id = SAColumn('d_st_sequence_id', Integer, default=1)
 
-    data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
+    state = SAColumn('d_state', String(20), doc='Indicates last operation on the dataset') # Note! Different from Bundle.state!
 
-    path = None  # Set by the Library and other queries.
+    data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
     tables = relationship('Table', backref='dataset', cascade='all, delete-orphan')
 
@@ -65,9 +65,10 @@ class Dataset(Base):
 
     codes = relationship('Code', backref='dataset', cascade='all, delete-orphan')
 
+    path = None  # Set by the Library and other queries.
     _database = None  # Reference to the database, when dataset is retrieved from a database object
 
-    _sequence_ids = {}  # Cache of sequence numbers
+    _sequence_ids = {}  # Cache of sequence numbers ( Is this still used? )
 
     def __init__(self, *args, **kwargs):
 
@@ -106,6 +107,22 @@ class Dataset(Base):
             self.version = str(self.identity.version)
 
         assert self.vid[0] == 'd'
+
+    def incver(self):
+        """Increment all of the version numbers"""
+        d = {}
+        for p in self.__mapper__.attrs:
+            if p.key in ['vid','vname','fqname', 'version', 'cache_key']:
+                continue
+            if p.key == 'revision':
+                d[p.key] = self.revision + 1
+            else:
+                d[p.key] = getattr(self, p.key)
+
+        n =  Dataset(**d)
+
+        return n
+
 
     def commit(self):
         self._database.commit()
