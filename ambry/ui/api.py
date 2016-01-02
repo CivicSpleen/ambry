@@ -28,46 +28,52 @@ class User(object):
         return "User(id='%s')" % self.id
 
 
-def authenticate(username, password):
-    from ambry.orm.exc import NotFoundError
-
-    # Try one of the accounts from the accounts file.
-    try:
-        account = aac.library.account(username)
-
-        if account.major_type == 'user' and account.test(password):
-            return User(username, username, password)
-    except (KeyError,NotFoundError):
-
-        pass
-
-    return None
-
-def identity(payload):
-    user_id = payload['identity']
-    return user_id
-
-
 def _jwt_required():
+    """Extract the Authorization header and validate it against the database"""
     from jose import jwt
     from flask import request
-    auth = request.headers.get('Authorization')
+    from ambry.orm.exc import NotFoundError
 
-    if not auth:
-        app.logger.info("AuthError: No auth")
-        abort(403)
+    auth_header = request.headers.get('Authorization')
 
-    form, token = auth.split(' ',1) if auth else (None, None)
+    if not auth_header:
+        app.logger.info("AuthError: No auth header value")
+        abort(401)
+
+    form, auth_str = auth_header.split(' ',1)
 
     if form != 'JWT':
         app.logger.info("AuthError: Didn't get JWT for auth type")
-        abort(403)
+        abort(401)
 
-    claims =  jwt.decode(token,app.config['API_TOKEN'], algorithms='HS256')
+    user, token = auth_str.split(':')
 
-    if not authenticate(claims['u'], claims['p']):
-        app.logger.info("Didn't authenticate: {} {} ".format(claims['u'], claims['p']))
-        abort(403)
+    try:
+        account = aac.library.account(user)
+    except NotFoundError:
+        app.logger.info("AuthError: Didn't get user '{}' ".format(user))
+        abort(401)
+
+    if account.major_type != 'api':
+        app.logger.info("User '{}' not api service type; got '{}'  ".format(user, account.major_type))
+        abort(400)
+
+    secret = account.decrypt_secret()
+
+    try:
+        claims = jwt.decode(token, secret, algorithms='HS256')
+    except jwt.JWTError:
+        app.logger.info("AuthError: failed to verify token ")
+        abort(401)
+
+    if not 'u' in claims:
+        app.logger.info("AuthError: no user in claims ")
+        abort(400)
+
+    if user != claims['u']:
+        app.logger.info("Claimed user does not match")
+        abort(401)
+
 
 def jwt_required(fn):
     """View decorator that requires a valid JWT token to be present in the request
@@ -90,7 +96,6 @@ def test_get():
     return r.json(
         ok = True
     )
-
 
 #
 # Administration Interfaces
@@ -119,6 +124,8 @@ def config_remotes_put():
         for k, v in r_d.items():
             if hasattr(rmt,k):
                 setattr(rmt, k, v)
+
+    l.commit()
 
     return r.json(
         remotes=[ rmt.dict for rmt in r.library.remotes]
@@ -286,7 +293,12 @@ def bundle_build_checkin_post(vid):
     with open(path, 'wb') as f:
         copy_file_or_flo(request.stream, f)
 
-    r.library.checkin_bundle(path)
+    def cb(message, number):
+        print message, number
+
+    r.library.checkin_bundle(path, cb)
+
+
 
     return r.json(
         result='ok'

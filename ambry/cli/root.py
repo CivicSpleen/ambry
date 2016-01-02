@@ -115,7 +115,7 @@ def make_parser(cmd):
     sp = cmd.add_parser('ui', help='Run the web user interface')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='ui')
-    sp.add_argument('-H', '--host', help="Server host.", default='0.0.0.0')
+    sp.add_argument('-H', '--host', help="Server host.", default='localhost')
     sp.add_argument('-p', '--port', help="Server port", default=8080)
     sp.add_argument('-P', '--use-proxy', action='store_true',
                         help="Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix")
@@ -487,12 +487,15 @@ def root_ui(args, l, rc):
     remote = l.find_or_new_remote('localhost', service='ambry')
     remote.url = "http://{}:{}".format(args.host, args.port)
 
-    if not remote.api_token:
+    if not remote.jwt_secret:
         from ambry.util import random_string
-        remote.api_token = random_string(16)
+        remote.jwt_secret = random_string(16)
 
-    # Create a local user account entry for accessing the API
-    account = l.find_or_new_account(set_url_part(remote.url, username='api'), major_type='api')
+    # Create a local user account entry for accessing the API. This one is for the client,
+    # which knows the destination URL, so the account id has the form: http://api@localhost:8080/
+    username = 'api'
+    account_url = set_url_part(remote.url, username=username)
+    account = l.find_or_new_account(account_url, major_type='api')
     if not account.access_key:
         account.url = remote.url
         account.access_key = 'api'
@@ -501,19 +504,25 @@ def root_ui(args, l, rc):
     else:
         secret = account.decrypt_secret()
 
-    assert secret
-
-    # Create the corresponding account in the UI's database
-    account = l.find_or_new_account('api', major_type='user')
+    # This one is for the server side, where it doesn't know the destination URL, and the
+    # account id is just the username.
+    account = l.find_or_new_account(username, major_type='api')
+    account.url = remote.url
     account.access_key = 'api'
     account.encrypt_secret(secret)
+
 
     l.commit()
 
     # The is the token for creating JWT tokens.
-    app.config['API_TOKEN'] = remote.api_token
+    app.config['JWT_SECRET'] = remote.jwt_secret
 
-    prt('API Token: {}'.format(app.config['API_TOKEN']))
+    prt('JWT Secret  : {}'.format(app.config['JWT_SECRET']))
+    prt('API Password: {}'.format(secret))
+
+    prt('Add Secret to a foreign library: ')
+    prt('    ambry remotes add -j {} -u {} {}'.format(remote.jwt_secret,remote.url, remote.short_name))
+    prt('    ambry accounts add -v api -s {} {}'.format(secret, account_url))
 
     try:
         app.run(host=args.host, port=int(args.port), debug=args.debug)

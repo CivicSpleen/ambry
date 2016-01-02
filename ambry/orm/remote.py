@@ -40,7 +40,7 @@ class Remote(Base):
     ui_name = SAColumn('rm_ui_name', Text)
 
     db_dsn = SAColumn('rm_db_dsn', Text)
-    api_token = SAColumn('rm_api_token', Text, doc='Encryption secret for JWT')
+    jwt_secret = SAColumn('rm_api_token', Text, doc='Encryption secret for JWT')
 
     account_password = SAColumn('rm_account_password', Text, doc='Password for encryption secrets in the database')
 
@@ -54,6 +54,10 @@ class Remote(Base):
     account_accessor = None # Set externally to allow access to the account credentials
 
     tr_db_password = None
+
+    @property
+    def api_token(self): # old name
+        return self.jwt_secret
 
     @property
     def is_api(self):
@@ -105,8 +109,7 @@ class Remote(Base):
         except KeyError:
             pass
 
-        c = Client(self.url,self.api_token, username, account['secret'])
-
+        c = Client(self.url, username, account['secret'])
         return c
 
     @property

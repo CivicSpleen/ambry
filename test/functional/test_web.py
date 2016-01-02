@@ -10,8 +10,8 @@ from test.test_base import TestBase
 # AMBRY_API_TOKEN=api_secret AMBRY_ACCOUNT_PASSWORD=secret_password
 
 
-api_secret = 'api_secret'
-secret_password='secret_password'
+jwt_secret = 'WaeW77qy8yqJM2mP'
+api_password= 'qHPaMbgGUXIUobpB2ET0'
 
 class Test(TestBase):
 
@@ -47,26 +47,11 @@ class Test(TestBase):
         import time
         import yaml
 
-        c = Client('http://localhost:8080', api_secret, 'api', api_secret)
-
-        a = Account(account_id='user1', major_type='ambry')
-        a.secret_password = secret_password
-        a.encrypt_secret('foobar')
-
-        accounts = { 'user1': a.dict }
-
-
-        c.library.accounts = accounts
-
-        return
-
         c = Client('http://localhost:8080')
-        c.auth('user1', 'foobar')
 
-        self.assertIn('user1', c.library.accounts.keys())
+        print c.authenticate('api', api_password, jwt_secret )
 
-        for k, v in c.library.accounts.items():
-            print k, v
+        print c.test()
 
     def test_checkin(self):
         """
@@ -78,6 +63,6 @@ class Test(TestBase):
         import yaml
 
         c = Client('http://localhost:8080')
-        c.auth('api', api_secret)
+        c.authenticate('api', api_password, jwt_secret)
 
         c.library.checkin('/tmp/foo.txt')

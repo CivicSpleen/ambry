@@ -408,7 +408,7 @@ class Library(object):
 
         return nb
 
-    def checkin_bundle(self, db_path):
+    def checkin_bundle(self, db_path, cb=None):
         """Add a bundle, as a Sqlite file, to this library"""
 
         db = Database('sqlite:///{}'.format(db_path))
@@ -422,7 +422,7 @@ class Library(object):
         try:
             self.dataset(ds.vid) # Skip loading bundles we already have
         except NotFoundError:
-            self.database.copy_dataset(ds)
+            self.database.copy_dataset(ds, cb=cb)
 
         b = self.bundle(ds.vid) # It had better exist now.
         b.state = Bundle.STATES.INSTALLED

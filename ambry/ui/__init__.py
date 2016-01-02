@@ -19,7 +19,7 @@ app_config = {
     'use_proxy': bool(os.getenv('AMBRY_UI_USE_PROXY', False)),
     'debug': bool(os.getenv('AMBRY_UI_DEBUG', False)),
     'website_title': os.getenv('AMBRY_UI_TITLE', 'Civic Knowledge Data Search'),
-    'API_TOKEN': os.getenv('AMBRY_API_TOKEN', str(uuid4())),
+    'JWT_SECRET': os.getenv('AMBRY_JWT_SECRET', os.getenv('AMBRY_API_TOKEN',str(uuid4())))
 
 }
 

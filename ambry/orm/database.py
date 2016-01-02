@@ -551,7 +551,7 @@ class Database(object):
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
 
-    def copy_dataset(self, ds):
+    def copy_dataset(self, ds, cb=None):
         from ambry.orm import Table, Column, Partition, File, ColumnStat, Code,\
             DataSource, SourceTable, SourceColumn, Dataset, Config
         from sqlalchemy.orm import noload
@@ -570,7 +570,10 @@ class Database(object):
                 i[0] +=1
 
                 if i[0]%1000 == 0:
-                    self.logger.info("Copied {} records".format(i[0]))
+                    if cb:
+                        cb('Copy dataset', i[0])
+                    else:
+                        self.logger.info("Copied {} records".format(i[0]))
 
                     dest_session.commit()
 
