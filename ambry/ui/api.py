@@ -298,8 +298,6 @@ def bundle_build_checkin_post(vid):
 
     r.library.checkin_bundle(path, cb)
 
-
-
     return r.json(
         result='ok'
     )
