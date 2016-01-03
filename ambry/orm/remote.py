@@ -44,6 +44,8 @@ class Remote(Base):
 
     account_password = SAColumn('rm_account_password', Text, doc='Password for encryption secrets in the database')
 
+    virtual_host = SAColumn('rm_virtual_host', Text, doc='Virtual host name, for web proxy')
+
     comment = SAColumn('ac_comment', Text)  # Access token or username
     message = SAColumn('rm_message', Text)
 
@@ -127,10 +129,19 @@ class Remote(Base):
 
     def _list_fs(self):
         assert self.account_accessor
+        from fs.errors import  ResourceNotFoundError
 
-        remote = self.s3(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url, self.account_accessor)
 
-        return remote.listdir('_meta/vname')
+        try:
+            for e in remote.listdir('_meta/vname'):
+                yield e
+        except ResourceNotFoundError:
+            # An old repo, doesn't have the meta/name values.
+
+            for fn in remote.walkfiles(wildcard='*.db'):
+                this_name = fn.strip('/').replace('/', '.').replace('.db', '')
+                yield this_name
 
     def _list_api(self):
 
@@ -152,7 +163,7 @@ class Remote(Base):
         from ambry.orm.exc import NotFoundError
         import json
 
-        remote = self.s3(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url, self.account_accessor)
 
         path_parts = ['vid','id','vname','name']
 
@@ -172,7 +183,7 @@ class Remote(Base):
 
         return c.dataset(ref)
 
-    def checkin(self, package,  cb=None):
+    def checkin(self, package, no_partitions=False, cb=None):
         """
         Check in a bundle package to the remote.
 
@@ -186,15 +197,16 @@ class Remote(Base):
             raise NotFoundError("Package path does not exist: '{}' ".format(package.path))
 
         if self.is_api:
-            return self._checkin_api(package, cb)
+            return self._checkin_api(package, no_partitions=no_partitions, cb=cb)
         else:
-            return self._checkin_fs(package, cb)
+            return self._checkin_fs(package, no_partitions=no_partitions, cb=cb)
 
-    def _checkin_fs(self, package, cb=None):
-
+    def _checkin_fs(self, package, no_partitions=False, cb=None):
+        from fs.errors import NoPathURLError, NoSysPathError
+        from ambry.orm import Partition
         assert self.account_accessor
 
-        remote = self.s3(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url, self.account_accessor)
 
         ds = package.package_dataset
 
@@ -212,17 +224,25 @@ class Remote(Base):
             e.wait()
 
         if package.library:
-            from ambry.orm import Bundle
-            bundle = Bundle(ds, package.library)
-
-            for p in bundle.partitions:
-                self._put_partition_fs(remote, p, cb=cb)
+            for p in package.session.query(Partition).filter(Partition.type == Partition.TYPE.UNION).all():
+                self._put_partition_fs(remote, p, package.library, cb=cb)
 
         self._put_metadata(remote, ds)
 
-        return remote, remote.getpathurl(db_ck)
+        try:
+            return remote, remote.getpathurl(db_ck)
+        except NoPathURLError:
+            pass
 
-    def _checkin_api(self, package, cb=None):
+        try:
+            return remote, remote.getsyspath(db_ck)
+        except NoSysPathError:
+            pass
+
+
+        return remote, None
+
+    def _checkin_api(self, package, no_partitions=False, cb=None):
         from ambry_client import Client
 
         c = self._api_client()
@@ -234,6 +254,7 @@ class Remote(Base):
         """Store metadata on a pyfs remote"""
         import json
         from six import text_type
+        from fs.errors import ResourceNotFoundError
 
         identity = ds.identity
         d = identity.dict
@@ -243,11 +264,22 @@ class Remote(Base):
 
         ident = json.dumps(d)
 
-        fs_remote.setcontents(os.path.join('_meta', 'vid', identity.vid), ident)
-        fs_remote.setcontents(os.path.join('_meta', 'id', identity.id_), ident)
-        fs_remote.setcontents(os.path.join('_meta', 'vname', text_type(identity.vname)), ident)
-        fs_remote.setcontents(os.path.join('_meta', 'name', text_type(identity.name)), ident)
+        def do_metadata():
+            fs_remote.setcontents(os.path.join('_meta', 'vid', identity.vid), ident)
+            fs_remote.setcontents(os.path.join('_meta', 'id', identity.id_), ident)
+            fs_remote.setcontents(os.path.join('_meta', 'vname', text_type(identity.vname)), ident)
+            fs_remote.setcontents(os.path.join('_meta', 'name', text_type(identity.name)), ident)
 
+
+        try:
+            do_metadata()
+        except ResourceNotFoundError:
+            parts = ['vid','id','vname','name']
+            for p in parts:
+                dirname = os.path.join('_meta', p)
+                fs_remote.makedir(dirname, allow_recreate=True, recursive=True)
+
+            do_metadata()
 
 
     def put_partition(self, cb=None):
@@ -255,13 +287,19 @@ class Remote(Base):
         pass
 
 
-    def _put_partition_fs(self, fs_remote, p, cb=None):
+    def _put_partition_fs(self, fs_remote, p, library,  cb=None):
 
         if cb:
             def cb_one_arg(n):
                 cb('Uploading partition {}'.format(p.identity.name), n)
         else:
             cb_one_arg = None
+
+
+        if not library:
+            return
+
+        p = library.partition(p.vid)
 
         with p.datafile.open(mode='rb') as fin:
             fs_remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
@@ -272,9 +310,19 @@ class Remote(Base):
         pass
 
 
-    def checkout(self):
-        """Checkout a bundle from the remote"""
-        pass
+    def checkout(self, ref):
+        """Checkout a bundle from the remote. Returns a file-like object"""
+        if self.is_api:
+            return self._checkout_api(ref)
+        else:
+            return self._checkout_fs(ref)
+
+    def _checkout_api(self, ref):
+        raise NotImplementedError()
+
+    def _checkout_fs(self, ref):
+        remote = self._fs_remote(self.url, self.account_accessor)
+
 
     def get_partition(self):
         """Get a partition from the remote"""
@@ -292,7 +340,7 @@ class Remote(Base):
         from fs.errors import ResourceNotFoundError
         from os.path import join
 
-        remote = self.s3(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url, self.account_accessor)
 
         def safe_remove(path):
             try:
@@ -332,6 +380,20 @@ class Remote(Base):
         c = self._api_client()
 
         c.library.remove(ref)
+
+    def _fs_remote(self, url, account_acessor):
+
+        from ambry.util import parse_url_to_dict
+
+        d = parse_url_to_dict(url)
+
+        if d['scheme'] == 's3':
+            return self.s3(url, account_acessor)
+        else:
+            from fs.opener import fsopendir
+            return fsopendir(url)
+
+
 
     def s3(self, url, account_acessor):
         """Setup an S3 pyfs, with account credentials, fixing an ssl matching problem"""

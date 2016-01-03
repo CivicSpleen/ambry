@@ -156,7 +156,6 @@ def config_accounts_put():
     from ambry.orm.account import AccountDecryptionError, MissingPasswordError
     r = aac.renderer
 
-
     from ambry.library.config import LibraryConfigSyncProxy
 
     l = r.library

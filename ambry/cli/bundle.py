@@ -447,14 +447,14 @@ def run_command(args, rc):
 
     try:
         globals()['bundle_' + args.subcommand](args, l, rc)
-    except ConflictError as e:
+    except (ConflictError, NotFoundError) as e:
+        if args.exceptions:
+            raise
         fatal(str(e))
     except LoggedException as e:
         exc = e.exc
         b = e.bundle
         b.fatal(str(e.message))
-
-
 
 def get_bundle_ref(args, l, use_history=False):
     """ Use a variety of methods to determine which bundle to use
@@ -985,7 +985,9 @@ def bundle_checkin(args, l, rc):
 
     b = l.bundle(ref, True)
 
-    remote_instance, path = b.checkin(remote_name=args.remote, source_only=args.source)
+    remote_instance, path = b.checkin(remote_name=args.remote,
+                                      no_partitions=args.no_partitions,
+                                      source_only=args.source)
 
     if path:
         b.log("Checked in to remote '{}' path '{}'".format(remote_instance, b.identity.fqname))

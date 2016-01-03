@@ -85,9 +85,8 @@ class Account(Base):
             # These are passwords, not really secrets, so they are encrypted asymmetrically
 
             self.encrypted_secret = pbkdf2_sha256.encrypt(v, rounds=200000, salt_size=16)
-        else:
+        elif v:
             if self.secret_password:
-
                 self.encrypted_secret = encrypt(self.secret_password, v).encode('base64')
             else:
                 raise MissingPasswordError("Must have a password to get or set the secret")

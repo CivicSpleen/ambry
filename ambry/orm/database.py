@@ -23,7 +23,7 @@ from ambry.orm.process import Process
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 117
+SCHEMA_VERSION = 118
 
 # Note: If you are going to change POSTGRES_SCHEMA_NAME do not forget to change docs:
 #   1. README.rst (search for 'Install pg_trgm extension')
@@ -213,7 +213,7 @@ class Database(object):
                         dbapi_con.execute('PRAGMA foreign_keys=ON')
 
             with self._engine.connect() as conn:
-                _validate_version(conn)
+                _validate_version(conn, self.dsn)
 
         return self._engine
 
@@ -599,15 +599,14 @@ class Database(object):
         dest_session.merge(dso)
         dest_session.commit()
 
-
         for table_class in tables:
-            self._copy_dataset_merge(ds, source_session, dest_session, table_class, incver)
+            self._copy_dataset_merge(ds, source_session, dest_session, table_class, incver, cb=cb)
 
         self._copy_dataset_configs(ds, source_session, dest_session, incver)
 
         return self.dataset(dso.vid)
 
-    def _copy_dataset_merge(self, ds, source_session, dest_session, table_class, incver):
+    def _copy_dataset_merge(self, ds, source_session, dest_session, table_class, incver, cb = None):
         from sqlalchemy.orm import noload, undefer
 
         i = [0]
@@ -757,7 +756,7 @@ class VersionIsNotStored(Exception):
     pass
 
 
-def migrate(connection):
+def migrate(connection, dsn):
     """ Collects all migrations and applies missed.
 
     Args:
@@ -781,6 +780,7 @@ def migrate(connection):
                 trans.commit()
             except:
                 trans.rollback()
+                logger.error("Failed to migrate '{}'  on {} ".format(version, dsn))
                 raise
 
 
@@ -855,7 +855,7 @@ def get_stored_version(connection):
         raise DatabaseError('Do not know how to get version from {} engine.'.format(connection.engine.name))
 
 
-def _validate_version(connection):
+def _validate_version(connection, dsn):
     """ Performs on-the-fly schema updates based on the models version.
 
     Raises:
@@ -874,7 +874,7 @@ def _validate_version(connection):
         raise DatabaseError('Trying to open an old SQLite database.')
 
     if _migration_required(connection):
-        migrate(connection)
+        migrate(connection, dsn)
 
 
 def _migration_required(connection):

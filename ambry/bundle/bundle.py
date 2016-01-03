@@ -2602,6 +2602,7 @@ Caster Code
 
         self.log('Wrote bundle package file to {}'.format(db.path))
 
+        db.library = self.library
         return db
 
     def checkin(self, no_partitions=False, remote_name = None, source_only = False, cb=None):
@@ -2621,7 +2622,7 @@ Caster Code
 
         remote.account_accessor = self.library.account_accessor
 
-        remote_instance, path = remote.checkin(package, cb=cb)
+        remote_instance, path = remote.checkin(package, no_partitions=no_partitions, cb=cb)
 
         return remote_instance, package
 

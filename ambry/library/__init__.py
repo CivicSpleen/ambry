@@ -285,6 +285,9 @@ class Library(object):
             ds_on = on.as_dataset
 
             ds = self._db.dataset(ds_on)  # Could do it in on SQL query, but this is easier.
+            # The refresh is required because in some places the dataset is loaded without the partitions,
+            # and if that persist, we won't have partitions in it until it is refreshed.
+            self.database.session.refresh(ds)
 
             p = ds.partition(ref)
 
@@ -337,7 +340,6 @@ class Library(object):
         """ Removes a bundle from the library and deletes the configuration for
         it from the library database."""
 
-        bundle.remove()
         self.database.remove_dataset(bundle.dataset)
 
     #
@@ -408,8 +410,9 @@ class Library(object):
 
         return nb
 
-    def checkin_bundle(self, db_path, cb=None):
+    def checkin_bundle(self, db_path, replace = True, cb=None):
         """Add a bundle, as a Sqlite file, to this library"""
+        from ambry.orm.exc import NotFoundError
 
         db = Database('sqlite:///{}'.format(db_path))
         db.open()
@@ -418,6 +421,15 @@ class Library(object):
 
         assert ds is not None
         assert ds._database
+
+        try:
+            b = self.bundle(ds.vid)
+            self.logger.info("Removing old bundle before checking in new one of same number: '{}'".format(ds.vid))
+            self.remove(b)
+        except NotFoundError:
+            pass
+
+
 
         try:
             self.dataset(ds.vid) # Skip loading bundles we already have
@@ -512,8 +524,15 @@ class Library(object):
     # Remotes
     #
 
-    def sync_remote(self, remote_name, bundle_name, list_only=False):
-        remote = self.remote(remote_name)
+    def sync_remote(self, remote_name, bundle_name=None):
+        from ambry.orm import Remote
+
+        if isinstance(remote_name, text_type):
+            remote = self.remote(remote_name)
+        else:
+            remote = remote_name
+
+        assert isinstance(remote, Remote)
 
         temp = fsopendir('temp://ambry-import', create_dir=True)
 
@@ -523,16 +542,6 @@ class Library(object):
 
             this_name = fn.strip('/').replace('/', '.').replace('.db', '')
 
-            if bundle_name and this_name != bundle_name:
-                continue
-
-            if list_only:
-                entries.append(this_name)
-                self.logger.info(this_name)
-                continue
-            else:
-                self.logger.info('Sync {}'.format(this_name))
-
             temp.makedir(os.path.dirname(fn), recursive=True, allow_recreate=True)
             with remote.open(fn, 'rb') as f:
                 temp.setcontents(fn, f)
@@ -540,15 +549,12 @@ class Library(object):
             try:
                 self.checkin_bundle(temp.getsyspath(fn))
 
-                entries.append(this_name)
 
             except Exception as e:
                 self.logger.error('Failed to sync {} from {}, {}: {}'
                                   .format(fn, remote_name, temp.getsyspath(fn), e))
 
-            # If we synced a requested bundle, no need to check more
-            if bundle_name and this_name == bundle_name:
-                break
+
 
         self.database.commit()
         return entries
@@ -557,7 +563,11 @@ class Library(object):
     def remotes(self):
         """Return the names and URLs of the remotes"""
         from ambry.orm import Remote
-        return self.database.session.query(Remote).all()
+        for r in self.database.session.query(Remote).all():
+            if not r.short_name:
+                continue
+
+            yield self.remote(r.short_name)
 
     def _remote(self, name):
         from ambry.orm import Remote
@@ -566,7 +576,6 @@ class Library(object):
 
     def remote(self, name_or_bundle):
 
-        from fs.opener import fsopendir
         from sqlalchemy.orm.exc import NoResultFound
 
         r = None
@@ -591,7 +600,7 @@ class Library(object):
                 r = None
 
         if not r:
-            raise NotFoundError("Failed to find remote for ref: {}".format(name_or_bundle))
+            raise NotFoundError("Failed to find remote for ref '{}'".format(name_or_bundle))
 
         r.account_accessor = self.account_accessor
 

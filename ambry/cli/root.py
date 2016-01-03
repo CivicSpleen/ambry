@@ -153,8 +153,14 @@ def run_command(args, rc):
         if args.exceptions:
             raise
 
-
-    globals()['root_' + args.subcommand](args, l, rc)
+    try:
+        globals()['root_' + args.subcommand](args, l, rc)
+    except NotFoundError as e:
+        if args.exceptions:
+            raise
+        fatal(e)
+    except Exception:
+        raise
 
 
 def root_makemigration(args, l, rc):
@@ -331,23 +337,19 @@ def root_sync(args, l, config):
 
     name = args.ref if args.ref else None
 
-    if name in [r for r in l.remotes]:
-        remote_name = name
-        bundle_name = None
+    remote_names = [r.short_name for r in l.remotes]
+
+    if name in remote_names:
+        remote = l.remote(name)
+        l.sync_remote(remote)
+
     else:
-        remote_name = None
-        bundle_name = name
 
-    for r in l.remotes:
+        for r in l.remotes:
 
-        if remote_name and remote_name != r:
-            continue
+            prt('Sync with remote {}', r.short_name)
 
-        prt('Sync with remote {}', r)
-
-        entries = l.sync_remote(r, bundle_name=bundle_name, list_only = args.list)
-        if bundle_name and bundle_name in entries:
-            break
+            l.sync_remote(r)
 
 
 def root_search(args, l, rc):
