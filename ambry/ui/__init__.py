@@ -73,7 +73,6 @@ app = Flask(__name__)
 app.config.update(app_config)
 Session(app)
 
-
 @app.teardown_appcontext
 def close_connection(exception):
     aac = getattr(g,'aac', None)
