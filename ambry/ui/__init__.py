@@ -7,8 +7,12 @@ Copyright 2014, Civic Knowledge. All Rights Reserved
 import os
 import functools
 from flask import Flask, g
-from flask.ext.session import Session
 from uuid import uuid4
+from flask_wtf.csrf import CsrfProtect
+from session import ItsdangerousSessionInterface
+from flask_login import LoginManager
+
+
 
 import logging
 
@@ -20,7 +24,11 @@ app_config = {
     'debug': bool(os.getenv('AMBRY_UI_DEBUG', False)),
     'website_title': os.getenv('AMBRY_UI_TITLE', 'Civic Knowledge Data Search'),
     'JWT_SECRET': os.getenv('AMBRY_JWT_SECRET', os.getenv('AMBRY_API_TOKEN',str(uuid4()))),
-    'MAX_CONTENT_LENGTH': 1024*1024*512
+    'MAX_CONTENT_LENGTH': 1024*1024*512,
+    "WTF_CSRF_SECRET_KEY": str(uuid4()),
+    "SECRET_KEY": str(uuid4()),
+    'SESSION_TYPE': 'filesystem',
+    'WTF_CSRF_CHECK_DEFAULT': False # Turn off CSRF by default. Must enable on specific views.
 }
 
 class AmbryAppContext(object):
@@ -68,10 +76,18 @@ def get_aac(): # Ambry Application Context
 
     return g.aac
 
+
 app = Flask(__name__)
 
 app.config.update(app_config)
-Session(app)
+
+csrf = CsrfProtect()
+csrf.init_app(app)
+#app.secret_key = app.config['SECRET_KEY']
+app.session_interface = ItsdangerousSessionInterface()
+
+login_manager = LoginManager()
+login_manager.init_app(app)
 
 @app.teardown_appcontext
 def close_connection(exception):
@@ -83,3 +99,4 @@ def close_connection(exception):
 import ambry.ui.views
 import ambry.ui.jsonviews
 import ambry.ui.api
+import ambry.ui.user

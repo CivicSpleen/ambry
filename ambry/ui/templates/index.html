@@ -10,10 +10,11 @@
 {% endblock %}
 {% block body %}
 
-{% include 'search/single_form.html' -%}
-
-<div class = "row">
+<div class = "row  top-buffer">
     <div class="col-md-8 col-md-offset-2">
+
+        {% include 'search/single_form.html' -%}
+
         <small>
             <p>Use special terms for more specificity: "births <strong>in</strong> San Diego
                 <strong>from</strong> 2005 <strong>source</strong> cdph.ca.gov.
@@ -22,7 +23,7 @@
             </button></p>
         </small>
     </div>
-    <div class="collapse col-md-8 col-md-offset-2" id="collapseExample">
+    <div class="collapse " id="collapseExample">
         <div class="panel panel-info">
             <div class="panel-heading">
                 <h3 class="panel-title">Tour of the Interface</h3>
@@ -48,13 +49,11 @@
 </div>
 
 <div class = "row">
-    <div class="col-md-8 col-md-offset-2">
-        <div id="loading" class="spinner-loader">
-        Loading...
-        </div>
-        <div id="dataset-results">
-            {% include 'bundle-parts/bundle-list.html' -%}
-        </div>
+    <div id="loading" class="spinner-loader">
+    Loading...
+    </div>
+    <div id="dataset-results">
+        {% include 'bundle-parts/bundle-list.html' -%}
     </div>
 </div>
 

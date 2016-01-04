@@ -17,7 +17,7 @@ from jinja2 import Environment, PackageLoader
 
 from flask.json import JSONEncoder as FlaskJSONEncoder
 from flask.json import dumps
-from flask import Response, make_response, url_for
+from flask import Response, make_response, url_for, session
 
 
 from ambry.identity import ObjectNumber, NotObjectNumberError, Identity
@@ -274,6 +274,8 @@ class Renderer(object):
         that can be used from the context. """
         from functools import wraps
         from ambry._meta import __version__
+        from .forms import LoginForm
+        from flask import request
 
         # Add a prefix to the URLs when the HTML is generated for the local
         # filesystem.
@@ -293,22 +295,25 @@ class Renderer(object):
             'table_path': table_path,
             'partition_path': partition_path,
             'getattr': getattr,
-            'title': app.config.get('website_title')
+            'title': app.config.get('website_title'),
+            'next_page': request.path, # Actually last page, for login redirect
+            'session': session
         }
-
 
 
     def render(self, template, *args, **kwargs):
         from flask import render_template
 
-        kwargs.update(self.cc())
-        kwargs['l'] = self.library
+        context = self.cc()
+        context.update(kwargs)
+
+        context['l'] = self.library
 
         if self.content_type == 'json':
             return Response(dumps(kwargs, cls=JSONEncoder, indent=4),mimetype='application/json')
 
         else:
-            return render_template(template, *args, **kwargs)
+            return render_template(template, *args, **context)
 
     def json(self, **kwargs):
         return Response(dumps(kwargs, cls=JSONEncoder), mimetype='application/json')

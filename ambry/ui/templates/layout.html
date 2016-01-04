@@ -8,6 +8,8 @@
         <link href="/css/spinners.css" type="text/css" rel="stylesheet">
         <link href="/css/style.css" rel="stylesheet">
         <link href="/css/pygments.css" rel="stylesheet">
+        <link href="/css/login.css" rel="stylesheet">
+        <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
         <style>
             {% block page_css %}{% endblock %}
         </style>
@@ -15,17 +17,29 @@
 </head>
 <body>
 <div id="main">
-    <div id="header" class="navbar navbar-default navbar-fixed-top"> 
-        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-            <ul class="nav navbar-nav"> 
-                <li><a href="/">Home</a></li> 
-                <li><a href="#" class="nav-bar-title">{% block masthead %} {% endblock %}</a></li>
-            </ul>
+    <nav id="header" class="navbar navbar-default navbar-fixed-top" role="navigation"> 
+        <div class="container">
+            <div class="navbar-header">
+            <a class="navbar-brand" href="/">
+                <img class="brand" alt="Brand" src="{{ url_for('static', filename='favicon.ico') }}">
+            </a>
+            </div>
 
+            <p class="navbar-text" >
+                {% block masthead %} {% endblock %}
+            </p>
+            <p class="navbar-text navbar-right">
+                {% if current_user.is_authenticated %}
+                    {{ current_user.name }} ( <a href="{{ url_for('logout')}}">Logout</a> )
+                {% else %}
+                    <a href="#" data-toggle="modal" data-target="#login-modal" class="navbar-link ">Login</a>
+                {% endif %}
+
+            </p>
         </div>
-    </div>
+    </nav>
 
-    <div id="container">
+    <div class="container">
         <div class="row">
             <div class="col-md-12 pull-right">
                 <div>
@@ -46,6 +60,36 @@
         </div>
     </div>
 </div>
+
+<!--- Modal Login, from http://bootsnipp.com/snippets/featured/clean-modal-login-form -->
+<div class="modal fade" id="login-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel"
+     aria-hidden="true" style="display: none;">
+    <div class="modal-dialog">
+        <div class="loginmodal-container">
+            <h1>Login to Your Account</h1><br>
+            <form method="POST" action="/login">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="text" name="username" placeholder="Username">
+                <input type="password" name="password" placeholder="Password">
+                <input type="submit" name="login" class="login loginmodal-submit" value="Login">
+                <input type="submit" name="login" class="login loginmodal-cancel" value="Cancel">
+                <input type="hidden" name="redirect" value="{{ next_page }}">
+
+            </form>
+
+            {% if error %}
+                <div class="login-error">
+                    <p class=error><strong>Error:</strong> {{ error }}
+                </div>
+            {%  endif %}
+
+            <div class="login-help">
+            </div>
+        </div>
+    </div>
+</div>
+
+
 {% block tailjs %}
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-migrate/1.2.1/jquery-migrate.min.js"></script> -->

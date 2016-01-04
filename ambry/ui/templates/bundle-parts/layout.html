@@ -4,7 +4,7 @@
 {% block head %}
     {{ super() }}
 {% endblock %}
-{% block masthead %}{{b.metadata.about.title.html|safe}}{% endblock %}
+{% block masthead %}{{b.metadata.about.title.html|striptags}}{% endblock %}
 {% block pageheader %}
 <div class="page-header">
     <div class="summary">{% if b.metadata.about.summary -%}{{b.metadata.about.summary.html|safe}}{% endif -%}</div>

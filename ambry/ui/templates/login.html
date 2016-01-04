@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block title %}Login{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block page_css %}
+
+{% endblock %}
+{% block masthead %}Login{% endblock %}
+
+{% block body %}
+
+{% endblock %}
+
+{% block tailjs %}
+    {{ super() }}
+    <script type="text/javascript">
+    $(window).load(function(){
+        $('#login-modal').modal('show');
+    });
+</script>
+{% endblock %}
