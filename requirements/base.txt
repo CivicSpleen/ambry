@@ -5,15 +5,10 @@ address-parser==0.0.1
 boto==2.38.0
 beautifulsoup4==4.3.2
 ckanapi==3.5
-ckcache>=0.1.6
 decorator>=4
-Flask-Compress==1.2.1
-Flask==0.10.1
-Flask-Session==0.1.1
 ipython==3.1.0
 isodate==0.5.1
 itsdangerous==0.24
-Jinja2==2.8
 lockfile==0.10.2
 Markdown==2.6.2
 MarkupSafe==0.23
@@ -50,6 +45,5 @@ docker-py>=1.6.0
 git+https://github.com/CivicKnowledge/ambry_sources.git#egg=ambry_sources
 git+https://github.com/CivicKnowledge/geoid.git#egg=geoid
 psutil>=3.3.0 # For managing the docker db tunnel process
-python-jose
-passlib
+
 

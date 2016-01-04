@@ -49,6 +49,8 @@ def make_parser(cmd):
     sp = asp.add_parser('pg', help='Operations on a Postgres library database')
     sp.set_defaults(subcommand='pg')
     sp.add_argument('-p', '--processes', default=False, action='store_true', help='List all processes')
+    sp.add_argument('-c', '--connect', default=False, action='store_true',
+                    help='Connection and exit with return code to indicate success or failure')
     sp.add_argument('-l', '--locks', default=False, action='store_true', help='List all locks')
     sp.add_argument('-b', '--blocks', default=False, action='store_true',
                     help='List locks that are blocked or are blocking another process')
@@ -101,12 +103,21 @@ def library_number(args, l, config):
 
 def library_pg(args, l, config):
     """Report on the operation of a Postgres Library database"""
-
-    db = l.database
     import tabulate
     import terminaltables
     from textwrap import fill
     from ambry.util.text import getTerminalSize
+    import sys
+
+    if args.connect:
+        try:
+            l.database.connection.execute('SELECT * FROM pg_stat_activity;')
+            sys.exit(0)
+        except Exception as e:
+            prt(str(e))
+            sys.exit(1)
+
+    db = l.database
 
     (x, y) = getTerminalSize()
 
@@ -202,6 +213,9 @@ SELECT pid, database, mode, locktype, mode, relation, tuple, virtualxid FROM pg_
             if rows:
                 table = terminaltables.UnixTable([headers] + rows)
                 print table.table
+
+
+
 
 
 def library_unknown(args, l, config):
