@@ -184,7 +184,7 @@ class TestBase(unittest.TestCase):
 
         b = next(b for b in l.bundles).cast_to_subclass()
         b.clean()
-        b.sync_in(force = True)
+        b.sync_in(force=True)
         return b
 
     def new_dataset(self, n=1, source='source'):
@@ -238,7 +238,6 @@ class TestBase(unittest.TestCase):
         b.set_file_system(source_url=source_url, build_url=build_url)
 
         self.copy_bundle_files(test_source_fs, b.source_fs)
-
         return b
 
 

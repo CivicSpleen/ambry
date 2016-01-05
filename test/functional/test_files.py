@@ -125,17 +125,23 @@ class PostgreSQLInspector(InspectorBase):
     @classmethod
     def assert_table_created(cls, library, table):
         relation = '{}.{}'.format(library.database._schema, table)
-        assert PostgreSQLBackend._relation_exists(library.database.engine.raw_connection(), relation)
+        assert PostgreSQLBackend._relation_exists(
+            library.database.engine.raw_connection(),
+            relation)
 
     @classmethod
     def assert_view_created(cls, library, view):
         relation = '{}.{}'.format(library.database._schema, view)
-        assert PostgreSQLBackend._relation_exists(library.database.engine.raw_connection(), relation)
+        assert PostgreSQLBackend._relation_exists(
+            library.database.engine.raw_connection(),
+            relation)
 
     @classmethod
     def assert_materialized_view_created(cls, library, view):
         relation = '{}.{}'.format(library.database._schema, view)
-        assert PostgreSQLBackend._relation_exists(library.database.engine.raw_connection(), relation)
+        assert PostgreSQLBackend._relation_exists(
+            library.database.engine.raw_connection(),
+            relation)
 
     @classmethod
     def assert_index(cls, library, partition, column):
@@ -158,7 +164,6 @@ class BundleSQLTest(TestBase):
     @pytest.mark.slow
     def test_bundle_sql(self):
         """ Tests view creation from sql file. """
-
         library = self.library()
         if not library.database.exists():
             raise Exception(
@@ -169,35 +174,46 @@ class BundleSQLTest(TestBase):
         test_root = fsopendir('temp://')
         test_root.makedir('build')
         test_root.makedir('source')
-        simple_bundle = self.setup_bundle(
-            'simple', source_url=test_root.getsyspath('source'),
-            build_url=test_root.getsyspath('build'), library=library)
 
-        # simple_bundle.run(force=True)
-        simple_bundle.sync_in()
-        simple_bundle.ingest(force=True)
-        simple_bundle.schema()
-        simple_bundle.build()
+        simple_bundle = None
+        try:
+            simple_bundle = self.setup_bundle(
+                'simple', source_url=test_root.getsyspath('source'),
+                build_url=test_root.getsyspath('build'), library=library)
+
+            # simple_bundle.run(force=True)
+            simple_bundle.sync_in()
+            simple_bundle.ingest(force=True)
+            simple_bundle.schema()
+            simple_bundle.build()
+        finally:
+            if simple_bundle:
+                simple_bundle.close()
 
         # now load simple_with_sql bundle.
         test_root.makedir('build1')
         test_root.makedir('source1')
-        sql_bundle = self.setup_bundle(
-            'simple_with_sql', source_url=test_root.getsyspath('source1'),
-            build_url=test_root.getsyspath('build1'), library=library)
+        sql_bundle = None
+        try:
+            sql_bundle = self.setup_bundle(
+                'simple_with_sql', source_url=test_root.getsyspath('source1'),
+                build_url=test_root.getsyspath('build1'), library=library)
 
-        # load files to library database (as File records)
-        sql_bundle.sync_in()
+            # load files to library database (as File records)
+            sql_bundle.sync_in()
 
-        # create mpr file with source rows.
-        sql_bundle.ingest(force=True)
+            # create mpr file with source rows.
+            sql_bundle.ingest(force=True)
 
-        # create schema of the tables
-        sql_bundle.schema()
+            # create schema of the tables
+            sql_bundle.schema()
 
-        # now build - this should create table, view, materialized view and indexes from the sql
-        # and load source with data from the view.
-        sql_bundle.build()
+            # now build - this should create table, view, materialized view and indexes from the sql
+            # and load source with data from the view.
+            sql_bundle.build()
+        finally:
+            if sql_bundle:
+                sql_bundle.close()
 
         # check the final state.
         self.inspector.assert_sql_saved(sql_bundle)
