@@ -29,6 +29,24 @@ def load_user(user_id):
 
     return User(account)
 
+# This can be implemented to allow logins from URL values, or an Auth header, such as by transfers from
+# another application
+@login_manager.request_loader
+def load_user_from_request(request):
+
+    # first, try to login using the api_key url arg
+    api_key = request.args.get('api_key')
+    if api_key:
+        pass
+
+    # next, try to login using Basic Auth
+    api_key = request.headers.get('Authorization')
+    if api_key:
+        pass
+
+    # finally, return None if both methods did not login the user
+    return None
+
 class User(object):
 
     def __init__(self, account_rec):
@@ -44,7 +62,7 @@ class User(object):
     def is_active(self):
         return True
 
-    def is_aninymous(self):
+    def is_anonymous(self):
         return False
 
     def get_id(self):

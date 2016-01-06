@@ -518,14 +518,13 @@ class Library(object):
             return remote_name, db_ck
 
     #
-    #
-
-    #
     # Remotes
     #
 
-    def sync_remote(self, remote_name, bundle_name=None):
+    def sync_remote(self, remote_name):
         from ambry.orm import Remote
+
+
 
         if isinstance(remote_name, text_type):
             remote = self.remote(remote_name)
@@ -534,30 +533,77 @@ class Library(object):
 
         assert isinstance(remote, Remote)
 
-        temp = fsopendir('temp://ambry-import', create_dir=True)
-
-        entries = []
-
-        for fn in remote.walkfiles(wildcard='*.db'):
-
-            this_name = fn.strip('/').replace('/', '.').replace('.db', '')
-
-            temp.makedir(os.path.dirname(fn), recursive=True, allow_recreate=True)
-            with remote.open(fn, 'rb') as f:
-                temp.setcontents(fn, f)
-
-            try:
-                self.checkin_bundle(temp.getsyspath(fn))
 
 
-            except Exception as e:
-                self.logger.error('Failed to sync {} from {}, {}: {}'
-                                  .format(fn, remote_name, temp.getsyspath(fn), e))
-
-
+        for e in remote.list():
+            self._checkin_remote_bundle(remote, e)
 
         self.database.commit()
-        return entries
+
+    def checkin_remote_bundle(self, ref, remote=None):
+        """ Checkin a remote bundle by reference, possibly from a specific remote
+
+        :param ref: Any bundle reference
+        :param remote: If specified, use this remote. If not, search for the reference in cached directory listings
+        :param cb: A one argument progress callback
+        :return:
+        """
+
+        if not remote:
+            remote, vname = self.find_remote_bundle(ref)
+            ref = vname
+        else:
+            pass
+
+        if not remote:
+            raise NotFoundError("Failed to find bundle ref '{}' in any remote".format(ref))
+
+        return self._checkin_remote_bundle(remote, ref)
+
+
+    def _checkin_remote_bundle(self, remote, ref):
+        """
+        Checkin a remote bundle from a remote
+        :param remote: a Remote object
+        :param ref: Any bundle reference
+        :return: The vid of the loaded bundle
+        """
+        from ambry.orm.exc import NotFoundError
+        from ambry.util.flo import copy_file_or_flo
+        from tempfile import NamedTemporaryFile
+        from ambry.orm import Remote
+        from ambry.bundle.process import call_interval
+
+        assert isinstance(remote, Remote)
+
+        @call_interval(5)
+        def cb(r, total):
+            self.logger.info("{}: Downloaded {} bytes".format(ref, total))
+
+        try:
+            b = self.bundle(ref)
+            self.logger.info("{}: Already installed".format(ref))
+            vid = b.identity.vid
+            b.close()
+
+        except NotFoundError:
+            self.logger.info("{}: Syncing".format(ref))
+            with NamedTemporaryFile() as temp:
+                with remote.checkout(ref) as f:
+                    copy_file_or_flo(f, temp, cb=cb)
+                    temp.flush()
+
+                    self.checkin_bundle(temp.name)
+
+            b = self.bundle(ref)  # Should exist now.
+
+            b.dataset.data['remote_name'] = remote.short_name
+            b.dataset.data['remote_url'] = remote.url
+            b.commit()
+            vid = b.identity.vid
+            b.close()
+
+        return vid
 
     @property
     def remotes(self):
@@ -616,6 +662,9 @@ class Library(object):
             r = self.remote(name)
         except NotFoundError:
             from ambry.orm import Remote
+            if 'short_name' in kwargs:
+                assert name == kwargs['short_name']
+                del kwargs['short_name']
             r = Remote(short_name = name, **kwargs)
             self.database.session.add(r)
 
@@ -631,6 +680,26 @@ class Library(object):
 
         self.database.session.delete(r)
         self.commit()
+
+
+    def find_remote_bundle(self,ref):
+        """
+        Locate a bundle, by any reference, among the configured remotes. The routine will only look in the cache
+        directory lists stored in the remotes, which must be updated to be current.
+
+        :param ref:
+        :return: (remote,vname) or (None,None) if the ref is not found
+        """
+        for r in self.remotes:
+
+            if not 'list' in r.data:
+                continue
+
+            for k, v in r.data['list'].items():
+                if ref in v.values():
+                    return (r, v['vname'])
+
+        return None, None
 
 
     #

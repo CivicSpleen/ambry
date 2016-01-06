@@ -4,3 +4,5 @@ include INSTALL
 include README.md
 include LICENSE
 include doc
+include ambry/ui/static
+include ambry/ui/static/favicon.ico

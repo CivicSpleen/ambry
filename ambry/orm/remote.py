@@ -118,37 +118,49 @@ class Remote(Base):
     def api_client(self):
         return self._api_client()
 
-    def list(self):
+    def list(self, full=False):
         """List all of the bundles in the remote"""
 
         if self.is_api:
-            return self._list_api()
+            return self._list_api(full=full)
         else:
-            return self._list_fs()
+            return self._list_fs(full=full)
 
 
-    def _list_fs(self):
+    def _list_fs(self, full = False):
         assert self.account_accessor
         from fs.errors import  ResourceNotFoundError
+        from os.path import join
+        from json import loads
 
         remote = self._fs_remote(self.url, self.account_accessor)
 
         try:
             for e in remote.listdir('_meta/vname'):
-                yield e
+                if full:
+                    r = loads(remote.getcontents(join('_meta/vname', e)))
+                    yield (e, r)
+                else:
+                    yield e
         except ResourceNotFoundError:
             # An old repo, doesn't have the meta/name values.
-
             for fn in remote.walkfiles(wildcard='*.db'):
                 this_name = fn.strip('/').replace('/', '.').replace('.db', '')
-                yield this_name
+                if full:
+                    yield this_name
+                else:
+                    # Isn't any support for this
+                    yield (this_name, None)
 
-    def _list_api(self):
+    def _list_api(self, full = False):
 
         c = self._api_client()
 
-        return [ d.name for d in c.list()]
-
+        for d in c.list():
+            if full:
+                yield (d.name, d)
+            else:
+                yield d.name
 
     def find(self, ref):
 
@@ -165,7 +177,7 @@ class Remote(Base):
 
         remote = self._fs_remote(self.url, self.account_accessor)
 
-        path_parts = ['vid','id','vname','name']
+        path_parts = ['vname','vid','name','id']
 
         for p in path_parts:
             path = "/_meta/{}/{}".format(p, ref)
@@ -284,6 +296,7 @@ class Remote(Base):
 
     def put_partition(self, cb=None):
         """Store a partition on the remote"""
+        raise NotImplementedError()
         pass
 
 
@@ -307,22 +320,27 @@ class Remote(Base):
             event.wait()
 
     def _put_partition_api(self, p, cb=None):
+        raise NotImplementedError()
         pass
 
-
-    def checkout(self, ref):
+    def checkout(self, ref, cb=None):
         """Checkout a bundle from the remote. Returns a file-like object"""
         if self.is_api:
-            return self._checkout_api(ref)
+            return self._checkout_api(ref, cb=cb)
         else:
-            return self._checkout_fs(ref)
+            return self._checkout_fs(ref, cb=cb)
 
-    def _checkout_api(self, ref):
+    def _checkout_api(self, ref,  cb=None):
         raise NotImplementedError()
 
-    def _checkout_fs(self, ref):
+    def _checkout_fs(self, ref, cb=None):
         remote = self._fs_remote(self.url, self.account_accessor)
+        from ambry.util.flo import copy_file_or_flo
+        from tempfile import NamedTemporaryFile
 
+        d = self._find_fs(ref)
+
+        return remote.open(d['cache_key'] + '.db','rb')
 
     def get_partition(self):
         """Get a partition from the remote"""
@@ -370,6 +388,8 @@ class Remote(Base):
                   join('_meta', 'vname', info['vname']), join('_meta', 'name', info['name'])]:
             safe_remove(p)
 
+        # FIXME! Doesn't remove partitions
+
         return info['vid']
 
     def _remove_api(self, ref, cb=None):
@@ -392,6 +412,12 @@ class Remote(Base):
         else:
             from fs.opener import fsopendir
             return fsopendir(url)
+
+    @property
+    def fs(self):
+        """Return a pyfs object"""
+        return self._fs_remote(self.url, self.account_accessor)
+
 
 
 

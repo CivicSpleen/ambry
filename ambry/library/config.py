@@ -70,34 +70,33 @@ class LibraryConfigSyncProxy(object):
 
         self.commit()
 
-    def sync_remotes(self, remotes, clear = False):
+    def sync_remotes(self, remotes, cb=None):
         from ambry.orm.exc import NotFoundError
         from ambry.orm import Remote
 
         root = self.database.root_dataset
 
-        if clear:
-            root.config.library.delete_group('remotes')
-            self.commit()
-
         rc = root.config.library.remotes
 
         s = self.library.database.session
 
-        for name, url in remotes.items():
-            try:
-                extant = self.library.remote(name)
-                extant.url = url
-                s.merge(extant)
-            except NotFoundError:
-                remote = Remote(short_name=name, url=url)
-                s.add(remote)
+        for name, r in remotes.items():
 
+            if not isinstance(r, dict):
+                r = dict(url=r)
+
+            remote = self.library.find_or_new_remote(name)
+
+            for k, v in r.items():
+                setattr(remote, k, v)
+
+            if cb:
+                cb("Loaded remote: {}".format(remote.short_name))
 
         self.commit()
 
 
-    def sync_accounts(self, accounts_data, clear = False, password=None):
+    def sync_accounts(self, accounts_data, clear = False, password=None, cb = None):
         """
         Load all of the accounts from the account section of the config
         into the database.
@@ -120,9 +119,10 @@ class LibraryConfigSyncProxy(object):
                 continue
 
             d = {}
-            a = Account(account_id=account_id)
 
+            a = self.library.find_or_new_account(account_id)
             a.secret_password = password or self.password
+
 
 
             for k, v in values.items():
@@ -145,5 +145,8 @@ class LibraryConfigSyncProxy(object):
 
             else:
                 self.database.session.add(a)
+
+            if cb:
+                cb('Loaded account: {}'.format(a.account_id))
 
         self.database.session.commit()

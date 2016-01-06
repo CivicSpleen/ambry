@@ -452,6 +452,8 @@ def run_command(args, rc):
             raise
         fatal(str(e))
     except LoggedException as e:
+        if args.exceptions:
+            raise
         exc = e.exc
         b = e.bundle
         b.fatal(str(e.message))
@@ -591,9 +593,15 @@ def bundle_info(args, l, rc):
     inf(0, 'VID', b.identity.vid)
     inf(0, 'VName', b.identity.vname)
 
+    if 'remote_name' in b.dataset.data:
+        inf(0, 'Remote', b.dataset.data['remote_name'])
+
     inf(1, 'Dataset State', b.dstate)
     inf(1, 'Build State', (b.buildstate.state.current if  b.buildstate.state.current else '') +
         (', '+str(b.buildstate.build_duration_pretty) if b.buildstate.build_duration_pretty else '') )
+
+    if 'remote_name' in b.dataset.data:
+        inf(1, 'Remote Url', b.dataset.data.get('remote_url'))
 
     try:
         inf(1, 'Geo cov', str(list(b.metadata.coverage.geo)))
@@ -877,9 +885,6 @@ def bundle_schema(args, l, rc):
 
     b.set_last_access(Bundle.STATES.SCHEMA)
     b.commit()
-
-
-
 
 def bundle_build(args, l, rc):
 
@@ -1363,6 +1368,7 @@ def bundle_extract(args, l, rc):
 
 def bundle_view(args, l, rc):
     from ambry_sources.cli import main
+    from fs.errors import ResourceNotFoundError
 
     b = using_bundle(args, l)
 
@@ -1381,13 +1387,16 @@ def bundle_view(args, l, rc):
     # Maybe it is a partition
     if not df:
         try:
+            # Try to get the partition from the bundle.
             p = b.partition(arg)
             df = p.datafile
+
         except:
             pass
 
     if not df:
         try:
+            # Nope, try to get it from the library
             p = l.partition(arg)
             df = p.datafile
         except:
@@ -1398,7 +1407,11 @@ def bundle_view(args, l, rc):
 
     args.path = [df]
 
-    main(args)
+    try:
+        main(args)
+    except ResourceNotFoundError as e:
+        raise NotFoundError(str(e))
+
 
 
 def bundle_colmap(args, l, rc):

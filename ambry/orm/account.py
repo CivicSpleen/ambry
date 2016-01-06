@@ -61,8 +61,32 @@ class Account(Base):
         from . import  incver
         return incver(self, ['d_vid'])
 
+    @staticmethod
+    def sym_encrypt(password, v):
+        return encrypt(password, v).encode('base64')
 
-    def decrypt_secret(self):
+    @staticmethod
+    def sym_decrypt(password, v):
+        import binascii
+
+        try:
+            return decrypt(password, v.decode('base64'))
+        except SC_DecryptionException as e:
+            raise AccountDecryptionError("Wrong password ")
+        except binascii.Error as e:
+            raise AccountDecryptionError("Bad password: {}".format(e))
+
+
+    @staticmethod
+    def asym_encrypt(v):
+        from passlib.hash import pbkdf2_sha256
+        return pbkdf2_sha256.encrypt(v, rounds=200000, salt_size=16)
+
+
+    def decrypt_secret(self, password = None):
+
+        if not password:
+            password = self.secret_password
 
         if not self.encrypted_secret:
             return None
@@ -70,26 +94,33 @@ class Account(Base):
         if self.major_type == 'user':
             return None # These can't be decrypted, only tested.
 
-        if self.secret_password:
-            try:
-                return decrypt(self.secret_password, self.encrypted_secret.decode('base64'))
-            except SC_DecryptionException as e:
-                raise AccountDecryptionError("Bad password "+self.secret_password)
+        if password:
+            return self.sym_decrypt(password, self.encrypted_secret)
+
         else:
             raise MissingPasswordError("Must have a password to get or set the secret")
 
 
-    def encrypt_secret(self,v):
-        from passlib.hash import pbkdf2_sha256
+
+
+
+    def encrypt_secret(self,v, password = None):
+
+
+        if not password:
+            password = self.secret_password
+
         if self.major_type == 'user':
             # These are passwords, not really secrets, so they are encrypted asymmetrically
 
-            self.encrypted_secret = pbkdf2_sha256.encrypt(v, rounds=200000, salt_size=16)
+            self.encrypted_secret = self.asym_encrypt(v)
         elif v:
-            if self.secret_password:
-                self.encrypted_secret = encrypt(self.secret_password, v).encode('base64')
+            if password:
+                self.encrypted_secret = self.sym_encrypt(password, v)
             else:
                 raise MissingPasswordError("Must have a password to get or set the secret")
+
+        return self.encrypted_secret
 
     def test(self, v):
 
@@ -144,10 +175,13 @@ class Account(Base):
 
         d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ('data') }
 
+        d['secret'] = 'not available'
+
         if self.secret_password:
-            d['secret'] = self.decrypt_secret()
-        else:
-            d['secret'] = 'not available'
+            try:
+                d['secret'] = self.decrypt_secret()
+            except AccountDecryptionError:
+                pass
 
         if self.data:
             for k, v in self.data.items():

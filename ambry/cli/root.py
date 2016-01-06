@@ -126,10 +126,7 @@ def make_parser(cmd):
 
 
 def run_command(args, rc):
-    from ..library import new_library
     from . import global_logger
-    from ambry.orm.exc import DatabaseError
-
 
     if args.test_library:
         rc.set_lirbary_database('test')
@@ -335,21 +332,16 @@ def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
 
-    name = args.ref if args.ref else None
+    ref = args.ref if args.ref else None
 
     remote_names = [r.short_name for r in l.remotes]
 
-    if name in remote_names:
-        remote = l.remote(name)
-        l.sync_remote(remote)
+    if ref in remote_names:
+        l.sync_remote(l.remote(ref))
 
     else:
 
-        for r in l.remotes:
-
-            prt('Sync with remote {}', r.short_name)
-
-            l.sync_remote(r)
+        l.checkin_remote_bundle(ref)
 
 
 def root_search(args, l, rc):

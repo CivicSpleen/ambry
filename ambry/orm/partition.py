@@ -500,6 +500,16 @@ class Partition(Base):
 
     @property
     def datafile(self):
+        from ambry.orm.exc import NotFoundError
+
+        try:
+            return self.local_datafile
+        except NotFoundError:
+            return self.remote_datafile
+
+
+    @property
+    def local_datafile(self):
         """Return the datafile for this partition, from the build directory, the remote, or the warehouse"""
         from ambry_sources import MPRowsFile
         from fs.errors import ResourceNotFoundError
@@ -511,8 +521,10 @@ class Partition(Base):
                 self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
 
             except ResourceNotFoundError:
-                raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
+                raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
 
+            if not  self._datafile.exists:
+                raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
 
         return self._datafile
 
@@ -525,16 +537,26 @@ class Partition(Base):
         try:
 
             from ambry_sources import MPRowsFile
-            # Get bundle for this partition
-            # Actually ... this seems way too complex. Why not self._bundle.remote()
-            # FIXME
-            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
-            remote = self._bundle.library.remote(b)
 
-            datafile = MPRowsFile(remote, self.cache_key)
+            ds = self.dataset
+
+            if not 'remote_name' in ds.data:
+
+                raise NotFoundError("Failed to find both local and remote file for partition: {}"
+                                    .format(self.identity.fqname))
+
+            remote = self._bundle.library.remote(ds.data['remote_name'])
+
+            b = self._bundle
+
+            datafile = MPRowsFile(remote.fs, self.cache_key)
+
+            if not datafile.exists:
+                raise NotFoundError("Could not locate data file for partition {} (remote)".format(self.identity.fqname))
+
 
         except ResourceNotFoundError as e:
-            raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
+            raise NotFoundError("Could not locate data file for partition {} (remote)".format(self.identity.fqname))
 
         return datafile
 

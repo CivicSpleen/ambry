@@ -9,8 +9,8 @@ __all__ = ['command_name', 'make_parser', 'run_command']
 command_name = 'library'
 
 from six import iteritems
-from ..cli import prt, err, fatal, warn  # @UnresolvedImport
-from ambry.util import Progressor
+from ..cli import prt, prt_no_format, err, fatal, warn  # @UnresolvedImport
+import sys
 
 
 def make_parser(cmd):
@@ -40,7 +40,6 @@ def make_parser(cmd):
     sp.add_argument('-F', '--bundle-list',
                     help='File of bundle VIDs. Sync only VIDs listed in this file')
 
-
     sp = asp.add_parser('number', help='Return a new number from the number server')
     sp.set_defaults(subcommand='number')
     sp.add_argument('-k', '--key', default='self',
@@ -54,6 +53,19 @@ def make_parser(cmd):
     sp.add_argument('-l', '--locks', default=False, action='store_true', help='List all locks')
     sp.add_argument('-b', '--blocks', default=False, action='store_true',
                     help='List locks that are blocked or are blocking another process')
+
+    sp = asp.add_parser('export', help='Dump a library configuration, remortes, accounts and bundles')
+    sp.set_defaults(subcommand='export')
+
+    sp.add_argument('config_file', nargs='?', type=argparse.FileType('wb'), default = sys.stdout,
+                    help='Config file to write to. If absent, will write to stdout')
+
+    sp = asp.add_parser('import', help='Import or list library configuration, remortes, accounts and bundles')
+    sp.set_defaults(subcommand='import')
+    sp.add_argument('-p', '--password', required=True, help='Decryption password')
+    sp.add_argument('-l', '--list', default=False, action='store_true', help='List, dont import')
+    sp.add_argument('config_file', nargs='?', type=argparse.FileType('rb'), default = sys.stdin,
+                    help='Config file to read from. If absent, will read from stdin')
 
 def run_command(args, rc):
     from ..library import new_library
@@ -214,6 +226,77 @@ SELECT pid, database, mode, locktype, mode, relation, tuple, virtualxid FROM pg_
                 table = terminaltables.UnixTable([headers] + rows)
                 print table.table
 
+def library_import(args, l, config):
+    import json
+    from ambry.library.config import LibraryConfigSyncProxy
+    from ambry.orm import Account
+    from simplecrypt import encrypt, decrypt, DecryptionException
+
+    try:
+        jsn = decrypt(args.password, args.config_file.read().decode('base64'))
+    except DecryptionException as e:
+        fatal(e)
+    finally:
+        args.config_file.close()
+
+    args.config_file.close()
+
+    d = json.loads(jsn)
+
+    for k, v in d['accounts'].items():
+        if v.get('major_type') != 'user' and 'encrypted_secret' in v:
+            v['secret'] = Account.sym_decrypt(args.password, v['encrypted_secret'])
+
+    if args.list:
+        prt_no_format(json.dumps(d, indent=4))
+    else:
+        lcsp = LibraryConfigSyncProxy(l)
+
+        lcsp.sync_remotes(d['remotes'], cb=l.logger.info)
+        lcsp.sync_accounts(d['accounts'], cb=l.logger.info)
+
+        for vid, v in d['bundles'].items():
+            l.logger.info("Check in remote bundle {}, {}".format(vid, v['vname']))
+            l.checkin_remote_bundle(vid)
+
+
+def library_export(args, l, config):
+    from simplecrypt import encrypt, decrypt, DecryptionException
+    import json
+    from ambry.util import random_string
+
+    password = random_string(16)
+
+    d = {
+        'remotes': {},
+        'accounts': {},
+        'bundles': {}
+    }
+
+    for r in l.remotes:
+        d['remotes'][r.short_name] = { k:v for k,v in r.dict.items() if bool(v ) and k not in ('id', ) }
+
+    for k in l.accounts.keys():
+        a = l.account(k)
+
+        da = { k:v for k,v in a.dict.items() if bool(v )and k != 'secret' }
+
+        # Change the secret encryption password
+        if 'encrypted_secret' in da:
+            da['encrypted_secret'] = a.encrypt_secret(a.decrypt_secret(), password)
+
+        d['accounts'][a.account_id] = da
+
+    for b in l.bundles:
+        d['bundles'][b.identity.vid] = {
+            'vid' : b.identity.vid,
+            'vname': str(b.identity.name),
+            'cache_key': b.identity.cache_key
+        }
+
+    prt("Password: {}".format(password))
+    args.config_file.write(encrypt(password, json.dumps(d, indent = 4)).encode('base64'))
+    args.config_file.close()
 
 
 
