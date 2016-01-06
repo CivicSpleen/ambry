@@ -7,13 +7,16 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from collections import OrderedDict
 import inspect
 import time
+
 from tabulate import tabulate
+
 import six
 from six import iteritems, itervalues, string_types, u
+
+from ambry_sources import RowProxy
+
 from ambry.identity import PartialPartitionName
 from ambry.util import qualified_class_name
-from ambry_sources import RowProxy
-from ambry.dbexceptions import ConfigurationError
 
 
 class PipelineError(Exception):
@@ -43,7 +46,8 @@ Pipeline:
 """.format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline=str(self.pipe.pipeline),
            pipe_class=qualified_class_name(self.pipe), source_name=self.pipe.source.name,
            source_id=self.pipe.source.vid,
-           headers=self.pipe.headers, exc_name=self.exc_name, extra=self.extra, extra_section=self.extra_section)
+           headers=self.pipe.headers, exc_name=self.exc_name, extra=self.extra,
+           extra_section=self.extra_section)
 
 
 class BadRowError(PipelineError):
@@ -53,8 +57,7 @@ class BadRowError(PipelineError):
         self.row = row
 
     def __str__(self):
-        self.extra = "Last Row       : {}".format(self.row)
-
+        self.extra = 'Last Row       : {}'.format(self.row)
         return super(BadRowError, self).__str__()
 
 
@@ -164,7 +167,7 @@ class Pipe(object):
 
                 if row:  # Check that the rows have the same length as the header
                     if len(row) != header_len:
-                        m = "Header width mismatch. Row width = {}, header width = {}".format(len(row), header_len)
+                        m = 'Header width mismatch. Row width = {}, header width = {}'.format(len(row), header_len)
 
                         self.bundle.error(m)
                         raise BadRowError(self, row, m)
@@ -346,6 +349,7 @@ class RowGenerator(object):
         self._bundle = bundle
         self._source = source
 
+
 class GeneratorSourcePipe(Pipe):
     """Base class for a source pipe that implements it own iterator """
 
@@ -408,7 +412,6 @@ class Sink(Pipe):
                 cb_count = self._callback_freq
                 self._callback(self, i)
             cb_count -= 1
-
 
     def report_progress(self):
         """
@@ -671,7 +674,6 @@ class SelectRows(Pipe):
 
         >>> Select(' row.id == 10 or source.grain == 20 ')
 
-
         :param pred: Callable or string. If a string, it must be just an expression which can take arguments source and row
         :return:
         """
@@ -819,8 +821,8 @@ class CastSourceColumns(Pipe):
         def time(v):
             return parser.parse(v).time()
 
-        inner_code = ','.join(["cast_maybe({},row[{}])"
-                              .format( c.datatype , i)
+        inner_code = ','.join(['cast_maybe({},row[{}])'
+                               .format(c.datatype, i)
                                for i, c in enumerate(st.columns)])
 
         self.processor = eval('lambda row: [{}]'.format(inner_code), locals())
@@ -859,8 +861,9 @@ class MapSourceHeaders(Pipe):
 
             else:
 
-                raise PipelineError(self, "Source table {} has no columns, can't map header"
-                                .format(self.source.source_table.name))
+                raise PipelineError(
+                    self,
+                    "Source table {} has no columns, can't map header".format(self.source.source_table.name))
 
         else:
 
@@ -1613,8 +1616,6 @@ def make_table_map(table, headers):
     return eval(header_code), eval(body_code)
 
 
-
-
 class SelectPartition(Pipe):
     """A Base class for adding a _pname column, which is used by the partition writer to select which
     partition a row is written to. By default, uses a partition name that consists of only the
@@ -1662,7 +1663,7 @@ class SelectPartition(Pipe):
 
     def process_header(self, row):
         from ambry_sources.sources.util import RowProxy
-        assert self.source.sequence_id != None
+        assert self.source.sequence_id is not None
         # The segment value make this a segment partition. Segment partitions are coalesced at
         # the end of the build
         self._default = PartialPartitionName(table=self.source.dest_table.name,
@@ -1797,7 +1798,6 @@ class WriteToPartition(Pipe, PartitionWriter):
                 p = self.bundle.partitions.partition(pname)
                 if not p:
                     from ..orm.partition import Partition
-                    import os
 
                     type_ = Partition.TYPE.SEGMENT if pname.segment else Partition.TYPE.UNION
 
@@ -1814,7 +1814,6 @@ class WriteToPartition(Pipe, PartitionWriter):
                 self._partitions[str(pname)] = p
 
             header_mapper, body_mapper = make_table_map(p.table, self._headers[self.source.name])
-
 
             if p.datafile.exists:
                 p.datafile.remove()

@@ -1,5 +1,4 @@
 import unittest
-import yaml
 
 from test.test_base import TestBase
 
@@ -116,8 +115,6 @@ class Test(TestBase):
 
         print('Munger 2', round(float(n) / (time.time() - s), 3), 'rows/s')
 
-
-
     def test_sample_head(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head
 
@@ -164,7 +161,6 @@ class Test(TestBase):
                 for i in range(10000):
                     yield ([i, i])
 
-
         pl = Pipeline(
             source=Source(),
             first=SelectRows('row.a == 100 or row.b == 1000'),
@@ -178,7 +174,6 @@ class Test(TestBase):
         self.assertEqual(2, len(rows))
         self.assertEqual(100, rows[0][0])
         self.assertEqual(1000, rows[1][1])
-
 
     def test_slice(self):
         from ambry.etl.pipeline import Pipeline, Pipe, Slice, PrintRows
@@ -263,7 +258,6 @@ class Test(TestBase):
         self.assertIn([20, 21], pl[PrintRows].rows)
 
     def test_source_file_pipe(self):
-        from ambry.etl.pipeline import SourceFileSourcePipe
         from itertools import islice
 
         l = self.library()
@@ -279,7 +273,5 @@ class Test(TestBase):
 
             sf, sp = b._iterable_source(s)
 
-            for row in islice(sp,10):
+            for row in islice(sp, 10):
                 print row
-
-

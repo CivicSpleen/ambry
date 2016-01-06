@@ -63,7 +63,7 @@ class View(object):
     def __str__(self):
 
         def wr(o):
-            """ converts object to str and wraps with curly braces. """
+            """ converts object to str and wraps it with curly braces. """
             return '{%s}' % o
 
         columns_str = ', '.join([wr(c) for c in self.columns])
@@ -71,7 +71,6 @@ class View(object):
         joins_str = ', '.join([wr(j) for j in self.joins])
         return 'name: {},\n sources: [{}],\n columns: [{}],\n joins: [{}]'.format(
             self.name, sources_str, columns_str, joins_str)
-        return self.source.__str__()
 
 
 class Index(object):
