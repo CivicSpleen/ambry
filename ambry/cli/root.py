@@ -86,7 +86,7 @@ def make_parser(cmd):
     sp.set_defaults(subcommand='sync')
     sp.add_argument('-l', '--list', default=False, action='store_true',
                     help='List rather than sync')
-    sp.add_argument('ref', nargs='?', type=str, help='Name of a remote or a bundle reference')
+    sp.add_argument('refs', nargs='*', type=str, help='Names of a remote or a bundle references')
 
     sp = cmd.add_parser('remove', help='Remove a bundle from the library')
     sp.set_defaults(command='root')
@@ -101,7 +101,7 @@ def make_parser(cmd):
                     " source directory for the bundle ")
     sp.add_argument('-f', '--force', default=False, action='store_true',
                     help='Force importing an already imported bundle')
-    sp.add_argument('term', nargs=1, type=str, help='Base directory')
+    sp.add_argument('term', nargs="*", type=str, help='Base directory')
 
     #
     # Search Command
@@ -332,16 +332,13 @@ def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
 
-    ref = args.ref if args.ref else None
+    for ref in args.ref:
 
-    remote_names = [r.short_name for r in l.remotes]
+        if ref in [r.short_name for r in l.remotes]: # It's a remote name
+            l.sync_remote(l.remote(ref))
 
-    if ref in remote_names:
-        l.sync_remote(l.remote(ref))
-
-    else:
-
-        l.checkin_remote_bundle(ref)
+        else: # It's a bundle reference
+            l.checkin_remote_bundle(ref)
 
 
 def root_search(args, l, rc):
@@ -423,40 +420,42 @@ def root_import(args, l, rc):
     from ambry.orm.exc import NotFoundError
     import os
 
-    fs = fsopendir(args.term[0])
+    for term in args.term:
 
-    for f in fs.walkfiles(wildcard='bundle.yaml'):
+        fs = fsopendir(term)
 
-        prt("Visiting {}".format(f))
-        config = yaml.load(fs.getcontents(f))
+        for f in fs.walkfiles(wildcard='bundle.yaml'):
 
-        if not config:
-            err("Failed to get a valid bundle configuration from '{}'".format(f))
+            prt("Visiting {}".format(f))
+            config = yaml.load(fs.getcontents(f))
 
-        bid = config['identity']['id']
+            if not config:
+                err("Failed to get a valid bundle configuration from '{}'".format(f))
 
-        try:
-            b = l.bundle(bid)
+            bid = config['identity']['id']
 
-            if not args.force:
-                prt('Skipping existing  bundle: {}'.format(b.identity.fqname))
-                continue
+            try:
+                b = l.bundle(bid)
 
-        except NotFoundError:
-            b = None
+                if not args.force:
+                    prt('Skipping existing  bundle: {}'.format(b.identity.fqname))
+                    continue
 
-        if not b:
-            b = l.new_from_bundle_config(config)
-            prt('Loading bundle: {}'.format(b.identity.fqname))
-        else:
-            prt('Loading existing bundle: {}'.format(b.identity.fqname))
+            except NotFoundError:
+                b = None
 
-        b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
+            if not b:
+                b = l.new_from_bundle_config(config)
+                prt('Loading bundle: {}'.format(b.identity.fqname))
+            else:
+                prt('Loading existing bundle: {}'.format(b.identity.fqname))
 
-        b.sync_in()
+            b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
 
-        if args.detach:
-            b.set_file_system(source_url=None)
+            b.sync_in()
+
+            if args.detach:
+                b.set_file_system(source_url=None)
 
 
 def root_ui(args, l, rc):

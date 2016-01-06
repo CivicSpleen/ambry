@@ -134,6 +134,7 @@ d = dict(
     packages=find_packages(),
     scripts=['scripts/bambry', 'scripts/ambry', 'scripts/ambry-aliases.sh'],
     package_data=find_package_data(),
+    include_package_data=True,
     license=ambry_meta.__license__,
     cmdclass={'test': PyTest},
     platforms='Posix; MacOS X; Linux',

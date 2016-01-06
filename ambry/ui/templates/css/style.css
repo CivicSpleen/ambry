@@ -245,3 +245,8 @@ img.brand {
     width: 30px;
     vertical-align:middle;
 }
+
+/* Turn off the OneLogin "Add App" button, because I'm really, really sick of it on this site*/
+body #train_add_app_tab {
+    display: none;
+}

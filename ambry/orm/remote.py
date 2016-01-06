@@ -419,8 +419,6 @@ class Remote(Base):
         return self._fs_remote(self.url, self.account_accessor)
 
 
-
-
     def s3(self, url, account_acessor):
         """Setup an S3 pyfs, with account credentials, fixing an ssl matching problem"""
         from fs.s3fs import S3FS

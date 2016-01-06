@@ -25,6 +25,11 @@ from ambry.orm.columnstat import ColumnStat
 from ambry.orm.dataset import Dataset
 from ambry.util import Constant
 
+import logging
+from ambry.util import get_logger
+logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG)
+
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
 
 
@@ -503,10 +508,17 @@ class Partition(Base):
         from ambry.orm.exc import NotFoundError
 
         try:
-            return self.local_datafile
+            df =  self.local_datafile
+            logger.debug("datafile: Using local datafile {}".format(self.vname))
+            import pdb;
+            #pdb.set_trace()
         except NotFoundError:
-            return self.remote_datafile
+            df =  self.remote_datafile
+            logger.debug("datafile: Using remote datafile {}".format(self.vname))
+            import pdb;
+            #pdb.set_trace()
 
+        return df
 
     @property
     def local_datafile(self):
@@ -523,7 +535,7 @@ class Partition(Base):
             except ResourceNotFoundError:
                 raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
 
-            if not  self._datafile.exists:
+            if not self._datafile.exists:
                 raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
 
         return self._datafile
@@ -562,8 +574,13 @@ class Partition(Base):
 
     @property
     def is_local(self):
-        """Return ture is the partition file is local"""
-        return self.datafile.exists
+        """Return true is the partition file is local"""
+        from ambry.orm.exc import NotFoundError
+        try:
+            self.local_datafile
+            return True
+        except NotFoundError:
+            return False
 
 
     def localize(self, ps=None):
@@ -610,7 +627,8 @@ class Partition(Base):
             raise e
 
         with lock:
-            with remote.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
+            # FIXME! This won't work with remote API, only FS
+            with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
                 event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
                                                 f,
                                                 progress_callback=progress,
