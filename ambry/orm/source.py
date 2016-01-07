@@ -20,7 +20,7 @@ from .table import Table
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
 from ..util import Constant
-
+from sqlalchemy.orm import deferred
 
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""

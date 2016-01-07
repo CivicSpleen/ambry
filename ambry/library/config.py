@@ -124,7 +124,6 @@ class LibraryConfigSyncProxy(object):
             a.secret_password = password or self.password
 
 
-
             for k, v in values.items():
                 try:
                     if kmap[k] == 'secret':
@@ -138,13 +137,6 @@ class LibraryConfigSyncProxy(object):
 
             if values.get('service') == 's3':
                 a.url = 's3://{}'.format(a.account_id)
-
-            if a.account_id in all_accounts:
-                a.id = all_accounts[a.account_id]['id']
-                self.database.session.merge(a)
-
-            else:
-                self.database.session.add(a)
 
             if cb:
                 cb('Loaded account: {}'.format(a.account_id))

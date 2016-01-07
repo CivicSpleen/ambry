@@ -28,7 +28,7 @@ from ambry.util import Constant
 import logging
 from ambry.util import get_logger
 logger = get_logger(__name__)
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
 
@@ -510,13 +510,15 @@ class Partition(Base):
         try:
             df =  self.local_datafile
             logger.debug("datafile: Using local datafile {}".format(self.vname))
-            import pdb;
-            #pdb.set_trace()
         except NotFoundError:
+            pass
+
+        try:
             df =  self.remote_datafile
             logger.debug("datafile: Using remote datafile {}".format(self.vname))
-            import pdb;
-            #pdb.set_trace()
+        except NotFoundError:
+            pass
+
 
         return df
 
@@ -533,9 +535,6 @@ class Partition(Base):
                 self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
 
             except ResourceNotFoundError:
-                raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
-
-            if not self._datafile.exists:
                 raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
 
         return self._datafile

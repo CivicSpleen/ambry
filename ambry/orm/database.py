@@ -19,6 +19,7 @@ from . import Column, Partition, Table, Dataset, Config, File,\
 from ambry.orm.remote import Remote
 from ambry.orm.account import Account
 from ambry.orm.process import Process
+import logging
 
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
@@ -54,12 +55,13 @@ class Migration(BaseMigration):
 '''
 
 logger = get_logger(__name__)
+#logger.setLevel(logging.DEBUG)
 
 
 class Database(object):
     """ Stores local database of the datasets. """
 
-    def __init__(self, dsn, echo=False, foreign_keys=True, engine_kwargs=None):
+    def __init__(self, dsn, echo=False, foreign_keys=True, engine_kwargs=None, application_prefix='ambry'):
         """ Initializes database.
 
         Args:
@@ -95,6 +97,8 @@ class Database(object):
         self.logger = logger
 
         self.library = None # Set externally when checking in in
+
+        self._application_prefix = application_prefix
 
     def create(self):
         """Create the database from the base SQL."""
@@ -164,7 +168,7 @@ class Database(object):
 
                 if not 'connect_args' in self.engine_kwargs:
                     self.engine_kwargs['connect_args'] = {
-                        "application_name": "ambry:{}".format(os.getpid())
+                        "application_name": "{}:{}".format(self._application_prefix, os.getpid())
                     }
 
             # For most use, a small pool is good to prevent connection exhaustion, but these settings my be
@@ -221,8 +225,11 @@ class Database(object):
     def connection(self):
         """Return an SqlAlchemy connection."""
         if not self._connection:
+            logger.debug("Opening connection to: {}".format(self.dsn))
             self._connection = self.engine.connect()
+            logger.debug("Opened connection to: {}".format(self.dsn))
 
+        #logger.debug("Opening connection to: {}".format(self.dsn))
         return self._connection
 
     @property
@@ -694,14 +701,15 @@ class Database(object):
             return v
 
         else:
-            # Must be postges, or something else that supports "RETURNING"
+            # Must be postgres, or something else that supports "RETURNING"
             sql = text("""
             UPDATE {p_table} SET {p_seq_col} = {p_seq_col} + 1 WHERE {p_vid_col} = '{parent_vid}' RETURNING {p_seq_col}
             """.format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
                        parent_vid=parent_vid))
 
             self.connection.execute('SET search_path TO {}'.format(self._schema))
-            v = next(iter(self.connection.execute(sql)))[0]
+            r = self.connection.execute(sql)
+            v = next(iter(r))[0]
             return v-1
 
     def update_sequence_id(self, parent_table_class, parent_vid, child_table_class):

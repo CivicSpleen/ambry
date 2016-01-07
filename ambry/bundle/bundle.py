@@ -1414,7 +1414,7 @@ Caster Code
     def clean_ingested(self):
         """"Clean ingested files"""
         for s in self.sources:
-            df = s.datafile
+            df = s.local_datafile
             if df.exists:
                 df.remove()
                 s.state = s.STATES.NEW
@@ -1474,6 +1474,7 @@ Caster Code
         self.log('---- Ingesting ----')
 
         self.dstate = self.STATES.BUILDING
+        self.commit() # WTF? Without this, postgres blocks between table query, and update seq id in source tables.
 
         key = lambda s: s.stage if s.stage else 1
 
@@ -1486,7 +1487,7 @@ Caster Code
             try:
                 return s.is_processable and not s.is_ingested and not s.is_built
             except (IOError, zlib.error):
-                s.datafile.remove()
+                s.local_datafile.remove()
                 return True
 
         sources = sorted(self._resolve_sources(sources, tables, stage, predicate=not_final_or_delete),
@@ -1501,35 +1502,35 @@ Caster Code
         count = 0
         errors = 0
 
-        if True:
-            self._run_events(TAG.BEFORE_INGEST, 0)
-            # Clear out all ingested files that are malformed
-            for s in self.sources:
-                if s.is_downloadable:
-                    df = s.datafile
-                    try:
-                        info = df.info
-                        df.close()
-                    except (ResourceNotFoundError, zlib.error, IOError):
-                        df.remove()
 
-            for stage, g in groupby(sources, key):
-                sources = [s for s in g if not_final_or_delete(s)]
+        self._run_events(TAG.BEFORE_INGEST, 0)
+        # Clear out all ingested files that are malformed
+        for s in self.sources:
+            if s.is_downloadable:
+                df = s.local_datafile
+                try:
+                    info = df.info
+                    df.close()
+                except (ResourceNotFoundError, zlib.error, IOError):
+                    df.remove()
 
-                if not len(sources):
-                    continue
+        for stage, g in groupby(sources, key):
+            sources = [s for s in g if not_final_or_delete(s)]
 
-                self._run_events(TAG.BEFORE_INGEST, stage)
-                stage_errors = self._ingest_sources(sources, stage, force=force)
+            if not len(sources):
+                continue
 
-                errors += stage_errors
+            self._run_events(TAG.BEFORE_INGEST, stage)
+            stage_errors = self._ingest_sources(sources, stage, force=force)
 
-                count += len(sources) - stage_errors
+            errors += stage_errors
 
-                self._run_events(TAG.AFTER_INGEST, stage)
-                self.record_stage_state(self.STATES.INGESTING, stage)
+            count += len(sources) - stage_errors
 
-            self.state = self.STATES.INGESTED
+            self._run_events(TAG.AFTER_INGEST, stage)
+            self.record_stage_state(self.STATES.INGESTING, stage)
+
+        self.state = self.STATES.INGESTED
 
         try:
             pass
@@ -1564,6 +1565,7 @@ Caster Code
 
             # Create all of the source tables first, so we can't get contention for creating them
             # in MP.
+
             for source in sources:
                 _ = source.source_table
 
@@ -1606,11 +1608,11 @@ Caster Code
 
             from ambry.orm.exc import NotFoundError
 
-            if not source.is_partition and source.datafile.exists:
-                if not source.datafile.is_finalized:
-                    source.datafile.remove()
+            if not source.is_partition and source.local_datafile.exists:
+                if not source.local_datafile.is_finalized:
+                    source.local_datafile.remove()
                 elif force:
-                    source.datafile.remove()
+                    source.local_datafile.remove()
                 else:
                     ps.update(message='Source {} already ingested, skipping'.format(source.name), state='skipped')
                     return True
@@ -1642,11 +1644,11 @@ Caster Code
 
             @call_interval(5)
             def ingest_progress_f(i):
-                (desc, n_records, total, rate) = source.datafile.report_progress()
+                (desc, n_records, total, rate) = source.local_datafile.report_progress()
 
                 ps.update(message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
 
-            source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
+            source.local_datafile.load_rows(iterable_source, callback=ingest_progress_f,
                                       limit=500 if self.limited_run else None)
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
@@ -1655,7 +1657,7 @@ Caster Code
             source.update_spec()  # Update header_lines, start_line, etc.
             self.build_source_files.sources.objects_to_record()
 
-            ps.update(message='Ingested {}'.format(source.datafile.path), state='done')
+            ps.update(message='Ingested {}'.format(source.local_datafile.path), state='done')
             source.state = source.STATES.INGESTED
             self.commit()
 
@@ -1725,6 +1727,7 @@ Caster Code
         from ambry.etl import Collect, Head
 
         self.dstate = self.STATES.BUILDING
+        self.commit() # Workaround for https://github.com/CivicKnowledge/ambry/issues/171
 
         self.log('---- Schema ----')
 
@@ -1850,7 +1853,7 @@ Caster Code
             if p.type == p.TYPE.SEGMENT:
                 self.log("Removing old segment partition: {}".format(p.identity.name))
                 try:
-                    self.wrap_partition(p).datafile.remove()
+                    self.wrap_partition(p).local_datafile.remove()
                     self.session.delete(p)
                 except NotFoundError:
                     pass
@@ -1860,7 +1863,7 @@ Caster Code
             p = s.partition
             if p:
                 try:
-                    self.wrap_partition(p).datafile.remove()
+                    self.wrap_partition(p).local_datafile.remove()
                     self.session.delete(p)
                 except NotFoundError:
                     pass
@@ -2163,16 +2166,16 @@ Caster Code
         parent = self.partitions.get_or_new_partition(partition_name, type=Partition.TYPE.UNION)
         parent.state = parent.STATES.COALESCING
 
-        if parent.datafile.exists:
+        if parent.local_datafile.exists:
             ps.add("Removing exisiting datafile", partition=parent)
-            parent.datafile.remove()
+            parent.local_datafile.remove()
 
         if len(segments) == 1:
             seg = list(segments)[0]
             # If there is only one segment, just move it over
             ps.update('Coalescing single partition {} '.format(seg.identity.name), partition=seg)
-            with self.wrap_partition(seg).datafile.open() as f:
-                parent.datafile.set_contents(f)
+            with self.wrap_partition(seg).local_datafile.open() as f:
+                parent.local_datafile.set_contents(f)
 
         else:
 
@@ -2180,18 +2183,18 @@ Caster Code
             i = 1  # Row id.
 
             def coalesce_progress_f(i):
-                (desc, n_records, total, rate) = parent.datafile.report_progress()
+                (desc, n_records, total, rate) = parent.local_datafile.report_progress()
 
                 ps.update(message='Coalescing {}: {}/{} of {}, rate: {}'
                           .format(parent.identity.name, i, n_records, total, rate))
 
             coalesce_progress_f = CallInterval(coalesce_progress_f, 10)  # FIXME Should be a decorator
 
-            with parent.datafile.writer as w:
+            with parent.local_datafile.writer as w:
                 for seg in sorted(segments, key=lambda x: b(x.name)):
                     ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
 
-                    with self.wrap_partition(seg).datafile.reader as reader:
+                    with self.wrap_partition(seg).local_datafile.reader as reader:
                         import time
                         for row in reader.rows:
                             w.insert_row((i,) + row[1:])
@@ -2207,7 +2210,7 @@ Caster Code
 
         for s in segments:
             assert s.segment is not None
-            self.wrap_partition(s).datafile.remove()
+            self.wrap_partition(s).local_datafile.remove()
             self.session.delete(s)
 
         self.commit()
@@ -2591,10 +2594,13 @@ Caster Code
             pl.build.commit()
             db.commit()
 
-
-
         else:
             ds = db.copy_dataset(self.dataset, incver=incver)
+
+        b = Bundle(ds, self.library)
+        bfs = b.build_source_files.file(File.BSFILE.META)
+        print bfs.update_identity()
+
 
         db.session.query(Partition).update({'_location': partition_location})
         db.session.commit()

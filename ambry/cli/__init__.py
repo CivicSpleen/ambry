@@ -120,12 +120,15 @@ def get_commands(extra_commands=[]):
 
     for module_name in BASE_COMMANDS + extra_commands:
         try:
+
             m = __import__(module_name, fromlist=['command_name', 'make_parser', 'run_command'])
+
             commands[m.command_name] = (m.run_command, m.make_parser)
         except ImportError as e:
             warn("Failed to import CLI module '{}'. Ignoring it. ({}) ".format(module_name, e))
 
-        except AttributeError:
+        except AttributeError as e:
+            warn("Failed to import CLI module '{}'. Ignoring it. ({}) ".format(module_name, e))
             pass
 
     return commands

@@ -197,7 +197,8 @@ class Partitions(object):
         """Iterate over the type 'p' partitions, ignoring the 's' type. """
         from ambry.orm.partition import Partition
 
-        for p in self.bundle.dataset.session.query(Partition).filter(Partition.type==Partition.TYPE.UNION).all():
+        for p in (self.bundle.dataset.session.query(Partition).filter(Partition.type==Partition.TYPE.UNION)
+                          .filter(Partition.d_vid == self.bundle.identity.vid).all()):
             yield self.bundle.wrap_partition(p)
 
     def new_db_from_pandas(self, frame, table=None, data=None, load=True, **kwargs):

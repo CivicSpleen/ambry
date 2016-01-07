@@ -39,6 +39,8 @@ def make_parser(cmd):
                         help='Echo database queries.')
     parser.add_argument('-E', '--exceptions', default=False, action='store_true',
                         help="Don't capture and reformat exceptions; show the traceback on the console")
+    parser.add_argument('-T', '--trace', default=False, action='store_true',
+                        help="Trace every line of program execution")
     parser.add_argument('-m', '--multi', default=False, action='store_true',
                         help='Run in multiprocessing mode')
     parser.add_argument('-p', '--processes',  type=int,
@@ -445,6 +447,11 @@ def run_command(args, rc):
         args.multi = args.processes
         l.processes = args.processes
 
+    if args.trace:
+        from ambry.util.debug import traceit
+        import sys
+        sys.settrace(traceit)
+
     try:
         globals()['bundle_' + args.subcommand](args, l, rc)
     except (ConflictError, NotFoundError) as e:
@@ -486,8 +493,7 @@ def get_bundle_ref(args, l, use_history=False):
             with open(cwd_bundle) as f:
                 config = yaml.load(f)
                 try:
-                    id_ = config['identity']['id']
-                    return (id_, 'directory')
+                    return (config['identity']['vid'], 'directory')
                 except KeyError:
                     pass
 

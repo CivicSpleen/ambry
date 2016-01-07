@@ -220,8 +220,10 @@ class ProcessLogger(object):
         elif new_connection:  # For postgres, by default, create a new db connection
             # Make a new connection to the existing database
             self._db = db
+
             self._connection = self._db.engine.connect()
             self._session = self._db.Session(bind=self._connection, expire_on_commit=False)
+
         else:  # When not building, ok to use existing connection
             self._db = db
             self._connection = db.connection
