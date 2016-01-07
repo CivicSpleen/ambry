@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class DatabaseBackend(object):
-    """ Base class for warehouse database engines. """
+    """ Base class for mpr install/query implementations. """
 
     def __init__(self, library, dsn):
         self._library = library
@@ -38,7 +38,7 @@ class DatabaseBackend(object):
         """ Installs all partitons of the table and create view with union of all partitons.
 
         Args:
-            connection: connection to database who stores warehouse data.
+            connection: connection to database who stores mpr data.
             table (orm.Table):
         """
         # first install all partitions of the table
@@ -71,7 +71,7 @@ class DatabaseBackend(object):
         for statement in statements:
             logger.debug(
                 'Searching statement for partition ref.\n    statement: {}'.format(statement.to_unicode()))
-            table_names = _get_table_names1(statement)
+            table_names = _get_table_names(statement)
             new_statement = statement.to_unicode()
 
             if table_names:
@@ -91,11 +91,11 @@ class DatabaseBackend(object):
 
                     if partition:
                         logger.debug(
-                            'Searching partition table in the warehouse database.\n    partition: {}'
+                            'Searching partition table in the database.\n    partition: {}'
                             .format(partition.name))
                         try:
                             # try to use existing fdw or materialized view.
-                            warehouse_table = self._get_warehouse_table(connection, partition)
+                            mpr_table = self._get_mpr_table(connection, partition)
                             logger.debug(
                                 'Partition already installed. \n    partition: {}'.format(partition.vid))
                         except MissingTableError:
@@ -103,16 +103,16 @@ class DatabaseBackend(object):
                             logger.debug(
                                 'Partition is not installed. Install now. \n    partition: {}'
                                 .format(partition.vid))
-                            warehouse_table = self.install(connection, partition)
-                        new_statement = new_statement.replace(ref, warehouse_table)
+                            mpr_table = self.install(connection, partition)
+                        new_statement = new_statement.replace(ref, mpr_table)
 
                     if table:
                         logger.debug(
-                            'Searching table view in the warehouse database. \n    table: {}'
+                            'Searching table view in the database. \n    table: {}'
                             .format(table.vid))
                         try:
                             # try to use existing fdw or materialized view.
-                            warehouse_table = self._get_warehouse_view(connection, table)
+                            self._get_mpr_view(connection, table)
                             logger.debug(
                                 'Table view already exists. \n    table: {}'.format(table.vid))
                         except MissingTableError:
@@ -145,8 +145,8 @@ class DatabaseBackend(object):
         """ Closes connection to database. """
         raise NotImplementedError
 
-    def _get_warehouse_table(self, connection, partition):
-        """ Finds and returns partition table in the db represented by given connection.
+    def _get_mpr_table(self, connection, partition):
+        """ Finds and returns mpr table in the db represented by given connection.
 
         Args:
             connection: connection to db where to look for partition table.
@@ -161,7 +161,7 @@ class DatabaseBackend(object):
         """
         raise NotImplementedError
 
-    def _get_warehouse_view(self, connection, table):
+    def _get_mpr_view(self, connection, table):
         """ Finds and returns table view name in the db represented by given connection.
 
         Args:
@@ -205,23 +205,6 @@ def _get_table_names(statement):
     Returns:
         list of str
     """
-    tables = []
-    collect_table = False
-    for token in statement.tokens:
-        if token.value.lower() == 'from' or token.value.lower().endswith(' join'):
-            collect_table = True
-            continue
-        if isinstance(token, sqlparse.sql.Identifier) and collect_table:
-            tables.append(token.get_real_name())
-            collect_table = False
-    logger.debug(
-        'List of table names found in the statement.\n    statement: {}\n    tables: {}\n'
-        .format(statement.to_unicode(), tables))
-    return tables
-
-
-def _get_table_names1(statement):
-    # Simplified version - is more appropriate for ambry queryes
     parts = statement.to_unicode().split()
     tables = set()
     for i, token in enumerate(parts):

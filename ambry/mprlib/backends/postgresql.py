@@ -4,6 +4,8 @@ from ambry_sources.med import postgresql as postgres_med
 
 from ambry.util import get_logger, parse_url_to_dict
 
+from ambry.bundle.asql_parser import parse_index
+
 from ..exceptions import MissingTableError, MissingViewError
 from .base import DatabaseBackend
 
@@ -93,7 +95,7 @@ class PostgreSQLBackend(DatabaseBackend):
         if getattr(self, '_engine', None):
             self._engine.dispose()
 
-    def _get_warehouse_view(self, connection, table):
+    def _get_mpr_view(self, connection, table):
         """ Finds and returns table view name in the postgres db represented by given connection.
 
         Args:
@@ -116,28 +118,28 @@ class PostgreSQLBackend(DatabaseBackend):
                 'View of the table found.\n    table: {}, view: {}'
                 .format(table.vid, view))
             return view
-        raise MissingViewError('postgres database of the warehouse does not have view for {} table.'
+        raise MissingViewError('postgres database does not have view for {} table.'
                                .format(table.vid))
 
-    def _get_warehouse_table(self, connection, partition):
-        """ Returns name of the postgres table who stores partition data.
+    def _get_mpr_table(self, connection, partition):
+        """ Returns name of the postgres table who stores mpr data.
 
         Args:
-            connection: connection to postgres db who stores warehouse data.
+            connection: connection to postgres db who stores mpr data.
             partition (orm.Partition):
 
         Returns:
             str:
 
         Raises:
-            MissingTableError: if partition table not found in the warehouse db.
+            MissingTableError: if partition table not found in the db.
 
         """
         # FIXME: This is the first candidate for optimization. Add field to partition
         # with table name and update it while table creation.
         # Optimized version.
         #
-        # return partition.warehouse_table or raise exception
+        # return partition.mpr_table or raise exception
 
         # Not optimized version.
         #
@@ -162,7 +164,7 @@ class PostgreSQLBackend(DatabaseBackend):
                 'Foreign table of the partition found.\n    partition: {}, foreign table: {}'
                 .format(partition.name, foreign_table))
             return foreign_table
-        raise MissingTableError('warehouse postgres database does not have table for {} partition.'
+        raise MissingTableError('postgres database does not have table for {} partition.'
                                 .format(partition.vid))
 
     def _add_partition(self, connection, partition):
@@ -181,7 +183,7 @@ class PostgreSQLBackend(DatabaseBackend):
         """ Returns connection to the postgres database.
 
         Returns:
-            connection to postgres database who stores warehouse data.
+            connection to postgres database who stores mpr data.
 
         """
         if not getattr(self, '_connection', None):
@@ -205,7 +207,7 @@ class PostgreSQLBackend(DatabaseBackend):
         """ Executes given query and returns result.
 
         Args:
-            connection: connection to postgres database who stores warehouse data.
+            connection: connection to postgres database who stores mpr data.
             query (str): sql query
             fetch (boolean, optional): if True, fetch query result and return it. If False, do not fetch.
 
@@ -226,7 +228,7 @@ class PostgreSQLBackend(DatabaseBackend):
         """ Returns True if relation exists in the postgres db. Otherwise returns False.
 
         Args:
-            connection: connection to postgres database who stores warehouse data.
+            connection: connection to postgres database who stores mpr data.
             relation (str): name of the table, view or materialized view.
 
         Note:
@@ -251,3 +253,35 @@ class PostgreSQLBackend(DatabaseBackend):
             cursor.execute(exists_query, [schema_name, table_name])
             result = cursor.fetchall()
             return result == [(1,)]
+
+
+
+
+def _preprocess_postgres_index(asql_query, library, backend, connection):
+    """ Creates materialized view for each indexed partition found in the query.
+
+    Args:
+        asql_query (str): asql query
+        library (ambry.Library):
+        backend (PostgreSQLBackend):
+        connection ():
+
+    Returns:
+        str: converted asql if it contains index query. If not, returns asql_query as is.
+    """
+    new_query = None
+    if asql_query.strip().lower().startswith('index'):
+        logger.debug(
+            '_preprocess_postgres_index: create index query found.\n    asql query: {}'
+            .format(asql_query))
+        index = parse_index(asql_query)
+        partition = library.partition(index.source)
+        table = backend.install(connection, partition, materialize=True)
+        # do not give index name to allow postgres care about name of the index. Postgres will do it better.
+        new_query = 'CREATE INDEX my_ind ON {table} ({columns});'.format(
+            table=table, columns=','.join(index.columns))
+
+    logger.debug(
+        '_preprocess_postgres_index: preprocess finished.\n    asql query: {}\n    new query: {}'
+        .format(asql_query, new_query))
+    return new_query or asql_query

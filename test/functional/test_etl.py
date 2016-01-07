@@ -34,7 +34,7 @@ class Test(TestBase):
 
     def setUp(self):
         from fs.opener import fsopendir
-        super(Test,self).setUp()
+        super(Test, self).setUp()
         self.fs = fsopendir('mem://test')
 
     @unittest.skip('Timing test')

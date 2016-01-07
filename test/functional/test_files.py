@@ -22,7 +22,7 @@ except ImportError as exc:
     else:
         raise
 
-from ambry.library.warehouse.backends.postgresql import PostgreSQLBackend
+from ambry.mprlib import PostgreSQLBackend
 from ambry_sources.med import postgresql as postgres_med
 
 from test.test_base import TestBase

@@ -136,7 +136,7 @@ class BuildSourceFile(object):
     def fs_is_newer(self):
 
         return ((self.fs_modtime or 0) > (self.record.modified or 0)
-                and self.record.source_hash != self.fs_hash )
+                and self.record.source_hash != self.fs_hash)
 
     @property
     def fs_mod_since_sync(self):
@@ -221,7 +221,6 @@ class BuildSourceFile(object):
         self.objects_to_record()
         self.record_to_fs()
 
-
     def clean_objects(self):
         pass
 
@@ -255,7 +254,6 @@ class BuildSourceFile(object):
         return sio.getvalue()
 
 
-
 class RowBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
 
@@ -271,8 +269,6 @@ class RowBuildSourceFile(BuildSourceFile):
             with self._fs.open(fn_path, 'rt', encoding='utf-8') as f:
                 return self.fh_to_record(f)
 
-
-
     def fh_to_record(self, f):
         """Load a file in the filesystem into the file record"""
         import unicodecsv as csv
@@ -283,7 +279,7 @@ class RowBuildSourceFile(BuildSourceFile):
         fr.path = fn_path
         rows = []
 
-        # NOTE. THere were two cases here, for PY2 and PY3. Py two had
+        # NOTE. There were two cases here, for PY2 and PY3. Py two had
         # encoding='utf-8' in the reader. I've combined them b/c that's the default for
         # unicode csv, so it shouldn't be necessary.
 
@@ -504,7 +500,6 @@ class MetadataFile(DictBuildSourceFile):
         fr.update_contents(msgpack.packb(o), 'application/msgpack')
 
         return fr
-
 
 
 class PythonSourceFile(StringSourceFile):
@@ -750,9 +745,8 @@ class SchemaFile(RowBuildSourceFile):
             'real': Column.DATATYPE_FLOAT,
         }
 
-
         def run_progress_f(line_no):
-            self._bundle.log("Loading tables from file. Line #{}".format(line_no))
+            self._bundle.log('Loading tables from file. Line #{}'.format(line_no))
 
         from ambry.bundle.process import CallInterval
         run_progress_f = CallInterval(run_progress_f, 10)
@@ -903,18 +897,17 @@ class SourceSchemaFile(RowBuildSourceFile):
 
             if not st:
                 st = self._dataset.new_source_table(row['table'])
-                #table_number += 1
+                # table_number += 1
 
             if 'datatype' not in row:
                 row['datatype'] = 'unknown'
 
             del row['table']
 
-
             st.add_column(**row)  # Create or update
 
         if failures:
-            raise ConfigurationError("Failed to load source schema, missing sources: {} ".format(failures))
+            raise ConfigurationError('Failed to load source schema, missing sources: {} '.format(failures))
 
         self._dataset.commit()
 
@@ -936,6 +929,30 @@ class SourceSchemaFile(RowBuildSourceFile):
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile.update_contents(msgpack.packb(rows), 'application/msgpack')
+
+
+class ASQLSourceFile(StringSourceFile):
+
+    def record_to_fs(self):
+        """Create a filesystem file from a File. """
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        if fr.contents:
+
+            with self._fs.open(file_name(self._file_const), 'w', encoding='utf-8') as f:
+                f.write(fr.unpacked_contents)
+
+            fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
+
+    def execute(self):
+        """ Executes all sql statements from bundle's asql.
+        """
+        # FIXME:
+        asql = ''
+        from ambry.mprlib import execute_sql
+        # execute_sql(self._bundle, asql)
 
 
 file_info_map = {
@@ -1060,14 +1077,7 @@ class BuildSourceFileAccessor(object):
     def sync(self, force=None, defaults=False):
         raise NotImplementedError()
 
-    def put_contents(self, file_const, contents):
-
-        return self.file(file_const).fh_to_record(fh)
-
-    def get_contents(self):
-        return self.file(file_const).record_to_fh()
-
-    def sync_out(self, file_const, fh = None):
+    def sync_out(self, file_const, fh=None):
 
         rtrn = False
 
@@ -1084,4 +1094,3 @@ class BuildSourceFileAccessor(object):
             return c
         else:
             return None
-
