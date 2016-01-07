@@ -467,7 +467,7 @@ class MetadataFile(DictBuildSourceFile):
         return ad
 
     def objects_to_record(self):
-        pass # The metadata file never gets written back from objects
+        pass  # The metadata file never gets written back from objects
 
     def record_to_fh(self, f):
 
@@ -932,6 +932,7 @@ class SourceSchemaFile(RowBuildSourceFile):
 
 
 class ASQLSourceFile(StringSourceFile):
+    """ Stores bundle.sql file content. """
 
     def record_to_fs(self):
         """Create a filesystem file from a File. """
@@ -947,12 +948,15 @@ class ASQLSourceFile(StringSourceFile):
             fr.modified = self.fs_modtime
 
     def execute(self):
-        """ Executes all sql statements from bundle's asql.
-        """
-        # FIXME:
-        asql = ''
+        """ Executes all sql statements from bundle.sql. """
         from ambry.mprlib import execute_sql
-        # execute_sql(self._bundle, asql)
+        if self._bundle.library.database.engine.name == 'sqlite':
+            # FIXME: Is broken for sqlite.
+            # close current sqlite connection (pysqlite) because virtual tables
+            # implementation uses its own connection (apsw)
+            self._bundle.library.database.close()
+
+        execute_sql(self._bundle, self.file_content)
 
 
 file_info_map = {
@@ -964,7 +968,7 @@ file_info_map = {
     File.BSFILE.SCHEMA: (File.path_map[File.BSFILE.SCHEMA], SchemaFile),
     File.BSFILE.SOURCESCHEMA: (File.path_map[File.BSFILE.SOURCESCHEMA], SourceSchemaFile),
     File.BSFILE.SOURCES: (File.path_map[File.BSFILE.SOURCES], SourcesFile),
-    File.BSFILE.SQL: (File.path_map[File.BSFILE.SQL], StringSourceFile)
+    File.BSFILE.SQL: (File.path_map[File.BSFILE.SQL], ASQLSourceFile)
 }
 
 

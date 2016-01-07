@@ -227,7 +227,7 @@ class RowProxyPipe(Pipe):
 
 
 class DatafileSourcePipe(Pipe):
-    """A Source pipe that gemerates rows from an MPR file.  """
+    """A Source pipe that generates rows from an MPR file.  """
 
     def __init__(self, bundle, source):
         self.bundle = bundle
@@ -274,7 +274,7 @@ class DatafileSourcePipe(Pipe):
     def __str__(self):
         from ..util import qualified_class_name
 
-        return "{}; {} {}".format(qualified_class_name(self), type(self.source), self.path)
+        return '{}; {} {}'.format(qualified_class_name(self), type(self.source), self.path)
 
 
 class SourceFileSourcePipe(Pipe):
@@ -387,7 +387,7 @@ class GeneratorSourcePipe(Pipe):
 
 
 class Sink(Pipe):
-    """A final stage pipe, which consumes its input and produces no output rows"""
+    """ A final stage pipe, which consumes its input and produces no output rows. """
 
     def __init__(self, count=None, callback=None, callback_freq=1000):
         self._count = count
@@ -417,7 +417,6 @@ class Sink(Pipe):
         """
         This function can be called from a higher level to report progress. It is usually called from an alarm
         signal handler which is installed just before starting an operation:
-
 
         :return: Tuple: (process description, #records, #total records, #rate)
         """
@@ -501,8 +500,7 @@ class Nullify(Pipe):
 
     def __str__(self):
         from ..util import qualified_class_name
-
-        return "{} ".format(qualified_class_name(self))
+        return '{} '.format(qualified_class_name(self))
 
 
 class Slice(Pipe):
@@ -560,8 +558,8 @@ class Slice(Pipe):
         parts = []
 
         for slice in args:
-            parts.append("tuple(row[{}:{}])".format(slice[0], slice[1])
-                         if isinstance(slice, (tuple, list)) else "(row[{}],)".format(slice))
+            parts.append('tuple(row[{}:{}])'.format(slice[0], slice[1])
+                         if isinstance(slice, (tuple, list)) else '(row[{}],)'.format(slice))
 
             code = 'lambda row: {}'.format('+'.join(parts))
             func = eval(code)
@@ -578,8 +576,8 @@ class Slice(Pipe):
         try:
             self.slicer, self.code = Slice.make_slicer(args)
         except Exception as e:
-            raise PipelineError(self, "Failed to eval slicer for parts: {} for source {} "
-                                .format(args, self.source.name))
+            raise PipelineError(self, 'Failed to eval slicer for parts: {} for source {} '
+                                      .format(args, self.source.name))
 
         try:
             self.headers = self.slicer(row)
@@ -595,7 +593,7 @@ class Slice(Pipe):
     def __str__(self):
         from ..util import qualified_class_name
 
-        return "{}; Slice Args = {}".format(qualified_class_name(self), self.code)
+        return '{}; Slice Args = {}'.format(qualified_class_name(self), self.code)
 
 
 class Head(Pipe):
@@ -614,7 +612,7 @@ class Head(Pipe):
         return row
 
     def __str__(self):
-        return "{}; N={}; i={}".format(super(Head, self).__str__(), self.N, self.i)
+        return '{}; N={}; i={}'.format(super(Head, self).__str__(), self.N, self.i)
 
 
 class Sample(Pipe):
@@ -2009,9 +2007,8 @@ class Pipeline(OrderedDict):
                 return None
 
         for segment_name, pipes in list(pipe_config.items()):
-
             if segment_name == 'final':
-                # The 'final' segment is actually a list of names of BUndle methods to call afer the pipeline
+                # The 'final' segment is actually a list of names of Bundle methods to call afer the pipeline
                 # completes
                 super(Pipeline, self).__setattr__('final', pipes)
             elif segment_name == 'replace':
@@ -2019,9 +2016,8 @@ class Pipeline(OrderedDict):
                     self.replace(eval_pipe(frm), eval_pipe(to))
             else:
 
-                # Check if any of the pipes have a location command. If not, the pipe is cleared and the set of
-                # pipes replaces the ones that are there.
-
+                # Check if any of the pipes have a location command. If not, the pipe
+                # is cleared and the set of pipes replaces the ones that are there.
                 if not any(bool(pipe_location(pipe)) for pipe in pipes):
                     # Nope, they are all clean
                     self[segment_name] = [eval_pipe(pipe) for pipe in pipes]
@@ -2032,8 +2028,9 @@ class Pipeline(OrderedDict):
                             location = pipe_location(pipe)
                             pipe = pipe[1:]
                         else:
-                            raise PipelineError('If any pipes in a section have a location command, they all must'
-                                                ' Segment: {} pipes: {}'.format(segment_name, pipes))
+                            raise PipelineError(
+                                'If any pipes in a section have a location command, they all must'
+                                ' Segment: {} pipes: {}'.format(segment_name, pipes))
 
                         ep = eval_pipe(pipe)
 
@@ -2252,6 +2249,19 @@ class Pipeline(OrderedDict):
                 out[i] += [''] * (ll - len(out[i]))
 
         return tabulate(out)
+
+
+class BundleSQLPipe(Pipe):
+    """Pipe that executes queryes from bundle.sql """
+
+    def process_header(self, row):
+        if self.bundle.build_source_files.sql.exists():
+            self.bundle.build_source_files.sql.execute()
+        return row
+
+    def __str__(self):
+        from ..util import qualified_class_name
+        return 'Generator {}'.format(qualified_class_name(self))
 
 
 def augment_pipeline(pl, head_pipe=None, tail_pipe=None):

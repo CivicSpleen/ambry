@@ -31,8 +31,6 @@ BUILD_LOG_FILE = 'log/build_log{}.txt'
 def _CaptureException(f, *args, **kwargs):
     """Decorator implementation for capturing exceptions."""
     from ambry.dbexceptions import LoggedException
-    from sqlalchemy.exc import InvalidRequestError
-    from sqlalchemy.orm.exc import DetachedInstanceError
 
     b = args[0]  # The 'self' argument
 
@@ -92,7 +90,7 @@ class Bundle(object):
     default_pipelines = {
 
         'build': {
-            'first': [],
+            'first': [ambry.etl.BundleSQLPipe],
             'source_map': [ambry.etl.MapSourceHeaders],
             'cast': [ambry.etl.CastColumns],
             'body': [],
@@ -1812,21 +1810,6 @@ Caster Code
                 return len(self._s_vids)
 
         try:
-            # FIXME: Find appropriate place for sql execution.
-            # Yes, please, because it's certainly not here. The import apsw
-            # causes troubles, since it's hard to install on Macs.
-            # The multicorn intsallation is also hard, and should not be required for
-            # bundles that don't use SQL or the warehouse.
-            if False:
-                from ambry.library.warehouse.core import execute_sql
-                for f in self.dataset.files:
-                    if f.path == 'bundle.sql' and f.unpacked_contents:
-                        # close current sqlite connection (pysqlite) because virtual tables implementations
-                        # uses its own connection (apsw)
-                        self.close()
-                        execute_sql(self, f.unpacked_contents)
-                        break
-
             self._run_events(TAG.BEFORE_BUILD, 0)
 
             resolved_sources = SourceSet(self, self._resolve_sources(sources, tables, stage=stage,
