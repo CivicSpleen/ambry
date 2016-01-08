@@ -30,7 +30,7 @@ SQLAlchemy==1.0.0
 sqlparse==0.1.15
 Werkzeug==0.10.4
 whoosh==2.7.0
-psycopg2>=2.5
+psycopg2>=2.4
 fs>=0.5.2
 msgpack-python==0.4.6
 livestats==1.0

@@ -896,6 +896,7 @@ def bundle_schema(args, l, rc):
 def bundle_build(args, l, rc):
 
     b = using_bundle(args, l)
+
     b.set_last_access(Bundle.STATES.SYNCED)
     b.clean_progress()
     b.commit()
@@ -904,6 +905,10 @@ def bundle_build(args, l, rc):
 
     if not args.force and not args.table and not args.source:
         check_built(b)
+
+    if b.dstate == b.STATES.SOURCE:
+        prt("Source bundle; sync in records")
+        b.sync_in_records()
 
     if args.sync:
         b.sync_in()

@@ -383,6 +383,41 @@ class GeneratorSourcePipe(Pipe):
         return 'Generator {}'.format(qualified_class_name(self))
 
 
+class PartitionSourcePipe(Pipe):
+    """Base class for a source pipe that implements it own iterator """
+
+    def __init__(self, bundle, source, partition):
+        from ..util import qualified_class_name
+
+        self.bundle = bundle
+        self._source = source
+        self._partition = partition
+
+        # file_name is for the pipeline logger, to generate a file
+        self.file_name = self._source.name
+
+    def __iter__(self):
+
+        self.start()
+
+        yield [c.name for c in self._partition.table.columns]
+
+        for row in iter(self._partition):
+            yield row
+
+        self.finish()
+
+    def start(self):
+        pass
+
+    def finish(self):
+        pass
+
+    def __str__(self):
+        from ..util import qualified_class_name
+        return 'Partition {}'.format(qualified_class_name(self))
+
+
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
 
