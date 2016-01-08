@@ -1414,7 +1414,7 @@ Caster Code
     def clean_ingested(self):
         """"Clean ingested files"""
         for s in self.sources:
-            df = s.local_datafile
+            df = s.datafile
             if df.exists:
                 df.remove()
                 s.state = s.STATES.NEW
@@ -1507,7 +1507,7 @@ Caster Code
         # Clear out all ingested files that are malformed
         for s in self.sources:
             if s.is_downloadable:
-                df = s.local_datafile
+                df = s.datafile
                 try:
                     info = df.info
                     df.close()
@@ -1608,11 +1608,11 @@ Caster Code
 
             from ambry.orm.exc import NotFoundError
 
-            if not source.is_partition and source.local_datafile.exists:
-                if not source.local_datafile.is_finalized:
-                    source.local_datafile.remove()
+            if not source.is_partition and source.datafile.exists:
+                if not source.datafile.is_finalized:
+                    source.datafile.remove()
                 elif force:
-                    source.local_datafile.remove()
+                    source.datafile.remove()
                 else:
                     ps.update(message='Source {} already ingested, skipping'.format(source.name), state='skipped')
                     return True
@@ -1644,20 +1644,20 @@ Caster Code
 
             @call_interval(5)
             def ingest_progress_f(i):
-                (desc, n_records, total, rate) = source.local_datafile.report_progress()
+                (desc, n_records, total, rate) = source.datafile.report_progress()
 
                 ps.update(message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
 
-            source.local_datafile.load_rows(iterable_source, callback=ingest_progress_f,
+            source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
                                       limit=500 if self.limited_run else None)
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 
-            source.update_table()  # Generate the source tables.
+            #source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
             self.build_source_files.sources.objects_to_record()
 
-            ps.update(message='Ingested {}'.format(source.local_datafile.path), state='done')
+            ps.update(message='Ingested {}'.format(source.datafile.path), state='done')
             source.state = source.STATES.INGESTED
             self.commit()
 

@@ -174,8 +174,9 @@ class Pipe(object):
             raise
         except Exception as e:
             if self.bundle:
-                self.bundle.error("Exception during pipeline processing, in pipe {}: {} "
-                                  .format(qualified_class_name(self), e))
+                pass
+                #self.bundle.error("Exception during pipeline processing, in pipe {}: {} "
+                #                  .format(qualified_class_name(self), e))
             raise
 
         self.finish()
@@ -757,6 +758,21 @@ class AddDestHeader(Pipe):
 
         self.headers = self._added_headers
         yield self._added_headers
+
+        for row in rg:
+            yield row
+
+class AddSourceHeader(Pipe):
+    """Uses the source table header for the header row"""
+
+    def __init__(self):
+        pass
+
+    def __iter__(self):
+
+        rg = iter(self._source_pipe)
+
+        yield [c.name for c in self.source.source_table.columns]
 
         for row in rg:
             yield row

@@ -473,6 +473,7 @@ def get_bundle_ref(args, l, use_history=False):
     """
 
     if not use_history:
+
         if args.id:
             return (args.id, '-i argument')
 
@@ -493,7 +494,7 @@ def get_bundle_ref(args, l, use_history=False):
             with open(cwd_bundle) as f:
                 config = yaml.load(f)
                 try:
-                    return (config['identity']['vid'], 'directory')
+                    return (config['names']['vid'], 'directory')
                 except KeyError:
                     pass
 

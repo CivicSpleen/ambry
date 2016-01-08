@@ -63,10 +63,11 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
         Returns:
             str
         """
+        from six import text_type
 
         if isinstance(terms, (tuple, list)):
             if len(terms) > 1:
-                return ' | '.join(terms)
+                return ' | '.join(text_type(t) for t in terms)
             else:
                 return terms[0]
         else:

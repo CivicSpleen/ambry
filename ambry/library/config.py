@@ -95,7 +95,6 @@ class LibraryConfigSyncProxy(object):
 
         self.commit()
 
-
     def sync_accounts(self, accounts_data, clear = False, password=None, cb = None):
         """
         Load all of the accounts from the account section of the config
@@ -107,7 +106,6 @@ class LibraryConfigSyncProxy(object):
         """
 
         # Map common values into the accounts records
-
 
         all_accounts = self.accounts
 
@@ -123,8 +121,9 @@ class LibraryConfigSyncProxy(object):
             a = self.library.find_or_new_account(account_id)
             a.secret_password = password or self.password
 
-
             for k, v in values.items():
+                if k in ('id',):
+                    continue
                 try:
                     if kmap[k] == 'secret':
                         a.encrypt_secret(v)
@@ -141,4 +140,4 @@ class LibraryConfigSyncProxy(object):
             if cb:
                 cb('Loaded account: {}'.format(a.account_id))
 
-        self.database.session.commit()
+            self.database.session.commit()

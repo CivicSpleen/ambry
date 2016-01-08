@@ -104,7 +104,7 @@ class ProgressSection(object):
     def add(self, *args, **kwargs):
         """Add a new record to the section"""
 
-        if self.start and self.start.state == 'done':
+        if self.start and self.start.state == 'done' and kwargs.get('log_action') != 'done':
             raise ProgressLoggingError("Can't add -- process section is done")
 
         self.augment_args(args, kwargs)

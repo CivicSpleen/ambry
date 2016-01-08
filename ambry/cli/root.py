@@ -332,7 +332,7 @@ def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
 
-    for ref in args.ref:
+    for ref in args.refs:
 
         if ref in [r.short_name for r in l.remotes]: # It's a remote name
             l.sync_remote(l.remote(ref))
@@ -342,6 +342,7 @@ def root_sync(args, l, config):
 
 
 def root_search(args, l, rc):
+    from six import text_type
 
     if args.reindex:
         def tick(message):
@@ -354,7 +355,7 @@ def root_search(args, l, rc):
         l.search.index_library_datasets(tick)
         return
 
-    terms = ' '.join(args.terms)
+    terms = ' '.join(text_type(t) for t in args.terms)
     print(terms)
 
     results = l.search.search(terms)

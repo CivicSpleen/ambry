@@ -23,7 +23,15 @@ Easy Way
 
 The easiest way to install ambry is to for install the scientific python distribution, Anaconda. Visit the `Continuum Analytics downloads page <http://continuum.io/downloads>`_ and get the Anaconda installation for your distribution.
 
-After installing Anaconda, open a new Terminal window ( an old one won't have the path set correctly. ) You should now be running the python included with anaconda:
+You'll probably also need to install XCode, since that's required for just about anything interesting. 
+
+After installing Anaconda and XCode, open a new Terminal window ( an old one won't have the path set correctly. ) You should now be running the python included with anaconda:
+ 
+Install the psycopg package: 
+
+.. code-block:: bash
+
+    $ conda install psycopg2
  
 .. code-block:: bash
 
@@ -35,7 +43,8 @@ Most python dependencies are installed with `pip` along with Ambry, but `gdal` r
 .. code-block:: bash
 
     $ conda install gdal
- 
+
+
 Finally, install Ambry with pip:
     
 .. code-block:: bash

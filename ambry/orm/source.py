@@ -247,7 +247,7 @@ class DataSourceBase(object):
     def is_built(self):
         return self.state == self.STATES.BUILT
 
-    def update_table(self):
+    def update_table(self, unknown_type='str'):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
 
@@ -265,8 +265,11 @@ class DataSourceBase(object):
 
                     c = st.column(col['name'])
 
+                    dt = col['resolved_type'] if col['resolved_type'] != 'unknown' else unknown_type
+
                     if c:
                         c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
+
                     else:
 
                         c = st.add_column(col['pos'],
