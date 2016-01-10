@@ -55,6 +55,10 @@ class DataSourceBase(object):
 
     @property
     def url(self):
+        if self.reftype == 'generator':
+            # Guess that the first generator parameter is a URL. It may not be, but should be, by convention
+            return self.generator_args[0]
+
         return self.ref
 
     @url.setter
@@ -63,7 +67,15 @@ class DataSourceBase(object):
 
     @property
     def generator(self):
-        return self.ref
+
+        # If there is a semi colon, the first is the generator, rest are args
+        return self.ref.split(';')[0]
+
+    @property
+    def generator_args(self):
+
+        # If there is a semi colon, the first is the generator, rest are args
+        return self.ref.split(';')[1:]
 
     @generator.setter
     def generator(self, v):
@@ -170,10 +182,12 @@ class DataSourceBase(object):
         """Return a SourceSpec to describe this source"""
         from ambry_sources.sources import SourceSpec
 
-        url = self.ref
+        d = self.dict
+        d['url'] = self.url
 
-        # Will get the URL twice; once as ref and onces as URL, but the ref is ignored
-        return SourceSpec(url, **self.dict)
+        # Will get the URL twice; once as ref and once as URL, but the ref is ignored
+
+        return SourceSpec(**d)
 
     @property
     def account(self):

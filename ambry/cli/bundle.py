@@ -830,7 +830,10 @@ def bundle_ingest(args, l, rc):
     if not args.force and not args.table and not args.source:
         check_built(b)
 
-    b.sync_code()
+    if b.sync_code() > 0:
+        # If the bundle.py file changed, need to reload it
+        b = using_bundle(args, l).cast_to_subclass()
+
 
     if b.sync_sources() > 0:
         b.log("Source file changed, automatically cleaning")

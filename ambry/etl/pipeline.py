@@ -1880,6 +1880,10 @@ class WriteToPartition(Pipe, PartitionWriter):
         try:
             mapped_row = body_mapper(row)
 
+            # Assuming it is an ID!
+            if mapped_row[0] == None:
+                mapped_row[0] = self._count
+
             writer.insert_row(mapped_row)
         except Exception as e:
             self.bundle.logger.error("Insert failed to {}: {}\n{}".format(p.datafile.path, mapped_row, e))

@@ -158,6 +158,7 @@ class Bundle(object):
             self._source_url = source_url
             self.dataset.config.library.source.url = self._source_url
             self._source_fs = None
+
         elif source_url is None:
             self._source_url = None
             self.dataset.config.library.source.url = self._source_url
@@ -167,6 +168,19 @@ class Bundle(object):
             self._build_url = build_url
             self.dataset.config.library.build.url = self._build_url
             self._build_fs = None
+
+        self.dataset.commit()
+
+    def clear_file_systems(self):
+        """Remove references to build and source file systems, reverting to the defaults"""
+
+        self._source_url = None
+        self.dataset.config.library.source.url = None
+        self._source_fs = None
+
+        self._build_url = None
+        self.dataset.config.library.build.url = None
+        self._build_fs = None
 
         self.dataset.commit()
 
@@ -272,8 +286,22 @@ class Bundle(object):
 
         source = self.source(source_name)
 
+        ref = source.url
+
         try:
-            p = self.library.partition(source.url)
+            try:
+
+                p = self.library.partition(ref)
+            except NotFoundError:
+
+                self.warn("Partition reference {} not find, try to download it".format(ref))
+                remote, vname = self.library.find_remote_bundle(ref, try_harder=True)
+                if remote:
+                    self.warn("Installing {} from {}".format(remote, vname))
+                    self.library.checkin_remote_bundle(vname, remote)
+                    p = self.library.partition(ref)
+                else:
+                    raise
 
             if not p.is_local:
                 with self.progress.start('test', 0, message='localizing') as ps:
@@ -282,7 +310,7 @@ class Bundle(object):
             return p
 
         except NotFoundError:
-            return self.library.bundle(source.url)
+            return self.library.bundle(ref)
 
     @property
     def config(self):
@@ -927,6 +955,7 @@ Caster Code
         from ambry_sources import get_source
         from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe
         from ambry.bundle.process import call_interval
+        from ambry.dbexceptions import ConfigurationError
 
         s = None
 
@@ -942,17 +971,20 @@ Caster Code
         elif source.reftype == 'generator':
             import sys
 
-            if hasattr(self, source.generator):
-                gen_cls = getattr(self, source.generator)
-            elif source.generator in sys.modules['ambry.build'].__dict__:
-                gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
-            else:
-                gen_cls = self.import_lib().__dict__[source.generator]
+            try:
+                if hasattr(self, source.generator):
+                    gen_cls = getattr(self, source.generator)
+                elif source.generator in sys.modules['ambry.build'].__dict__:
+                    gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
+                else:
+                    gen_cls = self.import_lib().__dict__[source.generator]
+            except KeyError:
+                raise ConfigurationError("Could not find generator named '{}' ".format(source.generator))
 
             spec = source.spec
             spec.start_line = 1
             spec.header_lines = [0]
-            s = GeneratorSource(spec, gen_cls(self, source))
+            s = GeneratorSource(spec, gen_cls(self, source, *source.generator_args))
             sp = GeneratorSourcePipe(self, source, s)
 
         elif source.is_downloadable:
@@ -963,7 +995,7 @@ Caster Code
                     ps.add_update('Downloading {}: {}'.format(source.url, total_len), source=source,
                                   state='downloading')
                 else:
-                    self.log('Downloading {}'.format(source.url, total_len), source=source, state='downloading')
+                    self._bundle.log('Downloading {}: {}'.format(self._source.url, total_len))
 
             try:
                 s = get_source(
@@ -1500,7 +1532,6 @@ Caster Code
         count = 0
         errors = 0
 
-
         self._run_events(TAG.BEFORE_INGEST, 0)
         # Clear out all ingested files that are malformed
         for s in self.sources:
@@ -1519,6 +1550,7 @@ Caster Code
                 continue
 
             self._run_events(TAG.BEFORE_INGEST, stage)
+
             stage_errors = self._ingest_sources(sources, stage, force=force)
 
             errors += stage_errors
@@ -2196,7 +2228,7 @@ Caster Code
                     with self.wrap_partition(seg).local_datafile.reader as reader:
                         import time
                         for row in reader.rows:
-                            w.insert_row((i,) + row[1:])
+                            w.insert_row((i,) + row[1:]) # Writes the ID Value
                             i += 1
 
                             if i % 1000 == 1:
@@ -2599,6 +2631,8 @@ Caster Code
         b = Bundle(ds, self.library)
         bfs = b.build_source_files.file(File.BSFILE.META)
         print bfs.update_identity()
+
+        b.clear_file_systems()
 
 
         db.session.query(Partition).update({'_location': partition_location})

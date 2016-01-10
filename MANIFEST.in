@@ -3,3 +3,6 @@ recursive-include requirements *.txt
 include INSTALL
 include LICENSE
 recursive-include doc *
+recursive-include ambry/support/ *
+recursive-include ambry/ui/static/ *
+recursive-include ambry/ui/templates/ *
