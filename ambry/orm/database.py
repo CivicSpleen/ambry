@@ -154,36 +154,35 @@ class Database(object):
     @property
     def engine(self):
         """return the SqlAlchemy engine for this database."""
-        from sqlalchemy.pool import NullPool
 
         if not self._engine:
 
             if 'postgres' in self.driver:
 
-                if not 'connect_args' in self.engine_kwargs:
+                if 'connect_args' not in self.engine_kwargs:
                     self.engine_kwargs['connect_args'] = {
-                        "application_name": "ambry:{}".format(os.getpid())
+                        'application_name': 'ambry:{}'.format(os.getpid())
                     }
 
-            # For most use, a small pool is good to prevent connection exhaustion, but these settings my be
-            # too low for the main public web application
-
+                # For most use, a small pool is good to prevent connection exhaustion, but these settings may
+                # be too low for the main public web application.
 
                 self._engine = create_engine(self.dsn, echo=self._echo,
-                           pool_size = 5, max_overflow = 5, **self.engine_kwargs)
+                                             pool_size=5, max_overflow=5, **self.engine_kwargs)
 
             else:
-                self._engine = create_engine(self.dsn, echo=self._echo, **self.engine_kwargs)
+                self._engine = create_engine(
+                    self.dsn, echo=self._echo, **self.engine_kwargs)
 
             #
             # Disconnect connections that have a different PID from the one they were created in.
             # This protects against re-use in multi-processing.
             #
-            @event.listens_for(self._engine, "connect")
+            @event.listens_for(self._engine, 'connect')
             def connect(dbapi_connection, connection_record):
                 connection_record.info['pid'] = os.getpid()
 
-            @event.listens_for(self._engine, "checkout")
+            @event.listens_for(self._engine, 'checkout')
             def checkout(dbapi_connection, connection_record, connection_proxy):
 
                 from sqlalchemy.exc import DisconnectionError
@@ -196,7 +195,7 @@ class Database(object):
                         (connection_record.info['pid'], pid))
 
             if self.driver == 'sqlite':
-                @event.listens_for(self._engine, "connect")
+                @event.listens_for(self._engine, 'connect')
                 def pragma_on_connect(dbapi_con, con_record):
                     """ISSUE some Sqlite pragmas when the connection is created."""
 
@@ -600,11 +599,6 @@ class Database(object):
 
         p_vid_col = parent_table_class.vid.property.columns[0].name
 
-        try:
-            parent_col = child_table_class._parent_col
-        except AttributeError:
-            parent_col = child_table_class.d_vid.property.columns[0].name
-
         if self.driver == 'sqlite':
             # The Sqlite version is not atomic, but Sqlite also doesn't support concurrency
             # So, we don't have to open a new connection, but we also can't open a new connection, so
@@ -639,8 +633,6 @@ class Database(object):
 
         # Name of sequence id column in the child
         c_seq_col = child_table_class.sequence_id.property.columns[0].name
-
-        p_seq_col = getattr(parent_table_class, c_seq_col).property.columns[0].name
 
         try:
             parent_col = child_table_class._parent_col

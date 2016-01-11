@@ -581,7 +581,6 @@ class ConfigAccessor(object):
         top.build_from_db(self.dataset)
         return top
 
-
     @property
     def sync(self):
         """Access sync configuration values as attributes. See self.process for a usage example"""
