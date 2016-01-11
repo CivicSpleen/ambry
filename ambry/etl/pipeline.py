@@ -1760,7 +1760,6 @@ class WriteToPartition(Pipe, PartitionWriter):
         self._source_id = None
 
     def process_header(self, row):
-
         if '_pname' not in row:
             raise PipelineError("Did not get a _pname header. The pipeline must insert a _pname value"
                                 " to write to partitions ")
@@ -2257,11 +2256,25 @@ class BundleSQLPipe(Pipe):
     def process_header(self, row):
         if self.bundle.build_source_files.sql.exists():
             self.bundle.build_source_files.sql.execute()
+            # SQL execution for sqlite closes database. This leads to DetachedInstanceError.
+            # DetachedInstanceError: Parent instance <DataSource at 0xb4ebd9ec> is not bound to a Session;
+            #
+            # To avoid that we need to refresh detached objects.
+            if self.bundle.library.database.engine.name == 'sqlite':
+                for name, pipes in iteritems(self.pipeline):
+                    for pipe in pipes:
+                        while pipe:
+                            updated_source = self.bundle.library.database.session \
+                                .query(type(pipe._source)) \
+                                .populate_existing() \
+                                .get(pipe._source.vid)
+                            pipe._source = updated_source
+                            pipe = pipe._source_pipe
         return row
 
     def __str__(self):
         from ..util import qualified_class_name
-        return 'Generator {}'.format(qualified_class_name(self))
+        return 'SQL {}'.format(qualified_class_name(self))
 
 
 def augment_pipeline(pl, head_pipe=None, tail_pipe=None):

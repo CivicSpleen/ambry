@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """Parsers and exractors for the bundle source files.
 
 This module manages reading and writing files that configure a source bundle:
@@ -951,13 +953,14 @@ class ASQLSourceFile(StringSourceFile):
         """ Executes all sql statements from bundle.sql. """
         from ambry.mprlib import execute_sql
         if self._bundle.library.database.engine.name == 'sqlite':
-            # FIXME: Is broken for sqlite.
             # close current sqlite connection (pysqlite) because virtual tables
-            # implementation uses its own connection (apsw)
+            # implementation uses its own connection (apsw). Using both connections simultaneously
+            # leads to OperationalError: (pysqlite2.dbapi2.OperationalError) disk I/O error
+            #
+            # Note: Following code should care about detached objects. See BundleSQLPipe.process_header
+            #   for example.
             self._bundle.library.database.close()
-
-        execute_sql(self._bundle, self.file_content)
-
+        execute_sql(self._bundle.library, self.file_content)
 
 file_info_map = {
     File.BSFILE.BUILD: (File.path_map[File.BSFILE.BUILD], PythonSourceFile),
