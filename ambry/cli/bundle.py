@@ -196,7 +196,7 @@ def make_parser(cmd):
     command_p.add_argument('-s', '--source',  action='append',
                            help='Sources to ingest, instead of running all sources')
     command_p.add_argument('-S', '--stage', help='Ingest sources at this stage')
-    command_p.add_argument('-y', '--sync', default=False, action='store_true',help="Sync first")
+    command_p.add_argument('-y', '--sync', default=False, action='store_true', help='Sync first')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Schema Command
@@ -213,7 +213,7 @@ def make_parser(cmd):
     command_p.add_argument('-d', '--dest', action='store_true',
                            help='Build the destination schema, merging with the existing schema. ')
     command_p.add_argument('-D', '--dest-clean', action='store_true',
-                       help='Build the destination schema, cleaning the existing schema first ')
+                           help='Build the destination schema, cleaning the existing schema first ')
 
     command_p.add_argument('-b', '--build', action='store_true',
                            help='For the destination schema, use the build process to '
@@ -355,7 +355,8 @@ def make_parser(cmd):
     command_p = sub_cmd.add_parser('extract', help='Extract data from a bundle')
     command_p.set_defaults(subcommand='extract')
     command_p.add_argument('-l', '--limit', type=int, default=None, help='Limit on number of rows per file')
-    command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to extract')
+    command_p.add_argument('partition', nargs='?', metavar='partition', type=str,
+                           help='Partition to extract')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
     # Colmap
@@ -411,11 +412,11 @@ def make_parser(cmd):
     command_p.set_defaults(subcommand='log')
 
     command_p.add_argument('-e', '--exceptions', default=None, action='store_true',
-                       help='Print exceptions from the progress log')
+                           help='Print exceptions from the progress log')
     command_p.add_argument('-p', '--progress', default=None, action='store_true',
-                       help='Display progress logs')
+                           help='Display progress logs')
     command_p.add_argument('-s', '--stats', default=None, action='store_true',
-                       help='Display states and counts of partitions and sources')
+                           help='Display states and counts of partitions and sources')
     command_p.add_argument('-a', '--all', default=None, action='store_true',
                            help='Display all records')
 
@@ -429,7 +430,6 @@ def run_command(args, rc):
 
     if args.test_library:
         rc.set_library_database('test')
-
 
     l = Library(rc, echo=args.echo)
 
@@ -458,7 +458,6 @@ def run_command(args, rc):
         exc = e.exc
         b = e.bundle
         b.fatal(str(e.message))
-
 
 
 def get_bundle_ref(args, l, use_history=False):
@@ -526,7 +525,6 @@ def using_bundle(args, l, print_loc=True, use_history=False):
     if print_loc:  # Try to only do this once
         b.log_to_file('==============================')
     return b
-
 
 
 def bundle_info(args, l, rc):
@@ -679,7 +677,6 @@ def bundle_info(args, l, rc):
         for p in (b.dataset.query(Partition).filter(Partition.d_vid == b.identity.vid)
                           .options(lazyload('*'), joinedload(Partition.table))
                   ).all():
-
 
             rows.append([p.vid, p.vname, p.table.name,  p.count,
                          p.identity.time, p.identity.space, p.identity.grain,
@@ -873,8 +870,6 @@ def bundle_schema(args, l, rc):
     b.commit()
 
 
-
-
 def bundle_build(args, l, rc):
 
     b = using_bundle(args, l)
@@ -899,6 +894,7 @@ def bundle_build(args, l, rc):
     b.build(sources=args.source, tables=args.table, stage=args.stage, force=args.force)
 
     b.set_last_access(Bundle.STATES.BUILT)
+
 
 def bundle_run(args, l, rc):
 
@@ -1060,8 +1056,7 @@ def bundle_dump(args, l, rc):
                 row.name,
                 row.state,
                 row.type
-            )
-            )
+            ))
         records = sorted(records, key=lambda row: (row[0]))
 
     elif args.table == 'datasources':
@@ -1288,7 +1283,6 @@ def bundle_export(args, l, rc):
 
         b.set_file_system(source_url=source_dir)
 
-
     b.build_source_files.set_defaults()
     b.sync_out()
 
@@ -1304,8 +1298,6 @@ file_const_map = dict(
     s=File.BSFILE.SCHEMA,
     S=File.BSFILE.SOURCESCHEMA,
     r=File.BSFILE.SOURCES)
-
-
 
 
 def bundle_extract(args, l, rc):
@@ -1537,7 +1529,7 @@ def bundle_docker(args, l, rc):
         # OK; the last_container is dead
         b.buildstate.docker.last_container = None
         b.buildstate.commit()
-        inspect  = None
+        inspect = None
     except NullResource:
         inspect = None
         pass  # OK; no container specified in the last_container value
@@ -1550,7 +1542,6 @@ def bundle_docker(args, l, rc):
 
     def run_container(bambry_cmd=None):
         """Run a new docker container"""
-
 
         if bambry_cmd:
 
@@ -1585,7 +1576,7 @@ def bundle_docker(args, l, rc):
 
         if args.version:
             import ambry._meta
-            image = '{}:{}'.format(image_tag,ambry._meta.__version__)
+            image = '{}:{}'.format(image_tag, ambry._meta.__version__)
         else:
             image = image_tag
 
@@ -1599,7 +1590,7 @@ def bundle_docker(args, l, rc):
         host_config = client.create_host_config(
             volumes_from=volumes_from,
             links={
-                db_c:'db'
+                db_c: 'db'
             }
         )
 
@@ -1677,7 +1668,7 @@ def bundle_docker(args, l, rc):
         # Run a shell on a container
         # This is using execlp rather than the docker API b/c we want to entirely replace the
         # current process to get a good tty.
-        os.execlp('docker', 'docker', 'exec', '-t','-i', last_container, '/bin/bash')
+        os.execlp('docker', 'docker', 'exec', '-t', '-i', last_container, '/bin/bash')
 
     elif not bambry_cmd and not args.kill:
         # Run a container and then attach to it.
@@ -1694,7 +1685,6 @@ def bundle_log(args, l, rc):
     from ambry.orm import Partition
     from tabulate import tabulate
 
-
     if args.exceptions:
         print '=== EXCEPTIONS ===='
         for pr in b.progress.exceptions:
@@ -1708,7 +1698,6 @@ def bundle_log(args, l, rc):
         from collections import OrderedDict
         from sqlalchemy.sql import and_
 
-
         records = []
 
         def append(pr, edit=None):
@@ -1721,8 +1710,7 @@ def bundle_log(args, l, rc):
                              'phase', 'stage', 'modified', 'item_count',
                              'message'])
 
-            d['modified'] = round(float(d['modified']) - time.time(),1)
-
+            d['modified'] = round(float(d['modified']) - time.time(), 1)
 
             if edit:
                 for k, v in edit.items():
@@ -1742,20 +1730,20 @@ def bundle_log(args, l, rc):
 
         # Add old running rows, which may indicate a dead process.
         q = (b.progress.query.filter(Process.s_vid != None)
-             .filter(and_(Process.state == 'running',Process.modified < time.time() - 60)))
+             .filter(and_(Process.state == 'running', Process.modified < time.time() - 60)))
 
         for pr in q.all():
-            append(pr, edit={'modified': lambda e: (str(e)+' (dead?)') })
+            append(pr, edit={'modified': lambda e: (str(e)+' (dead?)')})
 
         records = drop_empty(records)
 
         if records:
-            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]),records[0]))
+            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]), records[0]))
 
     if args.stats:
         print '=== STATS ===='
         ds = b.dataset
-        key_f = key=lambda e: e.state
+        key_f = key = lambda e: e.state
         states = set()
         d = defaultdict(lambda: defaultdict(int))
 
@@ -1775,19 +1763,11 @@ def bundle_log(args, l, rc):
         headers = sorted(states)
         rows = []
 
-        for r in ('Sources','Partitions','Segments'):
+        for r in ('Sources', 'Partitions', 'Segments'):
             row = [r]
             for state in headers:
-                row.append(d[r].get(state,''))
+                row.append(d[r].get(state, ''))
             rows.append(row)
 
         if rows:
             prt_no_format(tabulate(rows, headers))
-
-
-
-
-
-
-
-
