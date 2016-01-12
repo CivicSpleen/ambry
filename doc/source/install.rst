@@ -1,6 +1,6 @@
 .. _install:
 
-################
+
 Installing Ambry
 ################
 
@@ -13,7 +13,6 @@ Ambry is a complex package that has dependencies on a lot of other code, some of
 * `Docker`_
 
 
-********
 Mac OS X
 ********
 
@@ -75,7 +74,7 @@ The KyngChaos packages aren't signed, so Mac OS will issue a warning. Use the ri
 
 Then,  see :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
    
-*************
+
 Linux, Ubuntu
 *************
 
@@ -102,33 +101,7 @@ Windows
 
 For Windows, you can probably use the "Easy Way" installation: install Anaconda first, then Ambry. If that doesn't work, try Vagrant or Docker. 
 
-*************
-Vagrant
-*************
 
-To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the source code. The Vagrant environment is inside the source distribution, and share's the host's source directory, so the Vagrant installation is a good way to develop on Windows while running in Ubuntu. 
-
-First, clone the source from github, https://github.com/CivicKnowledge/ambry.git or, download a Zip archive from: https://github.com/CivicKnowledge/ambry/archive/master.zip
-
-After unpacking the source, change directory to the vagrant directory, :file:`support/ambry-vagrant` and run :command:`vagrant up`
-
-.. code-block:: bash
-
-    $ wget https://github.com/CivicKnowledge/ambry/archive/master.zip
-    $ unzip master.zip
-    $ cd ambry-master/support/ambry-vagrant/
-    $ vagrant up
-    
-When the build is done, ssh to the box. 
-
-.. code-block:: bash
-
-    $ vagrant ssh 
-
-Then, follow the instrictions at :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
-  
-
-*************
 Docker
 *************
    
@@ -146,7 +119,7 @@ When that is finished, you can run the image with:
 
 .. _install-post-install:
 
-*************
+
 Post Install
 *************
   
@@ -155,20 +128,19 @@ After installing Ambry and its dependencies, you can check that the installation
 .. code-block:: bash
     
     $ ambry info 
-    Version:  0.3.420
-    Root dir: /home/eric/ambry
-    Source :  /home/eric/ambry/source
-    Configs:  ['/home/eric/.ambry.yaml', '/home/eric/.ambry-accounts.yaml']
+	Version:   0.3.1612
+	Root dir:  /Users/eric/proj/virt/ambry-develop/data
+	Source :   /Users/eric/proj/virt/ambry-develop/data/source
+	Configs:   ['/Users/eric/proj/virt/ambry-develop/.ambry.yaml']
+	Accounts:  /Users/eric/.ambry-accounts.yaml
+	Library:   sqlite:////Users/eric/proj/virt/ambry-develop/data/library.db
+	Remotes:   test, public
 
-    $ ambry library info 
-    Library Info
-    Name:     default
-    Database: sqlite:////home/eric/ambry/library.db
-    Cache:    FsCache: dir=/home/eric/ambry/library upstream=(None)
-    Remotes:  FsCompressionCache: upstream=(HttpCache: url=http://s3.sandiegodata.org/library/)
 
 After installation, you can customize the configuation. See: :ref:`configuration`
 
+subsection name
+***************
 
 
 
