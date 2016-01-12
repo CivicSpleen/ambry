@@ -30,6 +30,7 @@ After installing Anaconda, open a new Terminal window ( an old one won't have th
     $ which python 
     /Users/eric/anaconda/bin/python
  
+  
 Most python dependencies are installed with `pip` along with Ambry, but `gdal` requires compiling and doesn't build easily on OS X, so we'll get it with conda:
  
 .. code-block:: bash
