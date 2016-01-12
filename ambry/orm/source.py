@@ -35,7 +35,7 @@ class DataSourceBase(object):
     NON_PROCESS_REFTYPES = ('ref', 'template')
 
     # reftypes for sources that should not be built or have schemas create for
-    NON_INGEST_REFTYPES = ('ref', 'template', 'partition')
+    NON_INGEST_REFTYPES = ('ref', 'template', 'partition', 'sql')
 
     STATES = Constant()
     STATES.NEW = 'new'
@@ -141,7 +141,6 @@ class DataSourceBase(object):
     @property
     def partition(self):
         """For partition urltypes, return the partition specified by the ref """
-        from ambry.orm.exc import NotFoundError
         if self.urltype != 'partition':
             return None
 
@@ -256,8 +255,9 @@ class DataSourceBase(object):
         if self.reftype == 'partition':
 
             for c in self.partition.table.columns:
-                st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name,datatype=c.datatype)
-
+                st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name, datatype=c.datatype)
+        elif self.reftype == 'sql':
+            raise NotImplementedError('Get columns from database and populate source_table.')
         elif self.datafile.exists:
             with self.datafile.reader as r:
 
@@ -275,7 +275,6 @@ class DataSourceBase(object):
                                           datatype=col['resolved_type'],
                                           description=col['description'],
                                           has_codes=col['has_codes'])
-
 
     def update_spec(self):
         """Update the source specification with information from the row intuiter, but only if the spec values
@@ -319,7 +318,7 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     source_table_name = SAColumn('ds_st_name', Text)
     _source_table = relationship(SourceTable, backref='sources')
 
-    t_vid = SAColumn('ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True,doc='Table vid')
+    t_vid = SAColumn('ds_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=True, doc='Table vid')
     dest_table_name = SAColumn('ds_dt_name', Text)
     _dest_table = relationship(Table, backref='sources')
 
@@ -376,7 +375,6 @@ class TransientDataSource(DataSourceBase):
 
     @property
     def row(self):
-        import inspect
 
         # WARNING! There is another .row() in DataSourceBase which gets uses for non persistent records
 
@@ -384,7 +382,7 @@ class TransientDataSource(DataSourceBase):
         SKIP_KEYS = ('sequence_id', 'vid', '_source_table',
                      '_dest_table', 'd_vid', 't_vid', 'st_vid', 'dataset', 'process_records')
 
-        d =  OrderedDict([(k,getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+        d = OrderedDict([(k, getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
 
         assert 'process_records' not in d
 

@@ -18,7 +18,7 @@ def execute_sql(library, asql):
     """ Executes all sql statements from asql.
 
     Args:
-        library (Library):
+        library (library.Library):
         asql (str): unified sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
     """
     engine_name = library.database.engine.name

@@ -93,8 +93,6 @@ class Table(Base, DictableMixin):
         :param kwargs: Other arguments for the the Column() constructor
         :return: a Column object
         """
-        from . import next_sequence_id
-        from sqlalchemy.orm import object_session
         from ..identity import ColumnNumber
 
         try:
