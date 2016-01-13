@@ -138,14 +138,14 @@ class Account(Base):
 
     def encrypt_password(self, v):
 
-        from passlib.hash import pbkdf2_sha256
-        self.encrypted_password =  pbkdf2_sha256.encrypt(v, rounds=200000, salt_size=16)
+        from passlib.hash import pbkdf2_sha512
+        self.encrypted_password =  pbkdf2_sha512.encrypt(v, rounds=50000, salt_size=16)
 
 
     def test(self, v):
         """Test the password against a value"""
-        from passlib.hash import pbkdf2_sha256
-        return pbkdf2_sha256.verify(v, self.encrypted_password)
+        from passlib.hash import pbkdf2_sha512
+        return pbkdf2_sha512.verify(v, self.encrypted_password)
 
 
     @staticmethod
