@@ -35,7 +35,7 @@ class DataSourceBase(object):
     NON_PROCESS_REFTYPES = ('ref', 'template')
 
     # reftypes for sources that should not be built or have schemas create for
-    NON_INGEST_REFTYPES = ('ref', 'template', 'partition', 'sql')
+    NON_INGEST_REFTYPES = ('ref', 'template', 'partition',)
 
     STATES = Constant()
     STATES.NEW = 'new'
@@ -215,7 +215,6 @@ class DataSourceBase(object):
     @property
     def is_ingestible(self):
         """Return true if the URL is probably downloadable, and is not a reference or a template"""
-
         return self.urltype not in self.NON_INGEST_REFTYPES
 
     @property
@@ -229,6 +228,11 @@ class DataSourceBase(object):
         """Return true if the reference is to a partition"""
 
         return self.reftype == 'partition'
+
+    @property
+    def is_relation(self):
+        """Returns True if the reference is to a relation. """
+        return self.reftype == 'sql'
 
     @property
     def is_finalized(self):
@@ -253,11 +257,34 @@ class DataSourceBase(object):
         st = self.source_table
 
         if self.reftype == 'partition':
-
             for c in self.partition.table.columns:
                 st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name, datatype=c.datatype)
         elif self.reftype == 'sql':
-            raise NotImplementedError('Get columns from database and populate source_table.')
+            if self._bundle.library.database.engine.name == 'sqlite':
+                SQL_TO_PYTHON_MAP = {
+                    'INTEGER': int,
+                    'NUMERIC': float,
+                    'REAL': float,
+                    'CHARACTER': str,
+                    'VARCHAR': str,
+                    'TEXT': str
+                }
+                query = 'PRAGMA table_info(\'{}\');'.format(self.spec.url)
+                result = self._bundle.library.database.connection.execute(query)
+
+                for row in result:
+                    position = row[0] + 1
+                    name = row[1]
+                    datatype = row[2]
+                    if datatype.lower() == 'integer':
+                        datatype = int
+                    # FIXME: convert other sql types to python types.
+                    st.add_column(position, name, datatype, dest_header=name)
+            else:
+                raise NotImplementedError(
+                    '{} engine schema retrieve is not implemented.'
+                    .format(self._bundle.library.database.engine.name))
+
         elif self.datafile.exists:
             with self.datafile.reader as r:
 

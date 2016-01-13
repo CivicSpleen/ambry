@@ -7,6 +7,7 @@ __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
 
+import six
 from six import string_types
 
 from geoid.util import isimplify
@@ -308,12 +309,11 @@ class Partition(Base):
         else:
             return ''
 
-
     @property
     def time_description(self):
         """String description of the year or year range"""
 
-        tc = [ t for t in self.time_coverage if t]
+        tc = [t for t in self.time_coverage if t]
 
         if not tc:
             return ''
@@ -327,7 +327,6 @@ class Partition(Base):
             return mn
         else:
             return "{} to {}".format(mn, mx)
-
 
     @property
     def sub_description(self):
@@ -362,7 +361,6 @@ class Partition(Base):
                     d[k] = v
 
         return d
-
 
     @property
     def stats_dict(self):
@@ -511,8 +509,8 @@ class Partition(Base):
                 self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
 
             except ResourceNotFoundError:
-                raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
-
+                raise NotFoundError(
+                    'Could not locate data file for partition {}'.format(self.identity.fqname))
 
         return self._datafile
 
@@ -543,10 +541,9 @@ class Partition(Base):
         """Return ture is the partition file is local"""
         return self.datafile.exists
 
-
     def localize(self, ps=None):
         """Copy a non-local partition file to the local build directory"""
-        from  filelock import FileLock
+        from filelock import FileLock
         from ambry.util import ensure_dir_exists
         from ambry_sources import MPRowsFile
 
@@ -577,7 +574,7 @@ class Partition(Base):
 
                 if ps.rec.data['updates'] % 32 == 1:
                     ps.update(message='Localizing {}'.format(self.identity.name),
-                          item_count=item_count )
+                              item_count=item_count)
 
         def exception_cb(e):
             raise e

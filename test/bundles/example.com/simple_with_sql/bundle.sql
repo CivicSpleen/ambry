@@ -3,7 +3,9 @@
 -- Example of a table creation. ---
 CREATE TABLE table1 (
     col1 INTEGER,
-    col2 INTEGER);
+    col2 BOOLEAN);
+INSERT INTO table1 VALUES (1, 1);
+INSERT INTO table1 VALUES (2, 0);
 
 -- Example of a view creation. --
 CREATE VIEW view1 AS

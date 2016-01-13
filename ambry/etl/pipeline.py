@@ -847,11 +847,12 @@ class MapSourceHeaders(Pipe):
     def process_header(self, headers):
 
         is_generator = isinstance(self._source_pipe, GeneratorSourcePipe)
+        is_relation = isinstance(self._source_pipe, DatabaseRelationSourcePipe)
 
         if len(list(self.source.source_table.columns)) == 0:
 
-            if is_generator:
-                # Generators are assumed to return a valid, consistent header, so
+            if is_generator or is_relation:
+                # Generators or relations are assumed to return a valid, consistent header, so
                 # if the table is missing, carry on.
 
                 assert headers
@@ -868,9 +869,9 @@ class MapSourceHeaders(Pipe):
             dest_headers = [c.dest_header for c in self.source.source_table.columns]
 
             if len(headers) != len(dest_headers):
-                raise PipelineError(self, ("Source headers not same length as source table for source {}.\n"
-                                           "Table : {} headers: {}\n"
-                                           "Source: {} headers: {}\n")
+                raise PipelineError(self, ('Source headers not same length as source table for source {}.\n'
+                                           'Table : {} headers: {}\n'
+                                           'Source: {} headers: {}\n')
                                     .format(self.source.name, len(dest_headers), dest_headers,
                                             len(headers), headers))
 
@@ -2250,33 +2251,6 @@ class Pipeline(OrderedDict):
         return tabulate(out)
 
 
-class BundleSQLPipe(Pipe):
-    """Pipe that executes queryes from bundle.sql """
-
-    def process_header(self, row):
-        if self.bundle.build_source_files.sql.exists():
-            self.bundle.build_source_files.sql.execute()
-            # SQL execution for sqlite closes database. This leads to DetachedInstanceError.
-            # DetachedInstanceError: Parent instance <DataSource at 0xb4ebd9ec> is not bound to a Session;
-            #
-            # To avoid that we need to refresh detached objects.
-            if self.bundle.library.database.engine.name == 'sqlite':
-                for name, pipes in iteritems(self.pipeline):
-                    for pipe in pipes:
-                        while pipe:
-                            updated_source = self.bundle.library.database.session \
-                                .query(type(pipe._source)) \
-                                .populate_existing() \
-                                .get(pipe._source.vid)
-                            pipe._source = updated_source
-                            pipe = pipe._source_pipe
-        return row
-
-    def __str__(self):
-        from ..util import qualified_class_name
-        return 'SQL {}'.format(qualified_class_name(self))
-
-
 def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
     """
     Augment the pipeline by adding a new pipe section to each stage that has one or more pipes. Can be used for debugging
@@ -2312,3 +2286,30 @@ def _to_ascii(s):
     else:
         raise Exception('Unknown text type - {}'.format(type(s)))
     return ascii_
+
+
+class DatabaseRelationSourcePipe(Pipe):
+    """Source pipe that implements iterator over sql database tables or views. """
+
+    def __init__(self, source, gen):
+        from ..util import qualified_class_name
+
+        self._source = source
+        self._gen = gen
+
+        # file_name is for the pipeline logger, to generate a file
+        if self._source:
+            self.file_name = self._source.name
+        else:
+            self.file_name = qualified_class_name(self)
+
+    def __iter__(self):
+
+        yield self._gen.headers
+
+        for row in self._gen:
+            yield row
+
+    def __str__(self):
+        from ..util import qualified_class_name
+        return 'DatabaseRelation {}'.format(qualified_class_name(self))

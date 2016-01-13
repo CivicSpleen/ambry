@@ -90,7 +90,7 @@ class Bundle(object):
     default_pipelines = {
 
         'build': {
-            'first': [ambry.etl.BundleSQLPipe],
+            'first': [],
             'source_map': [ambry.etl.MapSourceHeaders],
             'cast': [ambry.etl.CastColumns],
             'body': [],
@@ -918,10 +918,10 @@ Caster Code
         return iter_source, source_pipe
 
     def _iterable_source(self, source, ps=None):
-        from ambry_sources.sources import FixedSource, GeneratorSource
+        from ambry_sources.sources import FixedSource, GeneratorSource, DatabaseRelationSource
         from ambry_sources.exceptions import MissingCredentials
         from ambry_sources import get_source
-        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe
+        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, DatabaseRelationSourcePipe
         from ambry.bundle.process import call_interval
 
         s = None
@@ -934,9 +934,10 @@ Caster Code
             s = source.partition
             sp = GeneratorSourcePipe(self, source, s)
 
-        # elif source.reftype == 'sql':
-            # FIXME: Implement
-        #    print source.reftype
+        elif source.reftype == 'sql':
+            s = DatabaseRelationSource(source.spec, self.library.database.connection)
+            sp = DatabaseRelationSourcePipe(source, s)
+
         elif source.reftype == 'generator':
             import sys
 
@@ -1073,7 +1074,7 @@ Caster Code
 
     def run_stages(self):
 
-        stages = set([ source.stage for source in self.sources])
+        stages = set([source.stage for source in self.sources])
 
         for stage in stages:
             sources = [ source for source in self.sources if source.stage == stage ]
@@ -1385,6 +1386,11 @@ Caster Code
 
         self.log('---- Ingesting ----')
 
+        # source may mention to sql relation defined in the bundle.sql. So process bundle.sql.
+        if self.build_source_files.sql.exists():
+            self.log('---- Execute bundle.sql ----')
+            self.build_source_files.sql.execute()
+
         key = lambda s: s.stage if s.stage else 1
 
         def not_final_or_delete(s):
@@ -1514,7 +1520,7 @@ Caster Code
 
             from ambry.orm.exc import NotFoundError
 
-            if not source.is_partition and source.datafile.exists:
+            if not source.is_partition and not source.is_relation and source.datafile.exists:
                 if not source.datafile.is_finalized:
                     source.datafile.remove()
                 elif force:
@@ -1540,7 +1546,7 @@ Caster Code
 
             if not source.is_ingestible:
                 ps.update(message='Not an ingestiable source: {}'.format(source.name),
-                            state='skipped', source=source)
+                          state='skipped', source=source)
                 source.state = source.STATES.NOTINGESTABLE
 
                 return True
@@ -1552,10 +1558,13 @@ Caster Code
             def ingest_progress_f(i):
                 (desc, n_records, total, rate) = source.datafile.report_progress()
 
-                ps.update(message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
+                ps.update(
+                    message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
 
+            intuit_type = not source.is_relation  # FIXME: Do not intuit rows for is_relation!
             source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
-                                      limit=500 if self.limited_run else None)
+                                      limit=500 if self.limited_run else None,
+                                      intuit_type=intuit_type)
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 
@@ -1682,8 +1691,7 @@ Caster Code
                         return enumerate(source.source_table.columns)
 
                 columns = sorted(set([(i, col.dest_header, col.datatype, col.description, col.has_codes)
-                                      for source in table_sources for i, col in source_cols(source )]))
-
+                                      for source in table_sources for i, col in source_cols(source)]))
 
                 initial_count = len(t.columns)
 

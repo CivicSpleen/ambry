@@ -9,24 +9,13 @@ from pysqlite2.dbapi2 import OperationalError
 
 from fs.opener import fsopendir
 
-try:
-    from ambry_sources.med.sqlite import install_mpr_module
-except ImportError as exc:
-    from semantic_version import Version
-    import ambry_sources
-    ambry_sources_version = getattr(ambry_sources, '__version__', None) or ambry_sources.__meta__.__version__
-    if Version(ambry_sources_version) < Version('0.1.10'):
-        raise ImportError(
-            '{}. You need to update ambry_sources to >= 0.1.10.'
-            .format(exc))
-    else:
-        raise
-
 from ambry.mprlib import PostgreSQLBackend
 from ambry_sources.med import postgresql as postgres_med
 
 from test.test_base import TestBase
-from test.helpers import assert_sqlite_index, assert_postgres_index
+from test.helpers import assert_sqlite_index, assert_postgres_index, assert_valid_ambry_sources
+
+assert_valid_ambry_sources('0.1.11')
 
 
 class InspectorBase(object):
@@ -64,7 +53,7 @@ class SQLiteInspector(InspectorBase):
         """ Looks for given table in the library. If not found raises AssertionError. """
         try:
             table_rows = library.database.connection.execute('SELECT col1, col2 FROM table1;').fetchall()
-            assert table_rows == []
+            assert table_rows == [(1, 1), (2, 2)]
         except OperationalError as exc:
             if 'no such table' in str(exc):
                 raise AssertionError('table1 was not created.')

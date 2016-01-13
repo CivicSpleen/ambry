@@ -204,7 +204,7 @@ class SourceTable(Base):
     def add_column(self, position, source_header, datatype, **kwargs):
         """
         Add a column to the source table.
-        :param position: Integer position of the column
+        :param position: Integer position of the column started from 1.
         :param source_header: Name of the column, as it exists in the source file
         :param datatype: Python datatype ( str, int, float, None ) for the column
         :param kwargs:  Other source record args.

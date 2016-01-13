@@ -18,7 +18,7 @@ def assert_sqlite_index(connection, partition, column):
 def assert_valid_ambry_sources(version):
     """ Checks ambry_sources version. Raises assertion if ambry_sources version is less then given version."""
     if Version(AMBRY_SOURCES_VERSION) < Version(version):
-        raise AssertionError('Need ambry_sources >= {}. Update your installation.'.format(version))
+        raise AssertionError('Require ambry_sources >= {}. Update your installation.'.format(version))
 
 
 def assert_postgres_index(connection, table, column):
