@@ -136,11 +136,7 @@ After installing Ambry and its dependencies, you can check that the installation
 	Library:   sqlite:////Users/eric/proj/virt/ambry-develop/data/library.db
 	Remotes:   test, public
 
-
 After installation, you can customize the configuation. See: :ref:`configuration`
-
-subsection name
-***************
 
 
 
