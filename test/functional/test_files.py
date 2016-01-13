@@ -216,3 +216,6 @@ class BundleSQLTest(TestBase):
             library,
             simple_bundle.partition('example.com-simple-simple'),
             'id')
+        # FIXME: Check partition created from from_table1 source
+        # FIXME: Check partition created from from_mat_view1 source
+        # FIXME: Check partition created from from_view1 source
