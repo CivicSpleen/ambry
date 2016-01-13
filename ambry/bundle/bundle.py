@@ -2596,7 +2596,7 @@ Caster Code
             try:
                 os.remove(path + '-shm')
                 os.remove(path + '-wal')
-            except IOError:
+            except IOError, OSError:
                 pass
 
         db = Database('sqlite:///{}'.format(path))

@@ -15,6 +15,7 @@ class Test(TestBase):
         from ambry.orm.account import Account
 
         a = Account(major_type='ambry')
+        a.secret_password = 'secret'
         a.encrypt_secret('foobar')
 
         self.assertIsNone(a.decrypt_secret())

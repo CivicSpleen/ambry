@@ -1,9 +1,0 @@
-python-jose
-passlib
-Jinja2==2.8
-Flask-Compress==1.2.1
-Flask==0.10.1
-Flask-Session==0.1.1
-Flask-Login
-wtforms
-Flask-WTF

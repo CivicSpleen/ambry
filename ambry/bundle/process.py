@@ -311,6 +311,91 @@ class ProcessLogger(object):
         return BuildConfigGroupAccessor(self.dataset, 'buildstate', self._session)
 
 
+    def bundle_process_logs(self, show_all = None):
+        import time
+        from collections import OrderedDict
+        from sqlalchemy.sql import and_
+        from ambry.util import drop_empty
+
+        records = []
+
+        def append(pr, edit=None):
+
+            if not isinstance(pr, dict):
+                pr = pr.dict
+
+            d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.items() if k in
+                            ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
+                             'phase', 'stage', 'modified', 'item_count',
+                             'message'])
+
+            d['modified'] = round(float(d['modified']) - time.time(), 1)
+
+            if edit:
+                for k, v in edit.items():
+                    d[k] = v(d[k])
+
+            if not records:
+                records.append(d.keys())
+
+            records.append(d.values())
+
+        q = self.query.order_by(Process.modified.desc())
+
+        for pr in q.all():
+
+            # Don't show reports that are done or older than 2 minutes.
+            if show_all or (pr.state != 'done' and pr.modified > time.time() - 120):
+                append(pr)
+
+        # Add old running rows, which may indicate a dead process.
+        q = (self.query.filter(Process.s_vid != None)
+             .filter(and_(Process.state == 'running', Process.modified < time.time() - 60))
+             .filter(Process.group != None))
+
+        for pr in q.all():
+            append(pr, edit={'modified': lambda e: (str(e) + ' (dead?)')})
+
+
+        records = drop_empty(records)
+
+        return records
+
+    def stats(self):
+        from collections import defaultdict
+        from itertools import groupby
+        from collections import defaultdict
+        from ambry.orm import Partition
+
+        ds = self.dataset
+        key_f = key = lambda e: e.state
+        states = set()
+        d = defaultdict(lambda: defaultdict(int))
+
+        for state, sources in groupby(sorted(ds.sources, key=key_f), key_f):
+            d['Sources'][state] = sum(1 for _ in sources) or None
+            states.add(state)
+
+        key_f = key = lambda e: (e.state, e.type)
+
+        for (state, type), partitions in groupby(sorted(ds.partitions, key=key_f), key_f):
+            states.add(state)
+            if type == Partition.TYPE.UNION:
+                d['Partitions'][state] = sum(1 for _ in partitions) or None
+            else:
+                d['Segments'][state] = sum(1 for _ in partitions) or None
+
+        headers = sorted(states)
+        rows = []
+
+        for r in ('Sources', 'Partitions', 'Segments'):
+            row = [r]
+            for state in headers:
+                row.append(d[r].get(state, ''))
+            rows.append(row)
+
+        return headers, rows
+
 class CallInterval(object):
     """Call the inner callback at a limited frequency"""
 

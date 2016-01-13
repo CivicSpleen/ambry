@@ -56,6 +56,7 @@ def make_parser(cmd):
 
     sp = asp.add_parser('export', help='Dump a library configuration, remortes, accounts and bundles')
     sp.set_defaults(subcommand='export')
+    sp.add_argument('-p', '--password', required=True, help='Encryption password')
 
     sp.add_argument('config_file', nargs='?', type=argparse.FileType('wb'), default = sys.stdout,
                     help='Config file to write to. If absent, will write to stdout')
@@ -265,7 +266,10 @@ def library_export(args, l, config):
     import json
     from ambry.util import random_string
 
-    password = random_string(16)
+    if args.password:
+        password = args.password
+    else:
+        password = random_string(16)
 
     d = {
         'remotes': {},
@@ -274,7 +278,7 @@ def library_export(args, l, config):
     }
 
     for r in l.remotes:
-        d['remotes'][r.short_name] = { k:v for k,v in r.dict.items() if bool(v ) and k not in ('id', ) }
+        d['remotes'][r.short_name] = { k:v for k,v in r.dict.items() if bool(v ) and k not in ('id','list' ) }
 
     for k in l.accounts.keys():
         a = l.account(k)
@@ -282,8 +286,11 @@ def library_export(args, l, config):
         da = { k:v for k,v in a.dict.items() if bool(v )and k != 'secret' }
 
         # Change the secret encryption password
-        if 'encrypted_secret' in da:
-            da['encrypted_secret'] = a.encrypt_secret(a.decrypt_secret(), password)
+        if 'encrypted_secret' in da and da['encrypted_secret']:
+            ds = a.decrypt_secret()
+            if ds:
+                da['encrypted_secret'] = a.encrypt_secret(ds, password)
+
 
         d['accounts'][a.account_id] = da
 
@@ -294,7 +301,9 @@ def library_export(args, l, config):
             'cache_key': b.identity.cache_key
         }
 
-    prt("Password: {}".format(password))
+    if not args.password:
+        prt("Password: {}".format(password))
+
     args.config_file.write(encrypt(password, json.dumps(d, indent = 4)).encode('base64'))
     args.config_file.close()
 

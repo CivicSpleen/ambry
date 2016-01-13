@@ -138,6 +138,10 @@ class Partition(Base):
         return PartitionIdentity.from_dict(dict(list(ds.dict.items()) + list(d.items())))
 
     @property
+    def bundle(self):
+        return self._bundle # Set externally, such as Bundle.wrap_partition
+
+    @property
     def is_segment(self):
         return self.type == self.TYPE.SEGMENT
 

@@ -40,9 +40,12 @@ class Account(Base):
     account_id = SAColumn('ac_account_id', Text, unique = True)
 
     url = SAColumn('ac_org', Text)  # URL of service
+
     access_key = SAColumn('ac_access', Text)  # Access token or username
 
-    encrypted_secret = SAColumn('ac_secret', Text) # Secret or password, symmetrically encrypted
+    encrypted_secret = SAColumn('ac_secret', Text) # Symmetrically encrypted secret
+
+    encrypted_password = SAColumn('ac_password', Text)  # Asymmetrically encrypted user password
 
     name = SAColumn('ac_name', Text)  # Person's name
     email = SAColumn('ac_email', Text)  # Email for foreign account
@@ -74,6 +77,7 @@ class Account(Base):
         except SC_DecryptionException as e:
             raise AccountDecryptionError("Wrong password ")
         except binascii.Error as e:
+
             raise AccountDecryptionError("Bad password: {}".format(e))
 
 
@@ -82,6 +86,19 @@ class Account(Base):
         from passlib.hash import pbkdf2_sha256
         return pbkdf2_sha256.encrypt(v, rounds=200000, salt_size=16)
 
+
+    @property
+    def secret(self):
+        assert self.secret_password # The encryption password
+        if self.encrypted_secret:
+            return self.sym_decrypt(self.secret_password, self.encrypted_secret)
+        else:
+            return None
+
+    @secret.setter
+    def secret(self, v):
+        assert self.secret_password # The encryption password
+        self.encrypted_secret = self.sym_encrypt(self.secret_password, v)
 
     def decrypt_secret(self, password = None):
 
@@ -101,28 +118,42 @@ class Account(Base):
             raise MissingPasswordError("Must have a password to get or set the secret")
 
 
-
-
-
     def encrypt_secret(self,v, password = None):
-
 
         if not password:
             password = self.secret_password
 
-        if self.major_type == 'user':
-            # These are passwords, not really secrets, so they are encrypted asymmetrically
+        if password:
+            self.encrypted_secret = self.sym_encrypt(password, v)
+        else:
+            raise MissingPasswordError("Must have a password to get or set the secret")
 
-            self.encrypted_secret = self.asym_encrypt(v)
-        elif v:
-            if password:
-                self.encrypted_secret = self.sym_encrypt(password, v)
-            else:
-                raise MissingPasswordError("Must have a password to get or set the secret")
+        return self.encrypted_secret
+
+    @property
+    def password(self):
+        raise NotImplemented('Use test()')
+
+    @password.setter
+    def password(self):
+        assert self.secret_password
+        self.encrypted_secret = self.sym_encrypt(self.secret_password, v)
+
+
+    def encrypt_password(self, v, password=None):
+
+        if not password:
+            password = self.secret_password
+
+        if password:
+            self.encrypted_secret = self.sym_encrypt(password, v)
+        else:
+            raise MissingPasswordError("Must have a password to get or set the secret")
 
         return self.encrypted_secret
 
     def test(self, v):
+        """Test the password against a value"""
 
         if self.major_type == 'user':
             from passlib.hash import pbkdf2_sha256

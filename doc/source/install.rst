@@ -43,7 +43,7 @@ Finally, install Ambry with pip:
 Now see :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
     
 
-   
+
 *************
 Linux, Ubuntu
 *************
@@ -117,12 +117,7 @@ After installing Ambry and its dependencies, you can check that the installation
     Source :  /home/eric/ambry/source
     Configs:  ['/home/eric/.ambry.yaml', '/home/eric/.ambry-accounts.yaml']
 
-    $ ambry library info 
-    Library Info
-    Name:     default
-    Database: sqlite:////home/eric/ambry/library.db
-    Cache:    FsCache: dir=/home/eric/ambry/library upstream=(None)
-    Remotes:  FsCompressionCache: upstream=(HttpCache: url=http://s3.sandiegodata.org/library/)
+
 
 After installation, you can customize the configuation. See: :ref:`configuration`
 

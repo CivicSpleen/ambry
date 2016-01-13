@@ -1567,14 +1567,11 @@ def bundle_test(args, l, rc):
 def bundle_log(args, l, rc):
     b = using_bundle(args, l)
     from ambry.util import drop_empty
-    from itertools import groupby
-    from collections import defaultdict
-    from ambry.orm import Partition
+
     from tabulate import tabulate
     from ambry.orm import Process
     import time
     from collections import OrderedDict
-    from sqlalchemy.sql import and_
 
     def append(pr, edit=None):
 
@@ -1607,26 +1604,7 @@ def bundle_log(args, l, rc):
     elif args.progress:
         print '=== PROGRESS ===='
 
-
-        records = []
-
-        q = b.progress.query.order_by(Process.modified.desc())
-
-        for pr in q.all():
-            # Don't show reports that are done or older than 2 minutes.
-            if args.all or (pr.state != 'done' and pr.modified > time.time() - 120):
-                append(pr)
-
-        # Add old running rows, which may indicate a dead process.
-        q = (b.progress.query.filter(Process.s_vid != None)
-             .filter(and_(Process.state == 'running',Process.modified < time.time() - 60))
-             .filter(Process.group != None))
-
-        for pr in q.all():
-
-            append(pr, edit={'modified': lambda e: (str(e)+' (dead?)') })
-
-        records = drop_empty(records)
+        records = b.progress.bundle_process_logs(show_all=args.all)
 
         if records:
             prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]),records[0]))
@@ -1646,32 +1624,8 @@ def bundle_log(args, l, rc):
 
     if args.stats:
         print '=== STATS ===='
-        ds = b.dataset
-        key_f = key=lambda e: e.state
-        states = set()
-        d = defaultdict(lambda: defaultdict(int))
 
-        for state, sources in groupby(sorted(ds.sources, key=key_f), key_f):
-            d['Sources'][state] = sum(1 for _ in sources) or None
-            states.add(state)
-
-        key_f = key = lambda e: (e.state, e.type)
-
-        for (state, type), partitions in groupby(sorted(ds.partitions, key=key_f), key_f):
-            states.add(state)
-            if type == Partition.TYPE.UNION:
-                d['Partitions'][state] = sum(1 for _ in partitions) or None
-            else:
-                d['Segments'][state] = sum(1 for _ in partitions) or None
-
-        headers = sorted(states)
-        rows = []
-
-        for r in ('Sources','Partitions','Segments'):
-            row = [r]
-            for state in headers:
-                row.append(d[r].get(state,''))
-            rows.append(row)
+        headers, rows = b.progress.stats()
 
         if rows:
             prt_no_format(tabulate(rows, headers))

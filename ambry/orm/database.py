@@ -24,7 +24,7 @@ import logging
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 118
+SCHEMA_VERSION = 119
 
 # Note: If you are going to change POSTGRES_SCHEMA_NAME do not forget to change docs:
 #   1. README.rst (search for 'Install pg_trgm extension')

@@ -308,10 +308,14 @@ def config_installcli(args, l, rc):
 
     for module_name in args.modules:
 
+
         m = __import__(module_name)
 
         for cmd in m.commands:
+            prt("Adding {} from {}".format(cmd, module_name))
             clis.add(cmd)
 
     with open(cli_path, 'wt') as f:
         yaml.dump(list(clis), f, default_flow_style=False)
+
+    prt("Wrote updated cli config to: {}".format(cli_path))

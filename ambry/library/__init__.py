@@ -829,6 +829,10 @@ class Library(object):
     def services(self):
         return self.database.root_dataset.config.library['services']
 
+    @property
+    def ui_config(self):
+        return self.database.root_dataset.config.library['ui']
+
     def number(self, assignment_class=None, namespace='d'):
         """
         Return a new number.

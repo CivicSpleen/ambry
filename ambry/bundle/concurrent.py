@@ -87,7 +87,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
         tb = traceback.format_exc()
         b.error('Subprocess {} raised an exception: {}'.format(os.getpid(), e), False)
         b.error(tb, False)
-        result = (False, [e])
+        result = (False, e)
 
     assert result
 
@@ -129,8 +129,6 @@ class Pool(MPPool):
             w.daemon = True
             w.start()
             debug('added worker')
-
-
 
 def alt_init(l): # For testing
     global library

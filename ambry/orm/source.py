@@ -57,7 +57,10 @@ class DataSourceBase(object):
     def url(self):
         if self.reftype == 'generator':
             # Guess that the first generator parameter is a URL. It may not be, but should be, by convention
-            return self.generator_args[0]
+            try:
+                return self.generator_args[0]
+            except IndexError:
+                return None
 
         return self.ref
 
