@@ -81,10 +81,6 @@ class Account(Base):
             raise AccountDecryptionError("Bad password: {}".format(e))
 
 
-    @staticmethod
-    def asym_encrypt(v):
-        from passlib.hash import pbkdf2_sha256
-        return pbkdf2_sha256.encrypt(v, rounds=200000, salt_size=16)
 
 
     @property
@@ -137,30 +133,20 @@ class Account(Base):
     @password.setter
     def password(self):
         assert self.secret_password
-        self.encrypted_secret = self.sym_encrypt(self.secret_password, v)
+        self.encrypted_password = self.sym_encrypt(self.secret_password, v)
 
 
-    def encrypt_password(self, v, password=None):
+    def encrypt_password(self, v):
 
-        if not password:
-            password = self.secret_password
+        from passlib.hash import pbkdf2_sha256
+        self.encrypted_password =  pbkdf2_sha256.encrypt(v, rounds=200000, salt_size=16)
 
-        if password:
-            self.encrypted_secret = self.sym_encrypt(password, v)
-        else:
-            raise MissingPasswordError("Must have a password to get or set the secret")
-
-        return self.encrypted_secret
 
     def test(self, v):
         """Test the password against a value"""
+        from passlib.hash import pbkdf2_sha256
+        return pbkdf2_sha256.verify(v, self.encrypted_password)
 
-        if self.major_type == 'user':
-            from passlib.hash import pbkdf2_sha256
-
-            return pbkdf2_sha256.verify(v, self.encrypted_secret)
-        else:
-            return v == self.decrypt_secret()
 
     @staticmethod
     def before_insert(mapper, conn, target):
