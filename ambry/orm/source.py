@@ -261,10 +261,21 @@ class DataSourceBase(object):
                 st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name, datatype=c.datatype)
         elif self.reftype == 'sql':
             if self._bundle.library.database.engine.name == 'sqlite':
-                SQL_TO_PYTHON_MAP = {
+                SQL_TO_PYTHON_TYPES = {
+                    'INT': int,
                     'INTEGER': int,
+                    'TINYINT': int,
+                    'SMALLINT': int,
+                    'MEDIUMINT': int,
+                    'BIGINT': int,
+                    'UNSIGNED BIG INT': int,
+                    'INT': int,
+                    'INT8': int,
                     'NUMERIC': float,
                     'REAL': float,
+                    'FLOAT': float,
+                    'DOUBLE': float,
+                    'BOOLEAN': bool,
                     'CHARACTER': str,
                     'VARCHAR': str,
                     'TEXT': str
@@ -276,9 +287,12 @@ class DataSourceBase(object):
                     position = row[0] + 1
                     name = row[1]
                     datatype = row[2]
-                    if datatype.lower() == 'integer':
-                        datatype = int
-                    # FIXME: convert other sql types to python types.
+                    try:
+                        datatype = SQL_TO_PYTHON_TYPES[datatype]
+                    except KeyError:
+                        raise Exception(
+                            'Do not know how to convert {} sql datatype to python data type.'
+                            .format(datatype))
                     st.add_column(position, name, datatype, dest_header=name)
             else:
                 raise NotImplementedError(

@@ -962,8 +962,10 @@ Caster Code
                     ps.add_update('Downloading {}: {}'.format(source.url, total_len), source=source,
                                   state='downloading')
                 else:
-                    self.log('Downloading {}'.format(source.url, total_len), source=source, state='downloading')
-
+                    self.log(
+                        'Downloading {}'.format(source.url, total_len),
+                        source=source,
+                        state='downloading')
             try:
                 s = get_source(
                     source.spec, self.library.download_cache,

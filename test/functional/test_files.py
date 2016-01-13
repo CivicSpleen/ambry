@@ -11,6 +11,7 @@ from fs.opener import fsopendir
 
 from ambry.mprlib import PostgreSQLBackend
 from ambry_sources.med import postgresql as postgres_med
+from ambry_sources.med.sqlite import install_mpr_module
 
 from test.test_base import TestBase
 from test.helpers import assert_sqlite_index, assert_postgres_index, assert_valid_ambry_sources
@@ -52,8 +53,10 @@ class SQLiteInspector(InspectorBase):
     def assert_table_created(cls, library, table):
         """ Looks for given table in the library. If not found raises AssertionError. """
         try:
-            table_rows = library.database.connection.execute('SELECT col1, col2 FROM table1;').fetchall()
-            assert table_rows == [(1, 1), (2, 2)]
+            table_rows = library.database.connection \
+                .execute('SELECT col1, col2, col3 FROM table1;') \
+                .fetchall()
+            assert table_rows == [(1, 1, 'one'), (2, 2, 'two')]
         except OperationalError as exc:
             if 'no such table' in str(exc):
                 raise AssertionError('table1 was not created.')
