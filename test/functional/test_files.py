@@ -147,9 +147,9 @@ class BundleSQLTest(TestBase):
     def setUp(self):
         super(BundleSQLTest, self).setUp()
         if self.dbname == 'sqlite':
-            self.inspector = SQLiteInspector
+            self._inspector = SQLiteInspector
         elif self.dbname == 'postgres':
-            self.inspector = PostgreSQLInspector
+            self._inspector = PostgreSQLInspector
         else:
             raise Exception('Do not know inspector for {} database.'.format(self.dbname))
 
@@ -208,11 +208,11 @@ class BundleSQLTest(TestBase):
                 sql_bundle.close()
 
         # check the final state.
-        self.inspector.assert_sql_saved(sql_bundle)
-        self.inspector.assert_table_created(library, 'table1')
-        self.inspector.assert_view_created(library, 'view1')
-        self.inspector.assert_materialized_view_created(library, 'materialized_view1')
-        self.inspector.assert_index(
+        self._inspector.assert_sql_saved(sql_bundle)
+        self._inspector.assert_table_created(library, 'table1')
+        self._inspector.assert_view_created(library, 'view1')
+        self._inspector.assert_materialized_view_created(library, 'materialized_view1')
+        self._inspector.assert_index(
             library,
             simple_bundle.partition('example.com-simple-simple'),
             'id')
