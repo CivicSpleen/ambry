@@ -24,7 +24,7 @@ def execute_sql(library, asql):
     engine_name = library.database.engine.name
     if engine_name == 'sqlite':
         backend = SQLiteBackend(library, library.database.dsn)
-        # FIXME: move preprocessors to the backend.
+        # TODO: move preprocessors to the backend.
         pipe = [_preprocess_sqlite_view, _preprocess_sqlite_index]
     elif engine_name == 'postgresql':
         backend = PostgreSQLBackend(library, library.database.dsn)

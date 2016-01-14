@@ -137,7 +137,7 @@ class SQLiteBackend(DatabaseBackend):
             MissingTableError: if partition table not found in the db.
 
         """
-        # FIXME: This is the first candidate for optimization. Add field to partition
+        # TODO: This is the first candidate for optimization. Add field to partition
         # with table name and update it while table creation.
         # Optimized version.
         #
@@ -272,7 +272,7 @@ class SQLiteBackend(DatabaseBackend):
 
 
 def _preprocess_sqlite_view(asql_query, library, backend, connection):
-    """ Finds materialized view and converts it to sqlite format.
+    """ Finds view or materialized view in the asql query and converts it to create table/insert rows.
 
     Note:
         Assume virtual tables for all partitions already created.
@@ -289,7 +289,7 @@ def _preprocess_sqlite_view(asql_query, library, backend, connection):
             asql_query as is.
     """
     new_query = None
-    if 'create materialized view' in asql_query.lower():
+    if 'create materialized view' in asql_query.lower() or 'create view' in asql_query.lower():
         logger.debug(
             '_preprocess_sqlite_view: materialized view found.\n    asql query: {}'
             .format(asql_query))
@@ -332,7 +332,7 @@ def _preprocess_sqlite_view(asql_query, library, backend, connection):
             if '.' in column.name:
                 source_alias, column_name = column.name.split('.')
             else:
-                # FIXME: Test that case.
+                # TODO: Test that case.
                 source_alias = None
                 column_name = column.name
 
