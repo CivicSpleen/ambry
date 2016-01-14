@@ -482,10 +482,18 @@ def _get_postgres_columns(connection, table):
     }
 
     query = '''
-        SELECT column_name, data_type, ordinal_position
-        FROM information_schema.columns
-        WHERE table_schema=:schema and table_name=:table;
+        SELECT attr.attname, format_type(attr.atttypid, attr.atttypmod) AS sql_type, attr.attnum
+        FROM pg_attribute AS attr
+        JOIN pg_class AS cls ON cls.oid = attr.attrelid
+        JOIN pg_namespace AS ns ON ns.oid = cls.relnamespace
+        WHERE attr.attnum > 0
+            AND cls.relkind in ('r', 'v', 'm')
+            AND cls.relname = :table
+            AND ns.nspname = :schema
+            AND NOT attr.attisdropped
+        ORDER BY attr.attnum;
     '''
+
     result = connection.execute(text(query), schema='ambrylib', table=table)
     ret = []
     for row in result:

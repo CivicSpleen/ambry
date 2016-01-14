@@ -16,7 +16,7 @@ from ambry_sources.med.sqlite import install_mpr_module
 from test.test_base import TestBase
 from test.helpers import assert_sqlite_index, assert_postgres_index, assert_valid_ambry_sources
 
-assert_valid_ambry_sources('0.1.11')
+assert_valid_ambry_sources('0.1.12')
 
 
 class InspectorBase(object):
