@@ -26,16 +26,16 @@ def execute_sql(library, asql):
         backend = SQLiteBackend(library, library.database.dsn)
         # TODO: move preprocessors to the backend.
         pipe = [_preprocess_sqlite_view, _preprocess_sqlite_index]
+        connection = backend._get_connection()
     elif engine_name == 'postgresql':
         backend = PostgreSQLBackend(library, library.database.dsn)
         pipe = [_preprocess_postgres_index]
-    else:
-        raise Exception('Do not know backend for {} database.'.format(engine_name))
-    connection = backend._get_connection()
-    if engine_name == 'postgresql':
+        connection = backend._get_connection()
         with connection.cursor() as cursor:
             # TODO: Move to backend methods.
             cursor.execute('SET search_path TO {};'.format(library.database._schema))
+    else:
+        raise Exception('Do not know backend for {} database.'.format(engine_name))
     try:
         statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
         for statement in statements:

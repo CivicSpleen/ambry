@@ -9,9 +9,9 @@ __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
 
-from six import iteritems
+import six
 
-from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, INTEGER, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, INTEGER, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
 from .source_table import SourceTable
@@ -98,7 +98,7 @@ class DataSourceBase(object):
 
     def update(self, **kwargs):
 
-        for k, v in iteritems(kwargs):
+        for k, v in six.iteritems(kwargs):
 
             if hasattr(self, k):
                 setattr(self, k, v)
@@ -261,43 +261,17 @@ class DataSourceBase(object):
                 st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name, datatype=c.datatype)
         elif self.reftype == 'sql':
             if self._bundle.library.database.engine.name == 'sqlite':
-                SQL_TO_PYTHON_TYPES = {
-                    'INT': int,
-                    'INTEGER': int,
-                    'TINYINT': int,
-                    'SMALLINT': int,
-                    'MEDIUMINT': int,
-                    'BIGINT': int,
-                    'UNSIGNED BIG INT': int,
-                    'INT': int,
-                    'INT8': int,
-                    'NUMERIC': float,
-                    'REAL': float,
-                    'FLOAT': float,
-                    'DOUBLE': float,
-                    'BOOLEAN': bool,
-                    'CHARACTER': str,
-                    'VARCHAR': str,
-                    'TEXT': str
-                }
-                query = 'PRAGMA table_info(\'{}\');'.format(self.spec.url)
-                result = self._bundle.library.database.connection.execute(query)
-
-                for row in result:
-                    position = row[0] + 1
-                    name = row[1]
-                    datatype = row[2]
-                    try:
-                        datatype = SQL_TO_PYTHON_TYPES[datatype]
-                    except KeyError:
-                        raise Exception(
-                            'Do not know how to convert {} sql datatype to python data type.'
-                            .format(datatype))
-                    st.add_column(position, name, datatype, dest_header=name)
+                columns_getter = _get_sqlite_columns
+            elif self._bundle.library.database.engine.name == 'postgresql':
+                columns_getter = _get_postgres_columns
             else:
                 raise NotImplementedError(
                     '{} engine schema retrieve is not implemented.'
                     .format(self._bundle.library.database.engine.name))
+
+            for name, datatype, position in columns_getter(self._bundle.library.database.connection,
+                                                           self.spec.url):
+                st.add_column(position, name, datatype, dest_header=name)
 
         elif self.datafile.exists:
             with self.datafile.reader as r:
@@ -411,7 +385,7 @@ class TransientDataSource(DataSourceBase):
                 self.properties.append(name)
                 setattr(self, name, None)
 
-        for k, v in iteritems(kwargs):
+        for k, v in six.iteritems(kwargs):
             setattr(self, k, v)
 
     @property
@@ -439,3 +413,88 @@ class TransientDataSource(DataSourceBase):
         """
         SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash', 'process_records')
         return OrderedDict([(k, getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
+
+
+def _get_sqlite_columns(connection, table):
+    """ Returns list of tuple containg columns of the table.
+
+    Args:
+        connection: sqlalchemy connection to sqlite database.
+        table (str): name of the table
+
+    Returns:
+        list of (name, datatype, position): where name is column name, datatype is
+            python type of the column, position is ordinal position of the column.
+
+    """
+    # TODO: Move to the sqlite wrapper.
+    # TODO: Consider sqlalchemy mapping.
+    SQL_TO_PYTHON_TYPES = {
+        'INT': int,
+        'INTEGER': int,
+        'TINYINT': int,
+        'SMALLINT': int,
+        'MEDIUMINT': int,
+        'BIGINT': int,
+        'UNSIGNED BIG INT': int,
+        'INT': int,
+        'INT8': int,
+        'NUMERIC': float,
+        'REAL': float,
+        'FLOAT': float,
+        'DOUBLE': float,
+        'BOOLEAN': bool,
+        'CHARACTER': str,
+        'VARCHAR': str,
+        'TEXT': str
+    }
+    query = 'PRAGMA table_info(\'{}\');'
+    result = connection.execute(query.format(table))
+    ret = []
+
+    for row in result:
+        position = row[0] + 1
+        name = row[1]
+        datatype = row[2]
+        try:
+            datatype = SQL_TO_PYTHON_TYPES[datatype]
+        except KeyError:
+            raise Exception(
+                'Do not know how to convert {} sql datatype to python data type.'
+                .format(datatype))
+        ret.append((name, datatype, position))
+    return ret
+
+
+def _get_postgres_columns(connection, table):
+    # TODO: Consider sqlalchemy mapper.
+    SQL_TO_PYTHON_TYPES = {
+        'char': str,
+        'bigint': six.integer_types[-1],  # long for py2 and int for py3
+        'boolean': bool,
+        'character varying': str,
+        'double precision': float,
+        'integer': int,
+        'numeric': float,
+        'real': float,
+        'smallint': int,
+        'text': str
+    }
+
+    query = '''
+        SELECT column_name, data_type, ordinal_position
+        FROM information_schema.columns
+        WHERE table_schema=:schema and table_name=:table;
+    '''
+    result = connection.execute(text(query), schema='ambrylib', table=table)
+    ret = []
+    for row in result:
+        name, datatype, position = row
+        try:
+            datatype = SQL_TO_PYTHON_TYPES[datatype]
+        except KeyError:
+            raise Exception(
+                'Do not know how to convert {} sql datatype to python data type.'
+                .format(datatype))
+        ret.append((name, datatype, position))
+    return ret

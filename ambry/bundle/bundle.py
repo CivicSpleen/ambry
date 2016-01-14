@@ -935,7 +935,10 @@ Caster Code
             sp = GeneratorSourcePipe(self, source, s)
 
         elif source.reftype == 'sql':
-            s = DatabaseRelationSource(source.spec, self.library.database.connection)
+            s = DatabaseRelationSource(
+                source.spec,
+                self.library.database.engine.name,
+                self.library.database.connection)
             sp = DatabaseRelationSourcePipe(source, s)
 
         elif source.reftype == 'generator':
