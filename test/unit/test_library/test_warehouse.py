@@ -17,22 +17,29 @@ class WarehouseTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
         self.my_library = self.library()
-        self.warehouse = Warehouse(self.my_library)
 
     # __init__ tests
-    def _test_uses_library_db(self):
-        # FIXME:
-        pass
+    def test_uses_library_db(self):
+        config_warehouse = self.my_library.config.library.warehouse
+        try:
+            self.my_library.config.library.warehouse = None
+            self.warehouse = Warehouse(self.my_library)
+            self.assertEqual(self.my_library.database.dsn, self.warehouse._backend._dsn)
+        finally:
+            # restore value from config
+            self.my_library.config.library.warehouse = config_warehouse
 
-    def _test_uses_db_from_config(self):
-        # FIXME:
-        pass
+    def test_uses_database_from_config(self):
+        config_warehouse = self.my_library.config.library.warehouse
+        try:
+            self.my_library.config.library.warehouse = 'sqlite:////tmp/temp1.db'
+            self.warehouse = Warehouse(self.my_library)
+            self.assertEqual('sqlite:////tmp/temp1.db', self.warehouse._backend._dsn)
+        finally:
+            # restore value from config
+            self.my_library.config.library.warehouse = config_warehouse
 
     # .query() tests
-    def test_uses_library_driver_backend(self):
-        # FIXME:
-        pass
-
     def test_sends_query_to_database_backend(self):
         w = Warehouse(self.my_library)
         PartitionFactory._meta.sqlalchemy_session = self.my_library.database.session

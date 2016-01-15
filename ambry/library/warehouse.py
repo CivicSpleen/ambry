@@ -33,7 +33,8 @@ or via SQLAlchemy, to return datasets.
 
         warehouse_dsn = library.config.library.get('warehouse')
         if not warehouse_dsn:
-            warehouse_dsn = library.config.library.database
+            # Use library database.
+            warehouse_dsn = library.database.dsn
 
         # Initialize appropriate backend.
         if warehouse_dsn.startswith('sqlite:'):
