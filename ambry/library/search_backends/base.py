@@ -115,12 +115,12 @@ class Keyword(IndexField):
 
     Note:
         This type is indexed and searchable (and optionally stored). Used to search for exact match of any
-        keyword FIXME: is it really exact match?.
+        keyword.
 
     Examples:
         Whoosh - KEYWORD, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.KEYWORD
-        SQLite - FIXME:
-        PostgreSQL - FIXME:
+        SQLite - https://sqlite.org/fts3.html
+        PostgreSQL - http://www.postgresql.org/docs/8.3/static/textsearch.html
     """
 
 
@@ -132,8 +132,8 @@ class Text(IndexField):
 
     Examples:
         Whoosh - TEXT, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.TEXT
-        SQLite - FIXME:
-        PostgreSQL - FIXME:
+        SQLite - https://sqlite.org/fts3.html
+        PostgreSQL - http://www.postgresql.org/docs/8.3/static/textsearch.html
     """
     pass
 
@@ -567,7 +567,7 @@ class BaseIdentifierIndex(BaseIndex):
 
     _schema = [
         Id('identifier'),  # Partition versioned id (partition vid)
-        Id('type'),  # Type. FIXME: What is type? Add examples.
+        Id('type'),  # Type.
         NGram('name'),
     ]
 
@@ -669,7 +669,20 @@ class SearchTermParser(object):
         return self.stemmer.stem(w)
 
     def parse(self, s, or_join=None):
-        """ FIXME: """
+        """ Parses search term to
+
+        Args:
+            s (str): string with search term.
+            or_join (callable): function to join 'OR' terms.
+
+        Returns:
+            dict: all of the terms grouped by marker. Key is a marker, value is a term.
+
+        Example:
+            >>> SearchTermParser().parse('table2 from 1978 to 1979 in california')
+            {'to': 1979, 'about': 'table2', 'from': 1978, 'in': 'california'}
+        """
+
         if not or_join:
             or_join = lambda x: '(' + ' OR '.join(x) + ')'
 
