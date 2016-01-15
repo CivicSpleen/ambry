@@ -31,9 +31,11 @@ class Mixin(object):
         config = self._get_config()
         library = self._get_library(config)
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
             'simple', source_url='temp://', build_url='temp://', library=library)
+
+        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
+        # not matter here. Hacking it to speed up the test.
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         partition1 = PartitionFactory(dataset=bundle.dataset)
         bundle.wrap_partition(partition1)
@@ -58,9 +60,11 @@ class Mixin(object):
         config = self._get_config()
         library = self._get_library(config)
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
             'simple', source_url='temp://', build_url='temp://', library=library)
+
+        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
+        # not matter here. Hacking it to speed up the test.
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         partition1 = PartitionFactory(dataset=bundle.dataset)
         bundle.wrap_partition(partition1)
@@ -96,9 +100,11 @@ class Mixin(object):
         config = self._get_config()
         library = self._get_library(config)
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
             'simple', source_url='temp://', build_url='temp://', library=library)
+
+        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
+        # not matter here. Hacking it to speed up the test.
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         partition1 = PartitionFactory(dataset=bundle.dataset)
         bundle.wrap_partition(partition1)
@@ -133,9 +139,11 @@ class Mixin(object):
         config = self._get_config()
         library = self._get_library(config)
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
             'simple', source_url='temp://', build_url='temp://', library=library)
+
+        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
+        # not matter here. Hacking it to speed up the test.
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         TableFactory._meta.sqlalchemy_session = bundle.dataset.session
 
@@ -178,9 +186,11 @@ class Mixin(object):
         config = self._get_config()
         library = self._get_library(config)
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
         bundle = self.setup_bundle(
             'simple', source_url='temp://', build_url='temp://', library=library)
+
+        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
+        # not matter here. Hacking it to speed up the test.
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         TableFactory._meta.sqlalchemy_session = bundle.dataset.session
 
