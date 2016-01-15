@@ -271,13 +271,13 @@ class Library(object):
         """ Finds partition by ref and converts to bundle partition.
 
         Args:
-            ref (str): id, vid (versioned id), name or vname (versioned name) (FIXME: try all)
+            ref (str): id, vid (versioned id), name or vname (versioned name)
 
         Raises:
             NotFoundError: if partition with given ref not found.
 
         Returns:
-            FIXME:
+            orm.Partition: found partition.
         """
 
         try:

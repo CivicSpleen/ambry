@@ -122,7 +122,7 @@ def export(bundle, force=False, force_restricted=False):
         # http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_update
         ckan.action.user_role_update(**role)
 
-    # FIXME: Using bulk update gives http500 error. Find the way and use bulk update instead of many requests.
+    # TODO: Using bulk update gives http500 error. Try later with new version.
     # http://docs.ckan.org/en/ckan-2.4.1/api/#ckan.logic.action.update.user_role_bulk_update - the same
     # ckan.action.user_role_bulk_update(user_roles=user_roles)
 

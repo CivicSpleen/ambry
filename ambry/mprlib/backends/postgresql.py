@@ -32,7 +32,6 @@ class PostgreSQLBackend(DatabaseBackend):
             str: name of the created table.
 
         """
-        # FIXME: connect to 'warehouse' schema.
         self._add_partition(connection, partition)
         fdw_table = postgres_med.table_name(partition.vid)
         view_table = '{}_v'.format(fdw_table)
@@ -135,7 +134,7 @@ class PostgreSQLBackend(DatabaseBackend):
             MissingTableError: if partition table not found in the db.
 
         """
-        # FIXME: This is the first candidate for optimization. Add field to partition
+        # TODO: This is the first candidate for optimization. Add field to partition
         # with table name and update it while table creation.
         # Optimized version.
         #
