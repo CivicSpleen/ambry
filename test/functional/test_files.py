@@ -216,6 +216,39 @@ class BundleSQLTest(TestBase):
             library,
             simple_bundle.partition('example.com-simple-simple'),
             'id')
-        # FIXME: Check partition created from from_table1 source
-        # FIXME: Check partition created from from_mat_view1 source
-        # FIXME: Check partition created from from_view1 source
+
+        # Check partition created from from_table1 source
+        partition1 = library \
+            .dataset(sql_bundle.dataset.vid) \
+            .partition('example.com-simplewithsql-from_table1')
+        self.assertEqual(partition1.table.name, 'from_table1')
+        self.assertEqual(
+            sorted([c.name for c in partition1.table.columns]),
+            sorted(['id', 'col1', 'col2', 'col3']))
+        self.assertEqual(
+            sorted([c.datatype for c in partition1.table.columns]),
+            sorted(['int', 'int', 'int', 'str']))
+
+        # Check partition created from from_view1 source.
+        partition2 = library \
+            .dataset(sql_bundle.dataset.vid) \
+            .partition('example.com-simplewithsql-from_view1')
+        self.assertEqual(partition2.table.name, 'from_view1')
+        self.assertEqual(
+            sorted([c.name for c in partition2.table.columns]),
+            sorted(['id', 's1_id', 's2_id']))
+        self.assertEqual(
+            sorted([c.datatype for c in partition2.table.columns]),
+            sorted(['int', 'int', 'int']))
+
+        # Check partition created from from_mat_view1 source.
+        partition3 = library \
+            .dataset(sql_bundle.dataset.vid)\
+            .partition('example.com-simplewithsql-from_materialized_view1')
+        self.assertEqual(partition3.table.name, 'from_materialized_view1')
+        self.assertEqual(
+            sorted([c.name for c in partition3.table.columns]),
+            sorted(['id', 's1_id', 's2_id']))
+        self.assertEqual(
+            sorted([c.datatype for c in partition3.table.columns]),
+            sorted(['int', 'int', 'int']))
