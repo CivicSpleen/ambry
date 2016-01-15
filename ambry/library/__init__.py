@@ -524,8 +524,6 @@ class Library(object):
     def sync_remote(self, remote_name):
         from ambry.orm import Remote
 
-
-
         if isinstance(remote_name, text_type):
             remote = self.remote(remote_name)
         else:
@@ -533,12 +531,10 @@ class Library(object):
 
         assert isinstance(remote, Remote)
 
-
-
         for e in remote.list():
             self._checkin_remote_bundle(remote, e)
 
-        self.database.commit()
+        self.commit()
 
     def checkin_remote_bundle(self, ref, remote=None):
         """ Checkin a remote bundle to this library.
@@ -558,7 +554,11 @@ class Library(object):
         if not remote:
             raise NotFoundError("Failed to find bundle ref '{}' in any remote".format(ref))
 
-        return self._checkin_remote_bundle(remote, ref)
+        vid =  self._checkin_remote_bundle(remote, ref)
+
+        self.commit()
+
+        return vid
 
 
     def _checkin_remote_bundle(self, remote, ref):
@@ -584,7 +584,7 @@ class Library(object):
             b = self.bundle(ref)
             self.logger.info("{}: Already installed".format(ref))
             vid = b.identity.vid
-            b.close()
+            b.progress.close()
 
         except NotFoundError:
             self.logger.info("{}: Syncing".format(ref))
@@ -599,9 +599,8 @@ class Library(object):
 
             b.dataset.data['remote_name'] = remote.short_name
             b.dataset.data['remote_url'] = remote.url
-            b.commit()
             vid = b.identity.vid
-            b.close()
+            b.progress.close()
 
         return vid
 

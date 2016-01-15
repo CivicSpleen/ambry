@@ -580,7 +580,7 @@ class Partition(Base):
         """Return true is the partition file is local"""
         from ambry.orm.exc import NotFoundError
         try:
-            self.local_datafile
+            self.local_datafile.exists
             return True
         except NotFoundError:
             return False
