@@ -11,7 +11,12 @@ Example:
     w.close()
 """
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
+from ambry.orm import Table
 from ambry.mprlib import SQLiteBackend, PostgreSQLBackend
 from ambry.util import get_logger
 
@@ -47,6 +52,7 @@ or via SQLAlchemy, to return datasets.
             raise Exception(
                 'Do not know how to handle {} dsn.'
                 .format(warehouse_dsn))
+        self._warehouse_dsn = warehouse_dsn
 
     def query(self, query=''):
         """ Creates virtual tables for all partitions found in the query and executes query.
@@ -55,7 +61,12 @@ or via SQLAlchemy, to return datasets.
             query (str): sql query
 
         """
-        # FIXME: If query is empty, return a Sqlalchemy query or select object
+
+        if not query:
+            engine = create_engine(self._warehouse_dsn)
+            session = sessionmaker(bind=engine)
+            return session().query(Table)
+
         logger.debug(
             'Executing warehouse query using {} backend.\n    query: {}'
             .format(self._backend._dsn, query))
@@ -66,7 +77,7 @@ or via SQLAlchemy, to return datasets.
         """ Finds partition by reference and installs it to warehouse db.
 
         Args:
-            ref (str): id, vid, name or versioned name of the partition.
+            ref (str): id, vid (versioned id), name or vname (versioned name) of the partition.
 
         """
         try:
