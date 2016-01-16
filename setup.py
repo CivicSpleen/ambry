@@ -136,18 +136,16 @@ class Docker(Command):
         for long, short, desc in self.user_options:
             setattr(self, long, False)
 
-
     def finalize_options(self):
 
         if self.all:
             for long, short, desc in self.user_options:
                 setattr(self, long, True)
 
-
     def run(self):
         import os, sys, shutil
 
-        init_args_a = ['docker', 'build'] +(['--no-cache'] if self.clean else [] ) + ['-f' ]
+        init_args_a = ['docker', 'build'] + (['--no-cache'] if self.clean else []) + ['-f']
 
         def tag(n):
             from ambry._meta import __version__
@@ -157,30 +155,34 @@ class Docker(Command):
             # Inspect the image to get the image id, so we can tag it.
             # FIXME. Instead of parsing the JSON, this should be:
             # docker inspect --format='{{.Id}}' civicknowledge/ambry
-            proc = subprocess.Popen("docker inspect civicknowledge/ambry:latest", stdout=subprocess.PIPE, shell=True)
+            proc = subprocess.Popen(
+                'docker inspect civicknowledge/ambry:latest',
+                stdout=subprocess.PIPE, shell=True)
             (out, err) = proc.communicate()
             d = json.loads(out)
 
             self.spawn(['docker', 'tag', '-f', d[0]['Id'], 'civicknowledge/{}:{}'.format(n,__version__)])
 
-
         if self.base:
-            self.spawn(init_args_a+[ 'support/docker/base/Dockerfile', '-t', 'civicknowledge/ambry-base', '.'])
+            self.spawn(
+                init_args_a + ['support/docker/base/Dockerfile', '-t', 'civicknowledge/ambry-base', '.'])
 
         if self.numbers:
-            self.spawn(init_args_a+[ 'support/docker/numbers/Dockerfile', '-t', 'civicknowledge/ambry-numbers', '.'])
+            self.spawn(
+                init_args_a + ['support/docker/numbers/Dockerfile', '-t', 'civicknowledge/ambry-numbers', '.'])
 
         if self.build:
-            self.spawn(init_args_a+[ 'support/docker/ambry/Dockerfile','-t', 'civicknowledge/ambry', '.'])
+            self.spawn(
+                init_args_a + ['support/docker/ambry/Dockerfile', '-t', 'civicknowledge/ambry', '.'])
             tag('ambry')
 
         if self.dev:
-            self.spawn(init_args_a+[ 'support/docker/dev/Dockerfile', '-t', 'civicknowledge/ambry', '.'])
+            self.spawn(init_args_a + ['support/docker/dev/Dockerfile', '-t', 'civicknowledge/ambry', '.'])
             tag('ambry')
 
         def d_build(name):
             """Builder for containers that don't need the context of the while source distribution"""
-            init_args = ['docker', 'build'] +(['--no-cache'] if self.clean else [] ) + ['-t']
+            init_args = ['docker', 'build'] + (['--no-cache'] if self.clean else []) + ['-t']
 
             self.spawn(init_args + ['civicknowledge/' + name, 'support/docker/' + name + '/'])
             tag(name)
