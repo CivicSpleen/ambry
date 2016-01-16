@@ -80,6 +80,7 @@ class PyTest(TestCommand):
     def run(self):
         # import here, cause outside the eggs aren't loaded
         import pytest
+        from ambry.util.mail import send_email
 
         if self.all:
             self.pytest_args += 'test'
@@ -100,43 +101,47 @@ class PyTest(TestCommand):
             # capture arg is not given. Disable capture by default.
             self.pytest_args = self.pytest_args + ' --capture=no'
 
-        if self.postgres and self.sqlite:
-            # run tests for both
-            print('ERROR: You can not run both - postgres and sqlite. Select exactly one.')
-            sys.exit(1)
-
+        db_envs = []  # AMBRY_TEST_DB values set - all tests will run for each of value.
         if self.postgres:
-            os.environ['AMBRY_TEST_DB'] = 'postgres'
+            db_envs.append('postgres')
+
         if self.sqlite:
-            os.environ['AMBRY_TEST_DB'] = 'sqlite'
+            db_envs.append('sqlite')
 
-        RESULT_LOG = '/tmp/ambry_test_latest_log.txt'
+        if not db_envs:
+            db_envs.append('')  # Yes, add empty to run tests without touching AMBRY_TEST_DB environment.
 
-        if self.email:
-            # force pytest to log test result to external file.
-            assert '@' in self.email, '{} email is not valid.'.format(self.email)
-            self.pytest_args += ' --resultlog={}'.format(RESULT_LOG)
+        total_errno = 0
+        for db in db_envs:
+            os.environ['AMBRY_TEST_DB'] = db
 
-        errno = pytest.main(self.pytest_args)
-        if self.email and errno:
-            # send log file with collected result to given email.
-            #
-            from ambry.util.mail import send_email
-            subject = 'Ambry tests failure'
+            RESULT_LOG = '/tmp/ambry_{}_test_latest_log.txt'.format(db)
 
-            # collect environment variables.
-            env_vars = []
-            for key, value in os.environ.items():
-                if 'password' in key.lower() or 'secret' in key.lower():
-                    value = '******'
-                env_vars.append('{} = {}'.format(key, value))
+            if self.email:
+                # force pytest to log test result to external file.
+                assert '@' in self.email, '{} email is not valid.'.format(self.email)
+                self.pytest_args += ' --resultlog={}'.format(RESULT_LOG)
 
-            message = 'Notification about {} failed tests. Test result log is attached.\n\n' \
-                'Environment variables:\n' \
-                '{}'.format(errno, '\n    '.join(sorted(env_vars)))
-            send_email([self.email], subject, message, attachments=[RESULT_LOG])
+            errno = pytest.main(self.pytest_args)
+            total_errno += errno
+            if self.email and errno:
+                # send log file with collected result to given email.
+                #
+                subject = 'Ambry tests failure'
 
-        sys.exit(errno)
+                # collect environment variables.
+                env_vars = []
+                for key, value in os.environ.items():
+                    if 'password' in key.lower() or 'secret' in key.lower():
+                        value = '******'
+                    env_vars.append('{} = {}'.format(key, value))
+
+                message = 'Notification about {} failed tests. Test result log is attached.\n\n' \
+                    'Environment variables:\n' \
+                    '{}'.format(errno, '\n    '.join(sorted(env_vars)))
+                send_email([self.email], subject, message, attachments=[RESULT_LOG])
+
+        sys.exit(total_errno)
 
 
 class Docker(Command):
