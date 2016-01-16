@@ -523,7 +523,6 @@ class Partition(Base):
         except NotFoundError:
             pass
 
-
         return df
 
     @property
@@ -567,11 +566,12 @@ class Partition(Base):
             datafile = MPRowsFile(remote.fs, self.cache_key)
 
             if not datafile.exists:
-                raise NotFoundError("Could not locate data file for partition {} (remote)".format(self.identity.fqname))
-
+                raise NotFoundError("Could not locate data file for partition {} from remote {} : file does not exist"
+                                    .format(self.identity.fqname, remote))
 
         except ResourceNotFoundError as e:
-            raise NotFoundError("Could not locate data file for partition {} (remote)".format(self.identity.fqname))
+            raise NotFoundError("Could not locate data file for partition {} (remote): {}"
+                                .format(self.identity.fqname, e))
 
         return datafile
 
@@ -580,11 +580,12 @@ class Partition(Base):
         """Return true is the partition file is local"""
         from ambry.orm.exc import NotFoundError
         try:
-            self.local_datafile.exists
-            return True
+            if self.local_datafile.exists:
+                return True
         except NotFoundError:
-            return False
+            pass
 
+        return False
 
     def localize(self, ps=None):
         """Copy a non-local partition file to the local build directory"""

@@ -526,16 +526,22 @@ class Bundle(object):
         return BuildSourceFileAccessor(self, self.dataset, self.source_fs)
 
     @property
+    def source_fs_url(self):
+        source_url = self._source_url if self._source_url else self.dataset.config.library.source.url
+
+        if not source_url:
+            source_url = self.library.filesystem.source(self.identity.cache_key)
+
+        return source_url
+
+    @property
     def source_fs(self):
         from fs.opener import fsopendir
         from fs.errors import ResourceNotFoundError
 
         if not self._source_fs:
 
-            source_url = self._source_url if self._source_url else self.dataset.config.library.source.url
-
-            if not source_url:
-                source_url = self.library.filesystem.source(self.identity.cache_key)
+            source_url = self.source_fs_url
 
             try:
                 self._source_fs = fsopendir(source_url)
@@ -1232,7 +1238,7 @@ Caster Code
         self.commit()
 
 
-    def sync_out(self, file_name=None):
+    def sync_out(self, file_name=None, force=False):
         """Synchronize from objects to records"""
         self.log('---- Sync Out ----')
         from ambry.bundle.files import BuildSourceFile
@@ -1240,7 +1246,7 @@ Caster Code
         self.dstate = self.STATES.BUILDING
 
         for f in self.build_source_files:
-            if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path==file_name:
+            if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path==file_name or force:
                 self.log('Sync: {}'.format(f.record.path))
                 f.record_to_fs()
 
@@ -2630,7 +2636,6 @@ Caster Code
 
         b = Bundle(ds, self.library)
         bfs = b.build_source_files.file(File.BSFILE.META)
-        print bfs.update_identity()
 
         b.clear_file_systems()
 

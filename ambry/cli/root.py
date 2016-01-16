@@ -417,6 +417,7 @@ def root_remove(args, l, rc):
             b = l.bundle(term)
         except NotFoundError:
             warn("Didn't find bundle for reference '{}'".format(term))
+            return
 
         fqname = b.identity.fqname
 
