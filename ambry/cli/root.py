@@ -10,7 +10,7 @@ command_name = 'root'
 
 from ..cli import warn
 from . import prt
-from six import print_
+
 
 def make_parser(cmd):
     import argparse
@@ -39,7 +39,6 @@ def make_parser(cmd):
                        help=' Also dump the root config entries')
     group.add_argument('-r', '--remote', default=False, action='store_true',
                        help='Information about the remotes')
-
 
     sp = cmd.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(command='root')
@@ -83,7 +82,6 @@ def make_parser(cmd):
                     help='Force importing an already imported bundle')
     sp.add_argument('term', nargs=1, type=str, help='Base directory')
 
-    #
     # Search Command
     #
 
@@ -98,17 +96,14 @@ def make_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='ui')
     sp.add_argument('-H', '--host', help="Server host.", default='0.0.0.0')
-    sp.add_argument('-p', '--port', help="Server port", default=8080)
+    sp.add_argument('-p', '--port', help='Server port', default=8080)
     sp.add_argument('-P', '--use-proxy', action='store_true',
-                        help="Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix")
-    sp.add_argument('-d', '--debug', action='store_true', help="Set debugging mode", default=False)
+                    help='Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix')
+    sp.add_argument('-d', '--debug', action='store_true', help='Set debugging mode', default=False)
 
 
 def run_command(args, rc):
-    from ..library import new_library
     from . import global_logger
-    from ambry.orm.exc import DatabaseError
-
 
     if args.test_library:
         rc.set_lirbary_database('test')
@@ -163,7 +158,7 @@ def root_list(args, l, rc):
 
         if search_key:
             d = dict(b.metadata.kv)
-            v = d.get(search_key,None)
+            v = d.get(search_key, None)
             if v and search_value and v.strip() == search_value.strip():
                 records.append(b.field_row(header))
 
@@ -172,7 +167,6 @@ def root_list(args, l, rc):
         else:
             for p in b.partitions:
                 records.append
-
 
     if args.sort:
         idx = header.index(args.sort)
@@ -211,7 +205,7 @@ def root_info(args, l, rc):
     from ..cli import prt
     from ..dbexceptions import ConfigurationError
     from tabulate import tabulate
-    from ambry.library.filesystem import  LibraryFilesystem
+    from ambry.library.filesystem import LibraryFilesystem
     from ambry.util.text import ansicolors
 
     import ambry
@@ -240,9 +234,9 @@ def root_info(args, l, rc):
         records = []
         for config in ds.configs:
             # Can't use prt() b/c it tries to format the {} in the config.value
-            records.append((config.dotted_key,config.value))
+            records.append((config.dotted_key, config.value))
 
-        print tabulate(sorted(records, key=lambda e: e[0]), headers=['key','value'])
+        print tabulate(sorted(records, key=lambda e: e[0]), headers=['key', 'value'])
 
 
 def root_sync(args, l, config):
@@ -265,7 +259,7 @@ def root_sync(args, l, config):
 
         prt('Sync with remote {}', r)
 
-        entries = l.sync_remote(r, bundle_name=bundle_name, list_only = args.list)
+        entries = l.sync_remote(r, bundle_name=bundle_name, list_only=args.list)
         if bundle_name and bundle_name in entries:
             break
 
@@ -348,7 +342,7 @@ def root_import(args, l, rc):
 
     for f in fs.walkfiles(wildcard='bundle.yaml'):
 
-        prt("Visiting {}".format(f))
+        prt('Visiting {}'.format(f))
         config = yaml.load(fs.getcontents(f))
 
         if not config:
@@ -383,7 +377,6 @@ def root_import(args, l, rc):
 def root_ui(args, l, rc):
 
     from ambry.ui import app
-    import ambry.ui.views
     import webbrowser
     import socket
 
@@ -392,16 +385,15 @@ def root_ui(args, l, rc):
         app.wsgi_app = ProxyFix(app.wsgi_app)
 
     if not args.debug:
-        webbrowser.open("http://{}:{}".format(args.host, args.port))
+        webbrowser.open('http://{}:{}'.format(args.host, args.port))
     else:
         import logging
         logging.basicConfig(level=logging.DEBUG)
         log = logging.getLogger('werkzeug')
         log.setLevel(logging.DEBUG)
-        #prt("Running at http://{}:{}".format(args.host, args.port))
+        # prt("Running at http://{}:{}".format(args.host, args.port))
 
     try:
         app.run(host=args.host, port=int(args.port), debug=args.debug)
     except socket.error as e:
-        warn("Failed to start ui: {}".format(e))
-
+        warn('Failed to start ui: {}'.format(e))
