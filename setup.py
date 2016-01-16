@@ -49,13 +49,14 @@ def find_package_data():
 
 class PyTest(TestCommand):
     user_options = [
-        ('pytest-args=', 't', 'Arguments to pass to py.test'),
+        ('pytest-args=', None, 'Arguments to pass to py.test'),
 
         ('all', 'a', 'Run all tests.'),
         ('unit', 'u', 'Run unit tests only.'),
         ('functional', 'f', 'Run functional tests only.'),
         ('bundle', 'b', 'Run bundle tests only.'),
         ('regression', 'r', 'Run regression tests only.'),
+        ('email=', None, 'Email where to send test results on fail.'),
 
         ('sqlite', 's', 'Run tests on sqlite.'),
         ('postgres', 'p', 'Run tests on postgres.'),
@@ -71,6 +72,7 @@ class PyTest(TestCommand):
         self.all = 0
         self.sqlite = 0
         self.postgres = 0
+        self.email = ''
 
     def finalize_options(self):
         TestCommand.finalize_options(self)
@@ -107,15 +109,38 @@ class PyTest(TestCommand):
         if self.sqlite:
             os.environ['AMBRY_TEST_DB'] = 'sqlite'
 
-        print self.pytest_args
+        RESULT_LOG = '/tmp/ambry_test_latest_log.txt'
+
+        if self.email:
+            # force pytest to log test result to external file.
+            assert '@' in self.email, '{} email is not valid.'.format(self.email)
+            self.pytest_args += ' --resultlog={}'.format(RESULT_LOG)
+
         errno = pytest.main(self.pytest_args)
+        if self.email and errno:
+            # send collected log file to given email.
+            #
+            from ambry.util.mail import send_email
+            subject = 'Ambry tests failure'
+
+            # collect environment variables.
+            env_vars = []
+            for key, value in os.environ.items():
+                if 'password' in key.lower() or 'secret' in key.lower():
+                    value = '******'
+                env_vars.append('{} = {}'.format(key, value))
+
+            message = 'Notification about {} failed tests. Test result log is attached.\n\n' \
+                'Environment variables:\n' \
+                '{}'.format(errno, '\n    '.join(sorted(env_vars)))
+            send_email([self.email], subject, message, attachments=[RESULT_LOG])
 
         sys.exit(errno)
 
 
 class Docker(Command):
 
-    description = "build or launch a docker image"
+    description = 'build or launch a docker image'
 
     user_options = [
         ('clean', 'C', 'Build without the image cache -- completely rebuild'),
