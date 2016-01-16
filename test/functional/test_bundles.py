@@ -7,30 +7,53 @@ class Test(TestBase):
 
     def test_headerstypes(self):
         b = self.import_single_bundle('ingest.example.com/headerstypes')
-        b.ingest()
+        try:
+            b.ingest()
+        finally:
+            b.close()
 
     def test_basic(self):
         b = self.import_single_bundle('ingest.example.com/basic')
-        b.ingest()
+        try:
+            b.ingest()
+        finally:
+            b.clean_all()
+            b.close()
 
     def test_stages(self):
         b = self.import_single_bundle('ingest.example.com/stages')
-        b.run_stages()
+        try:
+            b.run_stages()
+        finally:
+            b.clean_all()
+            b.close()
 
     def test_casters(self):
         b = self.import_single_bundle('build.example.com/casters')
-        b.ingest()
-        b.source_schema()
-        b.schema()
-        b.build()
+        try:
+            b.ingest()
+            b.source_schema()
+            b.schema()
+            b.build()
+        finally:
+            b.clean_all()
+            b.close()
 
     def test_coverage(self):
         b = self.import_single_bundle('build.example.com/coverage')
-        b.ingest()
-        b.source_schema()
-        b.schema()
-        b.build()
+        try:
+            b.ingest()
+            b.source_schema()
+            b.schema()
+            b.build()
+        finally:
+            b.clean_all()
+            b.close()
 
     def test_generators(self):
         b = self.import_single_bundle('build.example.com/generators')
-        b.run()
+        try:
+            b.run()
+        finally:
+            b.clean_all()
+            b.close()
