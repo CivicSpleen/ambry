@@ -392,7 +392,7 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         """
 
         # SQLite FTS can't find terms with `-`, therefore all hyphens replaced with underscore before save.
-        # Now to make proper query we need to replace all hypens in the search phrase.
+        # Now to make proper query we need to replace all hyphens in the search phrase.
         # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
         search_phrase = search_phrase.replace('-', '_')
         terms = SearchTermParser().parse(search_phrase)
