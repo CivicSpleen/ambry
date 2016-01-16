@@ -37,6 +37,12 @@ def make_parser(cmd):
     sp.add_argument('-fr', '--debug-force-restricted', action='store_true',
                     help='Export restricted datasets. For debugging only.')
 
+    # makemigration command
+    #
+    sp = asp.add_parser('makemigration', help='Create empty migration (for developers only).')
+    sp.set_defaults(subcommand='makemigration')
+    sp.add_argument('migration_name', type=str, help='Name of the migration')
+
     sp = asp.add_parser('scrape', help='Scrape')
     sp.set_defaults(subcommand='scrape')
     sp.add_argument('url', nargs=1)  # Get everything else.
@@ -105,3 +111,9 @@ def util_ckan_export(args, library, run_config):
     except NotFoundError:
         print('Dataset with {} vid not found.'.format(args.dvid))
         exit(1)
+
+
+def util_makemigration(args, l, rc):
+    from ambry.orm.database import create_migration_template
+    file_name = create_migration_template(args.migration_name)
+    print('New empty migration created. Now populate {} with appropriate sql.'.format(file_name))

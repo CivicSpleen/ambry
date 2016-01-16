@@ -31,11 +31,6 @@ def make_parser(cmd):
     sp.add_argument('term', nargs='?', type=str,
                     help='Name or ID of the bundle or partition')
 
-    sp = cmd.add_parser('makemigration', help='Create empty migration (for developers only).')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='makemigration')
-    sp.add_argument('migration_name', type=str, help='Name of the migration')
-
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
@@ -135,12 +130,6 @@ def run_command(args, rc):
         l = None
 
     globals()['root_' + args.subcommand](args, l, rc)
-
-
-def root_makemigration(args, l, rc):
-    from ambry.orm.database import create_migration_template
-    file_name = create_migration_template(args.migration_name)
-    print('New empty migration created. Now populate {} with appropriate sql.'.format(file_name))
 
 
 def root_list(args, l, rc):
