@@ -37,7 +37,7 @@ def send_email(recipients, subject, message, attachments=None):
 
     # Create the container (outer) email message.
     msg = MIMEMultipart()
-    msg['Subject'] = 'Ambry tests failure'
+    msg['Subject'] = subject
     msg['From'] = sender
     msg['To'] = ','.join(recipients)
     msg.attach(MIMEText(message, 'plain'))
@@ -46,7 +46,7 @@ def send_email(recipients, subject, message, attachments=None):
     for file_name in attachments:
         if os.path.exists(file_name):
             with open(file_name, 'r') as fp:
-                attachment = MIMEBase('application', 'text')  # 'octet-stream')
+                attachment = MIMEBase('application', 'text')
                 attachment.set_payload(fp.read())
                 attachment.add_header(
                     'Content-Disposition',

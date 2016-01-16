@@ -104,7 +104,8 @@ class PyTest(TestCommand):
             # run tests for both
             print('ERROR: You can not run both - postgres and sqlite. Select exactly one.')
             sys.exit(1)
-        elif self.postgres:
+
+        if self.postgres:
             os.environ['AMBRY_TEST_DB'] = 'postgres'
         if self.sqlite:
             os.environ['AMBRY_TEST_DB'] = 'sqlite'
@@ -118,7 +119,7 @@ class PyTest(TestCommand):
 
         errno = pytest.main(self.pytest_args)
         if self.email and errno:
-            # send collected log file to given email.
+            # send log file with collected result to given email.
             #
             from ambry.util.mail import send_email
             subject = 'Ambry tests failure'
