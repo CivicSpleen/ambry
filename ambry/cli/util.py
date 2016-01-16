@@ -9,6 +9,7 @@ from six import iteritems
 __all__ = ['command_name', 'make_parser', 'run_command']
 command_name = 'util'
 
+
 def make_parser(cmd):
 
     #
@@ -26,6 +27,15 @@ def make_parser(cmd):
     sp.add_argument('-f', '--force', default=False, action='store_true', help='Push all files')
     sp.add_argument('-n', '--dry-run', default=False, action='store_true',
                     help="Dry run, don't actually send the files.")
+
+    # ckan_export command
+    sp = asp.add_parser('ckan_export', help='Export dataset to CKAN.')
+    sp.set_defaults(subcommand='ckan_export')
+    sp.add_argument('dvid', type=str, help='Dataset vid')
+    sp.add_argument('-f', '--force', action='store_true',
+                    help='Ignore existance error and continue to publish.')
+    sp.add_argument('-fr', '--debug-force-restricted', action='store_true',
+                    help='Export restricted datasets. For debugging only.')
 
     sp = asp.add_parser('scrape', help='Scrape')
     sp.set_defaults(subcommand='scrape')
@@ -49,7 +59,6 @@ def run_command(args, rc):
     l = new_library(rc)
 
     l.logger = global_logger
-
     globals()['util_' + args.subcommand](args, l, rc)
 
 
@@ -75,3 +84,24 @@ def util_scrape(args, l, config):
         sys.stdout.flush()
     else:
         print(tabulate(rows, headers))
+
+
+def util_ckan_export(args, library, run_config):
+    from ambry.orm.exc import NotFoundError
+    from ambry.exporters.ckan import export, is_exported, UnpublishedAccessError
+    try:
+        bundle = library.bundle(args.dvid)
+        if not args.force and is_exported(bundle):
+            print('{} dataset is already exported. Update is not implemented!'.format(args.dvid))
+            exit(1)
+        else:
+            try:
+                export(bundle, force=args.force, force_restricted=args.debug_force_restricted)
+            except UnpublishedAccessError:
+                print('Did not publish because dataset access ({}) restricts publishing.'
+                      .format(bundle.config.metadata.about.access))
+                exit(1)
+            print('{} dataset successfully exported to CKAN.'.format(args.dvid))
+    except NotFoundError:
+        print('Dataset with {} vid not found.'.format(args.dvid))
+        exit(1)

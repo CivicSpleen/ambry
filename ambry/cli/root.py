@@ -36,15 +36,6 @@ def make_parser(cmd):
     sp.set_defaults(subcommand='makemigration')
     sp.add_argument('migration_name', type=str, help='Name of the migration')
 
-    sp = cmd.add_parser('ckan_export', help='Export dataset to CKAN.')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='ckan_export')
-    sp.add_argument('dvid', type=str, help='Dataset vid')
-    sp.add_argument('-f', '--force', action='store_true',
-                    help='Ignore existance error and continue to publish.')
-    sp.add_argument('-fr', '--debug-force-restricted', action='store_true',
-                    help='Export restricted datasets. For debugging only.')
-
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
@@ -150,27 +141,6 @@ def root_makemigration(args, l, rc):
     from ambry.orm.database import create_migration_template
     file_name = create_migration_template(args.migration_name)
     print('New empty migration created. Now populate {} with appropriate sql.'.format(file_name))
-
-
-def root_ckan_export(args, library, run_config):
-    from ambry.orm.exc import NotFoundError
-    from ambry.exporters.ckan import export, is_exported, UnpublishedAccessError
-    try:
-        bundle = library.bundle(args.dvid)
-        if not args.force and is_exported(bundle):
-            print('{} dataset is already exported. Update is not implemented!'.format(args.dvid))
-            exit(1)
-        else:
-            try:
-                export(bundle, force=args.force, force_restricted=args.debug_force_restricted)
-            except UnpublishedAccessError:
-                print('Did not publish because dataset access ({}) restricts publishing.'
-                      .format(bundle.config.metadata.about.access))
-                exit(1)
-            print('{} dataset successfully exported to CKAN.'.format(args.dvid))
-    except NotFoundError:
-        print('Dataset with {} vid not found.'.format(args.dvid))
-        exit(1)
 
 
 def root_list(args, l, rc):

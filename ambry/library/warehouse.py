@@ -99,7 +99,7 @@ or via SQLAlchemy, to return datasets.
         """ Creates materialized table for given partition reference.
 
         Args:
-            ref (str): id, vid, name or versioned name of the partition.
+            ref (str): id, vid, name or vname of the partition.
 
         Returns:
             str: name of the partition table in the database.
