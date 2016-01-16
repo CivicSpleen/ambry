@@ -472,6 +472,7 @@ class BasePartitionIndex(BaseIndex):
             except ValueError:
                 logger.debug("Failed to parse gvid '{}' from partition '{}' grain coverage"
                              .format(g, partition.identity.vname))
+                return g
 
         keywords = (
             ' '.join(partition.space_coverage) + ' ' +
