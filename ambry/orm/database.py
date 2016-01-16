@@ -478,8 +478,11 @@ class Database(object):
 
         if not ds:
             try:
-                ds = self.session.query(Dataset).filter(Dataset.id == ref)\
-                    .order_by(Dataset.revision.desc()).first()
+                ds = self.session \
+                    .query(Dataset) \
+                    .filter(Dataset.id == ref) \
+                    .order_by(Dataset.revision.desc()) \
+                    .first()
             except NoResultFound:
                 ds = None
 
@@ -491,8 +494,11 @@ class Database(object):
 
         if not ds:
             try:
-                ds = self.session.query(Dataset).filter(Dataset.name == ref)\
-                    .order_by(Dataset.revision.desc()).first()
+                ds = self.session \
+                    .query(Dataset) \
+                    .filter(Dataset.name == ref) \
+                    .order_by(Dataset.revision.desc()) \
+                    .first()
             except NoResultFound:
                 ds = None
 
@@ -565,7 +571,9 @@ class Database(object):
 
         # Put the partitions in dependency order so the merge won't throw a Foreign key integrity error
         # The non-segment partitions go first, then the segments.
-        ds.partitions = [p for p in ds.partitions if not p.is_segment] + [p for p in ds.partitions if p.is_segment]
+        ds.partitions = \
+            [p for p in ds.partitions if not p.is_segment] \
+            + [p for p in ds.partitions if p.is_segment]
 
         self.session.merge(ds)
 
@@ -618,7 +626,7 @@ class Database(object):
             return v
 
         else:
-            # Must be postges, or something else that supports "RETURNING"
+            # Must be postgres, or something else that supports "RETURNING"
             sql = text("""
             UPDATE {p_table} SET {p_seq_col} = {p_seq_col} + 1 WHERE {p_vid_col} = '{parent_vid}' RETURNING {p_seq_col}
             """.format(p_table=parent_table_class.__tablename__, p_seq_col=p_seq_col, p_vid_col=p_vid_col,
@@ -742,11 +750,11 @@ def create_migration_template(name):
 def get_stored_version(connection):
     """ Returns database version.
 
-    Raises: Assuming user_version pragma (sqlite case) and user_version table (postgresql case)
-        exist because they created with the database creation.
-
     Args:
         connection (sqlalchemy connection):
+
+    Raises: Assuming user_version pragma (sqlite case) and user_version table (postgresql case)
+        exist because they created with the database creation.
 
     Returns:
         int: version of the database.
@@ -792,7 +800,7 @@ def _validate_version(connection):
     assert isinstance(version, int)
 
     if version > 10 and version < 100:
-        raise DatabaseError('Trying to open an old SQLite database.')
+        raise DatabaseError('You are trying to open an old SQLite database.')
 
     if _migration_required(connection):
         migrate(connection)
