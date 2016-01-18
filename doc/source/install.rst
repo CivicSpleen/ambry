@@ -9,7 +9,6 @@ Ambry is a complex package that has dependencies on a lot of other code, some of
 * `Mac OS X`_
 * `Linux, Ubuntu`_
 * `Windows`_
-* `Vagrant`_
 * `Docker`_
 
 
@@ -42,7 +41,7 @@ Finally, install Ambry with pip:
 
     $ pip install ambry
 
-Now see :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
+Now see `Post Install`_ to create your configuration files and check the integrity of the installation. 
     
 
 Script Install
@@ -72,7 +71,7 @@ If the script fails, it is usually a problem with installing one of the external
 
 The KyngChaos packages aren't signed, so Mac OS will issue a warning. Use the right-click menu to open them with the installer.
 
-Then,  see :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
+Then, see `Post Install`_ to create your configuration files and check the integrity of the installation. 
    
 
 Linux, Ubuntu
@@ -92,10 +91,9 @@ If you've created a fresh Ubuntu install, you'll probably also have to update an
     sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
 
 
-Follow up with :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
+Follow up with `Post Install`_ to create your configuration files and check the integrity of the installation. 
    
 
-*************
 Windows
 *************
 

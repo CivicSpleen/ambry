@@ -73,8 +73,7 @@ After editing one or more table column maps, you can combine them with
 
     $ bambry colmap -b
 
-This command will create the :file:`colmap.csv' file, which will hold the source and destination field names for only
-the fields that changed.
+This command will create the :file:`colmap.csv` file, which will hold the source and destination field names for only the fields that changed.
 
 Load the Column Map
 +++++++++++++++++++++++
@@ -84,10 +83,10 @@ Load the Column Map
     $ bambry colmap -b
 
 Load the column map into records in the bundle, altering the existing source table records with the changed from the
-:file:`colmap.csv'  file.
+:file:`colmap.csv`  file.
 
 Export the final source schema.
-++++++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++
 
 .. code-block:: bash
 

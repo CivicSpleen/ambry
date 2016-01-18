@@ -60,12 +60,11 @@ Now, you can list the bundles:
 Using the Bambry Command
 ************************
 
-You can operate on these bundles with the :command:`bambry` program. There are a few ways to
+You can operate on these bundles with the :ref:`bambry command <bambry_command>` program. There are a few ways to
 specify which bundle you want to work on:
 
 * Use the ``-i`` option to specify the bundle vid explicity. 
-* :command:`cd` to the bundle directory.  :command:`bambry` will find a bundle ref in a :file:`bundle.yaml`
-file in the current directory
+* :command:`cd` to the bundle directory.  :command:`bambry` will find a bundle ref in a :file:`bundle.yaml` file in the current directory
 * Set the `AMBRY_BUNDLE` env var.
 * For most commands, supply the vid as an argument.
 * Without any of the prior methods, :command:`bambry` will use the last bundle you worked on. 
@@ -164,6 +163,7 @@ If you want to get the data in your bundle extracted to a CSV file, run:
 The files in the build directory with a ``.mpr`` extension is a proprietary format. You can view these files with the :command:`ampr` command: 
 
 .. code-block:: bash
+
     $ ampr -H /Users/eric/proj/virt/ambry10/library/build/example.com/simple-0.1.3/example.com/simple-0.1.3/source/simple.mpr 
     MPR File    : /Users/eric/proj/virt/ambry10/library/build/example.com/simple-0.1.3/example.com/simple-0.1.3/source/simple.mpr
     Created     : 2015-09-22 16:12:42.336765
