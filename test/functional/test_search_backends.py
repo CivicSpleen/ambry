@@ -325,7 +325,7 @@ class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
 
         # force to use library database for search.
         self.rc.services.search = None
-        self._my_library = self.library()
+        self._my_library = self.library(self.rc)
         assert isinstance(self._my_library.search.backend, SQLiteSearchBackend)
         self.assertEqual(self._my_library.database.dsn, 'sqlite://')
 
