@@ -169,6 +169,8 @@ def make_parser(cmd=None, parser = None):
     command_p = sub_cmd.add_parser('duplicate',
                                    help='Increment a bundles version number and create a new bundle')
     command_p.set_defaults(subcommand='duplicate')
+    command_p.add_argument('-s', '--new-source-dir', default=False, action='store_true',
+                           help='Assign a new source directory. Otherwise, use the current source directory')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Clean Command
@@ -725,13 +727,24 @@ def check_built(b):
 
 def bundle_duplicate(args, l, rc):
 
-    b = using_bundle(args, l)
+    orig_b = using_bundle(args, l)
 
     prt('Building bundle package')
-    package = b.package(rebuild=True, source_only=True, incver=True)
+    package = orig_b.package(rebuild=True, source_only=True, incver=True)
     prt('Wrote package to {}'.format(package.path))
     b = l.checkin_bundle(package.path)
     prt('Checked in: {}'.format(b.identity.fqname))
+
+    if args.new_source_dir:
+        b.clear_file_systems()
+    else:
+        b.set_file_system(source_url=orig_b.source_fs_url)
+
+
+    b.sync_out(force=True)
+
+    b.commit()
+
 
 def bundle_package(args, l, rc):
     b = using_bundle(args, l)
@@ -794,11 +807,6 @@ def bundle_clean(args, l, rc):
 
     b.commit()
 
-
-def bundle_download(args, l, rc):
-    b = using_bundle(args, l).cast_to__subclass()
-    b.download()
-    b.set_last_access(Bundle.STATES.DOWNLOADED)
 
 
 def bundle_sync(args, l, rc):

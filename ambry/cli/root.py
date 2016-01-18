@@ -84,8 +84,7 @@ def make_parser(cmd):
     sp = cmd.add_parser('sync', help='Sync with the remotes')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='sync')
-    sp.add_argument('-l', '--list', default=False, action='store_true',
-                    help='List rather than sync')
+    sp.add_argument('-a', '--all', default=False, action='store_true', help='Sync with all remotes')
     sp.add_argument('refs', nargs='*', type=str, help='Names of a remote or a bundle references')
 
     sp = cmd.add_parser('remove', help='Remove a bundle from the library')
@@ -220,7 +219,7 @@ def root_list(args, l, rc):
 
 
 
-    idx = header.index(args.sort) if args.sort else 0
+    idx = header.index(args.sort) if args.sort else 1
     records = sorted(records, key=lambda r: r[idx])
 
 
@@ -321,14 +320,36 @@ def root_info(args, l, rc):
 def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
+    from requests.exceptions import ConnectionError
 
-    for ref in args.refs:
+    all_remote_names = [ r.short_name for r in l.remotes ]
 
-        if ref in [r.short_name for r in l.remotes]: # It's a remote name
-            l.sync_remote(l.remote(ref))
+    if args.all:
+        remotes = all_remote_names
+    else:
+        remotes = args.refs
 
-        else: # It's a bundle reference
-            l.checkin_remote_bundle(ref)
+    prt("Sync with {} remotes or bundles ".format(len(remotes)))
+
+    if not remotes:
+        return
+
+    for ref in remotes:
+        l.commit()
+
+        try:
+            if ref in all_remote_names: # It's a remote name
+                l.sync_remote(l.remote(ref))
+
+            else: # It's a bundle reference
+                l.checkin_remote_bundle(ref)
+
+        except NotFoundError as e:
+            warn(e)
+            continue
+        except ConnectionError as e:
+            warn(e)
+            continue
 
 
 def root_search(args, l, rc):
@@ -396,6 +417,7 @@ def root_remove(args, l, rc):
             b = l.bundle(term)
         except NotFoundError:
             warn("Didn't find bundle for reference '{}'".format(term))
+            return
 
         fqname = b.identity.fqname
 
