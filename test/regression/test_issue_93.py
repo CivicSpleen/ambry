@@ -35,9 +35,9 @@ class Test(TestBase):
             f.write(bundle_content.replace(replace_part, replacement))
         bundle.sync_in()
 
-        # Check the key is deleted from db.
+        # Assert the key is deleted from db.
         # This one is tricky because we may have two configs with same keys - contacts.analyst.url
-        # and contacts.creator.urls for example.
+        # and contacts.creator.url for example.
         session = bundle.library.database.session
         for config in session.query(Config).filter_by(key='url', value='http://example.com').all():
             self.assertNotEqual(config.parent.key, 'analyst')
