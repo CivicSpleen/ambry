@@ -16,14 +16,15 @@ from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, Co
 from ambry.util import get_logger, parse_url_to_dict
 from . import Column, Partition, Table, Dataset, Config, File,\
     Code, ColumnStat, DataSource, SourceColumn, SourceTable
+from ambry.orm.remote import Remote
+from ambry.orm.account import Account
 from ambry.orm.process import Process
-
-from account import Account
+import logging
 
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 116
+SCHEMA_VERSION = 119
 
 # Note: If you are going to change POSTGRES_SCHEMA_NAME do not forget to change docs:
 #   1. README.rst (search for 'Install pg_trgm extension')
@@ -54,12 +55,13 @@ class Migration(BaseMigration):
 '''
 
 logger = get_logger(__name__)
+#logger.setLevel(logging.DEBUG)
 
 
 class Database(object):
     """ Stores local database of the datasets. """
 
-    def __init__(self, dsn, echo=False, foreign_keys=True, engine_kwargs=None):
+    def __init__(self, dsn, echo=False, foreign_keys=True, engine_kwargs=None, application_prefix='ambry'):
         """ Initializes database.
 
         Args:
@@ -93,6 +95,10 @@ class Database(object):
             self._schema = None
 
         self.logger = logger
+
+        self.library = None # Set externally when checking in in
+
+        self._application_prefix = application_prefix
 
     def create(self):
         """Create the database from the base SQL."""
@@ -161,7 +167,7 @@ class Database(object):
 
                 if 'connect_args' not in self.engine_kwargs:
                     self.engine_kwargs['connect_args'] = {
-                        'application_name': 'ambry:{}'.format(os.getpid())
+                        "application_name": "{}:{}".format(self._application_prefix, os.getpid())
                     }
 
                 # For most use, a small pool is good to prevent connection exhaustion, but these settings may
@@ -210,7 +216,7 @@ class Database(object):
                         dbapi_con.execute('PRAGMA foreign_keys=ON')
 
             with self._engine.connect() as conn:
-                _validate_version(conn)
+                _validate_version(conn, self.dsn)
 
         return self._engine
 
@@ -218,8 +224,11 @@ class Database(object):
     def connection(self):
         """Return an SqlAlchemy connection."""
         if not self._connection:
+            logger.debug("Opening connection to: {}".format(self.dsn))
             self._connection = self.engine.connect()
+            logger.debug("Opened connection to: {}".format(self.dsn))
 
+        #logger.debug("Opening connection to: {}".format(self.dsn))
         return self._connection
 
     @property
@@ -375,7 +384,7 @@ class Database(object):
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
-            ColumnStat, SourceTable, SourceColumn, DataSource, Account, Process]
+            ColumnStat, SourceTable, SourceColumn, DataSource, Account, Process, Remote]
 
         try:
             self.drop()
@@ -458,6 +467,12 @@ class Database(object):
     def root_dataset(self):
         """Return the root dataset, which hold configuration values for the library"""
         return self.dataset(ROOT_CONFIG_NAME_V)
+
+    @property
+    def package_dataset(self):
+        """For sqlite bundle packages, return the first ( and only ) dataset"""
+
+        return self.session.query(Dataset).filter(Dataset.vid != ROOT_CONFIG_NAME_V).one()
 
     def dataset(self, ref, load_all=False, exception=True):
         """Return a dataset, given a vid or id
@@ -555,44 +570,104 @@ class Database(object):
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
-    def copy_dataset(self, ds):
-        from ..util import toposort
 
-        # Make sure everything we want to copy is loaded
-        ds.tables
-        ds.partitions
-        ds.files
-        ds.stats
-        ds.codes
-        ds.sources
-        ds.source_tables
-        ds.source_columns
-        # ds.configs # We'll get these later
+    def copy_dataset(self, ds, incver=False, cb=None):
+        """
+        Copy a dataset into the database.
+        :param ds: The source dataset to copy
+        :param cb: A progress callback, taking two parameters: cb(message, num_records)
+        :return:
+        """
+        from ambry.orm import Table, Column, Partition, File, ColumnStat, Code, \
+            DataSource, SourceTable, SourceColumn, Dataset, Config
 
-        # Put the partitions in dependency order so the merge won't throw a Foreign key integrity error
-        # The non-segment partitions go first, then the segments.
-        ds.partitions = \
-            [p for p in ds.partitions if not p.is_segment] \
-            + [p for p in ds.partitions if p.is_segment]
+        tables = [ Table, Column, Partition, File, ColumnStat, Code, SourceTable, SourceColumn, DataSource ]
 
-        self.session.merge(ds)
+        return self._copy_dataset_copy(ds, tables, incver, cb)
 
+    def copy_dataset_files(self, ds, incver=False, cb=None):
+        """
+        Copy only files and configs into the database.
+        :param ds: The source dataset to copy
+        :param cb: A progress callback, taking two parameters: cb(message, num_records)
+        :return:
+        """
+        from ambry.orm import File
+
+        tables = [File]
+
+        return self._copy_dataset_copy(ds, tables, incver, cb)
+
+    def _copy_dataset_copy(self, ds, tables, incver, cb=None):
+        from sqlalchemy.orm import noload
+
+        source_session = ds.session
+        dest_session = self.session
+
+        ds = source_session.query(Dataset).filter(Dataset.vid == ds.vid).options(noload('*')).first()
+
+        dso = ds.incver() if incver else ds
+
+        dest_session.merge(dso)
+        dest_session.commit()
+
+        for table_class in tables:
+            self._copy_dataset_merge(ds, source_session, dest_session, table_class, incver, cb=cb)
+
+        self._copy_dataset_configs(ds, source_session, dest_session, incver)
+
+        return self.dataset(dso.vid)
+
+    def _copy_dataset_merge(self, ds, source_session, dest_session, table_class, incver, cb = None):
+        from sqlalchemy.orm import noload, undefer
+
+        i = [0]
+
+        options = [noload('*')]
+        if table_class == File:
+            options.append(undefer('contents'))
+
+        for o in source_session.query(table_class).filter(table_class.d_vid == ds.vid).options(*options).all():
+
+            if incver:
+                o = o.incver()
+
+            dest_session.merge(o)
+
+            i[0] += 1
+
+            if i[0] % 1000 == 0:
+                if cb:
+                    cb('Copy dataset', i[0])
+                else:
+                    self.logger.info("Copied {} records".format(i[0]))
+
+                dest_session.commit()
+
+    def _copy_dataset_configs(self, ds, source_session, dest_session, incver):
         # FIXME: Oh, this is horrible. Sqlalchemy inserts all of the configs as a group, but they are self-referential,
         # so some with a reference to a parent get inserted before their parent. The topo sort solves this,
         # but there must be a better way to do it.
 
-        dag = {c.id: set([c.parent_id]) for c in ds.configs}
+        from ..util import toposort
+        from sqlalchemy.orm import noload
 
-        refs = {c.id: c for c in ds.configs}
+        configs = source_session.query(Config).filter(Config.d_vid == ds.vid).options(noload('*')).all()
+
+        dag = {c.id: set([c.parent_id]) for c in configs}
+        refs = {c.id: c for c in configs}
+        ordered = []
 
         for e in toposort(dag):
             for ref in e:
                 if ref:
-                    self.session.merge(refs[ref])
+                    config = refs[ref]
+                    if incver:
+                        config = config.incver()
+                    dest_session.merge(config)
 
-        self.session.commit()
+        dest_session.commit()
 
-        return self.dataset(ds.vid)
 
     def next_sequence_id(self, parent_table_class, parent_vid, child_table_class):
         """Get the next sequence id for child objects for a parent object that has a child sequence
@@ -633,7 +708,8 @@ class Database(object):
                        parent_vid=parent_vid))
 
             self.connection.execute('SET search_path TO {}'.format(self._schema))
-            v = next(iter(self.connection.execute(sql)))[0]
+            r = self.connection.execute(sql)
+            v = next(iter(r))[0]
             return v-1
 
     def update_sequence_id(self, parent_table_class, parent_vid, child_table_class):
@@ -686,7 +762,7 @@ class VersionIsNotStored(Exception):
     pass
 
 
-def migrate(connection):
+def migrate(connection, dsn):
     """ Collects all migrations and applies missed.
 
     Args:
@@ -710,6 +786,7 @@ def migrate(connection):
                 trans.commit()
             except:
                 trans.rollback()
+                logger.error("Failed to migrate '{}'  on {} ".format(version, dsn))
                 raise
 
 
@@ -784,7 +861,7 @@ def get_stored_version(connection):
         raise DatabaseError('Do not know how to get version from {} engine.'.format(connection.engine.name))
 
 
-def _validate_version(connection):
+def _validate_version(connection, dsn):
     """ Performs on-the-fly schema updates based on the models version.
 
     Raises:
@@ -803,7 +880,7 @@ def _validate_version(connection):
         raise DatabaseError('You are trying to open an old SQLite database.')
 
     if _migration_required(connection):
-        migrate(connection)
+        migrate(connection, dsn)
 
 
 def _migration_required(connection):

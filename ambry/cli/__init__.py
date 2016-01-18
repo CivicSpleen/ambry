@@ -1,7 +1,7 @@
 """Main script for the databaundles package, providing support for creating new
 bundles.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
@@ -93,20 +93,42 @@ def get_parser(commands):
     return parser
 
 
-BASE_COMMANDS = ['ambry.cli.bundle', 'ambry.cli.config', 'ambry.cli.dockr',
-                 'ambry.cli.library', 'ambry.cli.root', 'ambry.cli.util']
+BASE_COMMANDS = ['ambry.cli.bundle', 'ambry.cli.config', 'ambry.cli.library', 'ambry.cli.root']
+
+
+def get_extra_commands():
+    """Use the configuration to discover additional CLI packages to load"""
+    from ambry.run import find_config_file
+    from ambry.dbexceptions import ConfigurationError
+    from ambry.util import yaml
+
+    try:
+        plugins_dir = find_config_file('cli.yaml')
+    except ConfigurationError:
+        return []
+
+    with open(plugins_dir) as f:
+        cli_modules = yaml.load(f)
+
+    return cli_modules
+
 
 def get_commands(extra_commands=[]):
+    from ambry.dbexceptions import ConfigurationError
 
     commands = {}
 
     for module_name in BASE_COMMANDS + extra_commands:
-        m = __import__(module_name, fromlist=['command_name', 'make_parser', 'run_command'])
-
         try:
-            commands[m.command_name] = (m.run_command,m.make_parser)
 
-        except AttributeError:
+            m = __import__(module_name, fromlist=['command_name', 'make_parser', 'run_command'])
+
+            commands[m.command_name] = (m.run_command, m.make_parser)
+        except ImportError as e:
+            warn("Failed to import CLI module '{}'. Ignoring it. ({}) ".format(module_name, e))
+
+        except AttributeError as e:
+            warn("Failed to import CLI module '{}'. Ignoring it. ({}) ".format(module_name, e))
             pass
 
     return commands
@@ -114,7 +136,13 @@ def get_commands(extra_commands=[]):
 def main(argsv=None, ext_logger=None):
     from ..dbexceptions import ConfigurationError
 
-    commands =  get_commands()
+    global global_logger
+    # For failures in importing CLI modules. Re-set later.
+    global_logger = get_logger(__name__, template='%(levelname)s: %(message)s')
+
+    extras = get_extra_commands()
+
+    commands =  get_commands(extras)
 
     parser = get_parser(commands)
 
@@ -130,7 +158,6 @@ def main(argsv=None, ext_logger=None):
     else:
         rc_path = args.config
 
-    global global_logger
 
     if ext_logger:
         global_logger = ext_logger

@@ -464,3 +464,27 @@ class Test(TestBase):
 
         # print(p.promote(ds_name).cache_key)
         # self.assertEquals('', p.promote(ds_name).cache_key)
+
+
+    def test_increment(self):
+
+        dnn = 1000000
+        rev = 100
+
+        dn = DatasetNumber(dnn, rev)
+        self.assertEqual('d000004c9201C', str(dn))
+
+        dn2 = ObjectNumber.increment(dn)
+        self.assertEqual(101, dn2.revision)
+
+        dn3 = ObjectNumber.increment(dn2)
+        self.assertEqual(102, dn3.revision)
+
+        tn = TableNumber(dn3, 1)
+        self.assertEqual(102, tn.revision)
+        self.assertEqual('t000004c920101E', str(tn))
+
+        tn2 = ObjectNumber.increment(tn)
+        self.assertEqual(103, tn2.revision)
+
+

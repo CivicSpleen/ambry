@@ -1,6 +1,6 @@
 .. _install:
 
-################
+
 Installing Ambry
 ################
 
@@ -13,7 +13,6 @@ Ambry is a complex package that has dependencies on a lot of other code, some of
 * `Docker`_
 
 
-********
 Mac OS X
 ********
 
@@ -30,6 +29,7 @@ After installing Anaconda, open a new Terminal window ( an old one won't have th
     $ which python 
     /Users/eric/anaconda/bin/python
  
+  
 Most python dependencies are installed with `pip` along with Ambry, but `gdal` requires compiling and doesn't build easily on OS X, so we'll get it with conda:
  
 .. code-block:: bash
@@ -74,7 +74,7 @@ The KyngChaos packages aren't signed, so Mac OS will issue a warning. Use the ri
 
 Then,  see :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
    
-*************
+
 Linux, Ubuntu
 *************
 
@@ -99,36 +99,15 @@ Follow up with :ref:`install-post-install` to create your configuration files an
 Windows
 *************
 
-For Windows, use Docker, or a Ubuntu VM.
+For Windows, you can probably use the "Easy Way" installation: install Anaconda first, then Ambry. If that doesn't work, try Vagrant or Docker. 
 
 
-*************
 Docker
 *************
    
-:ref:`tutorial/docker`
-
-*************
-Virtual Env
-*************
+TBD. 
 
 
-.. code-block:: bash
-
-    $ mkvirtualenv client
-    $ cdvirtualenv
-
-
-For a development environment, or bleeding-edge use:
-
-.. code-block:: bash
-
-    $ git clone https://github.com/CivicKnowledge/ambry.git
-    $ ambry config install
-
-
-
-*************
 Post Install
 *************
   
@@ -137,24 +116,14 @@ After installing Ambry and its dependencies, you can check that the installation
 .. code-block:: bash
     
     $ ambry info 
-    Version:  0.3.420
-    Root dir: /home/eric/ambry
-    Source :  /home/eric/ambry/source
-    Configs:  ['/home/eric/.ambry.yaml', '/home/eric/.ambry-accounts.yaml']
-
-    $ ambry library info 
-    Library Info
-    Name:     default
-    Database: sqlite:////home/eric/ambry/library.db
-    Cache:    FsCache: dir=/home/eric/ambry/library upstream=(None)
-    Remotes:  FsCompressionCache: upstream=(HttpCache: url=http://s3.sandiegodata.org/library/)
+	Version:   0.3.1612
+	Root dir:  /Users/eric/proj/virt/ambry-develop/data
+	Source :   /Users/eric/proj/virt/ambry-develop/data/source
+	Configs:   ['/Users/eric/proj/virt/ambry-develop/.ambry.yaml']
+	Accounts:  /Users/eric/.ambry-accounts.yaml
+	Library:   sqlite:////Users/eric/proj/virt/ambry-develop/data/library.db
+	Remotes:   test, public
 
 After installation, you can customize the configuation. See: :ref:`configuration`
-
-
-
-
-
-
 
 

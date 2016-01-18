@@ -39,6 +39,8 @@ def make_parser(cmd):
                         help='Echo database queries.')
     parser.add_argument('-E', '--exceptions', default=False, action='store_true',
                         help="Don't capture and reformat exceptions; show the traceback on the console")
+    parser.add_argument('-T', '--trace', default=False, action='store_true',
+                        help="Trace every line of program execution")
     parser.add_argument('-m', '--multi', default=False, action='store_true',
                         help='Run in multiprocessing mode')
     parser.add_argument('-p', '--processes',  type=int,
@@ -103,7 +105,7 @@ def make_parser(cmd):
     group.add_argument('-m', '--metadata', default=False, action='store_const',
                        const='metadata', dest='table',
                        help='Dump metadata as json')
-    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+    command_p.add_argument('ref', nargs='?', type=str, help='Bundle or file reference')
 
     # Set command
     #
@@ -141,7 +143,11 @@ def make_parser(cmd):
     command_p.set_defaults(subcommand='sync')
     command_p.add_argument('file_name', nargs='?', type=str, help='File reference')
     command_p.add_argument('-i', '--in', default=False, action='store_true',
+                           help='Sync from files to records, and records to objects')
+    command_p.add_argument('-f', '--files', default=False, action='store_true',
                            help='Sync from files to records')
+    command_p.add_argument('-r', '--records', default=False, action='store_true',
+                           help='Sync from records to objects')
     command_p.add_argument('-o', '--out', default=False, action='store_true',
                            help='Sync from records to files')
     command_p.add_argument('-c', '--code', default=False, action='store_true',
@@ -152,6 +158,8 @@ def make_parser(cmd):
     command_p = sub_cmd.add_parser('duplicate',
                                    help='Increment a bundles version number and create a new bundle')
     command_p.set_defaults(subcommand='duplicate')
+    command_p.add_argument('-s', '--new-source-dir', default=False, action='store_true',
+                           help='Assign a new source directory. Otherwise, use the current source directory')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Clean Command
@@ -282,13 +290,26 @@ def make_parser(cmd):
     command_p = sub_cmd.add_parser('finalize', help='Finalize the bundle, preventing further changes')
     command_p.set_defaults(subcommand='finalize')
 
+    # Package Command
+    #
+    command_p = sub_cmd.add_parser('package', help='Package the bundle into a sqlite file.')
+    command_p.set_defaults(subcommand='package')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Rebuild if is already exists')
+    command_p.add_argument('-s', '--source', default=False, action='store_true',
+                           help='Only package source files')
+    command_p.add_argument('-i', '--incver', default=False, action='store_true',
+                           help='Increment the revision number')
+
     # Checkin Command
     #
     command_p = sub_cmd.add_parser('checkin', help='Commit the bundle to the remote store')
     command_p.set_defaults(subcommand='checkin')
     command_p.add_argument('-n', '--no-partitions', default=False, action='store_true',
                            help="Don't check in partitions")
-
+    command_p.add_argument('-r', '--remote', help='Specify remote, rather than using default for bundle')
+    command_p.add_argument('-s', '--source', default=False, action='store_true',
+                           help='Only package source files')
     #
     # Update Command
     #
@@ -379,28 +400,6 @@ def make_parser(cmd):
     command_p.set_defaults(subcommand='test')
     command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
 
-    # Docker
-    #
-
-    command_p = sub_cmd.add_parser('docker', help='Run bambry commands in a docker container')
-    command_p.set_defaults(subcommand='docker')
-    command_p.add_argument('-i', '--docker_id', default=False, action='store_true',
-                           help='Print the id of the running container')
-    command_p.add_argument('-c', '--container', help='Use a specific container id')
-    command_p.add_argument('-k', '--kill', default=False, action='store_true',
-                           help='Kill the running container')
-    command_p.add_argument('-n', '--docker_name', default=False, action='store_true',
-                           help='Print the name of the running container')
-    command_p.add_argument('-l', '--logs', default=False, action='store_true',
-                           help='Get the logs (stdout) from a runnings container')
-    command_p.add_argument('-s', '--shell', default=False, action='store_true',
-                           help='Run a shell on the currently running container')
-    command_p.add_argument('-S', '--stats', default=False, action='store_true',
-                           help='Report stats from the currently running container')
-    command_p.add_argument('-v', '--version', default=False, action='store_true',
-                           help='Select a docker version that is the same as this Ambry installation')
-
-    command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
 
     #
     # Log
@@ -450,11 +449,20 @@ def run_command(args, rc):
         args.multi = args.processes
         l.processes = args.processes
 
+    if args.trace:
+        from ambry.util.debug import traceit
+        import sys
+        sys.settrace(traceit)
+
     try:
         globals()['bundle_' + args.subcommand](args, l, rc)
-    except ConflictError as e:
+    except (ConflictError, NotFoundError) as e:
+        if args.exceptions:
+            raise
         fatal(str(e))
     except LoggedException as e:
+        if args.exceptions:
+            raise
         exc = e.exc
         b = e.bundle
         b.fatal(str(e.message))
@@ -468,6 +476,7 @@ def get_bundle_ref(args, l, use_history=False):
     """
 
     if not use_history:
+
         if args.id:
             return (args.id, '-i argument')
 
@@ -488,8 +497,7 @@ def get_bundle_ref(args, l, use_history=False):
             with open(cwd_bundle) as f:
                 config = yaml.load(f)
                 try:
-                    id_ = config['identity']['id']
-                    return (id_, 'directory')
+                    return (config['names']['vid'], 'directory')
                 except KeyError:
                     pass
 
@@ -516,11 +524,11 @@ def using_bundle(args, l, print_loc=True, use_history=False):
     b.multi = args.multi
     b.capture_exceptions = not args.exceptions
 
-    if args.debug:
+    if hasattr(args,'debug') and args.debug:
         warn('Bundle debug mode. Send USR2 signal (kill -USR2 ) to displaya stack trace')
         l.init_debug()
 
-    if args.limited_run:
+    if hasattr(args,'limited_run') and args.limited_run:
         b.limited_run = True
     if print_loc:  # Try to only do this once
         b.log_to_file('==============================')
@@ -594,8 +602,16 @@ def bundle_info(args, l, rc):
     inf(0, 'VID', b.identity.vid)
     inf(0, 'VName', b.identity.vname)
 
-    inf(1, 'Build State', b.buildstate.state.current)
-    inf(1, 'Build Time', b.buildstate.build_duration_pretty)
+    if 'remote_name' in b.dataset.data:
+        inf(0, 'Remote', b.dataset.data['remote_name'])
+
+    inf(1, 'Dataset State', b.dstate)
+    inf(1, 'Build State', (b.buildstate.state.current if  b.buildstate.state.current else '') +
+        (', '+str(b.buildstate.build_duration_pretty) if b.buildstate.build_duration_pretty else '') )
+
+    if 'remote_name' in b.dataset.data:
+        inf(1, 'Remote Url', b.dataset.data.get('remote_url'))
+
     try:
         inf(1, 'Geo cov', str(list(b.metadata.coverage.geo)))
         inf(1, 'Grain cov', str(list(b.metadata.coverage.grain)))
@@ -692,24 +708,37 @@ def bundle_info(args, l, rc):
 
 def check_built(b):
     """Exit if the bundle is built or finalized"""
-    if b.is_built or b.is_finalized:
+    if b.is_finalized:
         fatal("Can't perform operation; state = '{}'. "
               "Call `bambry clean` explicitly or build with -f option".format(b.state))
 
 
 def bundle_duplicate(args, l, rc):
 
+    orig_b = using_bundle(args, l)
+
+    prt('Building bundle package')
+    package = orig_b.package(rebuild=True, source_only=True, incver=True)
+    prt('Wrote package to {}'.format(package.path))
+    b = l.checkin_bundle(package.path)
+    prt('Checked in: {}'.format(b.identity.fqname))
+
+    if args.new_source_dir:
+        b.clear_file_systems()
+    else:
+        b.set_file_system(source_url=orig_b.source_fs_url)
+
+
+    b.sync_out(force=True)
+
+    b.commit()
+
+
+def bundle_package(args, l, rc):
     b = using_bundle(args, l)
-
-    if not b.is_finalized:
-        fatal("Can't increment a bundle unless it is finalized")
-
-    nb = l.duplicate(b)
-
-    nb.set_last_access(Bundle.STATES.NEW)
-
-    prt('New Bundle: {} '.format(nb.identity.vname))
-
+    prt('Packaging bundle into sqlite file')
+    package = b.package(rebuild=args.force, source_only = args.source, incver=args.incver)
+    prt('Package writen to: {} '.format(package.path))
 
 def bundle_finalize(args, l, rc):
     b = using_bundle(args, l)
@@ -767,17 +796,12 @@ def bundle_clean(args, l, rc):
     b.commit()
 
 
-def bundle_download(args, l, rc):
-    b = using_bundle(args, l).cast_to__subclass()
-    b.download()
-    b.set_last_access(Bundle.STATES.DOWNLOADED)
-
 
 def bundle_sync(args, l, rc):
 
     b = using_bundle(args, l)
 
-    sync_in = getattr(args, 'in') or not any((getattr(args, 'in'), args.code,  args.out))
+    sync_in = getattr(args, 'in') or not any((getattr(args, 'in'), args.code,  args.out, args.files, args.records))
 
     if sync_in:
         prt('Sync in')
@@ -790,6 +814,13 @@ def bundle_sync(args, l, rc):
     if args.out:
         prt('Sync out')
         b.sync_out(file_name=args.file_name)
+
+    if args.files:
+        b.sync_in_files()
+
+
+    if args.records:
+        b.sync_in_records()
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
@@ -806,7 +837,10 @@ def bundle_ingest(args, l, rc):
     if not args.force and not args.table and not args.source:
         check_built(b)
 
-    b.sync_code()
+    if b.sync_code() > 0:
+        # If the bundle.py file changed, need to reload it
+        b = using_bundle(args, l).cast_to_subclass()
+
 
     if b.sync_sources() > 0:
         b.log("Source file changed, automatically cleaning")
@@ -873,6 +907,7 @@ def bundle_schema(args, l, rc):
 def bundle_build(args, l, rc):
 
     b = using_bundle(args, l)
+
     b.set_last_access(Bundle.STATES.SYNCED)
     b.clean_progress()
     b.commit()
@@ -881,6 +916,10 @@ def bundle_build(args, l, rc):
 
     if not args.force and not args.table and not args.source:
         check_built(b)
+
+    if b.dstate == b.STATES.SOURCE:
+        prt("Source bundle; sync in records")
+        b.sync_in_records()
 
     if args.sync:
         b.sync_in()
@@ -975,13 +1014,14 @@ def bundle_checkin(args, l, rc):
 
     b = l.bundle(ref, True)
 
-    remote_name = l.resolve_remote(b)
-    remote = l.remote(remote_name)
-
-    remote, path = b.checkin(no_partitions=args.no_partitions)
+    remote_instance, path = b.checkin(remote_name=args.remote,
+                                      no_partitions=args.no_partitions,
+                                      source_only=args.source)
 
     if path:
-        b.log("Checked in to remote '{}' path '{}'".format(remote, path))
+        b.log("Checked in to remote '{}' path '{}'".format(remote_instance, b.identity.fqname))
+    else:
+        b.error("Failed to get a path while checking in {}".format(b.identity.fqname))
 
 
 def bundle_set(args, l, rc):
@@ -1028,23 +1068,35 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'files':
 
-        records = []
-        headers = 'Path Major Minor State Size Modified Synced SyncDir'.split()
+        if args.ref:
+            from ambry.orm import File
+            from sqlalchemy.orm.exc import NoResultFound
+            records = None
+            try:
+                f = b.build_source_files.file_by_path(args.ref)
+                print f.contents
+            except (NotFoundError, AttributeError):
+                fatal("Did not find file for path '{}' ".format(args.ref))
 
-        for f in b.build_source_files:
-            row = f.record
-            records.append((
-                row.path,
-                row.major_type,
-                row.minor_type,
-                row.state,
-                row.size,
-                datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else '',
-                datetime.datetime.fromtimestamp(float(row.synced_fs)).isoformat() if row.synced_fs else '',
-                f.sync_dir()
+
+        else:
+            records = []
+            headers = 'Path Major Minor State Size Modified Synced SyncDir'.split()
+
+            for f in b.build_source_files:
+                row = f.record
+                records.append((
+                    row.path,
+                    row.major_type,
+                    row.minor_type,
+                    row.state,
+                    row.size,
+                    datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else '',
+                    datetime.datetime.fromtimestamp(float(row.synced_fs)).isoformat() if row.synced_fs else '',
+                    f.sync_dir()
+                    )
                 )
-            )
-        records = sorted(records, key=lambda row: (row[0], row[1], row[2]))
+            records = sorted(records, key=lambda row: (row[0], row[1], row[2]))
 
     elif args.table == 'partitions':
 
@@ -1244,23 +1296,29 @@ def bundle_import(args, l, rc):
 
     source_dir = os.path.abspath(source_dir)
 
-    fs = fsopendir(source_dir)
+    if source_dir.endswith('.db'): # it's a database package
+        prt('Loading bundle package')
+        b = l.checkin_bundle(source_dir)
 
-    config = yaml.load(fs.getcontents('bundle.yaml'))
+    else: # It's a source directory
 
-    if not config:
-        fatal("Failed to get a valid bundle configuration from '{}'".format(source_dir))
+        fs = fsopendir(source_dir)
 
-    bid = config['identity']['id']
+        config = yaml.load(fs.getcontents('bundle.yaml'))
 
-    try:
-        b = l.bundle(bid, True)
-    except NotFoundError:
-        b = l.new_from_bundle_config(config)
+        if not config:
+            fatal("Failed to get a valid bundle configuration from '{}'".format(source_dir))
 
-    b.set_file_system(source_url=source_dir)
+        bid = config['identity']['id']
 
-    b.sync_in(force=True)
+        try:
+            b = l.bundle(bid, True)
+        except NotFoundError:
+            b = l.new_from_bundle_config(config)
+
+        b.set_file_system(source_url=source_dir)
+
+        b.sync_in(force=True)
 
     prt('Loaded bundle: {}'.format(b.identity.fqname))
 
@@ -1330,6 +1388,7 @@ def bundle_extract(args, l, rc):
 
 def bundle_view(args, l, rc):
     from ambry_sources.cli import main
+    from fs.errors import ResourceNotFoundError
 
     b = using_bundle(args, l)
 
@@ -1348,13 +1407,16 @@ def bundle_view(args, l, rc):
     # Maybe it is a partition
     if not df:
         try:
+            # Try to get the partition from the bundle.
             p = b.partition(arg)
             df = p.datafile
+
         except:
             pass
 
     if not df:
         try:
+            # Nope, try to get it from the library
             p = l.partition(arg)
             df = p.datafile
         except:
@@ -1365,7 +1427,11 @@ def bundle_view(args, l, rc):
 
     args.path = [df]
 
-    main(args)
+    try:
+        main(args)
+    except ResourceNotFoundError as e:
+        raise NotFoundError(str(e))
+
 
 
 def bundle_colmap(args, l, rc):
@@ -1503,187 +1569,36 @@ def bundle_test(args, l, rc):
     b.run_tests(args.tests)
 
 
-def bundle_docker(args, l, rc):
-    import os
-    import sys
-    from docker.errors import NotFound, NullResource
-    from dockr import get_docker_links, docker_client
-
-    username, dsn, volumes_c, db_c, envs = get_docker_links(rc)
-
-    b = using_bundle(args, l, print_loc=False)
-    client = docker_client()
-
-    if args.container:
-        last_container = args.container
-    else:
-        try:
-            last_container = b.buildstate.docker.last_container
-        except KeyError:
-            last_container = None
-
-    try:
-        inspect = client.inspect_container(last_container)
-
-    except NotFound:
-        # OK; the last_container is dead
-        b.buildstate.docker.last_container = None
-        b.buildstate.commit()
-        inspect = None
-    except NullResource:
-        inspect = None
-        pass  # OK; no container specified in the last_container value
-
-    #
-    # Command args
-    #
-
-    bambry_cmd = ' '.join(args.args).strip()
-
-    def run_container(bambry_cmd=None):
-        """Run a new docker container"""
-
-        if bambry_cmd:
-
-            if last_container:
-                fatal("Bundle already has a running container: {}\n{}".format(inspect['Name'], inspect['Id']))
-
-            bambry_cmd_args = []
-
-            if args.limited_run:
-                bambry_cmd_args.append('-L')
-
-            if args.multi:
-                bambry_cmd_args.append('-m')
-
-            if args.processes:
-                bambry_cmd_args.append('-p' + str(args.processes))
-
-            envs['AMBRY_COMMAND'] = 'bambry -i {} {} {}'.format(
-                                    b.identity.vid, ' '.join(bambry_cmd_args), bambry_cmd)
-
-            detach = True
-        else:
-            detach = False
-
-        if args.limited_run:
-            envs['AMBRY_LIMITED_RUN'] = '1'
-
-        try:
-            image_tag = rc.docker.ambry_image
-        except KeyError:
-            image_tag = 'civicknowledge/ambry'
-
-        if args.version:
-            import ambry._meta
-            image = '{}:{}'.format(image_tag, ambry._meta.__version__)
-        else:
-            image = image_tag
-
-        try:
-            volumes_from = [rc.docker.volumes_from]
-        except KeyError:
-            volumes_from = []
-
-        volumes_from.append(volumes_c)
-
-        host_config = client.create_host_config(
-            volumes_from=volumes_from,
-            links={
-                db_c: 'db'
-            }
-        )
-
-        kwargs = dict(
-            image=image,
-            detach=detach,
-            tty=not detach,
-            stdin_open=not detach,
-            environment=envs,
-            host_config=host_config
-        )
-
-        prt('Starting container with image {} '.format(image))
-
-        r = client.create_container(**kwargs)
-
-        client.start(r['Id'])
-
-        return r['Id']
-
-    if args.kill:
-
-        if last_container:
-
-            if inspect and inspect['State']['Running']:
-                client.kill(last_container)
-
-            client.remove_container(last_container)
-
-            prt('Killed {}', last_container)
-
-            b.buildstate.docker.last_container = None
-            b.buildstate.commit()
-            last_container = None
-        else:
-            warn('No container to kill')
-
-    if bambry_cmd:
-        # If there is command, run the container first so the subsequent arguments can operate on it
-        last_container = run_container(bambry_cmd)
-        b.buildstate.docker.last_container = last_container
-        b.buildstate.commit()
-
-    if args.docker_id:
-        if last_container:
-            prt(last_container)
-
-        return
-
-    elif args.docker_name:
-
-        if last_container:
-            prt(inspect['Name'])
-
-        return
-
-    elif args.logs:
-
-        if last_container:
-            for line in client.logs(last_container, stream=True):
-                print line,
-        else:
-            fatal('No running container')
-
-    elif args.stats:
-
-        for s in client.stats(last_container, decode=True):
-
-            sys.stderr.write("\x1b[2J\x1b[H")
-            prt_no_format(s.keys())
-            prt_no_format(s['memory_stats'])
-            prt_no_format(s['cpu_stats'])
-
-    elif args.shell:
-        # Run a shell on a container
-        # This is using execlp rather than the docker API b/c we want to entirely replace the
-        # current process to get a good tty.
-        os.execlp('docker', 'docker', 'exec', '-t', '-i', last_container, '/bin/bash')
-
-    elif not bambry_cmd and not args.kill:
-        # Run a container and then attach to it.
-        cid = run_container()
-
-        os.execlp('docker', 'docker', 'attach', cid)
-
-
 def bundle_log(args, l, rc):
     b = using_bundle(args, l)
     from ambry.util import drop_empty
-    from itertools import groupby
-    from collections import defaultdict
-    from ambry.orm import Partition
+
     from tabulate import tabulate
+    from ambry.orm import Process
+    import time
+    from collections import OrderedDict
+
+    def append(pr, edit=None):
+
+        if not isinstance(pr, dict):
+            pr = pr.dict
+
+        d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.items() if k in
+                        ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
+                         'phase', 'stage', 'modified', 'item_count',
+                         'message'])
+
+        d['modified'] = round(float(d['modified']) - time.time(), 1)
+
+        if edit:
+            for k, v in edit.items():
+                d[k] = v(d[k])
+
+        if not records:
+            records.append(d.keys())
+
+        records.append(d.values())
+
 
     if args.exceptions:
         print '=== EXCEPTIONS ===='
@@ -1693,47 +1608,19 @@ def bundle_log(args, l, rc):
 
     elif args.progress:
         print '=== PROGRESS ===='
-        from ambry.orm import Process
-        import time
-        from collections import OrderedDict
-        from sqlalchemy.sql import and_
 
+        records = b.progress.bundle_process_logs(show_all=args.all)
+
+        if records:
+            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]),records[0]))
+
+    elif args.all:
         records = []
 
-        def append(pr, edit=None):
-
-            if not isinstance(pr, dict):
-                pr = pr.dict
-
-            d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.items() if k in
-                            ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
-                             'phase', 'stage', 'modified', 'item_count',
-                             'message'])
-
-            d['modified'] = round(float(d['modified']) - time.time(), 1)
-
-            if edit:
-                for k, v in edit.items():
-                    d[k] = v(d[k])
-
-            if not records:
-                records.append(d.keys())
-
-            records.append(d.values())
-
-        q = b.progress.query.order_by(Process.modified.desc())
+        q = b.progress.query.order_by(Process.id.asc())
 
         for pr in q.all():
-            # Don't show reports that are done or older than 2 minutes.
-            if args.all or (pr.state != 'done' and pr.modified > time.time() - 120):
-                append(pr)
-
-        # Add old running rows, which may indicate a dead process.
-        q = (b.progress.query.filter(Process.s_vid != None)
-             .filter(and_(Process.state == 'running', Process.modified < time.time() - 60)))
-
-        for pr in q.all():
-            append(pr, edit={'modified': lambda e: (str(e)+' (dead?)')})
+            append(pr)
 
         records = drop_empty(records)
 
@@ -1742,32 +1629,8 @@ def bundle_log(args, l, rc):
 
     if args.stats:
         print '=== STATS ===='
-        ds = b.dataset
-        key_f = key = lambda e: e.state
-        states = set()
-        d = defaultdict(lambda: defaultdict(int))
 
-        for state, sources in groupby(sorted(ds.sources, key=key_f), key_f):
-            d['Sources'][state] = sum(1 for _ in sources) or None
-            states.add(state)
-
-        key_f = key = lambda e: (e.state, e.type)
-
-        for (state, type), partitions in groupby(sorted(ds.partitions, key=key_f), key_f):
-            states.add(state)
-            if type == Partition.TYPE.UNION:
-                d['Partitions'][state] = sum(1 for _ in partitions) or None
-            else:
-                d['Segments'][state] = sum(1 for _ in partitions) or None
-
-        headers = sorted(states)
-        rows = []
-
-        for r in ('Sources', 'Partitions', 'Segments'):
-            row = [r]
-            for state in headers:
-                row.append(d[r].get(state, ''))
-            rows.append(row)
+        headers, rows = b.progress.stats()
 
         if rows:
             prt_no_format(tabulate(rows, headers))

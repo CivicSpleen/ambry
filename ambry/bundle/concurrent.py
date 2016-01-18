@@ -7,12 +7,14 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import os
-from multiprocessing.pool import debug, MaybeEncodingError, Pool as MPPool
+from multiprocessing.pool import debug, MaybeEncodingError, Pool as MPPool, MapResult
 
 #import multiprocessing, logging
 #multiprocessing.DEFAULT_LOGGING_FORMAT = '%(process)d [%(levelname)s/%(processName)s] %(message)s'
 #logger = multiprocessing.log_to_stderr()
 #logger.setLevel(multiprocessing.SUBDEBUG)
+
+
 
 def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
     """ Custom worker for bundle operations
@@ -78,7 +80,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
         assert b._progress == None  # Don't want to share connections across processes
 
         mp_args[0] = b
-        result = (True, mp_func(*mp_args))
+        result = (True, [mp_func(*mp_args)])
 
     except Exception as e:
         import traceback
@@ -121,15 +123,12 @@ class Pool(MPPool):
             w = self.Process(target=self._worker_f,
                              args=(self._inqueue, self._outqueue,
                                    self._initializer,
-                                   self._initargs, self._maxtasksperchild)
-                             )
+                                   self._initargs, self._maxtasksperchild))
             self._pool.append(w)
             w.name = w.name.replace('Process', 'PoolWorker')
             w.daemon = True
             w.start()
             debug('added worker')
-
-
 
 def alt_init(l): # For testing
     global library
@@ -153,7 +152,6 @@ def init_library(database_dsn, accounts_password, limited_run = False):
 
 def build_mp(b, stage, source_name, force):
     """Ingest a source, using only arguments that can be pickled, for multiprocessing access"""
-
 
     source = b.source(source_name)
 

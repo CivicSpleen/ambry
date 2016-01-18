@@ -1007,6 +1007,17 @@ def unparse_url_dict(d):
 
     return url
 
+def set_url_part(url, **kwargs):
+    """Change one or more parts of a URL"""
+    d = parse_url_to_dict(url)
+
+    d.update(kwargs)
+
+    return unparse_url_dict(d)
+
+
+
+
 
 def filter_url(url, **kwargs):
     """Alter a url by setting parameters set in parse_url_to_dict."""
@@ -1252,3 +1263,9 @@ def int_maybe(v):
         return int(v)
     except (TypeError, ValueError):
         return None
+
+def random_string(length):
+    import random
+    import string
+    return ''.join(random.SystemRandom().choice(string.ascii_lowercase + string.ascii_uppercase + string.digits)
+                   for _ in range(length))

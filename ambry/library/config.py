@@ -9,15 +9,19 @@ from ambry.dbexceptions import ConfigurationError
 
 class LibraryConfigSyncProxy(object):
 
-    def __init__(self, library):
+    def __init__(self, library, password=None):
         self.library = library
         self.config = library.config
         self.database = self.library.database
 
-        try:
-            self.password = self.config.accounts.password
-        except AttributeError:
-            self.password = None
+        if password:
+            self.password = password
+        else:
+            try:
+                self.password = self.config.accounts.password
+            except AttributeError:
+                self.password = None
+
 
         self.root_dir = None # Set when file systems are synced
 
@@ -32,7 +36,7 @@ class LibraryConfigSyncProxy(object):
     def accounts(self):
         return self.library.accounts
 
-    def sync(self):
+    def sync(self, force=False):
         import time
         import platform
 
@@ -44,8 +48,7 @@ class LibraryConfigSyncProxy(object):
 
         node = self.database.root_dataset.config.library.config['config_node']
 
-        if change_time > load_time:
-
+        if force or change_time > load_time:
             self.sync_accounts(self.config.accounts)
             self.sync_remotes(self.config.library.remotes)
 
@@ -67,25 +70,32 @@ class LibraryConfigSyncProxy(object):
 
         self.commit()
 
-    def sync_remotes(self, remotes, clear = False):
+    def sync_remotes(self, remotes, cb=None):
+        from ambry.orm.exc import NotFoundError
+        from ambry.orm import Remote
 
         root = self.database.root_dataset
 
-        if clear:
-            root.config.library.delete_group('remotes')
-            self.commit()
-
-
         rc = root.config.library.remotes
 
+        s = self.library.database.session
+
+        for name, r in remotes.items():
+
+            if not isinstance(r, dict):
+                r = dict(url=r)
+
+            remote = self.library.find_or_new_remote(name)
+
+            for k, v in r.items():
+                setattr(remote, k, v)
+
+            if cb:
+                cb("Loaded remote: {}".format(remote.short_name))
+
         self.commit()
 
-        for name, url in remotes.items():
-            rc[name] = url
-
-        self.commit()
-
-    def sync_accounts(self, accounts_data):
+    def sync_accounts(self, accounts_data, clear = False, password=None, cb = None):
         """
         Load all of the accounts from the account section of the config
         into the database.
@@ -95,23 +105,11 @@ class LibraryConfigSyncProxy(object):
         :return:
         """
 
-        kmap = {
-            'service': 'major_type',
-            'host': 'url',
-            'organization': 'org',
-            'apikey': 'secret',
-
-            'access': 'access_key',
-            'access_key': 'access_key',
-            'secret': 'secret',
-            'name': 'name',
-            'org': 'org',
-            'url': 'url',
-            'email': 'email'
-        }
-
+        # Map common values into the accounts records
 
         all_accounts = self.accounts
+
+        kmap = Account.prop_map()
 
         for account_id, values in accounts_data.items():
 
@@ -119,12 +117,18 @@ class LibraryConfigSyncProxy(object):
                 continue
 
             d = {}
-            a = Account(account_id=account_id)
-            a.password = self.password
+
+            a = self.library.find_or_new_account(account_id)
+            a.secret_password = password or self.password
 
             for k, v in values.items():
+                if k in ('id',):
+                    continue
                 try:
-                    setattr(a, kmap[k], v)
+                    if kmap[k] == 'secret':
+                        a.encrypt_secret(v)
+                    else:
+                        setattr(a, kmap[k], v)
                 except KeyError:
                     d[k] = v
 
@@ -133,11 +137,7 @@ class LibraryConfigSyncProxy(object):
             if values.get('service') == 's3':
                 a.url = 's3://{}'.format(a.account_id)
 
-            if a.account_id in all_accounts:
-                a.id = all_accounts[a.account_id]['id']
-                self.database.session.merge(a)
+            if cb:
+                cb('Loaded account: {}'.format(a.account_id))
 
-            else:
-                self.database.session.add(a)
-
-        self.database.session.commit()
+            self.database.session.commit()

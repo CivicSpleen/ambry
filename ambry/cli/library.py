@@ -9,8 +9,8 @@ __all__ = ['command_name', 'make_parser', 'run_command']
 command_name = 'library'
 
 from six import iteritems
-from ..cli import prt, err, fatal, warn  # @UnresolvedImport
-from ambry.util import Progressor
+from ..cli import prt, prt_no_format, err, fatal, warn  # @UnresolvedImport
+import sys
 
 
 def make_parser(cmd):
@@ -40,33 +40,6 @@ def make_parser(cmd):
     sp.add_argument('-F', '--bundle-list',
                     help='File of bundle VIDs. Sync only VIDs listed in this file')
 
-    sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. '
-                                    'Possible download the file from the remote library')
-    sp.set_defaults(subcommand='get')
-    sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-p', '--partitions', default=False, action='store_true',
-                    help='Also get all of the partitions. ')
-    sp.add_argument('-f', '--force', default=False, action='store_true',
-                    help='Force retrieving from the remote')
-
-    sp = asp.add_parser('open', help='Open a bundle or partition file with sqlite3')
-    sp.set_defaults(subcommand='open')
-    sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-f', '--force', default=False, action='store_true',
-                    help='Force retrieving from the remote')
-
-    sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
-    sp.set_defaults(subcommand='remove')
-    sp.add_argument('-a', '--all', default=False, action='store_true', help='Remove all records')
-    sp.add_argument('-b', '--bundle', default=False, action='store_true',
-                    help='Remove the dataset and partition records')
-    sp.add_argument('-l', '--library', default=False, action='store_true',
-                    help='Remove the library file record and library files')
-    sp.add_argument('-r', '--remote', default=False, action='store_true', help='Remove the remote record')
-    sp.add_argument('-s', '--source', default=False, action='store_true', help='Remove the source record')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
-                    help='Name or ID of the bundle or partition to remove')
-
     sp = asp.add_parser('number', help='Return a new number from the number server')
     sp.set_defaults(subcommand='number')
     sp.add_argument('-k', '--key', default='self',
@@ -75,9 +48,25 @@ def make_parser(cmd):
     sp = asp.add_parser('pg', help='Operations on a Postgres library database')
     sp.set_defaults(subcommand='pg')
     sp.add_argument('-p', '--processes', default=False, action='store_true', help='List all processes')
+    sp.add_argument('-c', '--connect', default=False, action='store_true',
+                    help='Connection and exit with return code to indicate success or failure')
     sp.add_argument('-l', '--locks', default=False, action='store_true', help='List all locks')
     sp.add_argument('-b', '--blocks', default=False, action='store_true',
                     help='List locks that are blocked or are blocking another process')
+
+    sp = asp.add_parser('export', help='Dump a library configuration, remortes, accounts and bundles')
+    sp.set_defaults(subcommand='export')
+    sp.add_argument('-p', '--password', required=True, help='Encryption password')
+
+    sp.add_argument('config_file', nargs='?', type=argparse.FileType('wb'), default = sys.stdout,
+                    help='Config file to write to. If absent, will write to stdout')
+
+    sp = asp.add_parser('import', help='Import or list library configuration, remortes, accounts and bundles')
+    sp.set_defaults(subcommand='import')
+    sp.add_argument('-p', '--password', required=True, help='Decryption password')
+    sp.add_argument('-l', '--list', default=False, action='store_true', help='List, dont import')
+    sp.add_argument('config_file', nargs='?', type=argparse.FileType('rb'), default = sys.stdin,
+                    help='Config file to read from. If absent, will read from stdin')
 
 def run_command(args, rc):
     from ..library import new_library
@@ -122,99 +111,26 @@ def library_clean(args, l, config):
     l.clean()
     l.sync_config()
 
-def library_remove(args, l, config):
-    from ambry.orm.exc import NotFoundError
-
-    cache_keys = set()
-    refs = set()
-
-    def remove_by_ident(ident):
-
-        try:
-
-            if ident.partition:
-                cache_keys.add(ident.partition.cache_key)
-                refs.add(ident.partition.vid)
-
-            # The reference is to a bundle, so we have to delete everything
-            else:
-                cache_keys.add(ident.cache_key)
-                refs.add(ident.vid)
-
-                b = l.get(ident.vid)
-
-                if b:
-                    for p in b.partitions:
-                        cache_keys.add(p.cache_key)
-                        refs.add(p.vid)
-
-        except NotFoundError:
-            pass
-
-    for name in args.terms:
-
-        ident = l.resolve(name, location=None)
-
-        if ident:
-            remove_by_ident(ident)
-            continue
-
-        if name.startswith('s'):
-            l.remove_store(name)
-
-        elif name.startswith('m'):
-            l.remove_manifest(name)
-
-        else:
-            warn("Found no references to term {}".format(name))
-
-    if args.library or args.all:
-        for ck in cache_keys:
-            l.cache.remove(ck, propagate=True)
-            prt("Remove file {}".format(ck))
-
-    for ref in refs:
-
-        if args.bundle or args.all:
-            prt("Remove bundle record {}".format(ref))
-            if ref.startswith('d'):
-                l.database.remove_dataset(ref)
-            if ref.startswith('p'):
-                l.database.remove_partition_record(ref)
-
-            # We also need to delete everything in this case; no point in having
-            # a file record if there there is no bundle or partition.
-            l.files.query.ref(ref).delete()
-
-        if args.library or args.all:
-            prt("Remove library record {}".format(ref))
-            if ref.startswith('d'):
-                l.files.query.ref(ref).type(l.files.TYPE.BUNDLE).delete()
-            if ref.startswith('p'):
-                l.files.query.ref(ref).type(l.files.TYPE.PARTITION).delete()
-
-        if args.remote or args.all:
-            prt("Remove remote record {}".format(ref))
-            l.files.query.ref(ref).type(l.files.TYPE.REMOTE).delete()
-            l.files.query.ref(ref).type(l.files.TYPE.REMOTEPARTITION).delete()
-
-        if (args.source or args.all) and ref.startswith('d'):
-            prt("Remove source record {}".format(ref))
-            l.files.query.ref(ref).type(l.files.TYPE.SOURCE).delete()
-
-        l.database.commit()
-
 def library_number(args, l, config):
     print(l.number(assignment_class=args.key))
 
 def library_pg(args, l, config):
     """Report on the operation of a Postgres Library database"""
-
-    db = l.database
     import tabulate
     import terminaltables
     from textwrap import fill
     from ambry.util.text import getTerminalSize
+    import sys
+
+    if args.connect:
+        try:
+            l.database.connection.execute('SELECT * FROM pg_stat_activity;')
+            sys.exit(0)
+        except Exception as e:
+            prt(str(e))
+            sys.exit(1)
+
+    db = l.database
 
     (x, y) = getTerminalSize()
 
@@ -310,6 +226,88 @@ SELECT pid, database, mode, locktype, mode, relation, tuple, virtualxid FROM pg_
             if rows:
                 table = terminaltables.UnixTable([headers] + rows)
                 print table.table
+
+def library_import(args, l, config):
+    import json
+    from ambry.library.config import LibraryConfigSyncProxy
+    from ambry.orm import Account
+    from simplecrypt import encrypt, decrypt, DecryptionException
+
+    try:
+        jsn = decrypt(args.password, args.config_file.read().decode('base64'))
+    except DecryptionException as e:
+        fatal(e)
+    finally:
+        args.config_file.close()
+
+    args.config_file.close()
+
+    d = json.loads(jsn)
+
+    for k, v in d['accounts'].items():
+        if v.get('major_type') != 'user' and 'encrypted_secret' in v:
+            v['secret'] = Account.sym_decrypt(args.password, v['encrypted_secret'])
+
+    if args.list:
+        prt_no_format(json.dumps(d, indent=4))
+    else:
+        lcsp = LibraryConfigSyncProxy(l)
+
+        lcsp.sync_remotes(d['remotes'], cb=l.logger.info)
+        lcsp.sync_accounts(d['accounts'], cb=l.logger.info)
+
+        for vid, v in d['bundles'].items():
+            l.logger.info("Check in remote bundle {}, {}".format(vid, v['vname']))
+            l.checkin_remote_bundle(vid)
+
+
+def library_export(args, l, config):
+    from simplecrypt import encrypt, decrypt, DecryptionException
+    import json
+    from ambry.util import random_string
+
+    if args.password:
+        password = args.password
+    else:
+        password = random_string(16)
+
+    d = {
+        'remotes': {},
+        'accounts': {},
+        'bundles': {}
+    }
+
+    for r in l.remotes:
+        d['remotes'][r.short_name] = { k:v for k,v in r.dict.items() if bool(v ) and k not in ('id','list' ) }
+
+    for k in l.accounts.keys():
+        a = l.account(k)
+
+        da = { k:v for k,v in a.dict.items() if bool(v )and k != 'secret' }
+
+        # Change the secret encryption password
+        if 'encrypted_secret' in da and da['encrypted_secret']:
+            ds = a.decrypt_secret()
+            if ds:
+                da['encrypted_secret'] = a.encrypt_secret(ds, password)
+
+
+        d['accounts'][a.account_id] = da
+
+    for b in l.bundles:
+        d['bundles'][b.identity.vid] = {
+            'vid' : b.identity.vid,
+            'vname': str(b.identity.name),
+            'cache_key': b.identity.cache_key
+        }
+
+    if not args.password:
+        prt("Password: {}".format(password))
+
+    args.config_file.write(encrypt(password, json.dumps(d, indent = 4)).encode('base64'))
+    args.config_file.close()
+
+
 
 
 def library_unknown(args, l, config):

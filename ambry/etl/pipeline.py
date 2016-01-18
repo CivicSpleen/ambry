@@ -177,8 +177,9 @@ class Pipe(object):
             raise
         except Exception as e:
             if self.bundle:
-                self.bundle.error("Exception during pipeline processing, in pipe {}: {} "
-                                  .format(qualified_class_name(self), e))
+                pass
+                #self.bundle.error("Exception during pipeline processing, in pipe {}: {} "
+                #                  .format(qualified_class_name(self), e))
             raise
 
         self.finish()
@@ -384,6 +385,41 @@ class GeneratorSourcePipe(Pipe):
     def __str__(self):
         from ..util import qualified_class_name
         return 'Generator {}'.format(qualified_class_name(self))
+
+
+class PartitionSourcePipe(Pipe):
+    """Base class for a source pipe that implements it own iterator """
+
+    def __init__(self, bundle, source, partition):
+        from ..util import qualified_class_name
+
+        self.bundle = bundle
+        self._source = source
+        self._partition = partition
+
+        # file_name is for the pipeline logger, to generate a file
+        self.file_name = self._source.name
+
+    def __iter__(self):
+
+        self.start()
+
+        yield [c.name for c in self._partition.table.columns]
+
+        for row in iter(self._partition):
+            yield row
+
+        self.finish()
+
+    def start(self):
+        pass
+
+    def finish(self):
+        pass
+
+    def __str__(self):
+        from ..util import qualified_class_name
+        return 'Partition {}'.format(qualified_class_name(self))
 
 
 class Sink(Pipe):
@@ -757,6 +793,21 @@ class AddDestHeader(Pipe):
 
         self.headers = self._added_headers
         yield self._added_headers
+
+        for row in rg:
+            yield row
+
+class AddSourceHeader(Pipe):
+    """Uses the source table header for the header row"""
+
+    def __init__(self):
+        pass
+
+    def __iter__(self):
+
+        rg = iter(self._source_pipe)
+
+        yield [c.name for c in self.source.source_table.columns]
 
         for row in rg:
             yield row
@@ -1825,6 +1876,10 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         try:
             mapped_row = body_mapper(row)
+
+            # Assuming it is an ID!
+            if mapped_row[0] == None:
+                mapped_row[0] = self._count
 
             writer.insert_row(mapped_row)
         except Exception as e:

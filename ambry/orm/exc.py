@@ -31,3 +31,7 @@ class ConflictError(BundleError):
 class MetadataError(BundleError):
 
     """Conflict with existing resource."""
+
+class  OrmObjectError(BundleError):
+
+    """Base for object errors."""

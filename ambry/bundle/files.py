@@ -503,6 +503,18 @@ class MetadataFile(DictBuildSourceFile):
 
         return fr
 
+    def update_identity(self):
+        """Update the identity and names to match the dataset id and version"""
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        d =  fr.unpacked_contents
+
+        d['identity'] =  self._dataset.identity.ident_dict
+        d['names'] = self._dataset.identity.names_dict
+
+        fr.update_contents(msgpack.packb(d), 'application/msgpack')
+
 
 class PythonSourceFile(StringSourceFile):
 
@@ -1043,6 +1055,12 @@ class BuildSourceFileAccessor(object):
         bsfile = fc(self._bundle, self._dataset, self._fs, const_name)
 
         return bsfile
+
+    def file_by_path(self, path):
+
+        s = self._dataset._database.session
+
+        return s.query(File).filter(File.path == path).filter(File.d_vid == self._dataset.vid).first()
 
     def record_to_objects(self, preference=None):
         """Create objects from files, or merge the files into the objects. """

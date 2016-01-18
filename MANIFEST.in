@@ -1,8 +1,6 @@
 include requirements.txt
-include requirements/base.txt
-include requirements/geo.txt
-include requirements/dev.txt
+recursive-include requirements *.txt
 include INSTALL
-include README.md
 include LICENSE
-include doc
+recursive-include doc *
+

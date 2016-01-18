@@ -29,7 +29,9 @@ class TestBase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+
         cls.dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+
         config = ambry.run.load()  # not cached; get_config is
         cls.test_dsn_key = 'test-{}'.format(cls.dbname)
 
@@ -53,14 +55,17 @@ class TestBase(unittest.TestCase):
                     new_last_part = last_part + '_test_1k'
                 d['path'] = d['path'].rstrip(last_part) + new_last_part
                 cls.library_test_dsn = unparse_url_dict(d)
+
             elif cls.dbname == 'postgres':
                 # create test database dsn and write it to the config.
                 parsed_url = urlparse(config.library.database)
                 db_name = parsed_url.path.replace('/', '')
                 test_db_name = '{}_test_{}'.format(db_name, SAFETY_POSTFIX)
                 cls.library_test_dsn = parsed_url._replace(path=test_db_name).geturl()
+
         cls._is_postgres = cls.dbname == 'postgres'
         cls._is_sqlite = cls.dbname == 'sqlite'
+
 
     def setUp(self):
 
@@ -87,6 +92,7 @@ class TestBase(unittest.TestCase):
                     os.remove(self._library.database.dsn.replace('sqlite:///', ''))
                 except OSError:
                     pass
+
         if self.__class__._is_postgres:
             PostgreSQLTestBase._drop_postgres_test_db()
 
@@ -121,11 +127,13 @@ class TestBase(unittest.TestCase):
         test_root = fsopendir(root_dir, create_dir=True)
 
         if rewrite:
-            with test_root.open('.ambry.yaml', 'w', encoding='utf-8', ) as f:
+            with test_root.open('config.yaml', 'w', encoding='utf-8', ) as f:
                 config.loaded = None
                 config.dump(f)
 
-        return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
+        print 'Test root:', test_root.getsyspath('/')
+
+        return ambry.run.load(test_root.getsyspath('/'))
 
     @classmethod
     def config(cls):
@@ -133,6 +141,7 @@ class TestBase(unittest.TestCase):
 
     @classmethod  # So it can be called from either setUp or setUpClass
     def _get_library(cls, config):
+
         from ambry.library import new_library
         return new_library(config if config else cls.get_rc())
 
@@ -260,7 +269,11 @@ class PostgreSQLTestBase(TestBase):
         if hasattr(cls, 'postgres_test_db_data'):
             # drop test database
             test_db_name = cls.postgres_test_db_data['test_db_name']
-            assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
+            if not test_db_name.endswith(SAFETY_POSTFIX):
+                raise AssertionError("""
+                Can't drop a postgres database that does not end in the saftey postfix
+                Add '{}' to the end of the database at: {}""".format(SAFETY_POSTFIX, test_db_dsn))
+
 
             engine = create_engine(cls.postgres_test_db_data['postgres_db_dsn'])
             connection = engine.connect()
@@ -299,12 +312,17 @@ class PostgreSQLTestBase(TestBase):
 
             # drop test database created by previuos run (control + c case).
             if cls.postgres_db_exists(test_db_name, engine):
-                assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
+
+                if not test_db_name.endswith(SAFETY_POSTFIX):
+                    raise AssertionError(
+                    "Can't drop a postgres database that does not end in the saftey postfix\n"
+                    "Add '{}' to the end of the database at: {}".format(SAFETY_POSTFIX, test_db_dsn))
+
                 while True:
-                    delete_it = six_input(
-                        '\nTest database with {} name already exists. Can I delete it (Yes|No): '
-                        .format(test_db_name))
-                    if delete_it.lower() == 'yes':
+                    #delete_it = six_input(
+                    #    '\nTest database with {} name already exists. Can I delete it (Yes|No): '
+                    #    .format(test_db_name))
+                    if True or delete_it.lower() == 'yes':
                         try:
                             connection.execute('DROP DATABASE {};'.format(test_db_name))
                             connection.execute('COMMIT;')

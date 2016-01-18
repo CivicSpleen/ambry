@@ -71,37 +71,4 @@ class LibraryFilesystem(object):
 
         return self._config.library.database.format(root=self._root)
 
-    def s3(self, url, account_acessor):
-        from fs.s3fs import S3FS
-        from ambry.util import parse_url_to_dict
-        from ambry.dbexceptions import ConfigurationError
 
-        import ssl
-
-        _old_match_hostname = ssl.match_hostname
-
-        def _new_match_hostname(cert, hostname):
-            if hostname.endswith('.s3.amazonaws.com'):
-                pos = hostname.find('.s3.amazonaws.com')
-                hostname = hostname[:pos].replace('.', '') + hostname[pos:]
-            return _old_match_hostname(cert, hostname)
-
-        ssl.match_hostname = _new_match_hostname
-
-        pd = parse_url_to_dict(url)
-
-        account = account_acessor(pd['netloc'])
-
-        assert account['account_id'] == pd['netloc']
-
-        s3 = S3FS(
-            bucket=pd['netloc'],
-            prefix=pd['path'],
-            aws_access_key=account['access_key'],
-            aws_secret_key=account['secret'],
-
-        )
-
-        # ssl.match_hostname = _old_match_hostname
-
-        return s3

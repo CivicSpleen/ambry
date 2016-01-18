@@ -10,7 +10,9 @@ command_name = 'root'
 
 from ..cli import warn
 from . import prt
-
+from six import print_
+from ambry.orm.exc import NotFoundError
+from . import fatal
 
 def make_parser(cmd):
     import argparse
@@ -35,10 +37,14 @@ def make_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
     group = sp.add_mutually_exclusive_group()
+    group.add_argument('-C', '--config-path', default=False, action='store_true',
+                       help='Print just the main config path')
     group.add_argument('-c', '--configs', default=False, action='store_true',
                        help=' Also dump the root config entries')
     group.add_argument('-r', '--remote', default=False, action='store_true',
                        help='Information about the remotes')
+    group.add_argument('-a', '--accounts', default=False, action='store_true',
+                       help='Information about accounts')
 
     sp = cmd.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(command='root')
@@ -63,14 +69,13 @@ def make_parser(cmd):
     sp = cmd.add_parser('sync', help='Sync with the remotes')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='sync')
-    sp.add_argument('-l', '--list', default=False, action='store_true',
-                    help='List rather than sync')
-    sp.add_argument('ref', nargs='?', type=str, help='Name of a remote or a bundle reference')
+    sp.add_argument('-a', '--all', default=False, action='store_true', help='Sync with all remotes')
+    sp.add_argument('refs', nargs='*', type=str, help='Names of a remote or a bundle references')
 
     sp = cmd.add_parser('remove', help='Remove a bundle from the library')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='remove')
-    sp.add_argument('term', nargs='?', type=str, help='bundle reference')
+    sp.add_argument('term', nargs='*', type=str, help='bundle reference')
 
     sp = cmd.add_parser('import', help='Import multiple source directories')
     sp.set_defaults(command='root')
@@ -80,7 +85,7 @@ def make_parser(cmd):
                     " source directory for the bundle ")
     sp.add_argument('-f', '--force', default=False, action='store_true',
                     help='Force importing an already imported bundle')
-    sp.add_argument('term', nargs=1, type=str, help='Base directory')
+    sp.add_argument('term', nargs="*", type=str, help='Base directory')
 
     # Search Command
     #
@@ -91,15 +96,6 @@ def make_parser(cmd):
     sp.add_argument('-r', '--reindex', default=False, action='store_true',
                     help='Reindex the bundles')
     sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
-
-    sp = cmd.add_parser('ui', help='Run the web user interface')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='ui')
-    sp.add_argument('-H', '--host', help="Server host.", default='0.0.0.0')
-    sp.add_argument('-p', '--port', help='Server port', default=8080)
-    sp.add_argument('-P', '--use-proxy', action='store_true',
-                    help='Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix')
-    sp.add_argument('-d', '--debug', action='store_true', help='Set debugging mode', default=False)
 
 
 def run_command(args, rc):
@@ -124,7 +120,17 @@ def run_command(args, rc):
             warn('Failed to instantiate library: {}'.format(e))
         l = None
 
-    globals()['root_' + args.subcommand](args, l, rc)
+        if args.exceptions:
+            raise
+
+    try:
+        globals()['root_' + args.subcommand](args, l, rc)
+    except NotFoundError as e:
+        if args.exceptions:
+            raise
+        fatal(e)
+    except Exception:
+        raise
 
 
 def root_list(args, l, rc):
@@ -142,9 +148,9 @@ def root_list(args, l, rc):
 
     elif not args.partitions:
         display_header = True
-        header = ['vid', 'vname', 'state', 'about.title']
+        header = ['vid', 'vname', 'dstate', 'bstate', 'about.title']
     else:
-        header = ['vid', 'vname', 'state', 'table']
+        header = ['vid', 'vname', 'dstate', 'bstate', 'table']
 
     records = []
 
@@ -168,9 +174,11 @@ def root_list(args, l, rc):
             for p in b.partitions:
                 records.append
 
-    if args.sort:
-        idx = header.index(args.sort)
-        records = sorted(records, key=lambda r: r[idx])
+
+
+    idx = header.index(args.sort) if args.sort else 1
+    records = sorted(records, key=lambda r: r[idx])
+
 
     if args.term:
 
@@ -207,8 +215,14 @@ def root_info(args, l, rc):
     from tabulate import tabulate
     from ambry.library.filesystem import LibraryFilesystem
     from ambry.util.text import ansicolors
+    from ambry.util import drop_empty
+    from ambry.orm import Account
 
     import ambry
+
+    if args.config_path:
+        prt(rc.loaded[0])
+        return
 
     prt('Version:   {}', ambry._meta.__version__)
     prt('Root dir:  {}', rc.library.filesystem_root)
@@ -223,7 +237,7 @@ def root_info(args, l, rc):
     prt('Accounts:  {}', rc.accounts.loaded[0])
     if l:
         prt('Library:   {}', l.database.dsn)
-        prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
+        prt('Remotes:   {}', ', '.join([str(r.short_name) for r in l.remotes]) if l.remotes else '')
     else:
         fs = LibraryFilesystem(rc)
         prt('Library:   {} {}(Inaccessible!){}', fs.database_dsn, ansicolors.FAIL, ansicolors.ENDC)
@@ -238,33 +252,65 @@ def root_info(args, l, rc):
 
         print tabulate(sorted(records, key=lambda e: e[0]), headers=['key', 'value'])
 
+    if args.accounts:
+
+        headers = 'Id Service User Access Url'.split()
+
+        records = []
+
+        for k in l.accounts.keys():
+
+            acct = l.account(k)
+
+            records.append([acct.account_id, acct.major_type, acct.user_id, acct.access_key, acct.url])
+
+        accounts = [v for k, v in l.accounts.items()]
+
+        if not records:
+            return
+
+        records = drop_empty([headers] + records)
+
+        print tabulate(sorted(records[1:]), records[0])
+
 
 def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
+    from requests.exceptions import ConnectionError
 
-    name = args.ref if args.ref else None
+    all_remote_names = [ r.short_name for r in l.remotes ]
 
-    if name in [r for r in l.remotes]:
-        remote_name = name
-        bundle_name = None
+    if args.all:
+        remotes = all_remote_names
     else:
-        remote_name = None
-        bundle_name = name
+        remotes = args.refs
 
-    for r in l.remotes:
+    prt("Sync with {} remotes or bundles ".format(len(remotes)))
 
-        if remote_name and remote_name != r:
+    if not remotes:
+        return
+
+    for ref in remotes:
+        l.commit()
+
+        try:
+            if ref in all_remote_names: # It's a remote name
+                l.sync_remote(l.remote(ref))
+
+            else: # It's a bundle reference
+                l.checkin_remote_bundle(ref)
+
+        except NotFoundError as e:
+            warn(e)
             continue
-
-        prt('Sync with remote {}', r)
-
-        entries = l.sync_remote(r, bundle_name=bundle_name, list_only=args.list)
-        if bundle_name and bundle_name in entries:
-            break
+        except ConnectionError as e:
+            warn(e)
+            continue
 
 
 def root_search(args, l, rc):
+    from six import text_type
 
     if args.reindex:
         def tick(message):
@@ -277,7 +323,7 @@ def root_search(args, l, rc):
         l.search.index_library_datasets(tick)
         return
 
-    terms = ' '.join(args.terms)
+    terms = ' '.join(text_type(t) for t in args.terms)
     print(terms)
 
     results = l.search.search(terms)
@@ -291,7 +337,7 @@ def root_search(args, l, rc):
 
 def root_doc(args, l, rc):
 
-    from ambry.ui import app, app_config
+    from ambry_ui import app, app_config
     import os
 
     import logging
@@ -322,13 +368,19 @@ def root_doc(args, l, rc):
 
 def root_remove(args, l, rc):
 
-    b = l.bundle(args.term)
+    for term in args.term:
 
-    fqname = b.identity.fqname
+        try:
+            b = l.bundle(term)
+        except NotFoundError:
+            warn("Didn't find bundle for reference '{}'".format(term))
+            return
 
-    l.remove(b)
+        fqname = b.identity.fqname
 
-    prt('Removed {}'.format(fqname))
+        l.remove(b)
+
+        prt('Removed {}'.format(fqname))
 
 
 def root_import(args, l, rc):
@@ -338,62 +390,40 @@ def root_import(args, l, rc):
     from ambry.orm.exc import NotFoundError
     import os
 
-    fs = fsopendir(args.term[0])
+    for term in args.term:
 
-    for f in fs.walkfiles(wildcard='bundle.yaml'):
+        fs = fsopendir(term)
 
-        prt('Visiting {}'.format(f))
-        config = yaml.load(fs.getcontents(f))
+        for f in fs.walkfiles(wildcard='bundle.yaml'):
 
-        if not config:
-            err("Failed to get a valid bundle configuration from '{}'".format(f))
+            prt("Visiting {}".format(f))
+            config = yaml.load(fs.getcontents(f))
 
-        bid = config['identity']['id']
+            if not config:
+                err("Failed to get a valid bundle configuration from '{}'".format(f))
 
-        try:
-            b = l.bundle(bid)
+            bid = config['identity']['id']
 
-            if not args.force:
-                prt('Skipping existing  bundle: {}'.format(b.identity.fqname))
-                continue
+            try:
+                b = l.bundle(bid)
 
-        except NotFoundError:
-            b = None
+                if not args.force:
+                    prt('Skipping existing  bundle: {}'.format(b.identity.fqname))
+                    continue
 
-        if not b:
-            b = l.new_from_bundle_config(config)
-            prt('Loading bundle: {}'.format(b.identity.fqname))
-        else:
-            prt('Loading existing bundle: {}'.format(b.identity.fqname))
+            except NotFoundError:
+                b = None
 
-        b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
+            if not b:
+                b = l.new_from_bundle_config(config)
+                prt('Loading bundle: {}'.format(b.identity.fqname))
+            else:
+                prt('Loading existing bundle: {}'.format(b.identity.fqname))
 
-        b.sync_in()
+            b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
 
-        if args.detach:
-            b.set_file_system(source_url=None)
+            b.sync_in()
 
+            if args.detach:
+                b.set_file_system(source_url=None)
 
-def root_ui(args, l, rc):
-
-    from ambry.ui import app
-    import webbrowser
-    import socket
-
-    if args.use_proxy:
-        from werkzeug.contrib.fixers import ProxyFix
-        app.wsgi_app = ProxyFix(app.wsgi_app)
-
-    if not args.debug:
-        webbrowser.open('http://{}:{}'.format(args.host, args.port))
-    else:
-        import logging
-        logging.basicConfig(level=logging.DEBUG)
-        log = logging.getLogger('werkzeug')
-        log.setLevel(logging.DEBUG)
-        # prt("Running at http://{}:{}".format(args.host, args.port))
-
-    try:
-        app.run(host=args.host, port=int(args.port), debug=args.debug)
-    except socket.error as e:
-        warn('Failed to start ui: {}'.format(e))

@@ -20,7 +20,7 @@ from .table import Table
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
 from ..util import Constant
-
+from sqlalchemy.orm import deferred
 
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
@@ -55,6 +55,13 @@ class DataSourceBase(object):
 
     @property
     def url(self):
+        if self.reftype == 'generator':
+            # Guess that the first generator parameter is a URL. It may not be, but should be, by convention
+            try:
+                return self.generator_args[0]
+            except IndexError:
+                return None
+
         return self.ref
 
     @url.setter
@@ -63,7 +70,15 @@ class DataSourceBase(object):
 
     @property
     def generator(self):
-        return self.ref
+
+        # If there is a semi colon, the first is the generator, rest are args
+        return self.ref.split(';')[0]
+
+    @property
+    def generator_args(self):
+
+        # If there is a semi colon, the first is the generator, rest are args
+        return self.ref.split(';')[1:]
 
     @generator.setter
     def generator(self, v):
@@ -169,10 +184,12 @@ class DataSourceBase(object):
         """Return a SourceSpec to describe this source"""
         from ambry_sources.sources import SourceSpec
 
-        url = self.ref
+        d = self.dict
+        d['url'] = self.url
 
-        # Will get the URL twice; once as ref and onces as URL, but the ref is ignored
-        return SourceSpec(url, **self.dict)
+        # Will get the URL twice; once as ref and once as URL, but the ref is ignored
+
+        return SourceSpec(**d)
 
     @property
     def account(self):
@@ -250,7 +267,7 @@ class DataSourceBase(object):
     def is_built(self):
         return self.state == self.STATES.BUILT
 
-    def update_table(self):
+    def update_table(self, unknown_type='str'):
         """Update the source table from the datafile"""
         from ambry_sources.intuit import TypeIntuiter
 
@@ -280,8 +297,11 @@ class DataSourceBase(object):
 
                     c = st.column(col['name'])
 
+                    dt = col['resolved_type'] if col['resolved_type'] != 'unknown' else unknown_type
+
                     if c:
                         c.datatype = TypeIntuiter.promote_type(c.datatype, col['resolved_type'])
+
                     else:
 
                         c = st.add_column(col['pos'],

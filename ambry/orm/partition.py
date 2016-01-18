@@ -26,6 +26,11 @@ from ambry.orm.columnstat import ColumnStat
 from ambry.orm.dataset import Dataset
 from ambry.util import Constant
 
+import logging
+from ambry.util import get_logger
+logger = get_logger(__name__)
+#logger.setLevel(logging.DEBUG)
+
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
 
 
@@ -132,6 +137,10 @@ class Partition(Base):
         }
 
         return PartitionIdentity.from_dict(dict(list(ds.dict.items()) + list(d.items())))
+
+    @property
+    def bundle(self):
+        return self._bundle # Set externally, such as Bundle.wrap_partition
 
     @property
     def is_segment(self):
@@ -498,6 +507,24 @@ class Partition(Base):
 
     @property
     def datafile(self):
+        from ambry.orm.exc import NotFoundError
+
+        try:
+            df =  self.local_datafile
+            logger.debug("datafile: Using local datafile {}".format(self.vname))
+        except NotFoundError:
+            pass
+
+        try:
+            df =  self.remote_datafile
+            logger.debug("datafile: Using remote datafile {}".format(self.vname))
+        except NotFoundError:
+            pass
+
+        return df
+
+    @property
+    def local_datafile(self):
         """Return the datafile for this partition, from the build directory, the remote, or the warehouse"""
         from ambry_sources import MPRowsFile
         from fs.errors import ResourceNotFoundError
@@ -509,8 +536,7 @@ class Partition(Base):
                 self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
 
             except ResourceNotFoundError:
-                raise NotFoundError(
-                    'Could not locate data file for partition {}'.format(self.identity.fqname))
+                raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
 
         return self._datafile
 
@@ -523,23 +549,41 @@ class Partition(Base):
         try:
 
             from ambry_sources import MPRowsFile
-            # Get bundle for this partition
-            # Actually ... this seems way too complex. Why not self._bundle.remote()
-            # FIXME
-            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
-            remote = self._bundle.library.remote(b)
 
-            datafile = MPRowsFile(remote, self.cache_key)
+            ds = self.dataset
+
+            if not 'remote_name' in ds.data:
+
+                raise NotFoundError("Failed to find both local and remote file for partition: {}"
+                                    .format(self.identity.fqname))
+
+            remote = self._bundle.library.remote(ds.data['remote_name'])
+
+            b = self._bundle
+
+            datafile = MPRowsFile(remote.fs, self.cache_key)
+
+            if not datafile.exists:
+                raise NotFoundError("Could not locate data file for partition {} from remote {} : file does not exist"
+                                    .format(self.identity.fqname, remote))
 
         except ResourceNotFoundError as e:
-            raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
+            raise NotFoundError("Could not locate data file for partition {} (remote): {}"
+                                .format(self.identity.fqname, e))
 
         return datafile
 
     @property
     def is_local(self):
-        """Return ture is the partition file is local"""
-        return self.datafile.exists
+        """Return true is the partition file is local"""
+        from ambry.orm.exc import NotFoundError
+        try:
+            if self.local_datafile.exists:
+                return True
+        except NotFoundError:
+            pass
+
+        return False
 
     def localize(self, ps=None):
         """Copy a non-local partition file to the local build directory"""
@@ -569,6 +613,11 @@ class Partition(Base):
                 if ps.rec.item_total is None:
                     ps.rec.item_count = 0
 
+                if not ps.rec.data:
+                    ps.rec.data = {}# Should not need to do this.
+                    return
+
+
                 item_count = ps.rec.item_count + bts
                 ps.rec.data['updates'] = ps.rec.data.get('updates', 0) + 1
 
@@ -580,7 +629,8 @@ class Partition(Base):
             raise e
 
         with lock:
-            with remote.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
+            # FIXME! This won't work with remote API, only FS
+            with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
                 event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
                                                 f,
                                                 progress_callback=progress,
@@ -678,6 +728,7 @@ class Partition(Base):
             segment=self.segment
         )
 
+
         assert self.dataset
 
         name = PartialPartitionName(**d).promote(self.dataset.identity.name)
@@ -693,6 +744,9 @@ class Partition(Base):
         object and create an ObjectNumber value for the id_"""
 
         target._set_ids()
+
+        if target.name and target.vname and target.cache_key and target.fqname and not target.dataset:
+            return
 
         Partition.before_update(mapper, conn, target)
 

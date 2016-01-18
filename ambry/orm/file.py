@@ -83,6 +83,11 @@ class File(Base, DictableMixin):
         UniqueConstraint('f_d_vid', 'f_path', 'f_major_type', 'f_minor_type',  name='u_ref_path'),
     )
 
+    def incver(self):
+        """Increment all of the version numbers"""
+        from . import  incver
+        return incver(self, ['d_vid'])
+
     def update(self, of):
         """Update a file from another file, for copying"""
 

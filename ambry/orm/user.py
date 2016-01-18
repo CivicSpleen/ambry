@@ -1,4 +1,4 @@
-"""Object-Relational Mapping classess, based on Sqlalchemy, for tracking operations on a bundle
+"""Object-Relational Mapping classess for users
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -16,11 +16,25 @@ from sqlalchemy.orm import relationship
 
 from . import Base, MutationDict, JSONEncodedObj
 
-class Process(Base):
+class User(Base):
     """Track processes and operations on database objects"""
-    __tablename__ = 'processes'
+    __tablename__ = 'users'
 
     id = SAColumn('pr_id', Integer, primary_key=True)
+
+    username
+    fullname
+    email
+    password
+
+    org
+
+    facebookid
+    githubid
+    googleid
+    linkedinid
+
+    data
 
     group = SAColumn('pr_group', Integer, ForeignKey('processes.pr_id'), nullable=True, index=True)
     parent = relationship('Process',  remote_side=[id], backref='children')
@@ -77,67 +91,7 @@ class Process(Base):
             self.d_vid, self.hostname, self.pid, self.phase if self.phase else '?', self.stage ,
             self.log_action, self.message)
 
-    @property
-    def log_str(self):
-        import platform
-        import os
 
-        parts = []
-
-        # This bit only gets executed when records stored in the database from one node or process are
-        # read from another. It won't print out in normall logging,
-        if self.hostname != platform.node() or self.pid != os.getpid():
-            hostpid = "({}@{})".format(self.pid, self.hostname)
-            parts.append(hostpid)
-
-        am = {
-            'start': ">",
-            'add': '+',
-            'update': '.',
-            'done': "<",
-            '': '?',
-            None: '?'
-        }
-
-        phase_str = self.phase if self.phase else '?'
-
-        if self.stage:
-            phase_str = phase_str + ':' + str(self.stage)
-
-        parts.append(phase_str)
-
-        action_char = am.get(self.log_action,'')
-
-        if self.state == 'error':
-            action_char = '!'
-
-        parts.append(action_char)
-
-        if self.s_vid:
-            parts.append(self.s_vid)
-
-        if self.t_vid:
-            parts.append(self.t_vid)
-
-        if self.p_vid:
-            parts.append(self.p_vid)
-
-        parts.append(self.message if self.message else '')
-
-        if self.item_count:
-            ic = 'processed '+str(self.item_count)
-
-            if self.item_total:
-                ic += ' of {}'.format(self.item_total)
-
-            if self.item_type:
-                ic += ' '+self.item_type
-
-            parts.append(ic)
-
-
-
-        return ' '.join(parts)
 
     @property
     def dict(self):
