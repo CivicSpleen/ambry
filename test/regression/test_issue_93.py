@@ -11,8 +11,7 @@ from test.test_base import TestBase
 class Test(TestBase):
 
     def test_deletes_removed_keys_from_db(self):
-        rc = self.get_rc()
-        library = new_library(rc)
+        library = self.library()
 
         # populate database with initial bundle.yaml
         bundle = self.setup_bundle('simple', library=library)
@@ -25,16 +24,23 @@ class Test(TestBase):
         # now delete key in the bundle.yaml and sync_in again
         bundle_content = bundle.source_fs.open('bundle.yaml').read()
         with bundle.source_fs.open('bundle.yaml', 'w') as f:
-            f.write(bundle_content.replace('url: http://example.com', ''))
+            replace_part = '' \
+                '    analyst:\n' \
+                '        org: Example Com\n' \
+                '        url: http://example.com\n'
+            replacement = ''\
+                '    ananlyst:\n' \
+                '        org: Example Com\n'
+            assert replace_part in bundle_content
+            f.write(bundle_content.replace(replace_part, replacement))
         bundle.sync_in()
 
         # Check the key is deleted from db.
+        # This one is tricky because we may have two configs with same keys - contacts.analyst.url
+        # and contacts.creator.urls for example.
         session = bundle.library.database.session
-        url_config = session\
-            .query(Config)\
-            .filter_by(key='url', value='http://example.com')\
-            .first()
-        self.assertIsNone(url_config)
+        for config in session.query(Config).filter_by(key='url', value='http://example.com').all():
+            self.assertNotEqual(config.parent.key, 'analyst')
 
         # Check config built from db - deleted key value should be empty.
         dataset = session.query(Dataset).filter_by(vid=bundle.dataset.vid).one()
@@ -42,8 +48,7 @@ class Test(TestBase):
         self.assertEqual(contacts.analyst.url, '')
 
     def test_deletes_removed_group_from_db(self):
-        rc = self.get_rc()
-        library = new_library(rc)
+        library = self.library()
 
         # populate database with initial bundle.yaml
         bundle = self.setup_bundle('simple', library=library)
@@ -56,10 +61,13 @@ class Test(TestBase):
         # now delete analyst group in the bundle.yaml and sync_in again
         bundle_content = bundle.source_fs.open('bundle.yaml').read()
         with bundle.source_fs.open('bundle.yaml', 'w') as f:
-            new_content = bundle_content\
-                .replace('url: http://example.com', '')\
-                .replace('org: Example Com', '')\
-                .replace('analyst:', '')
+            replace_part = '' \
+                '    analyst:\n' \
+                '        org: Example Com\n' \
+                '        url: http://example.com\n'
+            assert replace_part in bundle_content
+
+            new_content = bundle_content.replace(replace_part, '')
             f.write(new_content)
         bundle.sync_in()
 
@@ -69,8 +77,13 @@ class Test(TestBase):
         self.assertIsNone(query.filter_by(key='analyst').first())
 
         # Analyst inner terms removed too.
-        self.assertIsNone(query.filter_by(key='url', value='http://example.org').first())
-        self.assertIsNone(query.filter_by(key='org', value='Example Com').first())
+        # This one is tricky because we may have two configs with the same insides - contacts.analyst
+        # and contacts.creator for example.
+        for config in query.filter_by(key='url', value='http://example.com').all():
+            self.assertNotEqual(config.parent.key, 'analyst')
+
+        for config in query.filter_by(key='org', value='Example Com').all():
+            self.assertNotEqual(config.parent.key, 'analyst')
 
         # Check config built from db - deleted key value should be empty.
         dataset = session.query(Dataset).filter_by(vid=bundle.dataset.vid).one()

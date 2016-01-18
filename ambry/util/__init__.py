@@ -18,7 +18,6 @@ import re
 import subprocess
 import sys
 from time import time
-import uuid
 import yaml
 from yaml.representer import RepresenterError
 import warnings

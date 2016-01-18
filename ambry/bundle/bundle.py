@@ -1196,7 +1196,7 @@ Caster Code
         self.commit()
         return syncs
 
-    def sync_in(self, force = False):
+    def sync_in(self, force=False):
         """Synchronize from files to records, and records to objects"""
         self.log('---- Sync In ----')
         from ambry.bundle.files import BuildSourceFile
