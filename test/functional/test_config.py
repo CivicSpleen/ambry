@@ -169,12 +169,6 @@ library:
         l = Library(config)
         l.sync_config()
 
-        self.assertEqual(['test', 'restricted', 'census', 'public'], l.remotes.keys())
-
-    def test_plugins(self):
-        from os import chroot, makedirs, chroot
-        from os.path import join, dirname
-        from shutil import copyfile
-        from test import bundlefiles
-
-        rc = self.get_rc()
+        self.assertEqual(
+            sorted(['test', 'restricted', 'census', 'public']),
+            sorted([x.short_name for x in l.remotes]))
