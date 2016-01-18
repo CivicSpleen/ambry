@@ -25,7 +25,6 @@ class Test(TestBase):
     def test_accounts(self):
         """ Tests library, database and environment accounts. """
         l = self.library()
-        print l.database.dsn
         l.drop()
         l.create()
 
@@ -48,18 +47,15 @@ class Test(TestBase):
                 self.assertTrue(bool(act.decrypt_secret()))
             self.assertTrue(bool(act.account_id))
 
-        for k, v in l.remotes.items():
-            self.assertTrue(bool(k))
-            self.assertTrue(bool(v))
+        for remote in l.remotes:
+            self.assertTrue(bool(remote.url))
 
         # Delete the config and get the library again, this time from the
         # library DSN.
         rc = self.config()
+
         # print 'Removing', rc.loaded[0]
         os.remove(rc.loaded[0])
-
-        assert to_remove.startswith('/tmp')
-        os.remove(to_remove)
 
         self.assertFalse(os.path.exists(rc.loaded[0]))
         get_runconfig.clear()  # Clear the LRU cache on the function
@@ -69,12 +65,9 @@ class Test(TestBase):
 
         self.assertEqual(l.database.dsn, os.getenv('AMBRY_DB'))
 
-        print 'Starting'
-
         l = new_library()
         try:
             for k, v in l.accounts.items():
-                print k, v
                 act = l.account(k)
                 if k in ('ambry', 'google_spreadsheets',):
                     continue
@@ -83,10 +76,7 @@ class Test(TestBase):
                     self.assertTrue(bool(act.decrypt_secret()))
                 self.assertTrue(bool(act.account_id))
 
-            for k, v in l.remotes.items():
-                self.assertTrue(bool(k))
-                self.assertTrue(bool(v))
+            for remote in l.remotes:
+                self.assertTrue(bool(remote.url))
         finally:
             l.close()
-
-

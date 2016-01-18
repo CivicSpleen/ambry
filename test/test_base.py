@@ -131,8 +131,6 @@ class TestBase(unittest.TestCase):
                 config.loaded = None
                 config.dump(f)
 
-        print 'Test root:', test_root.getsyspath('/')
-
         return ambry.run.load(test_root.getsyspath('/'))
 
     @classmethod
