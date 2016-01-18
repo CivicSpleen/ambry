@@ -645,6 +645,7 @@ class Bundle(object):
         if not self._logger:
 
             ident = self.identity
+
             if self.multi:
                 template = '%(levelname)s %(process)d {} %(message)s'.format(ident.vid)
             else:
@@ -2602,7 +2603,7 @@ Caster Code
             try:
                 os.remove(path + '-shm')
                 os.remove(path + '-wal')
-            except IOError, OSError:
+            except (IOError, OSError):
                 pass
 
         db = Database('sqlite:///{}'.format(path))
@@ -2681,3 +2682,7 @@ Caster Code
     def remove(self):
         """Delete resources associated with the bundle."""
         pass  # Remove files in the file system other resource.
+
+
+    def __str__(self):
+        return self.identity.vname

@@ -645,7 +645,7 @@ class Library(object):
                 r = None
 
         if not r:
-            raise NotFoundError("Failed to find remote for ref '{}'".format(name_or_bundle))
+            raise NotFoundError("Failed to find remote for ref '{}'".format(str(name_or_bundle)))
 
         r.account_accessor = self.account_accessor
 

@@ -219,7 +219,7 @@ def root_list(args, l, rc):
 
 
 
-    idx = header.index(args.sort) if args.sort else 0
+    idx = header.index(args.sort) if args.sort else 1
     records = sorted(records, key=lambda r: r[idx])
 
 
