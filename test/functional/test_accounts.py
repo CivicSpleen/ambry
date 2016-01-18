@@ -4,6 +4,7 @@ import os
 from ambry.library import new_library
 from ambry.library.config import LibraryConfigSyncProxy
 from ambry.run import get_runconfig
+from ambry.orm.account import Account
 
 from test.test_base import TestBase
 
@@ -11,8 +12,6 @@ from test.test_base import TestBase
 class Test(TestBase):
 
     def test_encryption(self):
-
-        from ambry.orm.account import Account
 
         a = Account(major_type='ambry')
         a.secret_password = 'secret'
