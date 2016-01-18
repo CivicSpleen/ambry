@@ -410,14 +410,14 @@ class Library(object):
 
         return nb
 
-    def checkin_bundle(self, db_path, replace = True, cb=None):
+    def checkin_bundle(self, db_path, replace=True, cb=None):
         """Add a bundle, as a Sqlite file, to this library"""
         from ambry.orm.exc import NotFoundError
 
         db = Database('sqlite:///{}'.format(db_path))
         db.open()
 
-        ds = db.dataset(db.datasets[0].vid) # There should only be one
+        ds = db.dataset(db.datasets[0].vid)  # There should only be one
 
         assert ds is not None
         assert ds._database
@@ -429,18 +429,16 @@ class Library(object):
         except NotFoundError:
             pass
 
-
-
         try:
-            self.dataset(ds.vid) # Skip loading bundles we already have
+            self.dataset(ds.vid)  # Skip loading bundles we already have
         except NotFoundError:
             self.database.copy_dataset(ds, cb=cb)
 
-        b = self.bundle(ds.vid) # It had better exist now.
-        #b.state = Bundle.STATES.INSTALLED
+        b = self.bundle(ds.vid)  # It had better exist now.
+        # b.state = Bundle.STATES.INSTALLED
         b.commit()
 
-        #self.search.index_library_datasets(tick)
+        # self.search.index_library_datasets(tick)
 
         self.search.index_bundle(b)
 
@@ -464,7 +462,7 @@ class Library(object):
 
         with b.progress.start('checkin', 0, message='Check in bundle') as ps:
 
-            ps.add(message='Checking in bundle {} to {}'.format(ds.identity.vname, remote))
+            ps.add(message='Checking in bundle {} to {}'.format(b.identity.vname, remote))
 
             db_ck = b.identity.cache_key + '.db'
 
@@ -484,7 +482,6 @@ class Library(object):
 
             ps.update(state='done')
 
-
             if not no_partitions:
                 for p in b.partitions:
 
@@ -497,7 +494,9 @@ class Library(object):
                         @call_interval(5)
                         def progress(bytes):
                             total[0] += bytes
-                            ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0])
+                            ps.update(
+                                message='Upload partition'.format(p.identity.vname),
+                                item_count=total[0])
 
                         remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
                         event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
@@ -554,12 +553,11 @@ class Library(object):
         if not remote:
             raise NotFoundError("Failed to find bundle ref '{}' in any remote".format(ref))
 
-        vid =  self._checkin_remote_bundle(remote, ref)
+        vid = self._checkin_remote_bundle(remote, ref)
 
         self.commit()
 
         return vid
-
 
     def _checkin_remote_bundle(self, remote, ref):
         """
@@ -631,7 +629,6 @@ class Library(object):
             except NoResultFound:
                 r = None
 
-
         if not r:
             try:
                 r = self._remote(name_or_bundle.metadata.about.remote)
@@ -664,7 +661,7 @@ class Library(object):
             if 'short_name' in kwargs:
                 assert name == kwargs['short_name']
                 del kwargs['short_name']
-            r = Remote(short_name = name, **kwargs)
+            r = Remote(short_name=name, **kwargs)
             self.database.session.add(r)
 
         return r
@@ -694,7 +691,7 @@ class Library(object):
             if remote_service_type and r.service != remote_service_type:
                 continue
 
-            if not 'list' in r.data:
+            if 'list' not in r.data:
                 continue
 
             for k, v in r.data['list'].items():
@@ -703,7 +700,7 @@ class Library(object):
 
         return None, None
 
-    def find_remote_bundle(self, ref, try_harder = None):
+    def find_remote_bundle(self, ref, try_harder=None):
         """
         Locate a bundle, by any reference, among the configured remotes. The routine will only look in the cache
         directory lists stored in the remotes, which must be updated to be current.
@@ -735,9 +732,7 @@ class Library(object):
                 remote, vid = self._find_remote_bundle('-'.join(parts[:i]))
 
                 if remote:
-                    return (remote,vid)
-
-
+                    return (remote, vid)
         return (None, None)
 
     #
