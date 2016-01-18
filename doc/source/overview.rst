@@ -55,6 +55,7 @@ The dimensions along which partitions may be divided are:
 - Table. The name of the primary table stored in the partitions. 
 
 
+.. _about_numbering:
 
 Object Numbering
 ****************

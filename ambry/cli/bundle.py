@@ -23,16 +23,27 @@ from fs.opener import fsopendir
 from ..cli import prt, fatal, warn, prt_no_format
 from ..orm import File
 
-
-def make_parser(cmd):
+def doc_parser():
     import argparse
 
-    parser = cmd.add_parser('bundle', help='Manage bundle files')
+    parser = argparse.ArgumentParser( prog='ambry', description='')
+
+    make_parser(parser=parser)
+
+    return parser
+
+def make_parser(cmd=None, parser = None):
+
+    import argparse
+
+    if not parser:
+        parser = cmd.add_parser('bundle', help='Manage bundle files')
+
     parser.set_defaults(command='bundle')
 
-    parser.add_argument('-i', '--id', required=False, help='Bundle ID')
+    parser.add_argument('-i', '--id', required=False, help='Bundle reference. May be an id, name, vid or vname')
     parser.add_argument('-D', '--debug', required=False, default=False, action='store_true',
-                        help='URS1 signal will break to interactive prompt')
+                        help='THE USR1 signal will break to interactive prompt')
     parser.add_argument('-L', '--limited-run', default=False, action='store_true',
                         help='Enable bundle-specific behavior to reduce number of rows processed')
     parser.add_argument('-e', '--echo', required=False, default=False, action='store_true',

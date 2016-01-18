@@ -2,7 +2,7 @@
 Ambry Data Management
 =====================
 
-Ambry is a data management system for packaging, storing and referencing research datasets, with an emphasis on public data. Using Ambry, you can create packages of data, in a similar way that source code packages can be created using tools like Apt, Homebrew, Bower or dozens of others. These pckages can be stored in libraries and installed to databases and data repositories. See the :ref:`Overview <about_overview>` for examples of use. 
+Ambry is a data management system for packaging, storing and referencing research datasets, with an emphasis on public data. Using Ambry, you can create packages of data, in a similar way that source code packages can be created using tools like Apt, Homebrew, Bower or dozens of others. These pckages can be stored in libraries and installed to databases and data repositories. 
 
 In Ambry, data is packaged into Bundles, with each Bundle being composed of one or more partitions. The partitions are segmented along natural divisions in the data. For instance, with educations data, there is usually one partition per year, while for Census data, each year is a separate bundle, and there is one partition per state. The partition is a single-file relational database ( a Sqlite database ) and usually contains only one table. These partition files are primarily for storage and transport, and will be installed into a database before data is queried. 
 
@@ -27,4 +27,4 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-* :ref:`doctest`
+
