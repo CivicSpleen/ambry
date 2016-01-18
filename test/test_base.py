@@ -12,7 +12,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.sql.expression import text
 
 from six.moves.urllib.parse import urlparse
-from six.moves import input as six_input
+from fs.opener import fsopendir
 
 from ambry.identity import DatasetNumber
 from ambry.orm import Dataset
@@ -66,7 +66,6 @@ class TestBase(unittest.TestCase):
         cls._is_postgres = cls.dbname == 'postgres'
         cls._is_sqlite = cls.dbname == 'sqlite'
 
-
     def setUp(self):
 
         self.db = None
@@ -110,8 +109,6 @@ class TestBase(unittest.TestCase):
 
         """
 
-        from fs.opener import fsopendir
-
         config = ambry.run.load()  # not cached; get_config is
 
         orig_root = config.library.filesystem_root
@@ -154,7 +151,6 @@ class TestBase(unittest.TestCase):
     def _import_bundles(library, clean=True, force_import=False):
 
         from test import bundle_tests
-        import os
 
         if clean:
             library.clean()
@@ -269,9 +265,8 @@ class PostgreSQLTestBase(TestBase):
             test_db_name = cls.postgres_test_db_data['test_db_name']
             if not test_db_name.endswith(SAFETY_POSTFIX):
                 raise AssertionError("""
-                Can't drop a postgres database that does not end in the saftey postfix
-                Add '{}' to the end of the database at: {}""".format(SAFETY_POSTFIX, test_db_dsn))
-
+                    Can't drop a postgres database that does not end in the saftey postfix
+                    Add '{}' to the end of the database at: {}""".format(SAFETY_POSTFIX, test_db_name))
 
             engine = create_engine(cls.postgres_test_db_data['postgres_db_dsn'])
             connection = engine.connect()
@@ -313,23 +308,14 @@ class PostgreSQLTestBase(TestBase):
 
                 if not test_db_name.endswith(SAFETY_POSTFIX):
                     raise AssertionError(
-                    "Can't drop a postgres database that does not end in the saftey postfix\n"
-                    "Add '{}' to the end of the database at: {}".format(SAFETY_POSTFIX, test_db_dsn))
+                        "Can't drop a postgres database that does not end in the saftey postfix\n"
+                        "Add '{}' to the end of the database at: {}".format(SAFETY_POSTFIX, test_db_dsn))
 
-                while True:
-                    #delete_it = six_input(
-                    #    '\nTest database with {} name already exists. Can I delete it (Yes|No): '
-                    #    .format(test_db_name))
-                    if True or delete_it.lower() == 'yes':
-                        try:
-                            connection.execute('DROP DATABASE {};'.format(test_db_name))
-                            connection.execute('COMMIT;')
-                        except:
-                            connection.execute('ROLLBACK;')
-                        break
-
-                    elif delete_it.lower() == 'no':
-                        break
+                try:
+                    connection.execute('DROP DATABASE {};'.format(test_db_name))
+                    connection.execute('COMMIT;')
+                except:
+                    connection.execute('ROLLBACK;')
 
             #
             # check for test template with required extensions.
@@ -387,8 +373,3 @@ class PostgreSQLTestBase(TestBase):
                 text('SELECT 1 FROM pg_extension WHERE extname=:extension;'), extension=extension)\
             .fetchall()
         return result == [(1,)]
-
-
-
-
-
