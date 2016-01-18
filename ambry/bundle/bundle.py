@@ -357,9 +357,12 @@ class Bundle(object):
 
     def partition(self, ref=None, **kwargs):
         """Return a partition in this bundle for a vid reference or name parts"""
+        from ambry.orm.exc import NotFoundError
+        from sqlalchemy.orm.exc import NoResultFound
 
         if not ref and not kwargs:
             return None
+
 
         if ref:
 
@@ -368,16 +371,18 @@ class Bundle(object):
                     p._bundle = self
                     return p
 
-            return None
+            raise NotFoundError("No partition found for '{}' ".format(ref))
 
         elif kwargs:
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
-
-            p = self.partitions._find_orm(pnq).one()
-            if p:
-                p._bundle = self
-                return p
+            try:
+                p = self.partitions._find_orm(pnq).one()
+                if p:
+                    p._bundle = self
+                    return p
+            except NoResultFound:
+                raise NotFoundError("No partition found for '{}' ".format(kwargs))
 
     def new_partition(self, table, **kwargs):
         """
@@ -1956,8 +1961,8 @@ Caster Code
             def __len__(self):
                 return len(self._s_vids)
 
-        try:
-            self._run_events(TAG.BEFORE_BUILD, 0)
+
+        self._run_events(TAG.BEFORE_BUILD, 0)
 
         resolved_sources = SourceSet(self, self._resolve_sources(sources, tables, stage=stage,
                                                                  predicate=lambda s: s.is_processable))
