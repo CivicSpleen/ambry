@@ -143,9 +143,9 @@ def load_config(path=None):
 
     config = AttrDict()
     if not path:
-        path = CONFIG_FILE
+        path = ROOT_DIR
 
-    config_file = find_config_file(path, extra_path=path)
+    config_file = find_config_file(CONFIG_FILE, extra_path=path)
 
     if os.path.exists(config_file):
 
