@@ -21,12 +21,13 @@ from time import time
 import uuid
 import yaml
 from yaml.representer import RepresenterError
+import warnings
 
 from bs4 import BeautifulSoup
 
 from six.moves import filterfalse, xrange as six_xrange
-from six import iteritems, iterkeys, itervalues, print_, StringIO, text_type
-from six.moves import builtins, zip as six_izip
+from six import iteritems, iterkeys, itervalues, print_, StringIO
+from six.moves import zip as six_izip
 from six.moves.urllib.parse import urlparse, urlsplit, urlunsplit
 from six.moves.urllib.request import urlopen
 
@@ -734,33 +735,6 @@ def make_acro(past, prefix, s):  # pragma: no cover
     raise Exception('Could not get acronym.')
 
 
-def temp_file_name():
-    """Create a path to a file in the temp directory."""
-
-    import platform
-
-    if platform.system() == 'Windows':
-
-        import tempfile
-
-        f = tempfile.NamedTemporaryFile(delete=True)
-        f.close()
-
-        if os.path.exists(f.name):
-            os.remove(f.name)
-
-        return f.name
-
-    else:
-
-        tmp_dir = '/tmp/ambry'
-
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir)
-
-        return os.path.join(tmp_dir, str(uuid.uuid4()))
-
-
 def ensure_dir_exists(path):
     """Given a file, ensure that the path to the file exists"""
 
@@ -1007,6 +981,7 @@ def unparse_url_dict(d):
 
     return url
 
+
 def set_url_part(url, **kwargs):
     """Change one or more parts of a URL"""
     d = parse_url_to_dict(url)
@@ -1014,9 +989,6 @@ def set_url_part(url, **kwargs):
     d.update(kwargs)
 
     return unparse_url_dict(d)
-
-
-
 
 
 def filter_url(url, **kwargs):
@@ -1045,6 +1017,7 @@ def qualified_class_name(o):
     if module is None or module == str.__class__.__module__:
         return o.__class__.__name__
     return module + '.' + o.__class__.__name__
+
 
 def qualified_name(cls):
     """Full name of a class, including the module. Like qualified_class_name, but when you already have a class """
@@ -1101,9 +1074,10 @@ def scrape(library, url, as_html=False):
 
     if url.startswith('s3:'):
         s3 = library.filesystem.s3(url)
-        return scrape_s3(url, s3, as_html = as_html)
+        return scrape_s3(url, s3, as_html=as_html)
     else:
         return scrape_urls_from_web_page()
+
 
 def scrape_s3(root_url, s3, as_html=False):
     from os.path import join
@@ -1112,7 +1086,7 @@ def scrape_s3(root_url, s3, as_html=False):
     for f in s3.walkfiles('/'):
         if as_html:
             try:
-                url, _ = s3.getpathurl(f).split('?',1)
+                url, _ = s3.getpathurl(f).split('?', 1)
             except ValueError:
                 url = s3.getpathurl(f)
         else:
@@ -1123,6 +1097,7 @@ def scrape_s3(root_url, s3, as_html=False):
         d['sources'][fn] = dict(url=url, description='', title=fn)
 
     return d
+
 
 def scrape_urls_from_web_page(page_url):
     parts = list(urlsplit(page_url))
@@ -1190,11 +1165,13 @@ def scrape_urls_from_web_page(page_url):
 
     return d
 
+
 def drop_empty(rows):
     """Transpose the columns into rows, remove all of the rows that are empty after the first cell, then
     transpose back. The result is that columns that have a header but no data in the body are removed, assuming
     the header is the first row. """
     return zip(*[col for col in zip(*rows) if bool(filter(bool, col[1:]))])
+
 
 #http://stackoverflow.com/a/20577580
 def dequote(s):
@@ -1208,6 +1185,7 @@ def dequote(s):
         return s[1:-1]
 
     return s
+
 
 def pretty_time(s, granularity=3):
     """Pretty print time in seconds. COnverts the input time in seconds into a string with
@@ -1239,9 +1217,8 @@ def pretty_time(s, granularity=3):
 
         return ', '.join(result[:granularity])
 
-    return display_time(s,granularity)
+    return display_time(s, granularity)
 
-import warnings
 
 # From: http://code.activestate.com/recipes/391367-deprecated/
 def deprecated(func):
@@ -1257,12 +1234,14 @@ def deprecated(func):
     newFunc.__dict__.update(func.__dict__)
     return newFunc
 
+
 def int_maybe(v):
     """Try to convert to an int and return None on failure"""
     try:
         return int(v)
     except (TypeError, ValueError):
         return None
+
 
 def random_string(length):
     import random
