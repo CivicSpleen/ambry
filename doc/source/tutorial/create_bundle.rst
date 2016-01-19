@@ -3,7 +3,8 @@ Create a New Bundle
 
 Creating a new bundle involves two phases, the meta phase and the build phase. The meta phase is usually only run once, while the bundle is being configured. The Build phase actually creates the bundle partitions, and can be run by others, on other machines, after the bundle is configured. 
 
-In this tutorial, we will create a new bundle, using the [USDA Farmer's Market list.](http://public.source.civicknowledge.com/usda.gov/farmers-markets.csv)
+In this tutorial, we will create a new bundle, using the `USDA Farmer's Market list
+<http://public.source.civicknowledge.com/usda.gov/farmers-markets.csv>`_. 
 
 In the meta phase, you will create the new bundle and configure the files. The steps in this phase are usually: 
 
@@ -15,17 +16,23 @@ In the meta phase, you will create the new bundle and configure the files. The s
 - Create the destination schemas with :command:`bambry schema -d`
 - Edit the destination schemas so the source files build properly
 
+After configuring the bundle, you can build it to generate the data partitions. 
+
 Create a new bundle
 *******************
 
-Use the :command:`bambry new` command to create a new bundle, then export the bundle files to your working directory.  The :command:`bambry export` works like :command:`bambry sync -o`, but can also create directories and set the bundles source directory. 
+Use the :command:`bambry new` command to create a new bundle, then export the bundle files to your working directory.  To export a new bundle, the :command:`bambry export` command works like :command:`bambry sync -o`, but can also create directories and set the bundles source directory. 
+
+.. seealso::
+    :ref:`Overview of files and objects <file_locations>`
+        For an explaination about why you have to sync files out.
 
 .. code-block:: bash
 
     $ bambry new -s usda.gov -d farmers_markets
     usda.gov-farmers_markets-0.0.1~dQH4kt5xlf001
     
-The command will create a new bundle in your library, and print out the fully-qualified name, which include the version number and vid. Run :command:`ambry list` to verify that the bundle was created. 
+The command will create a new bundle in your library, and print out the fully-qualified name, which includes the version number and vid. Run :command:`ambry list` to verify that the bundle was created. 
 
 .. code-block:: bash
 
@@ -34,9 +41,9 @@ The command will create a new bundle in your library, and print out the fully-qu
     -------------  ------------------------------  --------  --------  -------------
     dQH4kt5xlf001  usda.gov-farmers_markets-0.0.1  new       new
 
-You can add any word to :command:`ambry list` and it will work like ::command:`grep`.
+You can add any word to :command:`ambry list` and it will work like :command:`grep`, returning only the bundles that have that word in their names.
 
-If your current directory is not in another bundle directory, the command will also have set the working bundle. Run `bambry info -w` to see what bundle this is:
+If your current directory is not in another bundle directory, the command will also have set the working bundle. Run :command:`bambry info -w` to see what bundle this is:
 
 .. code-block:: bash
 

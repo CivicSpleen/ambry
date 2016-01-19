@@ -248,6 +248,8 @@ Additional meta data and process information is stored in:
 - :file:`bundle.yaml`. The main configuration file, which may include modifications to the pipeline
 - :file:`bundle.py`. Primary bundle class, which may include transformation functions for editing rows during processing.
 
+.. _file_locations:
+
 File Locations
 **************
 

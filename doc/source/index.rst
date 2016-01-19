@@ -16,6 +16,7 @@ Contents:
 
     Install and Configure Ambry <install_config/index>
     Tutorial <tutorial/index>
+    Reference <process/index>
     cli/index
     Concepts and Design Overview <overview>
 
