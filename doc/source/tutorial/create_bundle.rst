@@ -168,14 +168,15 @@ View the file with some of the other options to check if it looks right.
 
 Ingesting the file will also update the source records, which you can export to the :file:`source.csv` file. This will add to values for `start_line`, which is important, and `end_line`, which is usually just informative.  You can verify that the source now has the values from the ingestion process by running :command:`bambry dump -s` and looking for the ``start_line`` and ``end_line`` values. 
 
+Then sync out to get the updates to the sources into the :file:`source.csv` file. 
+
 .. code-block:: bash 
     
     $ bambry sync -o
 
 .. caution::
 
-    If you don't export the updates sources, or set the start_line in the :file:`source.csv` file, you may get an error in the build process when Ambry tries to load the first ( 0'th ) row as a data row. 
-
+    If you don't sync out the updates to sources, or manually set the start_line in the :file:`source.csv` file, you may get an error in the build process when Ambry tries to load the first ( 0'th ) row as a data row. 
 
 
 Additional Source Configuration
@@ -190,9 +191,9 @@ The :file:`sources.csv` file has a lot of specification values to configure a so
 Creating Schemas
 ****************
 
-After ingesting the source files, you can create the source and destination schemas. The source schema defines the column names and data types for each source file. Its basically what you see when you run :command:`bambry view -s` on an ingested source. The destination schema is also a declaration of column names and types, but it is for the output, and is attached to the partitions. 
+After ingesting the source files, you can create the source and destination schemas. The source schema defines the column names and data types for each source file. It's basically what you see when you run :command:`bambry view -s` on an ingested source. The destination schema is also a declaration of column names and types, but it is for the output, and is attached to the partitions. 
 
-Creating a source file is easy: run :command:`bambry schema` to build all of the soruce schemas, or :command:`bambry schema -s <sourcename>` to build for a specific source. After building the source schema, you can check it was created with :command:`bambry dump -T` and write it back to the :file:`source_schema.csv` file with :command:`bambry sync -o`
+Creating a source schema is easy: run :command:`bambry schema` to build all of the soruce schemas, or :command:`bambry schema -s <sourcename>` to build for a specific source. After building the source schema, you can check it was created with :command:`bambry dump -T` and write it back to the :file:`source_schema.csv` file with :command:`bambry sync -o`
 
 .. code-block:: bash
 
@@ -267,9 +268,8 @@ Build the bundle with: :command:`bambry build`. It should build cleanly:
     INFO dQH4kt5xlf001 ==== Done Building ====
     
     
-
-
-
+    
+    
 
 Improving the Output
 *********************
