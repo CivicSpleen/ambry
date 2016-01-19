@@ -62,7 +62,7 @@ When the working bundle is set, you can run :command:`bambrycd` to cd to the bun
 
     .. code-block:: bash
 
-        $ bambcycd dQH4kt5xlf001
+        $ bambrycd dQH4kt5xlf001
         $ bambrycd dQH4kt5xlf
         $ bambrycd usda.gov-farmers_markets-0.0.1
         $ bambrycd usda.gov-farmers_markets
@@ -84,7 +84,7 @@ If you list the contents of this directory, you'll notice that it is empty. That
     INFO dQH4kt5xlf001 Sync: bundle.yaml
     INFO dQH4kt5xlf001 Sync: schema.csv
     
-The unadorned :command:`bambry export` works well when you are writing the bundle into the default soruce directly, but if you have a specific location to export to, such as a git repository, you will want to specify a specific directory and maybe add the `-a` option. The `-a` option will use the standard soruce naming scheme. 
+The unadorned :command:`bambry export` works well when you are writing the bundle into the default source directly, but if you have a specific location to export to, such as a git repository, you will want to specify a specific directory and maybe add the `-a` option. The `-a` option will use the standard source naming scheme. 
 
 So, :command:`bambry export /tmp/foo` would write the bundle build files to :file::`/tmp/foo`, while :command:`bambry export -a /tmp/foo` would write to :file:`/tmp/foo/usda.gov/farmers_markets`. 
 
@@ -109,7 +109,7 @@ Open the :file:`sources.csv` file in a spreadsheet editor and add  a new row wit
 - name: farmers_markets
 - ref: http://public.source.civicknowledge.com/usda.gov/farmers-markets.csv
 
-After you save the file, you can load it into the library with :command:`bambry sync -i`, then veryify that it was loaded by dumpoing the sources with :command:`bambry dump -s`:
+After you save the file, you can load it into the library with :command:`bambry sync -i`, then verify that it was loaded by dumping the sources with :command:`bambry dump -s`:
 
 .. code-block:: bash
 
@@ -156,13 +156,13 @@ To verify that the file was loaded, run :command:`bambry dump -i` to see the ing
     end_row     : 8501
     URL         : http://public.source.civicknowledge.com/usda.gov/farmers-markets.csv
 
-Review this information to see if Ambry loaded the file as you expect. In particular, check that `rows` and `cols` seem like the right number of rows and columns in the file. Then look at `header_rows` and `data_row.` THe `header_rows` value is a list of the rows that contain the names of the columns. It should be just the first row for CSV files, but for excel files, there may be multiple rows that have the column headers. The `data_row` value is the row number of the first data row. 
+Review this information to see if Ambry loaded the file as you expect. In particular, check that `rows` and `cols` seem like the right number of rows and columns in the file. Then look at `header_rows` and `data_row.` The `header_rows` value is a list of the rows that contain the names of the columns. It should be just the first row for CSV files, but for excel files, there may be multiple rows that have the column headers. The `data_row` value is the row number of the first data row. 
 
 With additional options, the :command:`bambry view` command can show you other information about the file:
 
 - :option:`-H` prints the first 10 rows and leftmost 10 columns, to see if the structure of the file looks corrrect. 
 - :option:`-s` prints the schema of the file, including the column names and a guess at the data type of the column. 
-- :option:`-t` shows the couts of each datatype for each column, so you can see how the Type Intuiter made its guesses about the column dat types. 
+- :option:`-t` shows the counts of each datatype for each column, so you can see how the Type Intuiter made its guesses about the column dat types. 
 
 View the file with some of the other options to check if it looks right. 
 
@@ -193,7 +193,7 @@ Creating Schemas
 
 After ingesting the source files, you can create the source and destination schemas. The source schema defines the column names and data types for each source file. It's basically what you see when you run :command:`bambry view -s` on an ingested source. The destination schema is also a declaration of column names and types, but it is for the output, and is attached to the partitions. 
 
-Creating a source schema is easy: run :command:`bambry schema` to build all of the soruce schemas, or :command:`bambry schema -s <sourcename>` to build for a specific source. After building the source schema, you can check it was created with :command:`bambry dump -T` and write it back to the :file:`source_schema.csv` file with :command:`bambry sync -o`
+Creating a source schema is easy: run :command:`bambry schema` to build all of the source schemas, or :command:`bambry schema -s <sourcename>` to build for a specific source. After building the source schema, you can check it was created with :command:`bambry dump -T` and write it back to the :file:`source_schema.csv` file with :command:`bambry sync -o`
 
 .. code-block:: bash
 
@@ -220,7 +220,7 @@ Creating a source schema is easy: run :command:`bambry schema` to build all of t
 
     If your bundle database state gets corrupt or diverged from what is defined in the build files, you can clean out the bundle with :command:`bambry clean`, then load the files back in with :command:`bambry sync -i`, or do both in one command with :command:`bambry clean -y`
 
-After creating the source schema, you can create the destination schema, which is the description of the table that will be included in the output partitions. TO create a destination schema, run :command:`bambry schema -d` and then sync out the :file:`schema.csv` with the :command:`bambry sync -o` command. You can verify that the schema was created with :command:`bambry dump -t` to view the table, and :command:`bambry dump -C` to view the columns. 
+After creating the source schema, you can create the destination schema, which is the description of the table that will be included in the output partitions. To create a destination schema, run :command:`bambry schema -d` and then sync out the :file:`schema.csv` with the :command:`bambry sync -o` command. You can verify that the schema was created with :command:`bambry dump -t` to view the table, and :command:`bambry dump -C` to view the columns. 
 
 
 .. code-block:: bash
@@ -320,7 +320,7 @@ When you open the file, most of it will seem sensible, by there are a few odd bi
 
 The `transform` column is a transformation to apply to a value as it is loaded into the partition. The transformation has it's own flow that is a lot like the pipeline, but for columns instead of entire rows. These transformation are handled by the CastColumns pipe and are run by a generate python file, which is stored in the bundle build directory. You can view this code at: :file:`$(bambry info -b)/code/casters/farmers_markets.py`. 
 
-WHen we generated the source and destination schemas for the `farmers_market` file, Ambry notices that the `zip` and `season2date` columns are mostly one type, but have some strings too. So, while the other columns have a simple datatype, those two have an `OrCode` type. These are special data types that will try to parse a value to particular type, and if the parsing fails, will store the value as a string. This value can be retrieved later, in the `code` column. 
+When we generated the source and destination schemas for the `farmers_market` file, Ambry notices that the `zip` and `season2date` columns are mostly one type, but have some strings too. So, while the other columns have a simple datatype, those two have an `OrCode` type. These are special data types that will try to parse a value to particular type, and if the parsing fails, will store the value as a string. This value can be retrieved later, in the `code` column. 
 
 So, most of the time, `zip` is an integer. When it is not, the `zip` column will hold a NULL, but the `code` property will be set. Then, the transform for the `zip_code` column will pull out that code. The pipe character '|' seperates stages in the transform, with two of them meaning that the code is extracted after the first round of transforms has been run. The code value is set on the first stage, then it can be retrieved in the second round. 
 

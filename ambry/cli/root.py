@@ -46,14 +46,6 @@ def make_parser(cmd):
     group.add_argument('-a', '--accounts', default=False, action='store_true',
                        help='Information about accounts')
 
-    sp = cmd.add_parser('doc', help='Start the documentation server')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='doc')
-
-    sp.add_argument('-c', '--clean', default=False, action='store_true',
-                    help='When used with --reindex, delete the index and old files first. ')
-    sp.add_argument('-d', '--debug', default=False, action='store_true', help='Debug mode ')
-    sp.add_argument('-p', '--port', help='Run on a sepecific port, rather than pick a random one')
 
     sp = cmd.add_parser('search', help='Search the full-text index')
     sp.set_defaults(command='root')
@@ -334,36 +326,6 @@ def root_search(args, l, rc):
             if p:
                 print('    ', p.vid, p.vname)
 
-
-def root_doc(args, l, rc):
-
-    from ambry_ui import app, app_config
-    import os
-
-    import logging
-    from logging import FileHandler
-    import webbrowser
-
-    app_config['port'] = args.port if args.port else 8085
-
-    cache_dir = l.filesystem.logs()
-
-    file_handler = FileHandler(os.path.join(cache_dir, 'web.log'))
-    file_handler.setLevel(logging.WARNING)
-    app.logger.addHandler(file_handler)
-
-    print('Serving documentation for cache: ', cache_dir)
-
-    url = 'http://localhost:{}/'.format(app_config['port'])
-
-    if not args.debug:
-        # Don't open the browser on debugging, or it will re-open on every
-        # application reload
-        webbrowser.open(url)
-    else:
-        print('Running at: {}'.format(url))
-
-    app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
 
 
 def root_remove(args, l, rc):

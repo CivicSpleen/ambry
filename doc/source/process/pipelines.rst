@@ -1,5 +1,5 @@
-Configure the Pipelines
-=======================
+Row Pipelines
+=============
 
 The pipeline is...
 

@@ -250,6 +250,7 @@ class BuildSourceFile(object):
         self.fs_to_record()
         self.record_to_objects()
 
+
     def setcontent(self, content):
         from cStringIO import StringIO
 

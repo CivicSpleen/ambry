@@ -863,6 +863,10 @@ def bundle_ingest(args, l, rc):
 
     b.ingest(tables=args.table, sources=args.source, force=args.force)
 
+    b.build_source_files.sources.objects_to_record()
+
+    b.commit()
+
     b.set_last_access(Bundle.STATES.INGESTED)
 
 
