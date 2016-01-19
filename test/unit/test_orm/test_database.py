@@ -21,14 +21,12 @@ from ambry.orm.exc import DatabaseError, DatabaseMissingError
 from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME, POSTGRES_SCHEMA_NAME
 from ambry.orm.dataset import Dataset
 
-from ambry.run import get_runconfig
-
 from test.factories import DatasetFactory, TableFactory,\
     ColumnFactory, PartitionFactory
 
 from test.unit.asserts import assert_spec
 
-from test.test_base import TestBase, PostgreSQLTestBase
+from test.test_base import TestBase
 
 
 class DatabaseTest(unittest.TestCase):
@@ -402,10 +400,11 @@ class ValidateVersionTest(unittest.TestCase):
     @patch('ambry.orm.database.get_stored_version')
     def test_raises_database_error_if_db_version_is_between_10_100(self, fake_get):
         fake_get.return_value = 88
-        engine = create_engine('sqlite://')
+        dsn = 'sqlite://'
+        engine = create_engine(dsn)
         connection = engine.connect()
         with self.assertRaises(DatabaseError):
-            _validate_version(connection)
+            _validate_version(connection, dsn)
 
     @patch('ambry.orm.database.get_stored_version')
     @patch('ambry.orm.database._migration_required')
@@ -414,9 +413,10 @@ class ValidateVersionTest(unittest.TestCase):
         fake_required.return_value = True
         fake_get.return_value = 100
 
-        engine = create_engine('sqlite://')
+        dsn = 'sqlite://'
+        engine = create_engine(dsn)
         connection = engine.connect()
-        _validate_version(connection)
+        _validate_version(connection, dsn)
         fake_required.assert_called_once_with(connection)
 
 
@@ -524,7 +524,8 @@ class GetStoredVersionTest(unittest.TestCase):
 class MigrateTest(unittest.TestCase):
 
     def setUp(self):
-        engine = create_engine('sqlite://')
+        self._dsn = 'sqlite://'
+        engine = create_engine(self._dsn)
         self.connection = engine.connect()
 
     @patch('ambry.orm.database._is_missed')
@@ -539,7 +540,7 @@ class MigrateTest(unittest.TestCase):
         fake_get.return_value = test_migrations
 
         # run.
-        migrate(self.connection)
+        migrate(self.connection, self._dsn)
 
         # testing.
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
@@ -557,7 +558,7 @@ class MigrateTest(unittest.TestCase):
         fake_migrate.side_effect = MyException('My fake exception')
         self.connection.execute('PRAGMA user_version = 22')
         with self.assertRaises(MyException):
-            migrate(self.connection)
+            migrate(self.connection, self._dsn)
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
         fake_migrate.assert_called_once_with(self.connection)
         self.assertEqual(stored_version, 22)

@@ -4,16 +4,13 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
-from sqlalchemy import Text, String, ForeignKey, LargeBinary
+from sqlalchemy import Column as SAColumn, Integer
+from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy import event
-from simplecrypt import encrypt, decrypt, DecryptionException as SC_DecryptionException
-import simplecrypt
-from ambry.orm.exc import OrmObjectError
 import os.path
 
-
 from . import Base, MutationDict, JSONEncodedObj
+
 
 class Remote(Base):
 
@@ -23,7 +20,7 @@ class Remote(Base):
 
     short_name = SAColumn('rm_short_name', Text, index=True, unique=True)
 
-    service = SAColumn('rm_service', Text, index=True) # ambry, s3 or fs
+    service = SAColumn('rm_service', Text, index=True)  # ambry, s3 or fs
 
     url = SAColumn('rm_url', Text)
 
@@ -42,7 +39,8 @@ class Remote(Base):
     db_dsn = SAColumn('rm_db_dsn', Text)
     jwt_secret = SAColumn('rm_api_token', Text, doc='Encryption secret for JWT')
 
-    account_password = SAColumn('rm_account_password', Text, doc='Password for encryption secrets in the database')
+    account_password = SAColumn('rm_account_password', Text,
+                                doc='Password for encryption secrets in the database')
 
     virtual_host = SAColumn('rm_virtual_host', Text, doc='Virtual host name, for web proxy')
 
@@ -53,17 +51,17 @@ class Remote(Base):
 
     # Temp variables, not stored
 
-    account_accessor = None # Set externally to allow access to the account credentials
+    account_accessor = None  # Set externally to allow access to the account credentials
 
     tr_db_password = None
 
     @property
-    def api_token(self): # old name
+    def api_token(self):  # old name
         return self.jwt_secret
 
     @property
     def is_api(self):
-        return self.service in ('ambry','docker')
+        return self.service in ('ambry', 'docker')
 
     @property
     def dict(self):
@@ -75,7 +73,8 @@ class Remote(Base):
         """
         from collections import OrderedDict
 
-        d = OrderedDict([ (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in ('data',) ])
+        d = OrderedDict(
+            [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in ('data',)])
 
         if self.data:
             for k, v in self.data.items():
@@ -101,7 +100,7 @@ class Remote(Base):
 
     def _api_client(self):
         from ambry_client import Client
-        from ambry.util import parse_url_to_dict, set_url_part
+        from ambry.util import set_url_part
 
         username = 'api'
 
@@ -126,10 +125,9 @@ class Remote(Base):
         else:
             return self._list_fs(full=full)
 
-
-    def _list_fs(self, full = False):
+    def _list_fs(self, full=False):
         assert self.account_accessor
-        from fs.errors import  ResourceNotFoundError
+        from fs.errors import ResourceNotFoundError
         from os.path import join
         from json import loads
 
@@ -152,7 +150,7 @@ class Remote(Base):
                     # Isn't any support for this
                     yield (this_name, None)
 
-    def _list_api(self, full = False):
+    def _list_api(self, full=False):
 
         c = self._api_client()
 
@@ -169,7 +167,6 @@ class Remote(Base):
         else:
             return self._find_fs(ref)
 
-
     def _find_fs(self, ref):
         from fs.errors import ResourceNotFoundError
         from ambry.orm.exc import NotFoundError
@@ -177,7 +174,7 @@ class Remote(Base):
 
         remote = self._fs_remote(self.url, self.account_accessor)
 
-        path_parts = ['vname','vid','name','id']
+        path_parts = ['vname', 'vid', 'name', 'id']
 
         for p in path_parts:
             path = "/_meta/{}/{}".format(p, ref)
@@ -251,16 +248,13 @@ class Remote(Base):
         except NoSysPathError:
             pass
 
-
         return remote, None
 
     def _checkin_api(self, package, no_partitions=False, cb=None):
-        from ambry_client import Client
 
         c = self._api_client()
 
         return c.library.checkin(package, cb)
-
 
     def _put_metadata(self, fs_remote, ds):
         """Store metadata on a pyfs remote"""
@@ -282,23 +276,20 @@ class Remote(Base):
             fs_remote.setcontents(os.path.join('_meta', 'vname', text_type(identity.vname)), ident)
             fs_remote.setcontents(os.path.join('_meta', 'name', text_type(identity.name)), ident)
 
-
         try:
             do_metadata()
         except ResourceNotFoundError:
-            parts = ['vid','id','vname','name']
+            parts = ['vid', 'id', 'vname', 'name']
             for p in parts:
                 dirname = os.path.join('_meta', p)
                 fs_remote.makedir(dirname, allow_recreate=True, recursive=True)
 
             do_metadata()
 
-
     def put_partition(self, cb=None):
         """Store a partition on the remote"""
         raise NotImplementedError()
         pass
-
 
     def _put_partition_fs(self, fs_remote, p, library,  cb=None):
 
@@ -307,7 +298,6 @@ class Remote(Base):
                 cb('Uploading partition {}'.format(p.identity.name), n)
         else:
             cb_one_arg = None
-
 
         if not library:
             return
@@ -335,12 +325,10 @@ class Remote(Base):
 
     def _checkout_fs(self, ref, cb=None):
         remote = self._fs_remote(self.url, self.account_accessor)
-        from ambry.util.flo import copy_file_or_flo
-        from tempfile import NamedTemporaryFile
 
         d = self._find_fs(ref)
 
-        return remote.open(d['cache_key'] + '.db','rb')
+        return remote.open(d['cache_key'] + '.db', 'rb')
 
     def get_partition(self):
         """Get a partition from the remote"""
@@ -393,7 +381,6 @@ class Remote(Base):
         return info['vid']
 
     def _remove_api(self, ref, cb=None):
-        from ambry_client import Client
 
         info = self._find_api(ref)
 
@@ -418,12 +405,10 @@ class Remote(Base):
         """Return a pyfs object"""
         return self._fs_remote(self.url, self.account_accessor)
 
-
     def s3(self, url, account_acessor):
         """Setup an S3 pyfs, with account credentials, fixing an ssl matching problem"""
         from fs.s3fs import S3FS
         from ambry.util import parse_url_to_dict
-        from ambry.dbexceptions import ConfigurationError
         import ssl
 
         assert self.account_accessor
@@ -457,7 +442,7 @@ class Remote(Base):
         return s3
 
     def __str__(self):
-        return '{};{}'.format(self.short_name,self.url)
+        return '{};{}'.format(self.short_name, self.url)
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -475,8 +460,6 @@ class Remote(Base):
                 target.service = 'ambry'
             else:
                 target.service = 'fs'
-
-
 
 event.listen(Remote, 'before_insert', Remote.before_insert)
 event.listen(Remote, 'before_update', Remote.before_update)

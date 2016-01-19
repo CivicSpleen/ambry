@@ -363,7 +363,6 @@ class Bundle(object):
         if not ref and not kwargs:
             return None
 
-
         if ref:
 
             for p in self.partitions:
@@ -1053,7 +1052,6 @@ Caster Code
         self.buildstate.commit()
         return
 
-
     @property
     def error_state(self):
         """Set the error condition"""
@@ -1100,7 +1098,6 @@ Caster Code
             state = state if state != self.STATES.CLEANED else self.STATES.NEW
             self.dstate = state
 
-
     @property
     def dstate(self):
         """Return the current dataset state.
@@ -1108,13 +1105,6 @@ Caster Code
         Note! This is different from the build state.
         """
         return self.dataset.state
-
-        if False: # Here is an alternate idea
-            if ds is not None:
-                return ds
-            else:
-                return self.state
-
 
     @dstate.setter
     def dstate(self, v):
@@ -1164,7 +1154,7 @@ Caster Code
         stages = set([source.stage for source in self.sources])
 
         for stage in stages:
-            sources = [ source for source in self.sources if source.stage == stage ]
+            sources = [source for source in self.sources if source.stage == stage]
 
             self.run(sources=sources)
 
@@ -1196,17 +1186,16 @@ Caster Code
         self.commit()
         return syncs
 
-    def sync_in(self, force = False):
+    def sync_in(self, force=False):
         """Synchronize from files to records, and records to objects"""
         self.log('---- Sync In ----')
-        from ambry.bundle.files import BuildSourceFile
 
         self.dstate = self.STATES.BUILDING
 
         for f in self.build_source_files:
 
             if self.source_fs.exists(f.record.path):
-                #print f.path, f.fs_modtime, f.record.modified, f.record.source_hash, f.fs_hash
+                # print f.path, f.fs_modtime, f.record.modified, f.record.source_hash, f.fs_hash
                 if f.fs_is_newer or force:
                     self.log('Sync: {}'.format(f.record.path))
                     f.fs_to_record()
@@ -1219,7 +1208,6 @@ Caster Code
     def sync_in_files(self, force=False):
         """Synchronize from files to records"""
         self.log('---- Sync Files ----')
-        from ambry.bundle.files import BuildSourceFile
 
         self.dstate = self.STATES.BUILDING
 
@@ -1236,7 +1224,6 @@ Caster Code
     def sync_in_records(self, force=False):
         """Synchronize from files to records"""
         self.log('---- Sync Files ----')
-        from ambry.bundle.files import BuildSourceFile
 
         for f in self.build_source_files:
             f.record_to_objects()
@@ -1247,7 +1234,6 @@ Caster Code
 
         self.commit()
 
-
     def sync_out(self, file_name=None, force=False):
         """Synchronize from objects to records"""
         self.log('---- Sync Out ----')
@@ -1256,7 +1242,7 @@ Caster Code
         self.dstate = self.STATES.BUILDING
 
         for f in self.build_source_files:
-            if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path==file_name or force:
+            if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path == file_name or force:
                 self.log('Sync: {}'.format(f.record.path))
                 f.record_to_fs()
 
@@ -1336,7 +1322,6 @@ Caster Code
                 synced += 1
 
         return synced
-
 
     #
     # Clean
@@ -1640,7 +1625,9 @@ Caster Code
                     raise
             else:
                 for i, source in enumerate(downloadable_sources, 1):
-                    ps.add(message='Ingesting source #{}, {}'.format(i, source.name), source=source, state='running')
+                    ps.add(
+                        message='Ingesting source #{}, {}'.format(i, source.name),
+                        source=source, state='running')
                     r = self._ingest_source(source, ps, force)
                     if not r:
                         errors += 1
@@ -1707,7 +1694,7 @@ Caster Code
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 
-            #source.update_table()  # Generate the source tables.
+            # source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
             self.build_source_files.sources.objects_to_record()
 
@@ -1750,7 +1737,6 @@ Caster Code
     @CaptureException
     def source_schema(self, sources=None, tables=None, clean=False):
         """Process a collection of ingested sources to make source tables. """
-        from ambry.bundle.files import BuildSourceFile
 
         sources = self._resolve_sources(sources, tables, None,
                                         predicate=lambda s: s.is_processable and not s.is_partition)
@@ -1860,13 +1846,9 @@ Caster Code
                     self.log("Populated destination table '{}' from source table '{}' with {} columns"
                              .format(t.name, source.source_table.name, diff))
 
-
         self.commit()
 
         return True
-
-
-
 
     #
     # Build
@@ -1961,7 +1943,6 @@ Caster Code
             def __len__(self):
                 return len(self._s_vids)
 
-
         self._run_events(TAG.BEFORE_BUILD, 0)
 
         resolved_sources = SourceSet(self, self._resolve_sources(sources, tables, stage=stage,
@@ -2039,7 +2020,7 @@ Caster Code
 
                     for i, source in enumerate(stage_sources):
                         id_ = ps.add(message='Running source {}'.format(source.name),
-                               source=source, item_count=i, state='running')
+                                     source=source, item_count=i, state='running')
                         self.build_source(stage, source, ps, force=force)
 
                         ps.update(message='Finished processing source', state='done')
@@ -2107,7 +2088,7 @@ Caster Code
                 if n_records > 0:
                     ps.update(message='Running pipeline {}: rate: {}'
                               .format(source_name, rate),
-                              s_vid=s_vid,item_type='rows',item_count=n_records)
+                              s_vid=s_vid, item_type='rows', item_count=n_records)
 
             pl.run(callback=run_progress_f)
 
@@ -2151,7 +2132,6 @@ Caster Code
         source.state = self.STATES.BUILT
 
         self.commit()
-
 
         return source.name
 
@@ -2234,9 +2214,8 @@ Caster Code
                     ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
 
                     with self.wrap_partition(seg).local_datafile.reader as reader:
-                        import time
                         for row in reader.rows:
-                            w.insert_row((i,) + row[1:]) # Writes the ID Value
+                            w.insert_row((i,) + row[1:])  # Writes the ID Value
                             i += 1
 
                             if i % 1000 == 1:
@@ -2371,10 +2350,6 @@ Caster Code
     def finalize_write_bundle_file(self):
 
         return self.package()
-
-
-
-
 
     def post_build_test(self):
 
@@ -2618,10 +2593,13 @@ Caster Code
             ds.state = Bundle.STATES.SOURCE
 
             # Hack, but I'm tired of fighting with it.
-            ds.session.query(Config).filter(Config.type == 'buildstate').filter(Config.group == 'state').delete()
+            ds.session.query(Config) \
+                .filter(Config.type == 'buildstate') \
+                .filter(Config.group == 'state') \
+                .delete()
             ds.commit()
 
-            pl = ProcessLogger(ds, self.logger, new_connection=False, new_sqlite_db = False)
+            pl = ProcessLogger(ds, self.logger, new_connection=False, new_sqlite_db=False)
             pl.clean()
             pl.build.state.current = ds.state
             pl.build.state[ds.state] = 0
@@ -2641,7 +2619,6 @@ Caster Code
 
         b.clear_file_systems()
 
-
         db.session.query(Partition).update({'_location': partition_location})
         db.session.commit()
         db.close()
@@ -2651,7 +2628,7 @@ Caster Code
         db.library = self.library
         return db
 
-    def checkin(self, no_partitions=False, remote_name = None, source_only = False, cb=None):
+    def checkin(self, no_partitions=False, remote_name=None, source_only=False, cb=None):
         from ambry.bundle.process import call_interval
 
         package = self.package(source_only=source_only)
@@ -2683,7 +2660,6 @@ Caster Code
     def remove(self):
         """Delete resources associated with the bundle."""
         pass  # Remove files in the file system other resource.
-
 
     def __str__(self):
         return self.identity.vname

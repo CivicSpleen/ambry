@@ -143,7 +143,7 @@ def load_config(path=None):
 
     config = AttrDict()
     if not path:
-        path = CONFIG_FILE
+        path = ROOT_DIR
 
     config_file = find_config_file(CONFIG_FILE, extra_path=path)
 
@@ -213,7 +213,6 @@ def update_config(config):
 
     if os.getenv(ENVAR.DB):
         config.library.database = os.getenv(ENVAR.DB)
-
 
     if os.getenv(ENVAR.ROOT):
         config.library.filesystem_root = os.getenv(ENVAR.ROOT)

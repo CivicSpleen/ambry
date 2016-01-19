@@ -91,16 +91,16 @@ class PyTest(TestCommand):
             self.pytest_args += 'test'
         elif self.unit or self.regression or self.bundle or self.functional:
             if self.unit:
-                self.pytest_args += 'test/unit'
+                self.pytest_args += ' test/unit'
             if self.regression:
-                self.pytest_args += 'test/regression'
+                self.pytest_args += ' test/regression'
             if self.bundle:
-                self.pytest_args += 'test/bundle_tests'
+                self.pytest_args += ' test/bundle_tests'
             if self.functional:
-                self.pytest_args += 'test/functional'
+                self.pytest_args += ' test/functional'
         else:
             # default case - functional.
-            self.pytest_args += 'test/functional'
+            self.pytest_args += ' test/functional'
 
         if 'capture' not in self.pytest_args:
             # capture arg is not given. Disable capture by default.
@@ -118,9 +118,10 @@ class PyTest(TestCommand):
 
         total_errno = 0
         for db in db_envs:
-            os.environ['AMBRY_TEST_DB'] = db
+            if db:
+                os.environ['AMBRY_TEST_DB'] = db
 
-            RESULT_LOG = '/tmp/ambry_{}_test_latest_log.txt'.format(db)
+            RESULT_LOG = '/tmp/ambry_{}_test_latest_log.txt'.format(db or os.environ.get('AMBRY_TEST_DB'))
 
             if self.email:
                 # force pytest to log test result to external file.
