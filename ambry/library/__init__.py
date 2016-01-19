@@ -126,7 +126,6 @@ class Library(object):
         return self.database.clean()
 
     def close(self):
-
         return self.database.close()
 
     def create(self):

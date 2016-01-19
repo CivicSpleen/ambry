@@ -20,7 +20,6 @@ class ProgressSection(object):
     """A handler of the records for a single routine or phase"""
 
     def __init__(self, parent, session, phase, stage, logger,  **kwargs):
-        import signal
 
         self._parent = parent
         self._pid = os.getpid()
@@ -34,11 +33,11 @@ class ProgressSection(object):
 
         self.rec = None
 
-        self._ai_rec_id = None # record for add_update
+        self._ai_rec_id = None  # record for add_update
 
         self._group = None
         self._start = None
-        self._group = self.add(log_action='start',state='running', **kwargs)
+        self._group = self.add(log_action='start', state='running', **kwargs)
 
         assert self._session
 
@@ -53,10 +52,9 @@ class ProgressSection(object):
 
         if exc_val:
             self.add(
-                message = str(exc_val),
-                exception_class = qualified_name(exc_type),
-                exception_trace = str(traceback.format_exc(exc_tb)),
-
+                message=str(exc_val),
+                exception_class=qualified_name(exc_type),
+                exception_trace=str(traceback.format_exc(exc_tb)),
             )
             self.done("Failed in context with exception")
             return False
@@ -70,13 +68,13 @@ class ProgressSection(object):
 
         if not self._start:
             try:
-                self._start =  self._session.query(Process).filter(Process.id == self._group).one()
+                self._start = self._session.query(Process).filter(Process.id == self._group).one()
             except NoResultFound:
                 self._start = None
 
         return self._start
 
-    def augment_args(self,args, kwargs):
+    def augment_args(self, args, kwargs):
 
         kwargs['pid'] = self._pid
         kwargs['d_vid'] = self._parent._d_vid
@@ -96,7 +94,7 @@ class ProgressSection(object):
         # from a different database, so we convert them to vids. For postgres,
         # the pojects are in the same database, but they would have been attached to another
         # session, so we'd have to either detach them, or do the following anyway
-        for table,vid in (('source','s_vid'), ('table','t_vid'),('partition','p_vid')):
+        for table, vid in (('source', 's_vid'), ('table', 't_vid'), ('partition', 'p_vid')):
             if table in kwargs:
                 kwargs[vid] = kwargs[table].vid
                 del kwargs[table]
@@ -112,7 +110,6 @@ class ProgressSection(object):
         kwargs['log_action'] = kwargs.get('log_action', 'add')
 
         rec = Process(**kwargs)
-
 
         self._session.add(rec)
 
@@ -139,7 +136,7 @@ class ProgressSection(object):
             for k, v in kwargs.items():
 
                 # Don't update object; use whatever was set in the original record
-                if k not in ('source','s_vid','table','t_vid','partition','p_vid'):
+                if k not in ('source', 's_vid', 'table', 't_vid', 'partition', 'p_vid'):
                     setattr(self.rec, k, v)
 
             self._session.merge(self.rec)
@@ -157,7 +154,7 @@ class ProgressSection(object):
             self._ai_rec_id = self.add(*args, **kwargs)
         else:
             au_save = self._ai_rec_id
-            self.update(*args,**kwargs)
+            self.update(*args, **kwargs)
             self._ai_rec_id = au_save
 
         return self._ai_rec_id
@@ -182,10 +179,11 @@ class ProgressSection(object):
     def get(self, id_):
         return self._session.query(Process).get(id_)
 
+
 class ProcessLogger(object):
     """Database connection and access object for recording build progress and build state"""
 
-    def __init__(self, dataset, logger=None, new_connection=True, new_sqlite_db = True):
+    def __init__(self, dataset, logger=None, new_connection=True, new_sqlite_db=True):
         import os.path
 
         self._vid = dataset.vid
@@ -197,7 +195,7 @@ class ProcessLogger(object):
         db = dataset._database
         schema = db._schema
 
-        if db.driver == 'sqlite' and new_sqlite_db :
+        if db.driver == 'sqlite' and new_sqlite_db:
             # Create an entirely new database. Sqlite does not like concurrent access,
             # even from multiple connections in the same process.
             from ambry.orm import Database
@@ -272,7 +270,7 @@ class ProcessLogger(object):
     def query(self):
         """Return all start records for this the dataset, grouped by the start record"""
 
-        return (self._session.query(Process).filter(Process.d_vid == self._d_vid))
+        return self._session.query(Process).filter(Process.d_vid == self._d_vid)
 
     @property
     def exceptions(self):
@@ -286,9 +284,11 @@ class ProcessLogger(object):
     def clean(self):
         """Delete all of the records"""
 
-        # Deleteing seems to be really weird and unrelable.
-        (self._session.query(Process).filter(Process.d_vid == self._d_vid)
-         ).delete(synchronize_session='fetch')
+        # Deleting seems to be really weird and unrelable.
+        self._session \
+            .query(Process) \
+            .filter(Process.d_vid == self._d_vid) \
+            .delete(synchronize_session='fetch')
 
         for r in self.records:
             self._session.delete(r)
@@ -308,8 +308,7 @@ class ProcessLogger(object):
         # It is a lightweight object, so no need to cache
         return BuildConfigGroupAccessor(self.dataset, 'buildstate', self._session)
 
-
-    def bundle_process_logs(self, show_all = None):
+    def bundle_process_logs(self, show_all=None):
         import time
         from collections import OrderedDict
         from sqlalchemy.sql import and_
@@ -354,7 +353,6 @@ class ProcessLogger(object):
         for pr in q.all():
             append(pr, edit={'modified': lambda e: (str(e) + ' (dead?)')})
 
-
         records = drop_empty(records)
 
         return records
@@ -362,7 +360,6 @@ class ProcessLogger(object):
     def stats(self):
         from collections import defaultdict
         from itertools import groupby
-        from collections import defaultdict
         from ambry.orm import Partition
 
         ds = self.dataset
@@ -394,6 +391,7 @@ class ProcessLogger(object):
 
         return headers, rows
 
+
 class CallInterval(object):
     """Call the inner callback at a limited frequency"""
 
@@ -414,12 +412,9 @@ class CallInterval(object):
             self._next = time.time() + self._freq
 
 
-def call_interval(freq,**kwargs):
+def call_interval(freq, **kwargs):
     """Decorator for the CallInterval wrapper"""
     def wrapper(f):
         return CallInterval(f, freq, **kwargs)
 
     return wrapper
-
-
-
