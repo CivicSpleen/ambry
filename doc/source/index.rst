@@ -11,14 +11,13 @@ Bundles and Partitions can be loaded into Libraries. A Library synchronizes with
 Contents:
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 3
+    :numbered:
 
-    install
-    configuration
-    overview
-    tutorial/index
+    Install and Configure Ambry <install_config/index>
+    Tutorial <tutorial/index>
     cli/index
-    library
+    Concepts and Design Overview <overview>
 
 
 Indices and tables

@@ -22,10 +22,7 @@ If you don't already have the ambry source distribution:
 Import the Example Bundles
 **************************
 
-With the source available, import the bundle into the library, but use the '-d' option to detach the source.
-When the bundle source is later exported, it will be exported to the default source directory, not
-to the directory of the originally imported source. If you are a developer, this prevents the source
-tree from getting polluted with source files.
+With the source available, import the bundle into the library, but use the '-d' option to detach the source. When the bundle source is later exported, it will be exported to the default source directory, not to the directory of the originally imported source. If you are a developer, this prevents the source tree from getting polluted with source files.
 
 .. code-block:: bash
 

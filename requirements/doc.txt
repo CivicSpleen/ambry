@@ -1,1 +1,2 @@
 # Documentation requirements for RTD
+sphinx-argparse

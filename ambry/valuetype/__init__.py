@@ -7,7 +7,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 from six import text_type
-
+from datetime import date
 
 def import_valuetype(name):
     import importlib
@@ -76,6 +76,17 @@ class FloatValue(float, ValueType):
         o = super(FloatValue, cls).__new__(cls, cls.parse(v))
         return o
 
+class DateValue(date, ValueType):
+    _pythontype = date
+
+    def __new__(cls, v):
+        from dateutil import parser
+        if v:
+            d = parser.parse(v)
+            o = super(DateValue, cls).__new__(cls, d.year, d.month, d.day)
+        else:
+            o = super(DateValue, cls).__new__(cls, 1900, 1, 1)
+        return o
 
 class RegEx(StrValue):
     pass

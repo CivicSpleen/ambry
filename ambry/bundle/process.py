@@ -52,8 +52,14 @@ class ProgressSection(object):
         assert self._session
 
         if exc_val:
+            try:
+                message = exc_val.details()
+            except AttributeError:
+                message = str(exc_val)
+
             self.add(
-                message = str(exc_val),
+
+                message = message,
                 exception_class = qualified_name(exc_type),
                 exception_trace = str(traceback.format_exc(exc_tb)),
 

@@ -241,6 +241,15 @@ class BuildSourceFile(object):
         """Create a filesystem file from a File"""
         raise NotImplementedError
 
+    def record_to_objects(self):
+        """Create objects from the file record"""
+        raise NotImplementedError
+
+    def fs_to_objects(self):
+        """Load the file from the file system, to the record, and then to the objects"""
+        self.fs_to_record()
+        self.record_to_objects()
+
     def setcontent(self, content):
         from cStringIO import StringIO
 

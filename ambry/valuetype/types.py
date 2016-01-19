@@ -12,7 +12,7 @@ import dateutil.parser as dp
 
 import six
 
-from . import IntValue, FloatValue
+from . import IntValue, FloatValue, DateValue
 from .exceptions import CastingError
 
 
@@ -298,6 +298,21 @@ class FloatOrCode(FloatValue):
             o = super(FloatOrCode, cls).__new__(cls, float('nan'))
             o.code = v
         return o
+
+class DateOrCode(DateValue):
+    "An Integer value that stores values that fail to convert in the 'code' property"
+    _pythontype = int
+
+    code = None
+
+    def __new__(cls, v):
+        try:
+            o = super(DateOrCode, cls).__new__(cls, v)
+        except Exception as e:
+            o = super(DateOrCode, cls).__new__(cls, None)
+            o.code = v
+        return o
+
 
 
 class ForeignKey(IntValue):
