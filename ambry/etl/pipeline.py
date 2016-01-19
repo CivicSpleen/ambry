@@ -30,6 +30,10 @@ class PipelineError(Exception):
         assert isinstance(pipe, Pipe), "Got a  type: " + str(type(pipe))
 
     def __str__(self):
+        return "Pipeline error: {}; {}".format(self.exc_name, self.message)
+
+
+    def details(self):
         return """
 ======================================
 Pipeline Exception: {exc_name}
@@ -1388,8 +1392,8 @@ class CastColumns(Pipe):
                            self, self.bundle, self.source)
                 rp = self.row_proxy_2
         except CastingError as e:
-            raise PipelineError(self, "Failed to cast column in table {}: {}"
-                                .format(self.source.dest_table.name, e))
+            raise PipelineError(self, "Failed to cast column in table {}, row {}: {}"
+                                .format(self.source.dest_table.name, self.row_n, e))
 
         return row
 

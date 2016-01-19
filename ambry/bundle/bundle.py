@@ -1288,7 +1288,7 @@ Caster Code
 
         return synced
 
-    def sync_sources(self):
+    def sync_sources(self, force=False):
         """Sync in only the sources.csv file"""
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
@@ -1299,9 +1299,9 @@ Caster Code
 
         for fc in [File.BSFILE.SOURCES]:
             bsf = self.build_source_files.file(fc)
-            if bsf.fs_is_newer:
+            if bsf.fs_is_newer or force:
                 self.log('Syncing {}'.format(bsf.file_name))
-                bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+                bsf.fs_to_objects()
                 synced += 1
 
         return synced

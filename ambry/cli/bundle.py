@@ -23,16 +23,27 @@ from fs.opener import fsopendir
 from ..cli import prt, fatal, warn, prt_no_format
 from ..orm import File
 
-
-def make_parser(cmd):
+def doc_parser():
     import argparse
 
-    parser = cmd.add_parser('bundle', help='Manage bundle files')
+    parser = argparse.ArgumentParser( prog='ambry', description='')
+
+    make_parser(parser=parser)
+
+    return parser
+
+def make_parser(cmd=None, parser = None):
+
+    import argparse
+
+    if not parser:
+        parser = cmd.add_parser('bundle', help='Manage bundle files')
+
     parser.set_defaults(command='bundle')
 
-    parser.add_argument('-i', '--id', required=False, help='Bundle ID')
+    parser.add_argument('-i', '--id', required=False, help='Bundle reference. May be an id, name, vid or vname')
     parser.add_argument('-D', '--debug', required=False, default=False, action='store_true',
-                        help='URS1 signal will break to interactive prompt')
+                        help='THE USR1 signal will break to interactive prompt')
     parser.add_argument('-L', '--limited-run', default=False, action='store_true',
                         help='Enable bundle-specific behavior to reduce number of rows processed')
     parser.add_argument('-e', '--echo', required=False, default=False, action='store_true',
@@ -113,6 +124,8 @@ def make_parser(cmd):
     command_p.set_defaults(subcommand='set')
     group = command_p.add_mutually_exclusive_group()
     group.add_argument('-s', '--state', default=None, help='Set the build state')
+    group.add_argument('-S', '--source-dir', default=False, action='store_true',
+                       help='Set the source directory to the current directory')
 
     # Info command
     #
@@ -426,6 +439,7 @@ def run_command(args, rc):
     from . import global_logger
     from ambry.orm.exc import ConflictError
     from ambry.dbexceptions import LoggedException
+    from ambry.etl.pipeline import PipelineError
 
     if args.test_library:
         rc.set_library_database('test')
@@ -456,7 +470,7 @@ def run_command(args, rc):
 
     try:
         globals()['bundle_' + args.subcommand](args, l, rc)
-    except (ConflictError, NotFoundError) as e:
+    except (ConflictError, NotFoundError, PipelineError) as e:
         if args.exceptions:
             raise
         fatal(str(e))
@@ -818,13 +832,11 @@ def bundle_sync(args, l, rc):
     if args.files:
         b.sync_in_files()
 
-
     if args.records:
         b.sync_in_records()
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
-
 
 def bundle_ingest(args, l, rc):
 
@@ -841,9 +853,8 @@ def bundle_ingest(args, l, rc):
         # If the bundle.py file changed, need to reload it
         b = using_bundle(args, l).cast_to_subclass()
 
-
     if b.sync_sources() > 0:
-        b.log("Source file changed, automatically cleaning")
+        b.log("Source file changed, automatically cleaning ingested files")
         args.clean = True
 
     if args.clean:
@@ -1034,6 +1045,10 @@ def bundle_set(args, l, rc):
         prt('Setting state to {}'.format(args.state))
         b.state = args.state
         b.commit()
+
+    if args.source_dir:
+        from os import getcwd
+        b.set_file_system(source_url=getcwd())
 
 
 def bundle_dump(args, l, rc):

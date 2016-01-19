@@ -27,8 +27,16 @@ Building Images
 
 The :command:`python setup.py docker` command is used to build and tag images for the various container types. The command has these options, each to build a different container type:
 
-- :option:`--base | -B` Builds the base container, `civicknowledge/base`, used by other containers.
-- :option:`--build | -b` Builds the builder container, which is launched from :command:`bambry docker`
+
+
+.. option:: -- base, --B 
+
+Builds the base container, `civicknowledge/base`, used by other containers.
+
+.. option:: --build, -b
+
+Builds the builder container, which is launched from :command:`bambry docker`
+
 - :option:`--dev | -d` Builds the same container as - :option:`--build,` but installs some packages from git rather than pip, so it is easier to use in development.
 - :option:`--db | -D` Builds the postgres database image
 - :option:`--tunnel | -t` Builds the image for an SSH tunnel to access remote databases securely.

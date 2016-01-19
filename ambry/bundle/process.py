@@ -51,10 +51,17 @@ class ProgressSection(object):
         assert self._session
 
         if exc_val:
+            try:
+                message = exc_val.details()
+            except AttributeError:
+                message = str(exc_val)
+
             self.add(
-                message=str(exc_val),
-                exception_class=qualified_name(exc_type),
-                exception_trace=str(traceback.format_exc(exc_tb)),
+
+                message = message,
+                exception_class = qualified_name(exc_type),
+                exception_trace = str(traceback.format_exc(exc_tb)),
+
             )
             self.done("Failed in context with exception")
             return False
