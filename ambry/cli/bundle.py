@@ -23,16 +23,18 @@ from fs.opener import fsopendir
 from ..cli import prt, fatal, warn, prt_no_format
 from ..orm import File
 
+
 def doc_parser():
     import argparse
 
-    parser = argparse.ArgumentParser( prog='ambry', description='')
+    parser = argparse.ArgumentParser(prog='ambry', description='')
 
     make_parser(parser=parser)
 
     return parser
 
-def make_parser(cmd=None, parser = None):
+
+def make_parser(cmd=None, parser=None):
 
     import argparse
 
@@ -41,7 +43,8 @@ def make_parser(cmd=None, parser = None):
 
     parser.set_defaults(command='bundle')
 
-    parser.add_argument('-i', '--id', required=False, help='Bundle reference. May be an id, name, vid or vname')
+    parser.add_argument('-i', '--id', required=False,
+                        help='Bundle reference. May be an id, name, vid or vname')
     parser.add_argument('-D', '--debug', required=False, default=False, action='store_true',
                         help='THE USR1 signal will break to interactive prompt')
     parser.add_argument('-L', '--limited-run', default=False, action='store_true',
@@ -360,7 +363,8 @@ def make_parser(cmd=None, parser = None):
     # Ampr
     #
 
-    command_p = sub_cmd.add_parser('view', help='View the datafile for a source or partition, using the ampr command')
+    command_p = sub_cmd.add_parser('view',
+                                   help='View the datafile for a source or partition, using the ampr command')
     command_p.set_defaults(subcommand='view')
     from ambry_sources.cli import make_arg_parser
     make_arg_parser(command_p)
@@ -371,8 +375,6 @@ def make_parser(cmd=None, parser = None):
     command_p = sub_cmd.add_parser('repopulate',
                                    help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
-
-
 
     command_p = sub_cmd.add_parser('import', help='Import a source bundle. ')
     command_p.set_defaults(subcommand='import')
@@ -412,7 +414,6 @@ def make_parser(cmd=None, parser = None):
     command_p = sub_cmd.add_parser('test', help='Run the bundle test code')
     command_p.set_defaults(subcommand='test')
     command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
-
 
     #
     # Log
@@ -538,11 +539,11 @@ def using_bundle(args, l, print_loc=True, use_history=False):
     b.multi = args.multi
     b.capture_exceptions = not args.exceptions
 
-    if hasattr(args,'debug') and args.debug:
+    if hasattr(args, 'debug') and args.debug:
         warn('Bundle debug mode. Send USR2 signal (kill -USR2 ) to displaya stack trace')
         l.init_debug()
 
-    if hasattr(args,'limited_run') and args.limited_run:
+    if hasattr(args, 'limited_run') and args.limited_run:
         b.limited_run = True
     if print_loc:  # Try to only do this once
         b.log_to_file('==============================')
@@ -620,8 +621,8 @@ def bundle_info(args, l, rc):
         inf(0, 'Remote', b.dataset.data['remote_name'])
 
     inf(1, 'Dataset State', b.dstate)
-    inf(1, 'Build State', (b.buildstate.state.current if  b.buildstate.state.current else '') +
-        (', '+str(b.buildstate.build_duration_pretty) if b.buildstate.build_duration_pretty else '') )
+    inf(1, 'Build State', (b.buildstate.state.current if b.buildstate.state.current else '') +
+        (', '+str(b.buildstate.build_duration_pretty) if b.buildstate.build_duration_pretty else ''))
 
     if 'remote_name' in b.dataset.data:
         inf(1, 'Remote Url', b.dataset.data.get('remote_url'))
@@ -705,7 +706,7 @@ def bundle_info(args, l, rc):
 
         rows = []
         for p in (b.dataset.query(Partition).filter(Partition.d_vid == b.identity.vid)
-                          .options(lazyload('*'), joinedload(Partition.table))
+                           .options(lazyload('*'), joinedload(Partition.table))
                   ).all():
 
             rows.append([p.vid, p.vname, p.table.name,  p.count,
@@ -742,7 +743,6 @@ def bundle_duplicate(args, l, rc):
     else:
         b.set_file_system(source_url=orig_b.source_fs_url)
 
-
     b.sync_out(force=True)
 
     b.commit()
@@ -751,8 +751,9 @@ def bundle_duplicate(args, l, rc):
 def bundle_package(args, l, rc):
     b = using_bundle(args, l)
     prt('Packaging bundle into sqlite file')
-    package = b.package(rebuild=args.force, source_only = args.source, incver=args.incver)
+    package = b.package(rebuild=args.force, source_only=args.source, incver=args.incver)
     prt('Package writen to: {} '.format(package.path))
+
 
 def bundle_finalize(args, l, rc):
     b = using_bundle(args, l)
@@ -810,7 +811,6 @@ def bundle_clean(args, l, rc):
     b.commit()
 
 
-
 def bundle_sync(args, l, rc):
 
     b = using_bundle(args, l)
@@ -837,6 +837,7 @@ def bundle_sync(args, l, rc):
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
+
 
 def bundle_ingest(args, l, rc):
 
@@ -1084,15 +1085,12 @@ def bundle_dump(args, l, rc):
     elif args.table == 'files':
 
         if args.ref:
-            from ambry.orm import File
-            from sqlalchemy.orm.exc import NoResultFound
             records = None
             try:
                 f = b.build_source_files.file_by_path(args.ref)
                 print f.contents
             except (NotFoundError, AttributeError):
                 fatal("Did not find file for path '{}' ".format(args.ref))
-
 
         else:
             records = []
@@ -1311,11 +1309,11 @@ def bundle_import(args, l, rc):
 
     source_dir = os.path.abspath(source_dir)
 
-    if source_dir.endswith('.db'): # it's a database package
+    if source_dir.endswith('.db'):  # it's a database package
         prt('Loading bundle package')
         b = l.checkin_bundle(source_dir)
 
-    else: # It's a source directory
+    else:  # It's a source directory
 
         fs = fsopendir(source_dir)
 
@@ -1446,7 +1444,6 @@ def bundle_view(args, l, rc):
         main(args)
     except ResourceNotFoundError as e:
         raise NotFoundError(str(e))
-
 
 
 def bundle_colmap(args, l, rc):
@@ -1614,7 +1611,6 @@ def bundle_log(args, l, rc):
 
         records.append(d.values())
 
-
     if args.exceptions:
         print '=== EXCEPTIONS ===='
         for pr in b.progress.exceptions:
@@ -1627,7 +1623,7 @@ def bundle_log(args, l, rc):
         records = b.progress.bundle_process_logs(show_all=args.all)
 
         if records:
-            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]),records[0]))
+            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]), records[0]))
 
     elif args.all:
         records = []
