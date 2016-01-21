@@ -91,6 +91,7 @@ def find_config_file(file_name, extra_path=None):
         ROOT_DIR
     ]
 
+
     for path in paths:
 
         if os.path.isdir(path) and os.path.exists(os.path.join(path, file_name)):
@@ -154,27 +155,6 @@ def load_config(path=None):
 
     else:
         # Probably never get here, since the find_config_dir would have thrown a ConfigurationError
-        config = AttrDict()
-        config.loaded = [None, 0]
-
-    return config
-
-
-def load_docker():
-    from os.path import getmtime
-
-    config = AttrDict()
-
-    try:
-        docker_file = find_config_file(DOCKER_FILE)
-    except ConfigurationError:
-        docker_file = None
-
-    if docker_file is not None and os.path.exists(docker_file):
-        config.update_yaml(docker_file)
-        config.loaded = [docker_file, getmtime(docker_file)]
-
-    else:
         config = AttrDict()
         config.loaded = [None, 0]
 
