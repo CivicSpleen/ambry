@@ -21,13 +21,11 @@ if sys.argv[-1] == 'publish':
     os.system('python setup.py sdist upload')
     sys.exit()
 
-
 # Avoiding import so we don't execute ambry.__init__.py, which has imports
 # that aren't installed until after installation.
 ambry_meta = imp.load_source('_meta', 'ambry/_meta.py')
 
 long_description = open('README.rst').read()
-
 
 def find_package_data():
     """ Returns package_data, because setuptools is too stupid to handle nested directories.
@@ -50,7 +48,6 @@ def find_package_data():
                 l.append(path)
 
     return {'ambry': l}
-
 
 class PyTest(TestCommand):
     user_options = [

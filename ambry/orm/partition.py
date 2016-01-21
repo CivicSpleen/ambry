@@ -512,16 +512,18 @@ class Partition(Base):
         try:
             df =  self.local_datafile
             logger.debug("datafile: Using local datafile {}".format(self.vname))
+            return df
         except NotFoundError:
             pass
 
         try:
             df =  self.remote_datafile
             logger.debug("datafile: Using remote datafile {}".format(self.vname))
+            return df
         except NotFoundError:
             pass
 
-        return df
+        return None
 
     @property
     def local_datafile(self):
@@ -600,6 +602,8 @@ class Partition(Base):
 
         ensure_dir_exists(lock_path)
 
+
+
         lock = FileLock(lock_path)
 
         if ps:
@@ -630,6 +634,10 @@ class Partition(Base):
 
         with lock:
             # FIXME! This won't work with remote API, only FS
+
+            if self.is_local:
+                return
+
             with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
                 event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
                                                 f,

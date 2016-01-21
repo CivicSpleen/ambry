@@ -11,6 +11,10 @@ import os.path
 
 from . import Base, MutationDict, JSONEncodedObj
 
+import logging
+from ambry.util import get_logger
+logger = get_logger(__name__)
+#logger.setLevel(logging.DEBUG)
 
 class Remote(Base):
 
@@ -429,6 +433,8 @@ class Remote(Base):
 
         assert account['account_id'] == pd['hostname']
 
+        logger.debug("Creating s3 access = {} secret = {} ".format(account['access_key'], account['secret']))
+
         s3 = S3FS(
             bucket=pd['netloc'],
             prefix=pd['path'],
@@ -453,7 +459,7 @@ class Remote(Base):
 
         url = target.url
 
-        if not target.service:
+        if not target.service and url:
             if url.startswith('s3:'):
                 target.service = 's3'
             elif url.startswith('http'):
