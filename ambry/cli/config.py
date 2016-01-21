@@ -156,7 +156,7 @@ def config_install(args, l, rc):
     else: # Non-root user, outside of virtualenv
         config_dir = user_config_dir
         warn(("Installing as non-root, to '{}'\n" +
-              "Run as root to install for all users.").format(install_file))
+              "Run as root to install for all users.").format(config_dir))
         default_root = os.path.join(os.path.expanduser('~'), 'ambry')
 
     if args.root:
