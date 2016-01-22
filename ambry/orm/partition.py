@@ -687,9 +687,16 @@ class Partition(Base):
         """ Iterator over the partition, returning RowProxy objects.
         :return: a generator
         """
-        with self.reader as r:
-            for row in r:
+
+        try:
+            reader = self.reader
+
+            for row in reader:
                 yield row
+
+        finally:
+            reader.close()
+
 
     # ============================
 
