@@ -1,5 +1,5 @@
-"table","position","source_header","dest_header","datatype","valuetype","start","width","size","summary","description"
-"simple_fixed",0,"id","id","str",,1,6,,,
-"simple_fixed",1,"uuid","uuid","str",,7,34,,,
-"simple_fixed",2,"int","int","str",,41,3,,,
-"simple_fixed",3,"float","float","float",,44,14,,,
+table,position,source_header,dest_header,datatype,valuetype,start,width,size,summary,description
+simple_fixed,0,id,id,str,,1,6,,,
+simple_fixed,1,uuid,uuid,str,,7,34,,,
+simple_fixed,2,int,int,str,,41,3,,,
+simple_fixed,3,float,float,float,,44,14,,,

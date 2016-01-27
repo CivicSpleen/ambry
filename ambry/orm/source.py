@@ -156,15 +156,11 @@ class DataSourceBase(object):
     @property
     def partition(self):
         """For partition urltypes, return the partition specified by the ref """
+
         if self.urltype != 'partition':
             return None
 
-        p = self._bundle.partition(self.url)
-
-        if not p:
-            p = self._bundle.library.partition(self.url)
-
-        return p
+        return self._bundle.library.partition(self.url)
 
     @property
     def datafile(self):
@@ -173,9 +169,10 @@ class DataSourceBase(object):
 
         if self._datafile is None:
             if self.urltype == 'partition':
-                self._datafile = self.partition.datafile
+                    self._datafile = self.partition.datafile
             else:
                 self._datafile = MPRowsFile(self._bundle.build_ingest_fs, self.name)
+
 
         return self._datafile
 

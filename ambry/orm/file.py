@@ -34,18 +34,7 @@ class File(Base, DictableMixin):
     BSFILE.SOURCESCHEMA = 'sourceschema'
     BSFILE.SOURCES = 'sources'
     BSFILE.SQL = 'sql'
-
-    path_map = {
-        BSFILE.BUILD: 'bundle.py',
-        BSFILE.LIB: 'lib.py',
-        BSFILE.TEST: 'test.py',
-        BSFILE.DOC: 'documentation.md',
-        BSFILE.META: 'bundle.yaml',
-        BSFILE.SCHEMA: 'schema.csv',
-        BSFILE.SOURCESCHEMA: 'source_schema.csv',
-        BSFILE.SOURCES: 'sources.csv',
-        BSFILE.SQL: 'bundle.sql',
-    }
+    BSFILE.NOTEBOOK = 'notebook'
 
     # The preferences are primarily implemented in the prepare phase. WIth FILE preference, the
     # objects are always cleared before loading file values. With O, file values are never loaded, but objects
@@ -203,7 +192,6 @@ class File(Base, DictableMixin):
 
     @staticmethod
     def validate_path(target, value, oldvalue, initiator):
-        """ Strip non-numeric characters from a phone number. """
         pass
 
     @staticmethod

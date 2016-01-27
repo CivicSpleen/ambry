@@ -12,6 +12,7 @@ Process Reference
     source_schema
     dest_schema
     pipelines
+    transforms
     library
     remotes
     webui

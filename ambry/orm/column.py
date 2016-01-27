@@ -60,7 +60,16 @@ class Column(Base):
 
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
-    lom = SAColumn('c_lom', String(1))
+    lom = SAColumn('c_lom', String(1), doc='Level of Measurement: n,o,i,r for Nominal, Ordinal, Interval, Ratio')
+
+    # Type Codes, major / minor
+    # err/se Standard Error
+    # err/rse Relative Standard error
+    # err/{95,90}{u,l,s}{r,a} {90,95}% confidence interval, {upper,lower, symmetric}, {absolute, relative} value
+    #
+    # major_type = SAColumn('c_major_type', String(4), doc='Major Type Code, e=Error')
+    # minor_type = SAColumn('c_minor_type', String(4), doc='')
+    # group = SAColumn('c_parent', Text, doc='Name of parent column, for groups or related columns ')
 
     derivedfrom = SAColumn('c_derivedfrom', Text)
 
@@ -70,6 +79,7 @@ class Column(Base):
     # ids of columns used for computing ratios, rates and densities
     numerator = SAColumn('c_numerator', String(20))
     denominator = SAColumn('c_denominator', String(20))
+
 
     indexes = SAColumn('t_indexes', MutationList.as_mutable(JSONEncodedObj))
     uindexes = SAColumn('t_uindexes', MutationList.as_mutable(JSONEncodedObj))
@@ -284,6 +294,19 @@ class Column(Base):
     @property
     def foreign_key(self):
         return self.fk_vid
+
+    @property
+    def dest_header(self):
+        """Allows destination tables to be used as source tables when creating schema from a 'partition' source"""
+        if self.altname:
+            return self.altname
+        else:
+            return self.name
+
+    @property
+    def has_codes(self):
+        """Allows destination tables to be used as source tables when creating schema from a 'partition' source"""
+        return False
 
     @property
     def dict(self):

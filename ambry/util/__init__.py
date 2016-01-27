@@ -1075,7 +1075,7 @@ def scrape(library, url, as_html=False):
         s3 = library.filesystem.s3(url)
         return scrape_s3(url, s3, as_html=as_html)
     else:
-        return scrape_urls_from_web_page()
+        return scrape_urls_from_web_page(url)
 
 
 def scrape_s3(root_url, s3, as_html=False):

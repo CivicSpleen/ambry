@@ -512,28 +512,36 @@ class Dataset(Base):
 
         return None
 
-    def bsfile(self, file_const):
+    def bsfile(self, path):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""
-        from sqlalchemy.orm.exc import NoResultFound
 
-        assert file_const in list(File.path_map.keys())
 
-        try:
-            fr = object_session(self)\
-                .query(File)\
-                .filter(File.d_vid == self.vid)\
-                .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)\
-                .filter(File.minor_type == file_const)\
-                .one()
-        except NoResultFound:
-            fr = File(d_vid=self.vid,
-                      major_type=File.MAJOR_TYPE.BUILDSOURCE,
-                      minor_type=file_const,
-                      path=File.path_map[file_const],
-                      source='fs')
+        return object_session(self)\
+            .query(File)\
+            .filter(File.d_vid == self.vid)\
+            .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)\
+            .filter(File.path == path)\
+            .one()
 
-            object_session(self).add(fr)
+    def new_bsfile(self, file_const, path):
+
+        fr = File(d_vid=self.vid,
+                  major_type=File.MAJOR_TYPE.BUILDSOURCE,
+                  minor_type=file_const,
+                  path=path,
+                  source='fs')
+
+        self.files.append(fr)
+        object_session(self).add(fr)
         return fr
+
+    def find_or_new_bsfile(self, file_const, path):
+        from sqlalchemy.orm.exc import NoResultFound
+        try:
+            return self.bsfile(path)
+        except NoResultFound:
+            return self.new_bsfile(file_const, path)
+
 
     @property
     def dict(self):

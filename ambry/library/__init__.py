@@ -79,6 +79,7 @@ class Library(object):
         try:
             self._db.open()
         except OperationalError as e:
+
             raise DatabaseMissingError("Failed to open database '{}': {} ".format(self._db.dsn, e))
 
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
@@ -259,6 +260,13 @@ class Library(object):
 
         return b
 
+    def bundle_by_cache_key(self, cache_key):
+
+        ds = self._db.dataset_by_cache_key(cache_key)
+
+        return self.bundle(ds)
+
+
     @property
     def bundles(self):
         """ Returns all datasets in the library as bundles. """
@@ -284,8 +292,10 @@ class Library(object):
             ds_on = on.as_dataset
 
             ds = self._db.dataset(ds_on)  # Could do it in on SQL query, but this is easier.
+
             # The refresh is required because in some places the dataset is loaded without the partitions,
             # and if that persist, we won't have partitions in it until it is refreshed.
+
             self.database.session.refresh(ds)
 
             p = ds.partition(ref)
@@ -396,9 +406,10 @@ class Library(object):
 
         nb.commit()
 
+        # Copy all of the files.
         for f in b.dataset.files:
             assert f.major_type == f.MAJOR_TYPE.BUILDSOURCE
-            nb.dataset.files.append(nb.dataset.bsfile(f.minor_type).update(f))
+            nb.dataset.files.append(nb.dataset.bsfile(f.minor_type, f.path).update(f))
 
         # Load the metadata in to records, then back out again. The objects_to_record process will set the
         # new identity object numbers in the metadata file
@@ -440,6 +451,7 @@ class Library(object):
         # self.search.index_library_datasets(tick)
 
         self.search.index_bundle(b)
+
 
         return b
 
@@ -514,6 +526,10 @@ class Library(object):
             b.dataset.commit()
 
             return remote_name, db_ck
+
+    def _init_git(self,b):
+        """If the source directory is configured for git, create a new repo and
+        add the bundle to it. """
 
     #
     # Remotes

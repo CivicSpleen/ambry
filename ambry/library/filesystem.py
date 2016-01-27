@@ -62,6 +62,10 @@ class LibraryFilesystem(object):
         """For file-based search systems, like Whoosh"""
         return self._compose('search',args)
 
+    def git(self, *args):
+        """Git home directory, indicates that git is installed"""
+        return self._compose('git',args)
+
     @property
     def database_dsn(self):
         """Substitute the root dir into the database DSN, for Sqlite"""

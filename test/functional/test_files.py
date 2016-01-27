@@ -9,9 +9,7 @@ from pysqlite2.dbapi2 import OperationalError
 
 from fs.opener import fsopendir
 
-from ambry.mprlib import PostgreSQLBackend
-from ambry_sources.med import postgresql as postgres_med
-from ambry_sources.med.sqlite import install_mpr_module
+
 
 from test.test_base import TestBase
 from test.helpers import assert_sqlite_index, assert_postgres_index, assert_valid_ambry_sources
@@ -67,6 +65,8 @@ class SQLiteInspector(InspectorBase):
     def assert_view_created(cls, library, view):
         """ Looks for given view in the library. If not found raises AssertionError. """
 
+        from ambry_sources.med.sqlite import install_mpr_module
+
         # keep apsw imports here to prevent break if apsw is not installed.
         connection = None
         try:
@@ -116,6 +116,8 @@ class PostgreSQLInspector(InspectorBase):
 
     @classmethod
     def assert_table_created(cls, library, table):
+        from ambry.mprlib import PostgreSQLBackend
+
         relation = '{}.{}'.format(library.database._schema, table)
         assert PostgreSQLBackend._relation_exists(
             library.database.engine.raw_connection(),
@@ -123,6 +125,7 @@ class PostgreSQLInspector(InspectorBase):
 
     @classmethod
     def assert_view_created(cls, library, view):
+        from ambry.mprlib import PostgreSQLBackend
         relation = '{}.{}'.format(library.database._schema, view)
         assert PostgreSQLBackend._relation_exists(
             library.database.engine.raw_connection(),
@@ -130,6 +133,7 @@ class PostgreSQLInspector(InspectorBase):
 
     @classmethod
     def assert_materialized_view_created(cls, library, view):
+        from ambry.mprlib import PostgreSQLBackend
         relation = '{}.{}'.format(library.database._schema, view)
         assert PostgreSQLBackend._relation_exists(
             library.database.engine.raw_connection(),
@@ -137,6 +141,7 @@ class PostgreSQLInspector(InspectorBase):
 
     @classmethod
     def assert_index(cls, library, partition, column):
+        from ambry_sources.med import postgresql as postgres_med
         table = '{}_v'.format(postgres_med.table_name(partition.vid))
         assert_postgres_index(library.database.engine.raw_connection(), table, column)
 

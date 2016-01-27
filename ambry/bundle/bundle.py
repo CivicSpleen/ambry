@@ -365,12 +365,12 @@ class Bundle(object):
 
         if ref:
 
-            for p in self.partitions:
-                if p.vid == b(ref) or p.name == b(ref):
-                    p._bundle = self
-                    return p
+            p = self.library.partition(ref)
+            p._bundle = self
+            return p
 
-            raise NotFoundError("No partition found for '{}' ".format(ref))
+
+            raise NotFoundError("No partition found for '{}' (a)".format(ref))
 
         elif kwargs:
             from ..identity import PartitionNameQuery
@@ -381,7 +381,19 @@ class Bundle(object):
                     p._bundle = self
                     return p
             except NoResultFound:
-                raise NotFoundError("No partition found for '{}' ".format(kwargs))
+                raise NotFoundError("No partition found for '{}' (b)".format(kwargs))
+
+
+    def partition_by_vid(self, ref):
+        """A much faster way to get partitions, by vid only"""
+        from ambry.orm import Partition
+
+        p = self.session.query(Partition).filter(Partition.vid == str(ref)).first()
+        if p:
+            return self.wrap_partition(p)
+        else:
+            return None
+
 
     def new_partition(self, table, **kwargs):
         """
@@ -1192,16 +1204,21 @@ Caster Code
 
         self.dstate = self.STATES.BUILDING
 
-        for f in self.build_source_files:
+        for path_name in self.source_fs.listdir():
+            f = self.build_source_files.instance_from_name(path_name)
 
-            if self.source_fs.exists(f.record.path):
-                # print f.path, f.fs_modtime, f.record.modified, f.record.source_hash, f.fs_hash
-                if f.fs_is_newer or force:
-                    self.log('Sync: {}'.format(f.record.path))
-                    f.fs_to_record()
-                    f.record_to_objects()
+            if not f:
+                self.warn("Ignoring unknown file: {}".format(path_name))
+                continue
+
+            if f and f.exists and (f.fs_is_newer or force):
+                self.log('Sync: {}'.format(f.record.path))
+                f.fs_to_record()
+                f.record_to_objects()
+
 
         self.commit()
+
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
@@ -1241,7 +1258,7 @@ Caster Code
 
         self.dstate = self.STATES.BUILDING
 
-        for f in self.build_source_files:
+        for f in self.build_source_files.list_records():
             if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path == file_name or force:
                 self.log('Sync: {}'.format(f.record.path))
                 f.record_to_fs()
@@ -1688,14 +1705,19 @@ Caster Code
                     message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
 
             intuit_type = not source.is_relation  # FIXME: Do not intuit rows for is_relation!
+
             source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
                                       limit=500 if self.limited_run else None,
-                                      intuit_type=intuit_type)
+                                      intuit_type=intuit_type, run_stats = False)
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 
             # source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
+
+            if self.limited_run:
+                source.end_line = None # Otherwize, it will be 500
+
             self.build_source_files.sources.objects_to_record()
 
             ps.update(message='Ingested {}'.format(source.datafile.path), state='done')
@@ -1739,12 +1761,12 @@ Caster Code
         """Process a collection of ingested sources to make source tables. """
 
         sources = self._resolve_sources(sources, tables, None,
-                                        predicate=lambda s: s.is_processable and not s.is_partition)
+                                        predicate=lambda s: s.is_processable)
 
         for source in sources:
             source.update_table()
             self.log('Creating source schema for: {}; {} columns'
-                     .format(source.name, len(source.source_table.columns)))
+                 .format(source.name, len(source.source_table.columns)))
 
         self.commit()
 
@@ -1813,8 +1835,8 @@ Caster Code
 
                 def source_cols(source):
                     if source.is_partition:
-                        print '!!!!', source.partition.table.columns
-                        return []
+                        return enumerate(source.partition.table.columns)
+
                     else:
                         return enumerate(source.source_table.columns)
 
@@ -2558,13 +2580,19 @@ Caster Code
     # Check in to remote
     #
 
-    def package(self, rebuild=True, partition_location='remote', incver=False, source_only=False):
+    def package(self, rebuild=True, partition_location='remote', incver=False,
+                source_only=False, variation=None):
         from ambry.orm import Database, Partition, Config
 
         identity = self.identity
+        kwargs = {} # Alter values of the new dataset
 
         if incver:
             identity = self.identity.rev(identity.on.revision + 1)
+
+        if variation:
+            identity.name.variation = variation
+            kwargs['variation'] = variation
 
         self.build_fs.makedir(os.path.dirname(identity.cache_key), allow_recreate=True)
 
@@ -2589,7 +2617,7 @@ Caster Code
         self.commit()
 
         if source_only:
-            ds = db.copy_dataset_files(self.dataset, incver=incver)
+            ds = db.copy_dataset_files(self.dataset, incver=incver, **kwargs)
             ds.state = Bundle.STATES.SOURCE
 
             # Hack, but I'm tired of fighting with it.
@@ -2612,7 +2640,7 @@ Caster Code
             db.commit()
 
         else:
-            ds = db.copy_dataset(self.dataset, incver=incver)
+            ds = db.copy_dataset(self.dataset, incver=incver, **kwargs)
 
         b = Bundle(ds, self.library)
         bfs = b.build_source_files.file(File.BSFILE.META)

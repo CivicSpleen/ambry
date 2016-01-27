@@ -51,9 +51,10 @@ class ProgressSection(object):
         assert self._session
 
         if exc_val:
-            try:
+            # Don't want to trigger another exception
+            if hasattr(exc_val, 'details'):
                 message = exc_val.details()
-            except AttributeError:
+            else:
                 message = str(exc_val)
 
             self.add(

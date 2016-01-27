@@ -33,11 +33,15 @@ class DatasetSearchResult(object):
 
     @property
     def partition_records(self):
+        from ambry.orm.exc import NotFoundError
 
         assert bool(self.bundle)
 
         for p in self.partitions:
-            yield self.bundle.partition(p)
+            try:
+                yield self.bundle.partition_by_vid(p)
+            except NotFoundError:
+                continue
 
     @property
     def score(self):
@@ -690,7 +694,7 @@ class SearchTermParser(object):
         toks = self.scan(s)
 
         # Assume the first term is ABOUT, if it is not marked with a marker.
-        if toks[0][0] == self.TERM or toks[0][0] == self.QUOTEDTERM:
+        if toks and toks[0] and (toks[0][0] == self.TERM or toks[0][0] == self.QUOTEDTERM):
             toks = [(self.MARKER, 'about')] + toks
 
         # Group the terms by their marker.

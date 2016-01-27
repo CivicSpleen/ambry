@@ -484,8 +484,8 @@ class Partition(Base):
 
     def clean(self):
         """Remove all built files and return the partition to a newly-created state"""
-
-        self.datafile.remove()
+        if self.datafile:
+            self.datafile.remove()
 
     @property
     def location(self):
@@ -509,21 +509,19 @@ class Partition(Base):
     def datafile(self):
         from ambry.orm.exc import NotFoundError
 
-        try:
-            df =  self.local_datafile
+        if self.is_local:
+            # Use the local version, if it exists
             logger.debug("datafile: Using local datafile {}".format(self.vname))
-            return df
-        except NotFoundError:
-            pass
-
-        try:
-            df =  self.remote_datafile
-            logger.debug("datafile: Using remote datafile {}".format(self.vname))
-            return df
-        except NotFoundError:
-            pass
-
-        return None
+            return self.local_datafile
+        else:
+            # If it doesn't try to get the remote.
+            try:
+                logger.debug("datafile: Using remote datafile {}".format(self.vname))
+                return self.remote_datafile
+            except NotFoundError:
+                # If the remote doesnt exist, return the local, so the caller can call  exists() on it,
+                # get its path, etc.
+                return self.local_datafile
 
     @property
     def local_datafile(self):
@@ -532,15 +530,12 @@ class Partition(Base):
         from fs.errors import ResourceNotFoundError
         from ambry.orm.exc import NotFoundError
 
-        if self._datafile is None:
+        try:
+            return MPRowsFile(self._bundle.build_fs, self.cache_key)
 
-            try:
-                self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
+        except ResourceNotFoundError:
+            raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
 
-            except ResourceNotFoundError:
-                raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
-
-        return self._datafile
 
     @property
     def remote_datafile(self):
@@ -601,8 +596,6 @@ class Partition(Base):
         lock_path = local.getsyspath(self.cache_key + '.lock')
 
         ensure_dir_exists(lock_path)
-
-
 
         lock = FileLock(lock_path)
 
@@ -688,14 +681,9 @@ class Partition(Base):
         :return: a generator
         """
 
-        try:
-            reader = self.reader
-
-            for row in reader:
+        with self.reader as r:
+            for row in r:
                 yield row
-
-        finally:
-            reader.close()
 
 
     # ============================

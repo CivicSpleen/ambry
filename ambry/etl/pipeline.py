@@ -158,7 +158,7 @@ class Pipe(object):
 
     def __iter__(self):
         rg = iter(self._source_pipe)
-
+        self.row_n = 0
         self.headers = self.process_header(next(rg))
 
         yield self.headers
@@ -170,8 +170,10 @@ class Pipe(object):
                 row = self.process_body(row)
 
                 if row:  # Check that the rows have the same length as the header
+                    self.row_n += 1
                     if len(row) != header_len:
-                        m = 'Header width mismatch. Row width = {}, header width = {}'.format(len(row), header_len)
+                        m = 'Header width mismatch in row {}. Row width = {}, header width = {}'.format(
+                            self.row_n, len(row), header_len)
 
                         self.bundle.error(m)
                         raise BadRowError(self, row, m)
@@ -903,10 +905,11 @@ class MapSourceHeaders(Pipe):
 
         is_generator = isinstance(self._source_pipe, GeneratorSourcePipe)
         is_relation = isinstance(self._source_pipe, DatabaseRelationSourcePipe)
+        is_partition = isinstance(self._source_pipe, PartitionSourcePipe)
 
         if len(list(self.source.source_table.columns)) == 0:
 
-            if is_generator or is_relation:
+            if is_generator or is_relation or is_partition:
                 # Generators or relations are assumed to return a valid, consistent header, so
                 # if the table is missing, carry on.
 

@@ -103,7 +103,7 @@ def doc_parser():
     return parser
 
 
-BASE_COMMANDS = ['ambry.cli.bundle', 'ambry.cli.config', 'ambry.cli.library', 'ambry.cli.root']
+BASE_COMMANDS = ['ambry.cli.bundle', 'ambry.cli.config', 'ambry.cli.library', 'ambry.cli.root', 'ambry.cli.util']
 
 
 def get_extra_commands():

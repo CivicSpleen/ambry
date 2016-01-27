@@ -205,10 +205,10 @@ class Database(object):
                 def pragma_on_connect(dbapi_con, con_record):
                     """ISSUE some Sqlite pragmas when the connection is created."""
 
-                    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
+                    #dbapi_con.execute('PRAGMA foreign_keys = ON;')
                     # Not clear that there is a performance improvement.
 
-                    dbapi_con.execute('PRAGMA journal_mode = WAL')
+                    #dbapi_con.execute('PRAGMA journal_mode = WAL')
                     dbapi_con.execute('PRAGMA synchronous = OFF')
                     dbapi_con.execute('PRAGMA temp_store = MEMORY')
                     dbapi_con.execute('PRAGMA cache_size = 500000')
@@ -525,6 +525,18 @@ class Database(object):
         else:
             return None
 
+    def dataset_by_cache_key(self, cache_key):
+
+        try:
+            return self.session \
+                .query(Dataset) \
+                .filter(Dataset.cache_key == cache_key) \
+                .order_by(Dataset.revision.desc()) \
+                .one()
+        except NoResultFound:
+            raise NotFoundError('No dataset in library for vid : {} '.format(cache_key))
+
+
     @property
     def datasets(self):
         """
@@ -571,7 +583,7 @@ class Database(object):
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
 
-    def copy_dataset(self, ds, incver=False, cb=None):
+    def copy_dataset(self, ds, incver=False, cb=None, **kwargs):
         """
         Copy a dataset into the database.
         :param ds: The source dataset to copy
@@ -583,9 +595,9 @@ class Database(object):
 
         tables = [ Table, Column, Partition, File, ColumnStat, Code, SourceTable, SourceColumn, DataSource ]
 
-        return self._copy_dataset_copy(ds, tables, incver, cb)
+        return self._copy_dataset_copy(ds, tables, incver, cb, **kwargs)
 
-    def copy_dataset_files(self, ds, incver=False, cb=None):
+    def copy_dataset_files(self, ds, incver=False, cb=None, **kwargs):
         """
         Copy only files and configs into the database.
         :param ds: The source dataset to copy
@@ -596,9 +608,9 @@ class Database(object):
 
         tables = [File]
 
-        return self._copy_dataset_copy(ds, tables, incver, cb)
+        return self._copy_dataset_copy(ds, tables, incver, cb, **kwargs)
 
-    def _copy_dataset_copy(self, ds, tables, incver, cb=None):
+    def _copy_dataset_copy(self, ds, tables, incver, cb=None, **kwargs):
         from sqlalchemy.orm import noload
 
         source_session = ds.session
@@ -607,6 +619,10 @@ class Database(object):
         ds = source_session.query(Dataset).filter(Dataset.vid == ds.vid).options(noload('*')).first()
 
         dso = ds.incver() if incver else ds
+
+        for k, v in kwargs.items():
+            if hasattr(dso, k):
+                setattr(dso, k, v)
 
         dest_session.merge(dso)
         dest_session.commit()

@@ -78,6 +78,25 @@ def make_parser(cmd=None, parser=None):
                     )
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
+    # Make a variant of an existing bundle.
+
+    sp = sub_cmd.add_parser('variant', help='Create a variant of an existing bundle')
+    sp.set_defaults(subcommand='variant')
+    sp.set_defaults(revision=1)  # Needed in Identity.name_parts
+    sp.add_argument('-s', '--source', default=None, help='Source, usually a domain name')
+    sp.add_argument('-d', '--dataset', default=None, help='Name of the dataset')
+    sp.add_argument('-b', '--subset', default=None, help='Name of the subset')
+    sp.add_argument('-t', '--time', default=None, help='Time period. Use ISO Time intervals where possible. ')
+    sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
+    sp.add_argument('-v', '--variation', default=None, help='Name of the variation')
+    sp.add_argument('-n', '--dryrun', action='store_true', default=False, help='Dry run')
+    sp.add_argument('-k', '--key', default='self',
+                    help="Number server key. One of 'self', 'unregistered', 'registered', 'authority' "
+                         ' Use \'self\' for a random, self-generated key.'
+                    )
+    sp.add_argument('ref', help='Reference to an existing bundle')
+
+
     # Config sub commands
     #
 
@@ -176,6 +195,7 @@ def make_parser(cmd=None, parser=None):
     command_p.set_defaults(subcommand='duplicate')
     command_p.add_argument('-s', '--new-source-dir', default=False, action='store_true',
                            help='Assign a new source directory. Otherwise, use the current source directory')
+    command_p.add_argument('-v', '--variation', help='Create a new packages, as a variation of this one')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Clean Command
@@ -869,7 +889,6 @@ def bundle_ingest(args, l, rc):
 
     b.set_last_access(Bundle.STATES.INGESTED)
 
-
 def bundle_schema(args, l, rc):
     from ambry.orm.file import File
 
@@ -1262,8 +1281,7 @@ def bundle_dump(args, l, rc):
 
 
 def bundle_new(args, l, rc):
-    """Clone one or more registered source packages ( via sync ) into the
-    source directory."""
+    """Create a new bundle"""
 
     from ambry.orm.exc import ConflictError
 
@@ -1302,6 +1320,54 @@ def bundle_new(args, l, rc):
         fatal("Can't create dataset; one with a conflicting name already exists")
 
     print(b.identity.fqname)
+
+def bundle_variant(args, l, rc):
+    """Create a new bundle"""
+
+    from ambry.orm.exc import ConflictError
+
+    ob = l.bundle(args.ref)
+
+    d = dict(
+        dataset=args.dataset or ob.identity.dataset,
+        revision=args.revision,
+        source=args.source or ob.identity.source,
+        bspace=args.space or ob.identity.bspace,
+        subset=args.subset or ob.identity.subset,
+        btime=args.time or ob.identity.btime,
+        variation=args.variation or ob.identity.variation)
+
+    try:
+        ambry_account = rc.accounts.get('ambry', {})
+    except:
+        ambry_account = None
+
+    if not ambry_account:
+        fatal("Failed to get an accounts.ambry entry from the configuration. ")
+
+    if not ambry_account.get('name') or not ambry_account.get('email'):
+        fatal('Must set accounts.ambry.email and accounts.ambry.name n account config file')
+
+    try:
+        b = l.new_bundle(assignment_class=args.key, **d)
+        b.metadata.contacts.wrangler.name = ambry_account.get('name')
+        b.metadata.contacts.wrangler.email = ambry_account.get('email')
+        b.commit()
+
+    except ConflictError:
+        fatal("Can't create dataset; one with a conflicting name already exists")
+
+    print(b.identity.fqname)
+
+    # Now, need to copy over all of the partitions into the new bundle.
+    for p in ob.partitions:
+        ds = b.dataset.new_source(p.name, ref=p.name, reftype='partition')
+        print ds
+
+    b.build_source_files.sources.objects_to_record()
+    #b.sync_out()
+
+    b.commit()
 
 
 def bundle_import(args, l, rc):
@@ -1411,6 +1477,7 @@ def bundle_view(args, l, rc):
 
     arg = args.path[0]
     df = None
+
     if os.path.exists(arg):
         path = arg
 
@@ -1422,7 +1489,7 @@ def bundle_view(args, l, rc):
             pass
 
     # Maybe it is a partition
-    if not df:
+    if not df or not df.exists:
         try:
             # Try to get the partition from the bundle.
             p = b.partition(arg)
@@ -1431,16 +1498,19 @@ def bundle_view(args, l, rc):
         except:
             pass
 
-    if not df:
+    if not df or not df.exists:
         try:
             # Nope, try to get it from the library
             p = l.partition(arg)
+            p.localize()
             df = p.datafile
         except:
             pass
 
     if not df:
         fatal("Didn't get a path to an MPR file, nor a reference to a soruce or partition")
+    else:
+        print '!!!!', arg, df.exists, df.syspath
 
     args.path = [df]
 
