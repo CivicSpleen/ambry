@@ -514,14 +514,19 @@ class Dataset(Base):
 
     def bsfile(self, path):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""
+        from sqlalchemy.orm.exc import NoResultFound
+        from ambry.orm.exc import NotFoundError
 
+        try:
 
-        return object_session(self)\
-            .query(File)\
-            .filter(File.d_vid == self.vid)\
-            .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)\
-            .filter(File.path == path)\
-            .one()
+            return object_session(self)\
+                .query(File)\
+                .filter(File.d_vid == self.vid)\
+                .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)\
+                .filter(File.path == path)\
+                .one()
+        except NoResultFound:
+            raise NotFoundError("Failed to find file for path '{}' ".format(path))
 
     def new_bsfile(self, file_const, path):
 
@@ -536,10 +541,10 @@ class Dataset(Base):
         return fr
 
     def find_or_new_bsfile(self, file_const, path):
-        from sqlalchemy.orm.exc import NoResultFound
+        from ambry.orm.exc import NotFoundError
         try:
             return self.bsfile(path)
-        except NoResultFound:
+        except NotFoundError:
             return self.new_bsfile(file_const, path)
 
 

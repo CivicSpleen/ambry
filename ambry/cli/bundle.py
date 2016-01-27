@@ -454,6 +454,13 @@ def make_parser(cmd=None, parser=None):
                            help='Display all records')
 
 
+    #
+    # Jupyter notebook
+    #
+    command_p = sub_cmd.add_parser('notebook', help='If the ambry-ui package is installed, run Jupyter notebook on the bundle')
+    command_p.set_defaults(subcommand='notebook')
+
+
 def run_command(args, rc):
 
     from ..library import Library
@@ -1719,3 +1726,34 @@ def bundle_log(args, l, rc):
 
         if rows:
             prt_no_format(tabulate(rows, headers))
+
+
+def bundle_notebook(args, l, rc):
+
+    import webbrowser
+
+    b = using_bundle(args, l)
+
+    try:
+        import ambry_ui
+    except ImportError:
+        fatal("ambry-ui package note installed, or not importable")
+
+    try:
+        from notebook.notebookapp import NotebookApp
+    except ImportError:
+        fatal('Jupyter notebook not installed')
+
+    import sys
+
+    sys.argv = ['ambry']
+    app = NotebookApp.instance()
+    app._library = l
+    app.contents_manager_class = 'ambry_ui.jupyter.AmbryContentsManager'
+    app.open_browser = False
+    app.initialize(None)
+
+    webbrowser.open("{}tree/{}".format(app.connection_url,b.identity.cache_key))
+
+    app.start()
+
