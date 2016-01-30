@@ -453,6 +453,13 @@ def make_parser(cmd=None, parser=None):
     command_p.add_argument('-a', '--all', default=None, action='store_true',
                            help='Display all records')
 
+    #
+    # Web UI
+    #
+    command_p = sub_cmd.add_parser('ui',
+                                   help='If the ambry-ui package is installed, start the web user interface')
+    command_p.set_defaults(subcommand='ui')
+    command_p.add_argument('-p', '--port', help="Server port", default=8080)
 
     #
     # Jupyter notebook
@@ -1090,7 +1097,9 @@ def bundle_dump(args, l, rc):
 
     b = l.bundle(ref, True)
 
-    prt('Dumping {} for {}\n'.format(args.table, b.identity.fqname))
+    if not args.table == 'files':
+        # So we can cat output to other tools
+        prt('Dumping {} for {}\n'.format(args.table, b.identity.fqname))
 
     def trunc(v, l):
         return v[:l] + (v[l:] and '..')
@@ -1329,7 +1338,7 @@ def bundle_new(args, l, rc):
     print(b.identity.fqname)
 
 def bundle_variant(args, l, rc):
-    """Create a new bundle"""
+    """Create a new bundle as a variant of an existing bundle"""
 
     from ambry.orm.exc import ConflictError
 
@@ -1364,15 +1373,12 @@ def bundle_variant(args, l, rc):
     except ConflictError:
         fatal("Can't create dataset; one with a conflicting name already exists")
 
-    print(b.identity.fqname)
-
     # Now, need to copy over all of the partitions into the new bundle.
     for p in ob.partitions:
         ds = b.dataset.new_source(p.name, ref=p.name, reftype='partition')
         print ds
 
     b.build_source_files.sources.objects_to_record()
-    #b.sync_out()
 
     b.commit()
 
@@ -1517,7 +1523,7 @@ def bundle_view(args, l, rc):
     if not df:
         fatal("Didn't get a path to an MPR file, nor a reference to a soruce or partition")
     else:
-        print '!!!!', arg, df.exists, df.syspath
+        pass
 
     args.path = [df]
 
@@ -1753,7 +1759,34 @@ def bundle_notebook(args, l, rc):
     app.open_browser = False
     app.initialize(None)
 
+    l.root.config.library.notebook.url = app.connection_url
+    l.commit()
+
     webbrowser.open("{}tree/{}".format(app.connection_url,b.identity.cache_key))
 
     app.start()
 
+
+def bundle_ui(args, l, rc):
+
+    from ambry_ui import app
+    import ambry_ui.views
+    import ambry_ui.jsonviews
+    import ambry_ui.api
+    import ambry_ui.user
+    import webbrowser
+    import socket
+
+    b = using_bundle(args, l)
+
+    try:
+        host = 'localhost'
+        app.config['SECRET_KEY'] = 'secret'  # To Ensure logins persist
+        app.config["WTF_CSRF_SECRET_KEY"] = 'secret'
+
+        webbrowser.open("http://{}:{}/bundles/{}.html".format(host, args.port, b.identity.vid))
+        l.root.config.library.ui.url = app.connection_url = "http://{}:{}".format(host, args.port)
+        l.commit()
+        app.run(host=host, port=int(args.port), debug=args.debug)
+    except socket.error as e:
+        warn("Failed to start ui: {}".format(e))

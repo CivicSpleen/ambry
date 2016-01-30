@@ -53,6 +53,26 @@ def new_library(config=None):
     return l
 
 
+class LibraryContext(object):
+    """A context object for creating a new library and closing it"""
+
+    def __init__(self, ctor_args):
+        self._ctor_args = ctor_args
+        self._library = None
+
+    def __enter__(self):
+
+        logger.debug("Entering library context id={}".format(id(self)))
+        self._library = Library(**self._ctor_args)
+        return self._library
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        logger.debug("Leaving library context id={}".format(id(self)))
+        if self._library:
+            self._library.commit()
+            self._library.close()
+
+
 class Library(object):
 
     def __init__(self,  config=None, search=None, echo=None, read_only=False):
@@ -67,6 +87,8 @@ class Library(object):
         self.logger = logger
 
         self.read_only = read_only  # allow optimizations that assume we aren't building bundles.
+
+        self._echo = echo
 
         self._fs = LibraryFilesystem(config)
 
@@ -88,6 +110,32 @@ class Library(object):
             self._search = Search(self, search)
         else:
             self._search = None
+
+    @property
+    def ctor_args(self):
+        """Return arguments for constructing a copy"""
+
+        return dict(
+            config=self._config,
+            search=self._search,
+            echo=self._echo,
+            read_only=self.read_only
+        )
+
+
+    def clone(self):
+        """Create a deep copy of this library"""
+
+        return Library(**self.ctor_args)
+
+    @property
+    def context(self):
+        """Return a new LibraryContext, for use later. This will result in a new instance of the current library.
+        not on operations on the current library. The new context will open new connectinos on the database.
+        """
+
+        return LibraryContext(self.ctor_args)
+
 
     def sync_config(self):
         """Sync the file config into the library proxy data in the root dataset """
@@ -128,6 +176,9 @@ class Library(object):
 
     def close(self):
         return self.database.close()
+
+    def exists(self):
+        return self.database.exists
 
     def create(self):
         from config import LibraryConfigSyncProxy
@@ -561,7 +612,8 @@ class Library(object):
 
         if not remote:
             remote, vname = self.find_remote_bundle(ref)
-            ref = vname
+            if vname:
+                ref = vname
         else:
             pass
 

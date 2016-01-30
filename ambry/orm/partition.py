@@ -611,8 +611,8 @@ class Partition(Base):
                     ps.rec.item_count = 0
 
                 if not ps.rec.data:
-                    ps.rec.data = {}# Should not need to do this.
-                    return
+                    ps.rec.data = {} # Should not need to do this.
+                    return self
 
 
                 item_count = ps.rec.item_count + bts
@@ -629,7 +629,7 @@ class Partition(Base):
             # FIXME! This won't work with remote API, only FS
 
             if self.is_local:
-                return
+                return self
 
             with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
                 event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
@@ -639,6 +639,8 @@ class Partition(Base):
                 event.wait()
                 if ps:
                     ps.update_done()
+
+        return self
 
     @property
     def reader(self):
@@ -684,6 +686,61 @@ class Partition(Base):
         with self.reader as r:
             for row in r:
                 yield row
+
+
+    def dataframe(self, predicate=None):
+        """Return the partition as a Pandas dataframe
+
+        :param predicate: If defined, a callable that is called for each row, and if it returns true, the
+        row is included in the output.
+
+        :return: Pandas dataframe
+
+        WARNING: This routine works from the reader iterator, which returns RowProxy objects. RowProxy objects
+        are reused, so if you construct a list directly from the output from this method, the list will have
+        multiple copies of a single RowProxy, which will have as an inner row the last result row. If you will
+        be directly constructing a list, use a getter that extracts the inner row, or which converts the RowProxy
+        to a dict:
+
+            list(s.datafile.select(lambda r: r.stusab == 'CA', lambda r: r.dict ))
+        """
+
+        import pandas as pd
+
+
+        if predicate:
+            def yielder():
+                for row in self.reader:
+                    if predicate(row):
+                        yield row.dict
+
+            return pd.DataFrame(yielder(),columns=self.table.header)
+
+        else:
+            return pd.DataFrame([row.values() for row in self.reader], columns=self.table.header)
+
+
+    def geoframe(self, predicate=None, crs = None, epsg = None):
+        """Return geopandas dataframe"""
+        import geopandas
+        from shapely.wkt import  loads
+
+        from fiona.crs import from_epsg
+
+        if crs is None:
+            try:
+                crs = from_epsg(epsg)
+            except TypeError:
+                raise TypeError('Must set either crs or epsg for output.')
+
+        df = self.dataframe(predicate=predicate)
+        geometry = df['geometry']
+
+        s = geometry.apply(lambda x: loads(x).simplify(.05))
+
+        df['geometry'] = geopandas.GeoSeries(s)
+
+        return geopandas.GeoDataFrame(df, crs = crs, geometry='geometry')
 
 
     # ============================

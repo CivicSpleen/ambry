@@ -218,6 +218,7 @@ class DataSourceBase(object):
     @property
     def is_downloadable(self):
         """Return true if the URL is probably downloadable, and is not a reference or a template"""
+
         return self.urltype not in self.NON_DOWNLOAD_REFTYPES
 
     @property

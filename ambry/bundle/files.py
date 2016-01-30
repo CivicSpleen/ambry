@@ -106,11 +106,21 @@ class BuildSourceFile(object):
 
     @property
     def record_exists(self):
-        return self._dataset.find_or_new_bsfile(self.file_const, self.file_name)
+        from ambry.orm.exc import NotFoundError
+        try:
+            _ =  self._dataset.bsfile(self.file_const, self.file_name)
+            return True
+        except NotFoundError:
+            return False
 
     @property
     def record(self):
         return self._dataset.find_or_new_bsfile(self.file_const, self.file_name)
+
+    @property
+    def extant_record(self):
+        """Only return a record that actually exists"""
+        return self._dataset.bsfile(self.file_name)
 
     @property
     def record_content(self):
@@ -153,6 +163,9 @@ class BuildSourceFile(object):
             self._fs.remove(self.file_name)
         except ResourceNotFoundError:
             pass
+
+    def remove_record(self):
+        self._bundle.session.delete(self.extant_record)
 
     @property
     def file_name(self):
@@ -496,7 +509,8 @@ class StringSourceFile(BuildSourceFile):
         if fr.contents:
             f.write(fr.unpacked_contents)
             fr.source_hash = self.fs_hash
-            fr.modified = self.fs_modtime
+            if self.fs_modtime:
+                fr.modified = self.fs_modtime
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
@@ -1228,9 +1242,15 @@ class BuildSourceFileAccessor(object):
 
     def file_by_path(self, path):
 
-        s = self._dataset._database.session
+        s = self._bundle.session
 
         return s.query(File).filter(File.path == path).filter(File.d_vid == self._dataset.vid).first()
+
+    def file_by_id(self, id):
+
+        s = self._dataset._database.session
+
+        return s.query(File).filter(File.id == id).one()
 
     def record_to_objects(self, preference=None):
         """Create objects from files, or merge the files into the objects. """

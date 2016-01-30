@@ -17,7 +17,6 @@ def install(install_dir, egg, url):
 
     output = subprocess.check_output(initial_args)
 
-    print '!!!!', output
 
 def uninstall(install_dir, egg):
 

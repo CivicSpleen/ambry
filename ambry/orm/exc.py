@@ -35,3 +35,6 @@ class MetadataError(BundleError):
 class  OrmObjectError(BundleError):
 
     """Base for object errors."""
+
+class CommitTrap(Exception):
+    """For trapping waward commits"""

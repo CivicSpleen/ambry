@@ -290,9 +290,9 @@ class Database(object):
             self._connection = None
 
     def commit(self):
-
+        from ambry.orm.exc import CommitTrap
         if self._raise_on_commit: # For debugging
-            raise Exception("Committed")
+            raise CommitTrap("Committed")
 
         self.session.commit()
         # self.close_session()
@@ -466,7 +466,9 @@ class Database(object):
     @property
     def root_dataset(self):
         """Return the root dataset, which hold configuration values for the library"""
-        return self.dataset(ROOT_CONFIG_NAME_V)
+        ds =  self.dataset(ROOT_CONFIG_NAME_V)
+        ds._database = self
+        return ds
 
     @property
     def package_dataset(self):
@@ -528,11 +530,13 @@ class Database(object):
     def dataset_by_cache_key(self, cache_key):
 
         try:
-            return self.session \
+            ds =  self.session \
                 .query(Dataset) \
                 .filter(Dataset.cache_key == cache_key) \
                 .order_by(Dataset.revision.desc()) \
                 .one()
+            ds._database = self
+            return ds
         except NoResultFound:
             raise NotFoundError('No dataset in library for vid : {} '.format(cache_key))
 

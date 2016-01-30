@@ -59,7 +59,7 @@ class File(Base, DictableMixin):
     preference = SAColumn('f_preference', String(1), default=PREFERENCE.MERGE)  # 'F' for filesystem, 'O' for objects, "M" for merge
     state = SAColumn('f_state', Text)
     hash = SAColumn('f_hash', Text)  # Hash of the contents
-    modified = SAColumn('f_modified', Float)
+    _modified = SAColumn('f_modified', Float)
     size = SAColumn('f_size', BigIntegerType)
 
     contents = deferred(SAColumn('f_contents', Binary))
@@ -132,9 +132,13 @@ class File(Base, DictableMixin):
         else:
             self.contents = contents
 
+        old_hash = self.hash
+
         self.hash = hashlib.md5(self.contents).hexdigest()
 
-        self.modified = time.time()
+        if old_hash != self.hash:
+            self.modified = int(time.time())
+
         self.size = new_size
 
     @property
@@ -152,10 +156,20 @@ class File(Base, DictableMixin):
         return d
 
     @property
+    def modified(self):
+        return self._modified
+
+    @modified.setter
+    def modified(self, v):
+
+        assert v > 0 and v is not None
+        self._modified = v
+
+    @property
     def modified_datetime(self):
         from datetime import datetime
         try:
-            return datetime.fromtimestamp(self.modified)
+            return datetime.fromtimestamp(int(self.modified))
         except TypeError:
             return None
 
@@ -164,7 +178,7 @@ class File(Base, DictableMixin):
         from ambry.util import pretty_time
         from time import time
         try:
-            return pretty_time(time() - self.modified)
+            return pretty_time(int(time()) - int(self.modified))
         except TypeError:
             return None
 
@@ -215,7 +229,9 @@ class File(Base, DictableMixin):
 
     @staticmethod
     def before_update(mapper, conn, target):
+
         pass
+
 
 event.listen(File, 'before_insert', File.before_insert)
 event.listen(File, 'before_update', File.before_update)

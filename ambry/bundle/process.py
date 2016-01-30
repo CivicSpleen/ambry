@@ -52,10 +52,11 @@ class ProgressSection(object):
 
         if exc_val:
             # Don't want to trigger another exception
-            if hasattr(exc_val, 'details'):
+            if hasattr(exc_val, 'details') and callable(exc_val.details):
                 message = exc_val.details()
             else:
-                message = str(exc_val)
+
+                message = str(exc_val.message.replace('{',''))
 
             self.add(
 

@@ -519,21 +519,26 @@ class Dataset(Base):
 
         try:
 
-            return object_session(self)\
+            f =  object_session(self)\
                 .query(File)\
                 .filter(File.d_vid == self.vid)\
                 .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)\
                 .filter(File.path == path)\
                 .one()
+
+            return f
+
         except NoResultFound:
             raise NotFoundError("Failed to find file for path '{}' ".format(path))
 
     def new_bsfile(self, file_const, path):
+        import time
 
         fr = File(d_vid=self.vid,
                   major_type=File.MAJOR_TYPE.BUILDSOURCE,
                   minor_type=file_const,
                   path=path,
+                  modified = int(time.time()), # In case content isn't set, which is where modified is set normally
                   source='fs')
 
         self.files.append(fr)
@@ -545,7 +550,11 @@ class Dataset(Base):
         try:
             return self.bsfile(path)
         except NotFoundError:
-            return self.new_bsfile(file_const, path)
+            import time
+            f = self.new_bsfile(file_const, path)
+            return f
+
+
 
 
     @property

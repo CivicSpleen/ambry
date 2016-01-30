@@ -13,21 +13,27 @@ from ambry.util import AttrDict, lru_cache, parse_url_to_dict
 from .dbexceptions import ConfigurationError
 
 
-@lru_cache()
-def get_runconfig(path=None):
+def get_runconfig(path=None, root = None, db= None):
     """Load the main configuration files and accounts file.
 
+    Debprecated. Use load()
     """
 
-    return load(path)
+    return load(path, root=root, db=db)
 
 
-def load(path=None):
-
+def load(path=None, root = None, db = None):
+    "Like get_runconfig, but isn't cached"
     config = load_config(path)
     config.update(load_accounts())
 
     update_config(config)
+
+    if root:
+        config.library.filesystem_root = root
+
+    if db:
+        config.library.database = db
 
     return config
 

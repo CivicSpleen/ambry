@@ -92,6 +92,10 @@ class CensusGeoid(Geoid):
     parser = geoid.census.CensusGeoid.parse
 
 
+class CensusStateGeoid(Geoid):
+    parser = geoid.census.State.parse
+
+
 class TigerGeoid(Geoid):
     parser = geoid.tiger.TigerGeoid.parse
 

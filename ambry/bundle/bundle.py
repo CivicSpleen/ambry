@@ -246,7 +246,7 @@ class Bundle(object):
 
     @property
     def session(self):
-        return self.dataset._database.session
+        return self.dataset.session
 
     def rollback(self):
         return self.dataset.rollback()
@@ -258,6 +258,9 @@ class Bundle(object):
         if inspect(self._dataset).detached:
             vid = self._vid
             self._dataset = self._dataset._database.dataset(vid)
+            assert self._dataset._database # New
+        else:
+            assert self._dataset._database # Old
 
         assert self._dataset, vid
 
@@ -618,6 +621,8 @@ class Bundle(object):
         """
         search = []
 
+        assert phase is not None
+
         # Create a search list of names for getting a pipline from the metadata
         if source and source.source_table_name:
             search.append(phase + '-' + source.source_table_name)
@@ -850,6 +855,7 @@ Caster Code
                 raise ConfigurationError("Pipeline '{}' declared in source '{}', but not found in metadata"
                                          .format(source.pipeline, source.name))
         else:
+
             for name in self.phase_search_names(source, phase):
                 if name in self.metadata.pipelines:
                     pipe_config = self.metadata.pipelines[name]
@@ -1492,8 +1498,7 @@ Caster Code
     def clean_build_files(self):
         """Remove all of the build files"""
 
-        for bs in self.build_source_files:
-            print('!!!!', bs.path)
+        pass
 
     def clean_build_state(self):
 

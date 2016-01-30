@@ -85,7 +85,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
-        b.error('Subprocess {} raised an exception: {}'.format(os.getpid(), e), False)
+        b.error('Subprocess {} raised an exception: {}'.format(os.getpid(), e.message), False)
         b.error(tb, False)
         result = (False, e)
 
