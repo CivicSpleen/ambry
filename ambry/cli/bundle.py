@@ -1153,13 +1153,14 @@ def bundle_dump(args, l, rc):
     elif args.table == 'partitions':
 
         records = []
-        headers = 'Vid Name State Type'.split()
+        headers = 'Vid Name State Type EPSG'.split()
         for row in b.dataset.partitions:
             records.append((
                 row.vid,
                 row.name,
                 row.state,
-                row.type
+                row.type,
+                row.epsg
             ))
         records = sorted(records, key=lambda row: (row[0]))
 

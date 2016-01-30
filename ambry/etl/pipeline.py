@@ -1857,7 +1857,8 @@ class WriteToPartition(Pipe, PartitionWriter):
 
                     type_ = Partition.TYPE.SEGMENT if pname.segment else Partition.TYPE.UNION
 
-                    p = self.bundle.partitions.new_partition(pname, type=type_)
+                    p = self.bundle.partitions.new_partition(pname, type=type_, epsg=self.source.epsg)
+
                     p.state = p.STATES.BUILDING
                     self.bundle.commit()
 

@@ -509,6 +509,7 @@ class StringSourceFile(BuildSourceFile):
         if fr.contents:
             f.write(fr.unpacked_contents)
             fr.source_hash = self.fs_hash
+
             if self.fs_modtime:
                 fr.modified = self.fs_modtime
 

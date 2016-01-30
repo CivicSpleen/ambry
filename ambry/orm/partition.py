@@ -79,6 +79,7 @@ class Partition(Base):
     format = SAColumn('p_format', String(50))
     segment = SAColumn('p_segment', Integer,
                        doc='Part of a larger partition. segment_id is usually also a source ds_id')
+    epsg = SAColumn('p_epsg', Integer, doc='EPSG SRID for the reference system of a geographic dataset. ')
     min_id = SAColumn('p_min_id', BigIntegerType)
     max_id = SAColumn('p_max_id', BigIntegerType)
     count = SAColumn('p_count', Integer)
@@ -438,6 +439,7 @@ class Partition(Base):
             'time_coverage', 'grain_coverage', 'name', 'vname', 'fqname', 'cache_key'
         ]
 
+
         d = OrderedDict([('table', self.table.name)] +
                         [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
                          if p.key not in SKIP_KEYS])
@@ -720,12 +722,15 @@ class Partition(Base):
             return pd.DataFrame([row.values() for row in self.reader], columns=self.table.header)
 
 
-    def geoframe(self, predicate=None, crs = None, epsg = None):
+    def geoframe(self, simplify=None, predicate=None, crs = None, epsg = None):
         """Return geopandas dataframe"""
         import geopandas
         from shapely.wkt import  loads
 
         from fiona.crs import from_epsg
+
+        if crs is None and epsg is None and self.epsg is not None:
+            epsg = self.epsg
 
         if crs is None:
             try:
@@ -736,7 +741,10 @@ class Partition(Base):
         df = self.dataframe(predicate=predicate)
         geometry = df['geometry']
 
-        s = geometry.apply(lambda x: loads(x).simplify(.05))
+        if simplify:
+            s = geometry.apply(lambda x: loads(x).simplify(simplify))
+        else:
+            s = geometry.apply(lambda x: loads(x))
 
         df['geometry'] = geopandas.GeoSeries(s)
 

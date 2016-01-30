@@ -538,7 +538,7 @@ class Dataset(Base):
                   major_type=File.MAJOR_TYPE.BUILDSOURCE,
                   minor_type=file_const,
                   path=path,
-                  modified = int(time.time()), # In case content isn't set, which is where modified is set normally
+                  #modified = int(time.time()), # In case content isn't set, which is where modified is set normally
                   source='fs')
 
         self.files.append(fr)

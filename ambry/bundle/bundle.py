@@ -2222,6 +2222,7 @@ Caster Code
             ps.update('Coalescing single partition {} '.format(seg.identity.name), partition=seg)
             with self.wrap_partition(seg).local_datafile.open() as f:
                 parent.local_datafile.set_contents(f)
+                parent.epsg = seg.epsg
 
         else:
 
@@ -2239,6 +2240,9 @@ Caster Code
             with parent.local_datafile.writer as w:
                 for seg in sorted(segments, key=lambda x: b(x.name)):
                     ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
+
+                    if not parent.epsg and seg.epsg:
+                        parent.epsg = seg.epsg
 
                     with self.wrap_partition(seg).local_datafile.reader as reader:
                         for row in reader.rows:

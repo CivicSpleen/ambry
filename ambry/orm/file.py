@@ -136,7 +136,7 @@ class File(Base, DictableMixin):
 
         self.hash = hashlib.md5(self.contents).hexdigest()
 
-        if old_hash != self.hash:
+        if self.size and (old_hash != self.hash):
             self.modified = int(time.time())
 
         self.size = new_size

@@ -361,6 +361,7 @@ class DataSource(DataSourceBase, Base, DictableMixin):
     time = SAColumn('ds_time', Text)
     space = SAColumn('ds_space', Text)
     grain = SAColumn('ds_grain', Text)
+    epsg = SAColumn('ds_epsg', INTEGER, doc='EPSG SRID for the reference system of a geographic dataset. ')
     segment = SAColumn('ds_segment', Text)
     start_line = SAColumn('ds_start_line', INTEGER)
     end_line = SAColumn('ds_end_line', INTEGER)
