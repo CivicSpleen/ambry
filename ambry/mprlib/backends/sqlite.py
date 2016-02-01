@@ -23,7 +23,7 @@ class SQLiteBackend(DatabaseBackend):
     """ Backend to install/query MPR files for SQLite database. """
 
     def install(self, connection, partition, materialize=False):
-        """ Creates virtual table or read-only table for gion.
+        """ Creates virtual table or read-only table for partition.
 
         Args:
             ref (str): id, vid, name or versioned name of the partition.
@@ -33,7 +33,7 @@ class SQLiteBackend(DatabaseBackend):
             str: name of the created table.
 
         """
-        virtual_table = sqlite_med.table_name(partition.vid)
+        virtual_table = partition.vid
 
         if not self._relation_exists(connection, virtual_table):
             self._add_partition(connection, partition)
@@ -79,10 +79,6 @@ class SQLiteBackend(DatabaseBackend):
 
         return partition.vid
 
-
-
-
-
     def index(self, connection, partition, columns):
         """ Create an index on the columns.
 
@@ -94,7 +90,7 @@ class SQLiteBackend(DatabaseBackend):
         query_tmpl = '''
             CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({column});
         '''
-        table_name = '{}_v'.format(sqlite_med.table_name(partition.vid))
+        table_name = '{}_v'.format(partition.vid)
         for column in columns:
             query = query_tmpl.format(
                 index_name='{}_{}_i'.format(partition.vid, column), table_name=table_name,
@@ -163,7 +159,7 @@ class SQLiteBackend(DatabaseBackend):
         # Not optimized version.
         #
         # first check either partition has readonly table.
-        virtual_table = sqlite_med.table_name(partition.vid)
+        virtual_table = partition.vid
         table = '{}_v'.format(virtual_table)
         logger.debug(
             'Looking for materialized table of the partition.\n    partition: {}'.format(partition.name))
@@ -299,7 +295,6 @@ class SQLiteBackend(DatabaseBackend):
 
         if os.path.exists(path):
             os.remove(path)
-
 
         # Tried this, but it thows an error:
         # SQLError: SQLError: no such module: mod_partition

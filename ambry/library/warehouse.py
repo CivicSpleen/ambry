@@ -14,11 +14,8 @@ Example:
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
 from ambry.orm import Table
-
-
 from ambry.util import get_logger
 
 logger = get_logger(__name__)
@@ -37,7 +34,6 @@ or via SQLAlchemy, to return datasets.
     def __init__(self, library, dsn=None):
 
         self._library = library
-
 
         if not dsn:
             # Use library database.
@@ -60,7 +56,6 @@ or via SQLAlchemy, to return datasets.
                 .format(dsn))
 
         self._warehouse_dsn = dsn
-
 
     @property
     def dsn(self):
@@ -141,8 +136,6 @@ or via SQLAlchemy, to return datasets.
         connection = self._backend._get_connection()
         partition = self._library.partition(ref)
         self._backend.index(connection, partition, columns)
-
-
 
     def close(self):
         """ Closes warehouse database. """
