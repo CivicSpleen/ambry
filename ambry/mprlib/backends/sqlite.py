@@ -15,8 +15,8 @@ logger = get_logger(__name__)
 
 # debug logging
 #
-# import logging
-# logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
+import logging
+logger = get_logger(__name__, level=logging.ERROR, propagate=False)
 
 
 class SQLiteBackend(DatabaseBackend):
@@ -37,6 +37,7 @@ class SQLiteBackend(DatabaseBackend):
 
         if not self._relation_exists(connection, virtual_table):
             self._add_partition(connection, partition)
+
         table = '{}_v'.format(virtual_table)
 
         if materialize:
@@ -65,7 +66,22 @@ class SQLiteBackend(DatabaseBackend):
                 cursor.execute(copy_query)
 
                 cursor.close()
-        return table if materialize else virtual_table
+
+        final_table = table if materialize else virtual_table
+
+        try:
+            cursor = connection.cursor()
+            view_q = "CREATE VIEW IF NOT EXISTS {} AS SELECT * FROM {} ".format(partition.vid, final_table)
+            cursor.execute(view_q)
+
+        finally:
+            cursor.close()
+
+        return partition.vid
+
+
+
+
 
     def index(self, connection, partition, columns):
         """ Create an index on the columns.
@@ -92,6 +108,7 @@ class SQLiteBackend(DatabaseBackend):
         if getattr(self, '_connection', None):
             logger.debug('Closing sqlite connection.')
             self._connection.close()
+            self._connection = None
 
     @staticmethod
     def get_view_name(table):
@@ -269,6 +286,26 @@ class SQLiteBackend(DatabaseBackend):
         cursor.execute(query)
         if fetch:
             return cursor.fetchall()
+
+    def clean(self, connection):
+
+        import os
+        import os.path
+
+        connection.close()
+        self.close()
+
+        path = self._dsn.replace('sqlite:///', '')
+
+        if os.path.exists(path):
+            os.remove(path)
+
+
+        # Tried this, but it thows an error:
+        # SQLError: SQLError: no such module: mod_partition
+        #for r in self._execute(connection, "SELECT name FROM sqlite_master WHERE type = 'table' "):
+        #    logger.debug("Dropping {}".format(r[0]))
+        #    self._execute(connection, "DROP TABLE '{}'".format(r[0]))
 
 
 def _preprocess_sqlite_view(asql_query, library, backend, connection):

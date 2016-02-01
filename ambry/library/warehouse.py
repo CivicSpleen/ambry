@@ -17,7 +17,8 @@ from sqlalchemy.orm import sessionmaker
 
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
 from ambry.orm import Table
-from ambry.mprlib import SQLiteBackend, PostgreSQLBackend
+
+
 from ambry.util import get_logger
 
 logger = get_logger(__name__)
@@ -33,26 +34,42 @@ class Warehouse(object):
 or via SQLAlchemy, to return datasets.
     """
 
-    def __init__(self, library):
+    def __init__(self, library, dsn=None):
+
         self._library = library
 
-        warehouse_dsn = library.config.library.get('warehouse')
-        if not warehouse_dsn:
+
+        if not dsn:
             # Use library database.
-            warehouse_dsn = library.database.dsn
+            dsn = library.database.dsn
 
         # Initialize appropriate backend.
-        if warehouse_dsn.startswith('sqlite:'):
+        if dsn.startswith('sqlite:'):
+            from ambry.mprlib.backends.sqlite import SQLiteBackend
             logger.debug('Initializing sqlite warehouse.')
-            self._backend = SQLiteBackend(library, warehouse_dsn)
-        elif warehouse_dsn.startswith('postgresql'):
+            self._backend = SQLiteBackend(library, dsn)
+
+        elif dsn.startswith('postgresql'):
+            from ambry.mprlib.backends.postgresql import PostgreSQLBackend
             logger.debug('Initializing postgres warehouse.')
-            self._backend = PostgreSQLBackend(library, warehouse_dsn)
+            self._backend = PostgreSQLBackend(library, dsn)
+
         else:
             raise Exception(
                 'Do not know how to handle {} dsn.'
-                .format(warehouse_dsn))
-        self._warehouse_dsn = warehouse_dsn
+                .format(dsn))
+
+        self._warehouse_dsn = dsn
+
+
+    @property
+    def dsn(self):
+        return self._warehouse_dsn
+
+    def clean(self):
+        """Remove all of the tables and data from the warehouse"""
+        connection = self._backend._get_connection()
+        self._backend.clean(connection)
 
     def query(self, query=''):
         """ Creates virtual tables for all partitions found in the query and executes query.
@@ -124,6 +141,8 @@ or via SQLAlchemy, to return datasets.
         connection = self._backend._get_connection()
         partition = self._library.partition(ref)
         self._backend.index(connection, partition, columns)
+
+
 
     def close(self):
         """ Closes warehouse database. """

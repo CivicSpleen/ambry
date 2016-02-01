@@ -66,7 +66,7 @@ class DatabaseBackend(object):
 
         # install all partitions and replace table names in the query.
         #
-        logger.debug('Findind and installing all partitions from query. \n    query: {}'.format(query))
+        logger.debug('Finding and installing all partitions from query. \n    query: {}'.format(query))
         new_query = []
         for statement in statements:
             logger.debug(

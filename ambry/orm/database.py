@@ -923,6 +923,7 @@ def _update_version(connection, version):
     """
     if connection.engine.name == 'sqlite':
         connection.execute('PRAGMA user_version = {}'.format(version))
+
     elif connection.engine.name == 'postgresql':
 
         connection.execute(DDL('CREATE SCHEMA IF NOT EXISTS {};'.format(POSTGRES_SCHEMA_NAME)))

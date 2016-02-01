@@ -1,0 +1,9 @@
+library:
+    category: development
+    filesystem_root: /tmp/ambry-test
+    remotes:
+        test: /tmp/ambry-test/remote
+
+services:
+    numbers:
+        self-key: null

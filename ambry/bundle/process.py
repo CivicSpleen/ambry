@@ -19,7 +19,7 @@ class ProgressLoggingError(Exception):
 class ProgressSection(object):
     """A handler of the records for a single routine or phase"""
 
-    def __init__(self, parent, session, phase, stage, logger,  **kwargs):
+    def __init__(self, parent, session, phase, stage, logger, **kwargs):
 
         self._parent = parent
         self._pid = os.getpid()
@@ -303,6 +303,13 @@ class ProcessLogger(object):
             self._session.delete(r)
 
         self._session.commit()
+
+    def delete(self):
+        """Delete the sqlite database file, if it exists"""
+
+        if self._db.dsn.startswith("sqlite"):
+            self._db.delete()
+
 
     def commit(self):
         assert self._new_connection

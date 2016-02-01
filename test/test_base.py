@@ -66,6 +66,8 @@ class TestBase(unittest.TestCase):
         cls._is_postgres = cls.dbname == 'postgres'
         cls._is_sqlite = cls.dbname == 'sqlite'
 
+        cls._delete_db_in_teardown = True
+
     def setUp(self):
 
         self.db = None
@@ -85,14 +87,23 @@ class TestBase(unittest.TestCase):
 
         if self._library:
             self._library.close()
-            if self.__class__._is_sqlite:
+            if self.__class__._is_sqlite and self.__class__._delete_db_in_teardown:
                 try:
                     # FIXME: Ensure you are dropping test database.
-                    os.remove(self._library.database.dsn.replace('sqlite:///', ''))
+
+                    path = self._library.database.dsn.replace('sqlite:///', '')
+
+                    os.remove(path)
+
+                    # Delete the progress database
+                    parts = os.path.split(path)
+                    parts = parts[:-1] + ('progress.db',)
+                    os.remove(os.path.join(*parts))
+
                 except OSError:
                     pass
 
-        if self.__class__._is_postgres:
+        if self.__class__._is_postgres and self.__class__._delete_db_in_teardown:
             PostgreSQLTestBase._drop_postgres_test_db()
 
     def ds_params(self, n, source='source'):
@@ -243,6 +254,14 @@ class TestBase(unittest.TestCase):
         self.copy_bundle_files(test_source_fs, b.source_fs)
         return b
 
+    def proto_library(self, dsn = None):
+        """Return a new proto library"""
+
+        from proto import ProtoLibrary
+
+        pl = ProtoLibrary(dsn=dsn)
+
+        return pl.init_library()
 
 class PostgreSQLTestBase(TestBase):
     """ Base class for database tests who requires postgresql database.

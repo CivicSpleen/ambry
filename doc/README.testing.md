@@ -97,7 +97,10 @@ database:
 Note: Do not include database name to the dsn because each test creates new empty database on each run.
 
     3. Install multicorn and pg_trgm extensions (tested 19.12.2015, on ambry v0.3.1684).
-Ambry uses custom postgres template because ambry tests require pg_trgm and multicorn extensions. I do not know how to install extensions on the fly, so you need to create the template and install both extensions before running tests. If postgres does not have such template all postgres tests will be skipped.
+Ambry uses custom postgres template because ambry tests require pg_trgm and multicorn extensions. I do not know how to 
+install extensions on the fly, so you need to create the template and install both extensions before running tests. 
+If postgres does not have such template all postgres tests will be skipped.
+
 ```bash
 # Switch to postgres account
 sudo su - postgres

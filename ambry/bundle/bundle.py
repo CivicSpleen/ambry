@@ -277,6 +277,20 @@ class Bundle(object):
     def library(self):
         return self._library
 
+    def warehouse(self,name):
+
+        self.build_fs.makedir('warehouses', allow_recreate=True)
+
+        path = self.build_fs.getsyspath('warehouses/'+name)
+
+        dsn = "sqlite:////{}.db".format(path)
+
+        from ambry.library.warehouse import Warehouse
+
+        return Warehouse(self, dsn=dsn)
+
+
+
     def dep(self, source_name):
         """Return a bundle dependency from the sources list
 

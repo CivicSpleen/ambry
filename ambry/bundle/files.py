@@ -1273,6 +1273,7 @@ class BuildSourceFileAccessor(object):
         """Create file records from objects. """
         from ambry.orm.file import File
 
+        raise NotImplementedError("Still uses obsolete file_info_map")
         for file_const, (file_name, clz) in iteritems(file_info_map):
             f = self.file(file_const)
 
@@ -1285,8 +1286,9 @@ class BuildSourceFileAccessor(object):
     def set_defaults(self):
         """Add default content to any file record that is empty"""
 
-        for f in iter(self):
-            if not f.record.size:
+        for const_name, c in file_classes.items():
+            if c.multiplicity  == '1':
+                f = self.file(const_name)
                 f.setcontent(f.default)
 
     def sync(self, force=None, defaults=False):

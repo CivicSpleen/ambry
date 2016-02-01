@@ -24,7 +24,9 @@ def get_runconfig(path=None, root = None, db= None):
 
 def load(path=None, root = None, db = None):
     "Like get_runconfig, but isn't cached"
+
     config = load_config(path)
+
     config.update(load_accounts())
 
     update_config(config)
@@ -167,7 +169,7 @@ def load_config(path=None):
     return config
 
 
-def update_config(config):
+def update_config(config, use_environ=True):
     """Update the configuration from environmental variables. Updates:
 
     - config.library.database from the AMBRY_DB environmental variable.
@@ -197,14 +199,15 @@ def update_config(config):
     except KeyError:
         config.accounts.password = None
 
-    if os.getenv(ENVAR.DB):
-        config.library.database = os.getenv(ENVAR.DB)
+    if use_environ:
+        if os.getenv(ENVAR.DB):
+            config.library.database = os.getenv(ENVAR.DB)
 
-    if os.getenv(ENVAR.ROOT):
-        config.library.filesystem_root = os.getenv(ENVAR.ROOT)
+        if os.getenv(ENVAR.ROOT):
+            config.library.filesystem_root = os.getenv(ENVAR.ROOT)
 
-    if os.getenv(ENVAR.PASSWORD):
-        config.accounts.password = os.getenv(ENVAR.PASSWORD)
+        if os.getenv(ENVAR.PASSWORD):
+            config.accounts.password = os.getenv(ENVAR.PASSWORD)
 
     try:
         _ = config.library.remotes

@@ -368,20 +368,6 @@ class AttrDict(OrderedDict):
     def flatten(self, path=tuple()):
         return self.flatten_dict(self, path=path)
 
-    def to_dict(self):
-        root = {}
-        val = self.flatten()
-        for k, v in val:
-            dst = root
-            for slug in k[:-1]:
-                if dst.get(slug) is None:
-                    dst[slug] = dict()
-                dst = dst[slug]
-            if v is not None or not isinstance(dst.get(k[-1]), Mapping):
-                dst[k[-1]] = v
-
-        return root
-
     def update_flat(self, val):
 
         if isinstance(val, AttrDict):
@@ -412,6 +398,23 @@ class AttrDict(OrderedDict):
     def update_yaml(self, path):
         self.update_flat(self.from_yaml(path))
         return self
+
+    def to_dict(self):
+        root = {}
+        val = self.flatten()
+        for k, v in val:
+            dst = root
+            for slug in k[:-1]:
+                if dst.get(slug) is None:
+                    dst[slug] = dict()
+                dst = dst[slug]
+            if v is not None or not isinstance(dst.get(k[-1]), Mapping):
+                dst[k[-1]] = v
+
+        return root
+
+    def update_dict(self, data):
+        self.update_flat(self.flatten_dict(data))
 
     def clone(self):
         clone = AttrDict()
@@ -991,13 +994,17 @@ def set_url_part(url, **kwargs):
 
 
 def filter_url(url, **kwargs):
-    """Alter a url by setting parameters set in parse_url_to_dict."""
+    """filter a URL by returning a URL with only the parts specified in the keywords"""
 
     d = parse_url_to_dict(url)
 
     d.update(kwargs)
 
     return unparse_url_dict({k: v for k, v in list(d.items()) if v})
+
+def select_from_url(url, key):
+    d = parse_url_to_dict(url)
+    return d.get(key)
 
 
 def normalize_newlines(string):

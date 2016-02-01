@@ -209,6 +209,7 @@ def root_info(args, l, rc):
     from ambry.util.text import ansicolors
     from ambry.util import drop_empty
     from ambry.orm import Account
+    from ambry.orm.database import SCHEMA_VERSION
 
     import ambry
 
@@ -217,6 +218,7 @@ def root_info(args, l, rc):
         return
 
     prt('Version:   {}', ambry._meta.__version__)
+    prt('Schema:    {}', SCHEMA_VERSION)
     prt('Root dir:  {}', rc.library.filesystem_root)
 
     try:

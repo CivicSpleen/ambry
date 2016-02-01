@@ -52,7 +52,16 @@ class PostgreSQLBackend(DatabaseBackend):
                         .format(partition.name, view_table, query))
                     cursor.execute(query)
                     cursor.execute('COMMIT;')
-        return view_table if materialize else fdw_table
+
+        final_table = view_table if materialize else fdw_table
+
+        with connection.cursor() as cursor:
+            view_q = "CREATE VIEW IF NOT EXISTS {} AS SELECT * FROM {} ".format(partition.vid, final_table)
+            cursor.execute(view_q)
+            cursor.execute('COMMIT;')
+
+        return partition.vid
+
 
     @staticmethod
     def get_view_name(table):
@@ -254,6 +263,8 @@ class PostgreSQLBackend(DatabaseBackend):
             return result == [(1,)]
 
 
+    def clean(self):
+        raise NotImplementedError()
 
 
 def _preprocess_postgres_index(asql_query, library, backend, connection):

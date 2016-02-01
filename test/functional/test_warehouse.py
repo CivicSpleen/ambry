@@ -4,7 +4,11 @@ import stat
 import unittest
 
 from ambry_sources import MPRowsFile
-from ambry_sources.med import postgresql as postgres_med
+try:
+    from ambry_sources.med import postgresql as postgres_med
+except ImportError:
+    # FIXME. Signal to skip postgres tests
+    pass
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
 from test.factories import PartitionFactory, TableFactory
@@ -345,8 +349,34 @@ def _get_generator_source(rows=None):
             yield row
     return GeneratorSource(SourceSpec('foobar'), gen())
 
-
 def _get_datafile(fs, path, rows=None):
     datafile = MPRowsFile(fs, path)
     datafile.load_rows(_get_generator_source(rows=rows))
     return datafile
+
+class BundleWarehouse(TestBase):
+
+    def test_bundle_warehouse(self):
+
+        l = self.proto_library()
+
+        for b in l.bundles:
+            print "b", b.identity
+
+        b = l.bundle('build.example.com-generators')
+
+        for p in b.partitions:
+            print p.identity
+
+        b = l.bundle('build.example.com-casters')
+
+        wh = b.warehouse('test')
+
+        wh.clean()
+
+        print wh.dsn
+        print wh.materialize('build.example.com-casters-integers')
+        print wh.materialize('build.example.com-casters-simple_stats')
+        print wh.materialize('build.example.com-generators-demo')
+
+        #print wh.install('build.example.com-casters-integers')
