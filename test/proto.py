@@ -34,7 +34,7 @@ class ProtoLibrary(object):
     """Manage test libraries. Creates a proto library, with pre-built bundles, that can be
     copied quickly into a test library, providing bundles to test against"""
 
-    def __init__(self, dsn=None, root=None,  config_path=None):
+    def __init__(self, dsn=None, root=None, config_path=None):
         """
 
         :param dsn: If specified, the dsn of the test databse. If not, defaults to sqlite.
@@ -47,9 +47,6 @@ class ProtoLibrary(object):
         from ambry.util import parse_url_to_dict, unparse_url_dict
 
         self._root = root
-
-        if self._root is None:
-            self._root = os.environ.get('AMBRY_TEST_ROOT')
 
         if not self._root:
             self._root = DEFAULT_ROOT
@@ -64,6 +61,7 @@ class ProtoLibrary(object):
             self.proto_dsn = unparse_url_dict(p)
 
             self._db_type = 'postgres'
+
         elif dsn and dsn.startswith('sqlite'):
 
             self.dsn = dsn
@@ -82,14 +80,17 @@ class ProtoLibrary(object):
         ensure_dir_exists(self._root)
 
         if config_path is None:
-            import test.bundlefiles
-            path = os.path.join(test.bundlefiles.__file__, 'test_config.yaml')
+            import test.support
+            config_path = os.path.join(os.path.dirname(test.support.__file__), 'test-config')
 
-        self.config = load_config(path)
+
+        self.config = load_config(config_path)
 
         self.config.update(load_accounts())
 
         update_config(self.config, use_environ=False)
+
+        assert self.config.loaded[0] == config_path+'/config.yaml'
 
         self.config.library.database = self.dsn
 
@@ -166,6 +167,7 @@ proto-dsn: {}
             b = l.bundle('ingest.example.com-headerstypes')
         except NotFoundError:
             b = self.import_bundle(l, 'ingest.example.com/headerstypes')
+            b.log("Build to: {}".format(b.build_fs))
             b.ingest()
             b.close()
 

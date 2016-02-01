@@ -38,7 +38,6 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 global_library = None
 
-
 def new_library(config=None):
 
     if config is None:
@@ -190,6 +189,10 @@ class Library(object):
     @property
     def database(self):
         return self._db
+
+    @property
+    def dsn(self):
+        return self._db.dsn
 
     @property
     def filesystem(self):
