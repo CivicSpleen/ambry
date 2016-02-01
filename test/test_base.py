@@ -151,12 +151,21 @@ class TestBase(unittest.TestCase):
         from ambry.library import new_library
         return new_library(config if config else cls.get_rc())
 
-    def library(self, config=None):
+    def library(self, config=None, use_proto=True):
 
-        if not self._library:
-            self._library = self._get_library(config)
+        from proto import ProtoLibrary
 
-        return self._library
+        dsn = os.environ.get("AMBRY_TEST_DB", None)
+
+        proto = ProtoLibrary(dsn=dsn)
+
+        print proto
+
+        l =  proto.init_library(use_proto=use_proto)
+
+        print 'Build fs: ', l.filesystem.build()
+
+        return l
 
     @staticmethod  # So it can be called from either setUp or setUpClass
     def _import_bundles(library, clean=True, force_import=False):
@@ -187,7 +196,7 @@ class TestBase(unittest.TestCase):
     def import_single_bundle(self, cache_path, clean=True):
         from test import bundle_tests
 
-        l = self.library()
+        l = self.library(use_proto=False)
 
         if clean:
             l.clean()

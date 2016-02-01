@@ -101,7 +101,6 @@ def find_config_file(file_name, extra_path=None):
 
 
     for path in paths:
-
         if os.path.isdir(path) and os.path.exists(os.path.join(path, file_name)):
             return os.path.join(path, file_name)
 
@@ -151,6 +150,7 @@ def load_config(path=None):
     from os.path import getmtime
 
     config = AttrDict()
+
     if not path:
         path = ROOT_DIR
 

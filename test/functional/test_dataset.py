@@ -17,7 +17,7 @@ class Test(TestBase):
 
     def test_dataset_basic(self):
         """Basic operations on datasets"""
-        library = self.library()
+        library = self.library(use_proto=False)
         db = library.database
 
         # Creating and conflicts

@@ -4,4 +4,5 @@ include INSTALL
 include LICENSE
 recursive-include doc *
 recursive-include ambry/bundle/default_files *
+recursive-include test/support *
 
