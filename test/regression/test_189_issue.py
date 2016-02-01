@@ -36,7 +36,7 @@ class Test(TestBase):
         else:
             raise Exception('Do not know inspector for {} database.'.format(self.dbname))
 
-    def test_created_sqlite_table_name_contains_vid_only(self):
+    def test_created_table_name_contains_vid_only(self):
         bundle = self.import_single_bundle('ingest.example.com/basic')
         bundle.ingest()
         bundle.source_schema()
