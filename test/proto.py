@@ -171,7 +171,6 @@ proto-dsn: {}
             b.ingest()
             b.close()
 
-
         try:
             b = l.bundle('ingest.example.com-stages')
         except NotFoundError:
