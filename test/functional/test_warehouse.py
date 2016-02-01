@@ -361,25 +361,22 @@ class BundleWarehouse(TestBase):
 
         l = self.library()
 
-        return
-
-        for b in l.bundles:
-            print("b", b.identity)
-
-        b = l.bundle('build.example.com-generators')
-
-        for p in b.partitions:
-            print(p.identity)
-
         b = l.bundle('build.example.com-casters')
 
         wh = b.warehouse('test')
 
         wh.clean()
 
+        print(wh.materialize('build.example.com-casters-simple'))
+
         print(wh.dsn)
+        # The load works OK for the partitions in the same bundle as the warehouse
         print(wh.materialize('build.example.com-casters-integers'))
+
+        return
+
         print(wh.materialize('build.example.com-casters-simple_stats'))
+        # But, it does not work for partitions from other bundles.
         print(wh.materialize('build.example.com-generators-demo'))
 
         #print wh.install('build.example.com-casters-integers')
