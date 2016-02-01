@@ -33,7 +33,7 @@ class PostgreSQLBackend(DatabaseBackend):
 
         """
         self._add_partition(connection, partition)
-        fdw_table = postgres_med.table_name(partition.vid)
+        fdw_table = partition.vid
         view_table = '{}_v'.format(fdw_table)
 
         if materialize:
@@ -86,7 +86,7 @@ class PostgreSQLBackend(DatabaseBackend):
 
         """
         query_tmpl = 'CREATE INDEX ON {table_name} ({column});'
-        table_name = '{}_v'.format(postgres_med.table_name(partition.vid))
+        table_name = '{}_v'.format(partition.vid)
         for column in columns:
             query = query_tmpl.format(table_name=table_name, column=column)
             logger.debug('Creating postgres index.\n    column: {}, query: {}'.format(column, query))
@@ -154,7 +154,7 @@ class PostgreSQLBackend(DatabaseBackend):
         # first check either partition has materialized view.
         logger.debug(
             'Looking for materialized view of the partition.\n    partition: {}'.format(partition.name))
-        foreign_table = postgres_med.table_name(partition.vid)
+        foreign_table = partition.vid
         view_table = '{}_v'.format(foreign_table)
         view_exists = self._relation_exists(connection, view_table)
         if view_exists:

@@ -272,6 +272,7 @@ class TestBase(unittest.TestCase):
 
         return pl.init_library()
 
+
 class PostgreSQLTestBase(TestBase):
     """ Base class for database tests who requires postgresql database.
 
