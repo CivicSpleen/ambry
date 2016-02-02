@@ -39,7 +39,10 @@ def get_logger(name, file_name=None, stream=None, template=None, propagate=False
     """
 
     logger = logging.getLogger(name)
-    if 'test' in sys.argv and not level:
+    running_tests = (
+        'test' in sys.argv  # running with setup.py
+        or sys.argv[0].endswith('py.test'))  # running with py.test
+    if running_tests and not level:
         # testing without level, this means tester does not want to see any log messages.
         level = logging.CRITICAL
 
