@@ -243,34 +243,6 @@ class ConvertSchemaTest(unittest.TestCase):
         self.assertEqual(ret['package_id'], ds1.vid)
         self.assertEqual(ret['name'], partition1.name)
 
-    def test_converts_partition_content_to_csv(self):
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
-
-        ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
-        self.sqlite_db.commit()
-
-        # make partition iterator return my values.
-        partition1._datafile = MagicMock()
-        partition1._datafile.headers = ['col1', 'col2']
-        fake_iter = lambda: iter([{'col1': '1', 'col2': '1'}, {'col1': '2', 'col2': '2'}])
-        with patch('ambry.orm.partition.Partition.__iter__', side_effect=fake_iter):
-            ret = _convert_partition(partition1)
-
-        # check converted partition.
-        self.assertIn('package_id', ret)
-        self.assertEqual(ret['package_id'], ds1.vid)
-        self.assertIn('upload', ret)
-        self.assertTrue(isinstance(ret['upload'], six.StringIO))
-        rows = []
-        reader = unicodecsv.reader(ret['upload'])
-        for row in reader:
-            rows.append(row)
-        self.assertEqual(rows[0], ['col1', 'col2'])
-        self.assertEqual(rows[1], ['1', '1'])
-        self.assertEqual(rows[2], ['2', '2'])
-
 
 def _get_fake_bundle(dataset, partitions=None):
     """ Returns bundle like object. """
