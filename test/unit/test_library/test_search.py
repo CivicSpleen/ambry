@@ -2,11 +2,20 @@
 import fudge
 from fudge.inspector import arg
 
+try:
+    # py2, mock is external lib.
+    from mock import MagicMock, Mock
+except ImportError:
+    # py3, mock is included
+    from unittest.mock import MagicMock, Mock
+
+from ambry.library import Library
 from ambry.library.search import Search
 from ambry.library.search_backends.whoosh_backend import DatasetWhooshIndex, PartitionWhooshIndex,\
     WhooshSearchBackend
 from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
+from ambry.orm import Dataset
 
 from test.factories import PartitionFactory, DatasetFactory
 from test.test_base import TestBase
@@ -83,23 +92,22 @@ class SearchTest(TestBase):
             search = Search(self._my_library)
             search.index_library_datasets()
 
-    def test_feeds_tick_function_with_indexed(self):
-        # ds1 = self.new_db_dataset(self._my_library.database, n=1)
-        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
-        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
-        ds1 = DatasetFactory()
-        self._my_library.database.session.commit()
-        self.assertEqual(len(self._my_library.datasets), 1)
+    def test_feeds_tick_function_with_indexed_dataset(self):
+        # prepare mocks
+        fake_backend = MagicMock(spec=SQLiteSearchBackend)
+        fake_backend.dataset_index = Mock()
+        fake_backend.partition_index = Mock()
+        fake_backend.identifier_index = Mock()
 
-        PartitionFactory(dataset=ds1)
-        self._my_library.database.session.commit()
+        tick_f = Mock()
 
-        fake_index_one = fudge.Fake().is_callable().returns(True)
-        tick_f = fudge.Fake()\
-            .expects_call().with_args('datasets: 1 partitions: 0')\
-            .next_call().with_args('datasets: 1 partitions: 1')
+        fake_library = MagicMock(spec=Library)
+        fake_dataset = MagicMock(spec=Dataset)
+        fake_library.datasets = [fake_dataset]
 
-        with fudge.patched_context(PartitionWhooshIndex, 'index_one', fake_index_one):
-            with fudge.patched_context(DatasetWhooshIndex, 'index_one', fake_index_one):
-                search = Search(self._my_library)
-                search.index_library_datasets(tick_f=tick_f)
+        # run
+        search = Search(fake_library, backend=fake_backend)
+        search.index_library_datasets(tick_f=tick_f)
+
+        # test
+        tick_f.assert_called_once_with('datasets: 1 partitions: 0')
