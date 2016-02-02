@@ -21,7 +21,6 @@ from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import relationship, object_session, backref
 
 from ambry.identity import ObjectNumber, PartialPartitionName, PartitionIdentity
-from ambry.orm import DictableMixin
 from ambry.orm.columnstat import ColumnStat
 from ambry.orm.dataset import Dataset
 from ambry.util import Constant
@@ -107,8 +106,8 @@ class Partition(Base):
     children = relationship('Partition', backref=backref('parent', remote_side=[vid]), cascade='all')
 
     _bundle = None  # Set when returned from a bundle.
-    _datafile = None
-    _datafile_writer = None
+    _datafile = None  # TODO: Unused variable.
+    _datafile_writer = None  # TODO: Unused variable.
     _stats_dict = None
 
     @property
@@ -141,7 +140,7 @@ class Partition(Base):
 
     @property
     def bundle(self):
-        return self._bundle # Set externally, such as Bundle.wrap_partition
+        return self._bundle  # Set externally, such as Bundle.wrap_partition
 
     @property
     def is_segment(self):
@@ -215,7 +214,6 @@ class Partition(Base):
                     if self._bundle:
                         self._bundle.error("Failed to parse gvid '{}' in {}.{}: {}"
                                            .format(str(gvid), column.table.name, column.name, e))
-                    pass
 
             try:
                 return isimplify(parsed)
@@ -284,7 +282,7 @@ class Partition(Base):
                 if year:
                     tcov.add(year)
 
-        self.time_coverage = [ t for t in tcov if t ]
+        self.time_coverage = [t for t in tcov if t]
 
         #
         # Grains
@@ -439,7 +437,6 @@ class Partition(Base):
             'time_coverage', 'grain_coverage', 'name', 'vname', 'fqname', 'cache_key'
         ]
 
-
         d = OrderedDict([('table', self.table.name)] +
                         [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
                          if p.key not in SKIP_KEYS])
@@ -536,8 +533,8 @@ class Partition(Base):
             return MPRowsFile(self._bundle.build_fs, self.cache_key)
 
         except ResourceNotFoundError:
-            raise NotFoundError("Could not locate data file for partition {} (local)".format(self.identity.fqname))
-
+            raise NotFoundError(
+                'Could not locate data file for partition {} (local)'.format(self.identity.fqname))
 
     @property
     def remote_datafile(self):
@@ -551,7 +548,7 @@ class Partition(Base):
 
             ds = self.dataset
 
-            if not 'remote_name' in ds.data:
+            if 'remote_name' not in ds.data:
 
                 raise NotFoundError("Failed to find both local and remote file for partition: {}"
                                     .format(self.identity.fqname))
@@ -563,8 +560,9 @@ class Partition(Base):
             datafile = MPRowsFile(remote.fs, self.cache_key)
 
             if not datafile.exists:
-                raise NotFoundError("Could not locate data file for partition {} from remote {} : file does not exist"
-                                    .format(self.identity.fqname, remote))
+                raise NotFoundError(
+                    'Could not locate data file for partition {} from remote {} : file does not exist'
+                    .format(self.identity.fqname, remote))
 
         except ResourceNotFoundError as e:
             raise NotFoundError("Could not locate data file for partition {} (remote): {}"
@@ -613,9 +611,8 @@ class Partition(Base):
                     ps.rec.item_count = 0
 
                 if not ps.rec.data:
-                    ps.rec.data = {} # Should not need to do this.
+                    ps.rec.data = {}  # Should not need to do this.
                     return self
-
 
                 item_count = ps.rec.item_count + bts
                 ps.rec.data['updates'] = ps.rec.data.get('updates', 0) + 1
@@ -689,7 +686,6 @@ class Partition(Base):
             for row in r:
                 yield row
 
-
     def dataframe(self, predicate=None):
         """Return the partition as a Pandas dataframe
 
@@ -709,23 +705,21 @@ class Partition(Base):
 
         import pandas as pd
 
-
         if predicate:
             def yielder():
                 for row in self.reader:
                     if predicate(row):
                         yield row.dict
 
-            return pd.DataFrame(yielder(),columns=self.table.header)
+            return pd.DataFrame(yielder(), columns=self.table.header)
 
         else:
             return pd.DataFrame([row.values() for row in self.reader], columns=self.table.header)
 
-
-    def geoframe(self, simplify=None, predicate=None, crs = None, epsg = None):
+    def geoframe(self, simplify=None, predicate=None, crs=None, epsg=None):
         """Return geopandas dataframe"""
         import geopandas
-        from shapely.wkt import  loads
+        from shapely.wkt import loads
 
         from fiona.crs import from_epsg
 
@@ -748,8 +742,7 @@ class Partition(Base):
 
         df['geometry'] = geopandas.GeoSeries(s)
 
-        return geopandas.GeoDataFrame(df, crs = crs, geometry='geometry')
-
+        return geopandas.GeoDataFrame(df, crs=crs, geometry='geometry')
 
     # ============================
 
@@ -795,7 +788,6 @@ class Partition(Base):
             grain=self.grain,
             segment=self.segment
         )
-
 
         assert self.dataset
 
