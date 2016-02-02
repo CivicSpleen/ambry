@@ -3,7 +3,6 @@ import os
 
 from ambry.library import new_library
 from ambry.library.config import LibraryConfigSyncProxy
-from ambry.run import get_runconfig
 from ambry.orm.account import Account
 
 from test.test_base import TestBase
@@ -57,8 +56,6 @@ class Test(TestBase):
         os.remove(rc.loaded[0])
 
         self.assertFalse(os.path.exists(rc.loaded[0]))
-        get_runconfig.clear()  # Clear the LRU cache on the function
-
         os.environ['AMBRY_DB'] = l.database.dsn
         os.environ['AMBRY_ACCOUNT_PASSWORD'] = l._account_password
 
