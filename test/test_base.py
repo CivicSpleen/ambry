@@ -30,7 +30,7 @@ class TestBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        cls.dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+        cls.dbname = os.environ.get('AMBRY_TEST_DB') or 'sqlite'
 
         config = ambry.run.load()  # not cached; get_config is
         cls.test_dsn_key = 'test-{}'.format(cls.dbname)
@@ -155,15 +155,11 @@ class TestBase(unittest.TestCase):
 
         from proto import ProtoLibrary
 
-        dsn = os.environ.get("AMBRY_TEST_DB", None)
+        dsn = os.environ.get('AMBRY_TEST_DB', None)
 
         proto = ProtoLibrary(dsn=dsn)
 
-        print proto
-
-        l =  proto.init_library(use_proto=use_proto)
-
-        print 'Build fs: ', l.filesystem.build()
+        l = proto.init_library(use_proto=use_proto)
 
         return l
 
@@ -263,7 +259,7 @@ class TestBase(unittest.TestCase):
         self.copy_bundle_files(test_source_fs, b.source_fs)
         return b
 
-    def proto_library(self, dsn = None):
+    def proto_library(self, dsn=None):
         """Return a new proto library"""
 
         from proto import ProtoLibrary
