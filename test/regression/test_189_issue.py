@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from test.test_base import TestBase
 
-from ambry.mprlib import PostgreSQLBackend
+from ambry.mprlib.backends.postgresql import PostgreSQLBackend
 from ambry_sources.med.postgresql import POSTGRES_PARTITION_SCHEMA_NAME
 
 
