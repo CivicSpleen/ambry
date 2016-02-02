@@ -2225,7 +2225,7 @@ Caster Code
         parent.state = parent.STATES.COALESCING
 
         if parent.local_datafile.exists:
-            ps.add("Removing exisiting datafile", partition=parent)
+            ps.add('Removing existing datafile', partition=parent)
             parent.local_datafile.remove()
 
         if len(segments) == 1:
