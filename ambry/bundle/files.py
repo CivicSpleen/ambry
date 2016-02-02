@@ -47,6 +47,7 @@ logger = get_logger(__name__)
 class FileTypeError(Exception):
     """Bad file type"""
 
+
 class BuildSourceFile(object):
 
     SYNC_DIR = Constant()
@@ -54,10 +55,10 @@ class BuildSourceFile(object):
     SYNC_DIR.RECORD_TO_FILE = 'rtf'
     SYNC_DIR.OBJECT_TO_FILE = 'otf'
 
-    multiplicity = '1' # Number of files of this type. '1' or 'n'
+    multiplicity = '1'  # Number of files of this type. '1' or 'n'
     file_const = None
 
-    def __init__(self, bundle, dataset, filesystem,  base_name = None):
+    def __init__(self, bundle, dataset, filesystem,  base_name=None):
         """
         Construct a new Build Source File acessor
         :param dataset: The dataset that will hold File records
@@ -74,7 +75,7 @@ class BuildSourceFile(object):
 
         assert self.multiplicity == '1' or base_name, 'File class {} requires a base_name'.format(type(self))
 
-        self._base_name = base_name # The root of the file name
+        self._base_name = base_name  # The root of the file name
 
     @classmethod
     def instance_from_filename(cls, name, bundle, dataset, fs):
@@ -89,10 +90,9 @@ class BuildSourceFile(object):
             # always be true in the future
             base_name = name.split('.')[0]
 
-            return cls(bundle, dataset, fs, base_name )
+            return cls(bundle, dataset, fs, base_name)
 
         return None
-
 
     def exists(self):
         if self.multiplicity == '1':
@@ -108,7 +108,7 @@ class BuildSourceFile(object):
     def record_exists(self):
         from ambry.orm.exc import NotFoundError
         try:
-            _ =  self._dataset.bsfile(self.file_const, self.file_name)
+            _ = self._dataset.bsfile(self.file_const, self.file_name)
             return True
         except NotFoundError:
             return False
@@ -149,7 +149,6 @@ class BuildSourceFile(object):
             with open(path, 'rt', encoding='utf-8') as f:
                 return f.read()
 
-
     @property
     def path(self):
         """ Returns system path of the file. """
@@ -174,7 +173,6 @@ class BuildSourceFile(object):
         else:
             assert self._base_name is not None
             return self._file_name.format(base_name=self._base_name)
-
 
     @property
     def fs_modtime(self):
@@ -322,7 +320,6 @@ class BuildSourceFile(object):
         """Return a list of the file name for this file type. Usuall, this will be just one,
         ( multiplicity == '1' ) but may be more when multiplicity = 'n' )"""
 
-
     def list_records(self):
         """Like list_files, but for records"""
 
@@ -365,7 +362,6 @@ class RowBuildSourceFile(BuildSourceFile):
         #    import unicodecsv as csv
         #    f = open(self._fstor.syspath, 'rbU')
         #    reader = csv.reader(f, encoding=encoding)
-
 
         for row in csv.reader(f):
             row = [e if e.strip() != '' else None for e in row]
@@ -489,7 +485,6 @@ class StringSourceFile(BuildSourceFile):
 
             return self.fh_to_record(f)
 
-
     def fh_to_record(self, f):
         """Load a file in the filesystem into the file record"""
 
@@ -601,9 +596,9 @@ class MetadataFile(DictBuildSourceFile):
 
         fr = self.record
 
-        d =  fr.unpacked_contents
+        d = fr.unpacked_contents
 
-        d['identity'] =  self._dataset.identity.ident_dict
+        d['identity'] = self._dataset.identity.ident_dict
         d['names'] = self._dataset.identity.names_dict
 
         fr.update_contents(msgpack.packb(d), 'application/msgpack')
@@ -633,7 +628,6 @@ class NotebookFile(StringSourceFile):
             with open(path, 'rt', encoding='utf-8') as f:
                 content_str = f.read()
 
-
         c = json.loads(content_str)
 
         context = {
@@ -646,11 +640,9 @@ class NotebookFile(StringSourceFile):
             for i in range(len(cell['source'])):
                 cell['source'][i] = cell['source'][i].format(**context)
 
-
         c['metadata']['ambry'] = {
             'identity': self._bundle.identity.dict
         }
-
 
         return json.dumps(c, indent=4)
 
@@ -769,9 +761,11 @@ class BuildPythonSourceFile(PythonSourceFile):
     file_const = File.BSFILE.BUILD
     _file_name = 'bundle.py'
 
+
 class LibPythonSourceFile(PythonSourceFile):
     file_const = File.BSFILE.LIB
     _file_name = 'lib.py'
+
 
 class TestPythonSourceFile(PythonSourceFile):
     file_const = File.BSFILE.TEST
@@ -1159,11 +1153,9 @@ file_classes = {
 file_info_map = None # FIXME. Replacing this. Remove on sight
 
 
-
 def file_class(const):
     """Return the class for a file constant"""
     return file_info_map[const][1]
-
 
 
 class BuildSourceFileAccessor(object):
@@ -1208,7 +1200,7 @@ class BuildSourceFileAccessor(object):
 
     def list_files(self):
         """Iterate through the files in the filesystem"""
-        for f in  self._fs.listdir():
+        for f in self._fs.listdir():
             yield self.instance_from_name(f)
 
     def list_records(self, file_const=None):
@@ -1217,7 +1209,6 @@ class BuildSourceFileAccessor(object):
             if file_const and r.minor_type != file_const:
                 continue
             yield self.instance_from_name(r.path)
-
 
     @property
     def meta_file(self):
@@ -1233,7 +1224,7 @@ class BuildSourceFileAccessor(object):
 
         return None
 
-    def file(self, const_name, base_name = None):
+    def file(self, const_name, base_name=None):
 
         fc = file_classes[const_name]
 
@@ -1245,12 +1236,13 @@ class BuildSourceFileAccessor(object):
 
         s = self._bundle.session
 
-        return s.query(File).filter(File.path == path).filter(File.d_vid == self._dataset.vid).first()
+        return s.query(File) \
+            .filter(File.path == path) \
+            .filter(File.d_vid == self._dataset.vid) \
+            .first()
 
     def file_by_id(self, id):
-
         s = self._dataset._database.session
-
         return s.query(File).filter(File.id == id).one()
 
     def record_to_objects(self, preference=None):
@@ -1287,7 +1279,7 @@ class BuildSourceFileAccessor(object):
         """Add default content to any file record that is empty"""
 
         for const_name, c in file_classes.items():
-            if c.multiplicity  == '1':
+            if c.multiplicity == '1':
                 f = self.file(const_name)
                 f.setcontent(f.default)
 
