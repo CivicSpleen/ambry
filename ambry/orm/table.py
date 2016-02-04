@@ -280,6 +280,22 @@ class Table(Base, DictableMixin):
 
         return ('Dest Table: {}\n'.format(self.name)) + tabulate(rows, headers)
 
+    def _repr_html_(self):
+        from tabulate import tabulate
+        from ambry.util import drop_empty
+
+        def record_gen():
+            for i, row in enumerate([c.row for c in self.columns]):
+                if i == 0:
+                    yield row.keys()
+                yield row.values()
+
+        records = list(record_gen())
+
+        records = drop_empty(records)
+
+        return "<h2>{}</h2>".format(self.name)+tabulate(records[1:], headers=records[0], tablefmt="html")
+
     @staticmethod
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the seqience_id for this

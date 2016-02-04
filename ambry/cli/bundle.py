@@ -1439,7 +1439,8 @@ def bundle_export(args, l, rc):
         b.set_file_system(source_url=source_dir)
 
     b.build_source_files.set_defaults()
-    b.sync_out()
+
+    b.sync_out(force=True)
 
     prt('Exported bundle: {}'.format(b.source_fs))
 

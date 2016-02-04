@@ -33,7 +33,7 @@ class SQLiteBackend(DatabaseBackend):
             str: name of the created table.
 
         """
-        virtual_table = sqlite_med.table_name(partition.vid)
+        virtual_table = partition.vid
 
         if not self._relation_exists(connection, virtual_table):
             self._add_partition(connection, partition)
@@ -55,6 +55,7 @@ class SQLiteBackend(DatabaseBackend):
                     'Creating new materialized view for partition mpr.'
                     '\n    partition: {}, view: {}, query: {}'
                     .format(partition.name, table, create_query))
+
                 cursor.execute(create_query)
 
                 # populate just created table with data from virtual table.
@@ -233,7 +234,7 @@ class SQLiteBackend(DatabaseBackend):
             sqlite_type = TYPE_MAP.get(column['type'])
             if not sqlite_type:
                 raise Exception('Do not know how to convert {} to sql column.'.format(column['type']))
-            columns_types.append('    {} {}'.format(column['name'], sqlite_type))
+            columns_types.append('    "{}" {}'.format(column['name'], sqlite_type))
         columns_types_str = ',\n'.join(columns_types)
         query = 'CREATE TABLE IF NOT EXISTS {}(\n{})'.format(tablename, columns_types_str)
         return query

@@ -364,19 +364,19 @@ class BundleWarehouse(TestBase):
         b = l.bundle('build.example.com-casters')
 
         wh = b.warehouse('test')
+        print(wh.dsn)
 
         wh.clean()
 
-        print(wh.materialize('build.example.com-casters-simple'))
+        self.assertEquals('p00casters006003', wh.materialize('build.example.com-casters-simple'))
+        self.assertEquals('p00casters004003', wh.materialize('build.example.com-casters-integers'))
+        self.assertEquals('p00casters002003', wh.materialize('build.example.com-casters-simple_stats'))
 
-        print(wh.dsn)
-        # The load works OK for the partitions in the same bundle as the warehouse
-        print(wh.materialize('build.example.com-casters-integers'))
+        partition = l.partition('build.example.com-generators-demo')
+        print(partition.fqname)
+        print(partition.datafile.url)
+        print(partition.datafile.exists)
 
-        return
-
-        print(wh.materialize('build.example.com-casters-simple_stats'))
-        # But, it does not work for partitions from other bundles.
         print(wh.materialize('build.example.com-generators-demo'))
 
         #print wh.install('build.example.com-casters-integers')

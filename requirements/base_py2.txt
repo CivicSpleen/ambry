@@ -1,6 +1,3 @@
 # py2 base requirements
 
 -r base.txt
--r ui.txt
-
-pdfminer==20140328

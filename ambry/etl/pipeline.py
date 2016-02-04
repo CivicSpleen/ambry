@@ -2296,7 +2296,8 @@ class Pipeline(OrderedDict):
                 out.append([seg_name, qualified_class_name(pipe)])
             else:
                 try:
-                    v = [seg_name, qualified_class_name(pipe), len(pipe.headers)] + [str(e) for e in pipe.headers if e]
+                    v = [seg_name, qualified_class_name(pipe),
+                         len(pipe.headers)] + [str(e)[:10] for e in pipe.headers if e]
                     out.append(v)
 
                 except AttributeError:

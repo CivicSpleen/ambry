@@ -274,6 +274,9 @@ class BuildSourceFile(object):
 
     def sync_out(self):
         """Sync out from objects to the file system"""
+
+
+
         self.objects_to_record()
         self.record_to_fs()
 
@@ -1251,7 +1254,7 @@ class BuildSourceFileAccessor(object):
 
         s = self._dataset._database.session
 
-        return s.query(File).filter(File.id == id).one()
+        return s.query(File).filter(File.d_vid == self._dataset.vid).filter(File.id == id).one()
 
     def record_to_objects(self, preference=None):
         """Create objects from files, or merge the files into the objects. """

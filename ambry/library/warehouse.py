@@ -35,9 +35,10 @@ or via SQLAlchemy, to return datasets.
     """
 
     def __init__(self, library, dsn=None):
+        from ambry.library import Library
+        assert isinstance(library, Library)
 
         self._library = library
-
 
         if not dsn:
             # Use library database.
@@ -122,9 +123,12 @@ or via SQLAlchemy, to return datasets.
             str: name of the partition table in the database.
 
         """
-        logger.debug(
-            'Materializing warehouse partition.\n    partition: {}'.format(ref))
+        from ambry.library import Library
+        assert isinstance(self._library, Library )
+
+        logger.debug('Materializing warehouse partition.\n    partition: {}'.format(ref))
         partition = self._library.partition(ref)
+
         connection = self._backend._get_connection()
         return self._backend.install(connection, partition, materialize=True)
 

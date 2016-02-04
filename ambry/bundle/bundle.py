@@ -37,7 +37,7 @@ def _CaptureException(f, *args, **kwargs):
     try:
         return f(*args, **kwargs)
     except Exception as e:
-
+        raise
         try:
             b.set_error_state()
             b.commit()
@@ -287,7 +287,7 @@ class Bundle(object):
 
         from ambry.library.warehouse import Warehouse
 
-        return Warehouse(self, dsn=dsn)
+        return Warehouse(self.library, dsn=dsn)
 
 
 
@@ -796,7 +796,7 @@ class Bundle(object):
         except Exception as e:
             caster_code = str(e)
 
-        v = u("""
+        templ = u("""
 Pipeline     : {}
 run time     : {}
 phase        : {}
@@ -814,8 +814,13 @@ Caster Code
 ===========
 {}
 
-""".format(pl.name, str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
-           pl.dest_table, unicode(pl), pl.headers_report(), caster_code))
+""")
+        try:
+            v = templ.format(pl.name, str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
+            pl.dest_table, unicode(pl), pl.headers_report(), caster_code)
+        except UnicodeError as e:
+            v = ''
+            self.error("Faled to write pipeline log for pipeline {} ".format(pl.name))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
