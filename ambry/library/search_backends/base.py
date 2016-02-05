@@ -463,8 +463,10 @@ class BasePartitionIndex(BaseIndex):
         values = ''
 
         for stat in partition.stats:
-            if stat.uvalues:
-                values += ' '.join(stat.uvalues) + '\n'
+            if stat.uvalues :
+                # SOme geometry vlaues are super long. They should not be in uvbalues, but when they are,
+                # need to cut them down.
+                values += ' '.join(e[:200] for e in stat.uvalues) + '\n'
 
         # Re-calculate the summarization of grains, since the geoid 0.0.7 package had a bug where state level
         # summaries had the same value as state-level allvals

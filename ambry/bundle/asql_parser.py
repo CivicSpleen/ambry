@@ -34,8 +34,15 @@ class Column(object):
     """ Parsed column. """
 
     def __init__(self, parsed_column):
-        self.name = parsed_column.name
-        self.alias = parsed_column.alias
+
+        try:
+            self.name = parsed_column.name
+            self.alias = parsed_column.alias
+        except AttributeError:
+            # Assume the value is a string, usualla single column name or '*'
+            self.name = parsed_column
+            self.alias = None
+
 
     def __str__(self):
         return 'name: {}, alias: {}'.format(self.name, self.alias)
@@ -55,6 +62,7 @@ class View(object):
     """ Parsed view or materialized view. """
 
     def __init__(self, parse_result):
+
         self.name = parse_result.name
         self.sources = [Source(s) for s in parse_result.sources]
         self.columns = [Column(c) for c in parse_result.columns]
@@ -90,7 +98,9 @@ def parse_view(query):
     Returns:
         View instance: parsed view.
     """
-    return View(_view_stmt.parseString(query))
+    result = _view_stmt.parseString(query)
+
+    return View(result)
 
 
 def parse_index(query):
@@ -275,3 +285,54 @@ _index_stmt << (
 oracle_sql_comment = '--' + restOfLine
 _view_stmt.ignore(oracle_sql_comment)
 _index_stmt.ignore(oracle_sql_comment)
+
+
+def substitute_vids(library, statement):
+    """ Replace all of the references to tables and partitions with their vids.
+
+    :param statement: an sqlstatement. String.
+    :return: tuple: new_statement, set of table vids, set of partition vids.
+    """
+    from ambry.identity import ObjectNumber, TableNumber, NotObjectNumberError
+    from ambry.orm.exc import NotFoundError
+
+    try:
+        parts = statement.split()
+    except AttributeError:
+        parts = statement.to_unicode().split()
+
+    new_parts = []
+
+    tables = set()
+    partitions = set()
+
+    while parts:
+        token = parts.pop(0).strip()
+        if token.lower() in ('from', 'join', 'materialize'):
+            ident = parts.pop(0).strip(';')
+            new_parts.append(token)
+
+            try:
+                obj_number = ObjectNumber.parse(token)
+                if isinstance(obj_number, TableNumber):
+                    table = library.table(ident)
+                    tables.add(table.vid)
+                    new_parts.append(table.vid)
+                else:
+                    # Do not care about other object numbers. Assume partition.
+                    raise NotObjectNumberError
+
+            except NotObjectNumberError:
+                # assume partition
+                try:
+                    partition = library.partition(ident)
+                    partitions.add(partition.vid)
+                    new_parts.append(partition.vid)
+                except NotFoundError:
+                    # Ok, maybe it is just a normal identifier...
+                    new_parts.append(ident)
+
+        else:
+            new_parts.append(token)
+
+    return ' '.join(new_parts), tables, partitions

@@ -355,9 +355,28 @@ def _get_datafile(fs, path, rows=None):
     datafile.load_rows(_get_generator_source(rows=rows))
     return datafile
 
+class SqlParserTests(TestBase):
+
+    def test_identifier_replacement(self):
+        from ambry.bundle.asql_parser import substitute_vids
+        l = self.library()
+
+        self.assertEquals('SELECT * FROM p00casters006003',
+                          substitute_vids(l,'SELECT * FROM build.example.com-casters-simple')[0])
+
+        self.assertEquals('SELECT * FROM p00casters006003 LEFT JOIN pERJQxWUVb005001 ON foo = bar',
+                          substitute_vids(l,
+                                          """SELECT * FROM build.example.com-casters-simple
+                                             LEFT JOIN build.example.com-generators-demo ON foo = bar
+                                          """)[0])
+
+
+
+
+
 class BundleWarehouse(TestBase):
 
-    def test_bundle_warehouse(self):
+    def test_bundle_warehouse_install(self):
 
         l = self.library()
 
@@ -368,15 +387,50 @@ class BundleWarehouse(TestBase):
 
         wh.clean()
 
-        self.assertEquals('p00casters006003', wh.materialize('build.example.com-casters-simple'))
-        self.assertEquals('p00casters004003', wh.materialize('build.example.com-casters-integers'))
-        self.assertEquals('p00casters002003', wh.materialize('build.example.com-casters-simple_stats'))
+        self.assertEqual(0, len(wh.list()))
 
-        partition = l.partition('build.example.com-generators-demo')
-        print(partition.fqname)
-        print(partition.datafile.url)
-        print(partition.datafile.exists)
+        self.assertEquals('p00casters006003', wh.install('build.example.com-casters-simple'))
+        self.assertEquals('p00casters004003', wh.install('build.example.com-casters-integers'))
+        self.assertEquals('p00casters002003', wh.install('build.example.com-casters-simple_stats'))
+        self.assertEqual('pERJQxWUVb005001', wh.materialize('build.example.com-generators-demo'))
 
-        print(wh.materialize('build.example.com-generators-demo'))
+        self.assertEqual(4, len(wh.list()))
 
-        #print wh.install('build.example.com-casters-integers')
+    def test_bundle_warehouse_query(self):
+        l = self.library()
+
+        b = l.bundle('build.example.com-casters')
+        wh = b.warehouse('test')
+        wh.clean()
+
+        self.assertEqual(0, len(wh.list()))
+
+        self.assertEqual(20, sum( 1 for row in wh.query("SELECT * FROM p00casters004003")))
+        self.assertEqual(6000, sum(1 for row in wh.query("SELECT * FROM p00casters006003")))
+        self.assertEqual(4000, sum(1 for row in wh.query("SELECT * FROM pERJQxWUVb005001")))
+
+        p = l.partition('p00casters004003')
+
+        self.assertEqual(20, sum(1 for row in wh.query("SELECT * FROM {}".format(p.vname))))
+        self.assertEqual(20, sum(1 for row in wh.query("SELECT * FROM {}".format(p.name))))
+
+
+        self.assertEqual(3, len(wh.list()))
+
+    def test_library_warehouse_query(self):
+        l = self.library()
+
+        b = l.bundle('build.example.com-casters')
+        wh = l.warehouse
+        wh.clean()
+
+        self.assertEqual(0, len(wh.list()))
+
+        self.assertEqual(20, sum(1 for row in wh.query("SELECT * FROM p00casters004003")))
+        self.assertEqual(6000, sum(1 for row in wh.query("SELECT * FROM p00casters006003")))
+        self.assertEqual(4000, sum(1 for row in wh.query("SELECT * FROM pERJQxWUVb005001")))
+
+        self.assertEqual(3, len(wh.list()))
+
+
+

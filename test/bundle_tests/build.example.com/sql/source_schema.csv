@@ -1,0 +1,11 @@
+table,position,source_header,dest_header,datatype,valuetype,has_codes,start,width,size,summary,description
+integers,1,a,a,int,,False,,,,,a
+integers,2,b,b,int,,False,,,,,b
+integers,3,c,c,int,,False,,,,,c
+integers,4,d,d,int,,False,,,,,d
+integers,5,e,e,int,,False,,,,,e
+integers,6,f,f,int,,False,,,,,f
+integers,7,g,g,int,,False,,,,,g
+integers,8,h,h,int,,False,,,,,h
+integers,9,i,i,int,,False,,,,,i
+integers,10,j,j,int,,False,,,,,j

@@ -25,9 +25,8 @@ logger = get_logger(__name__)
 
 # debug logging
 #
-# import logging
-# logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
-
+import logging
+logger = get_logger(__name__, level=logging.ERROR, propagate=False)
 
 class Warehouse(object):
     """ Provides SQL access to datasets in the library, allowing users to issue SQL queries, either as SQL
@@ -50,15 +49,22 @@ or via SQLAlchemy, to return datasets.
             logger.debug('Initializing sqlite warehouse.')
             self._backend = SQLiteBackend(library, dsn)
 
-        elif dsn.startswith('postgresql'):
-            from ambry.mprlib.backends.postgresql import PostgreSQLBackend
-            logger.debug('Initializing postgres warehouse.')
-            self._backend = PostgreSQLBackend(library, dsn)
+        elif dsn.startswith('postgres'):
+            try:
+                from ambry.mprlib.backends.postgresql import PostgreSQLBackend
+                logger.debug('Initializing postgres warehouse.')
+                self._backend = PostgreSQLBackend(library, dsn)
+            except ImportError as e:
+                from ambry.mprlib.backends.sqlite import SQLiteBackend
+                from ambry.util import set_url_part, select_from_url
+                dsn = "sqlite:///{}/{}".format(self._library.filesystem.build('warehouses'),
+                                               select_from_url(dsn,'path').strip('/')+".db")
+                logging.error("Failed to import required modules ({})for Postgres warehouse. Using Sqlite dsn={}"
+                              .format(e, dsn))
+                self._backend = SQLiteBackend(library, dsn)
 
         else:
-            raise Exception(
-                'Do not know how to handle {} dsn.'
-                .format(dsn))
+            raise Exception('Do not know how to handle {} dsn.'.format(dsn))
 
         self._warehouse_dsn = dsn
 
@@ -67,10 +73,20 @@ or via SQLAlchemy, to return datasets.
     def dsn(self):
         return self._warehouse_dsn
 
+    @property
+    def connection(self):
+        return self._backend._get_connection()
+
     def clean(self):
         """Remove all of the tables and data from the warehouse"""
         connection = self._backend._get_connection()
         self._backend.clean(connection)
+
+    def list(self):
+        """List the tables in the database"""
+        connection = self._backend._get_connection()
+        return list(self._backend.list(connection))
+
 
     def query(self, query=''):
         """ Creates virtual tables for all partitions found in the query and executes query.
@@ -88,10 +104,12 @@ or via SQLAlchemy, to return datasets.
         logger.debug(
             'Executing warehouse query using {} backend.\n    query: {}'
             .format(self._backend._dsn, query))
+
         connection = self._backend._get_connection()
+
         return self._backend.query(connection, query)
 
-    def install(self, ref):
+    def install(self, ref, table_name=None, index_columns=None):
         """ Finds partition by reference and installs it to warehouse db.
 
         Args:
@@ -103,17 +121,18 @@ or via SQLAlchemy, to return datasets.
             if isinstance(obj_number, TableNumber):
                 table = self._library.table(ref)
                 connection = self._backend._get_connection()
-                self._backend.install_table(connection, table)
+                return self._backend.install_table(connection, table)
             else:
                 # assume partition
                 raise NotObjectNumberError
+
         except NotObjectNumberError:
             # assume partition.
             partition = self._library.partition(ref)
             connection = self._backend._get_connection()
-            self._backend.install(connection, partition)
+            return self._backend.install(connection, partition, table_name=table_name, index_coumns=index_columns)
 
-    def materialize(self, ref):
+    def materialize(self, ref, table_name=None, index_columns=None):
         """ Creates materialized table for given partition reference.
 
         Args:
@@ -130,7 +149,8 @@ or via SQLAlchemy, to return datasets.
         partition = self._library.partition(ref)
 
         connection = self._backend._get_connection()
-        return self._backend.install(connection, partition, materialize=True)
+        return self._backend.install(connection, partition, table_name = table_name,
+                                     index_columns=index_columns, materialize=True)
 
     def index(self, ref, columns):
         """ Create an index on the columns.
@@ -140,12 +160,57 @@ or via SQLAlchemy, to return datasets.
             columns (list of str): names of the columns needed indexes.
 
         """
-        logger.debug(
-            'Creating index for partition.\n    ref: {}, columns: {}'.format(ref, columns))
+        logger.debug('Creating index for partition.\n    ref: {}, columns: {}'.format(ref, columns))
         connection = self._backend._get_connection()
         partition = self._library.partition(ref)
         self._backend.index(connection, partition, columns)
 
+
+    def parse_sql(self, asql):
+        """ Executes all sql statements from asql.
+
+        Args:
+            library (library.Library):
+            asql (str): unified sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
+        """
+        import sqlparse
+
+        statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
+        parsed_statements = []
+        for statement in statements:
+
+            statement_str = statement.to_unicode().strip()
+
+            for preprocessor in self._backend.sql_processors():
+                statement_str = preprocessor(statement_str, self._library, self._backend, self.connection)
+
+            parsed_statements.append(statement_str)
+
+        return parsed_statements
+
+    def execute_sql(self, asql, logger = None):
+        """ Executes all sql statements from asql.
+
+        Args:
+            library (library.Library):
+            asql (str): unified sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
+        """
+        import sqlparse
+        from ambry.mprlib.exceptions import BadSQLError
+
+        if not logger:
+            logger = self._library.logger
+
+        statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
+
+        for statement in statements:
+            statement = self._backend.install_statement(self.connection, statement, logger=logger)
+
+            if statement.strip():
+                try:
+                    self._backend.query(self.connection, statement, fetch=False)
+                except Exception as e:
+                    raise BadSQLError("{}; {}".format(statement, e))
 
 
     def close(self):

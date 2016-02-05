@@ -201,7 +201,7 @@ class Remote(Base):
 
         return c.dataset(ref)
 
-    def checkin(self, package, no_partitions=False, cb=None):
+    def checkin(self, package, no_partitions=False, force=False,  cb=None):
         """
         Check in a bundle package to the remote.
 
@@ -215,11 +215,11 @@ class Remote(Base):
             raise NotFoundError("Package path does not exist: '{}' ".format(package.path))
 
         if self.is_api:
-            return self._checkin_api(package, no_partitions=no_partitions, cb=cb)
+            return self._checkin_api(package, no_partitions=no_partitions, force=force, cb=cb)
         else:
-            return self._checkin_fs(package, no_partitions=no_partitions, cb=cb)
+            return self._checkin_fs(package, no_partitions=no_partitions, force=force, cb=cb)
 
-    def _checkin_fs(self, package, no_partitions=False, cb=None):
+    def _checkin_fs(self, package, no_partitions=False, force = False,  cb=None):
         from fs.errors import NoPathURLError, NoSysPathError
         from ambry.orm import Partition
         assert self.account_accessor
@@ -243,7 +243,7 @@ class Remote(Base):
 
         if package.library:
             for p in package.session.query(Partition).filter(Partition.type == Partition.TYPE.UNION).all():
-                self._put_partition_fs(remote, p, package.library, cb=cb)
+                self._put_partition_fs(remote, p, package.library, force = force, cb=cb)
 
         self._put_metadata(remote, ds)
 
@@ -259,11 +259,11 @@ class Remote(Base):
 
         return remote, None
 
-    def _checkin_api(self, package, no_partitions=False, cb=None):
+    def _checkin_api(self, package, no_partitions=False, force = False, cb=None):
 
         c = self._api_client()
 
-        return c.library.checkin(package, cb)
+        return c.library.checkin(package, force=force, cb=cb)
 
     def _put_metadata(self, fs_remote, ds):
         """Store metadata on a pyfs remote"""
@@ -300,7 +300,7 @@ class Remote(Base):
         raise NotImplementedError()
         pass
 
-    def _put_partition_fs(self, fs_remote, p, library,  cb=None):
+    def _put_partition_fs(self, fs_remote, p, library,  force = False, cb=None):
 
         if cb:
             def cb_one_arg(n):
@@ -315,8 +315,14 @@ class Remote(Base):
 
         with p.datafile.open(mode='rb') as fin:
             fs_remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
-            event = fs_remote.setcontents_async(p.datafile.path, fin, progress_callback=cb_one_arg)
-            event.wait()
+
+            exists = fs_remote.exists(p.datafile.path)
+
+            if force or not exists:
+                event = fs_remote.setcontents_async(p.datafile.path, fin, progress_callback=cb_one_arg)
+                event.wait()
+            else:
+                cb('Partition {} already exists on remote'.format(p.vid), 0)
 
     def _put_partition_api(self, p, cb=None):
         raise NotImplementedError()

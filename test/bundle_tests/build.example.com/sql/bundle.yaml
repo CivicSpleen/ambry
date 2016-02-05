@@ -1,0 +1,52 @@
+about:
+    access: restricted
+    remote: test
+    footnote: nll
+    grain: null
+    groups: null
+    license: ckdbl
+    processed: null
+    rights: public
+    source: null
+    space: null
+    subject: null
+    summary: SQL Files
+    tags: []
+    time: null
+    title: Tests of using SQL files.
+contacts:
+    wrangler:
+        email: bob@example.com
+        name: Bob Bobson
+        url: http://example.com
+dependencies: {}
+external_documentation:
+    dataset:
+        description: Web page the links to the dataset description
+        source: null
+        title: Dataset Page
+        url: http://example.com
+    download:
+        description: Web page that links to the source files.
+        source: null
+        title: Download Page
+        url: http://example.com
+identity:
+    dataset: sql
+    id: dm6lLvcQXm
+    revision: 1
+    source: build.example.com
+    version: 0.0.1
+names:
+    fqname: build.example.com-sql-0.0.1~dm6lLvcQXm001
+    name: build.example.com-sql
+    vid: dm6lLvcQXm001
+    vname: build.example.com-sql-0.0.1
+pipelines:
+    build:
+        last:
+            - PrintEvery
+        select_partition:
+            - SelectPartitionFromSource
+requirements: {}
+versions: {}

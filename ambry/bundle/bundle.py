@@ -278,14 +278,13 @@ class Bundle(object):
         return self._library
 
     def warehouse(self,name):
+        from ambry.library.warehouse import Warehouse
 
         self.build_fs.makedir('warehouses', allow_recreate=True)
 
         path = self.build_fs.getsyspath('warehouses/'+name)
 
         dsn = "sqlite:////{}.db".format(path)
-
-        from ambry.library.warehouse import Warehouse
 
         return Warehouse(self.library, dsn=dsn)
 
@@ -996,10 +995,10 @@ Caster Code
         return iter_source, source_pipe
 
     def _iterable_source(self, source, ps=None):
-        from ambry_sources.sources import FixedSource, GeneratorSource, DatabaseRelationSource
+        from ambry_sources.sources import FixedSource, GeneratorSource
         from ambry_sources.exceptions import MissingCredentials
         from ambry_sources import get_source
-        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe, DatabaseRelationSourcePipe
+        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe, BundleWarehouseSource
         from ambry.bundle.process import call_interval
         from ambry.dbexceptions import ConfigurationError
 
@@ -1012,11 +1011,8 @@ Caster Code
             sp = PartitionSourcePipe(self, source, source.partition)
 
         elif source.reftype == 'sql':
-            s = DatabaseRelationSource(
-                source.spec,
-                self.library.database.engine.name,
-                self.library.database.connection)
-            sp = DatabaseRelationSourcePipe(source, s)
+
+            sp = BundleWarehouseSource(self, source)
 
         elif source.reftype == 'generator':
             import sys
@@ -1545,10 +1541,6 @@ Caster Code
 
         self.log('---- Ingesting ----')
 
-        # source may mention to sql relation defined in the bundle.sql. So process bundle.sql.
-        if self.build_source_files.sql.exists():
-            self.log('---- Execute bundle.sql ----')
-            self.build_source_files.sql.execute()
 
         self.dstate = self.STATES.BUILDING
         self.commit() # WTF? Without this, postgres blocks between table query, and update seq id in source tables.
@@ -2684,7 +2676,7 @@ Caster Code
         db.library = self.library
         return db
 
-    def checkin(self, no_partitions=False, remote_name=None, source_only=False, cb=None):
+    def checkin(self, no_partitions=False, remote_name=None, source_only=False, force=False, cb=None):
         from ambry.bundle.process import call_interval
 
         package = self.package(source_only=source_only)
@@ -2701,7 +2693,7 @@ Caster Code
 
         remote.account_accessor = self.library.account_accessor
 
-        remote_instance, path = remote.checkin(package, no_partitions=no_partitions, cb=cb)
+        remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)
 
         return remote_instance, package
 
@@ -2718,4 +2710,4 @@ Caster Code
         pass  # Remove files in the file system other resource.
 
     def __str__(self):
-        return self.identity.vname
+        return "<bundle: {}>".format(self.identity.vname)

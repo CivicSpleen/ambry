@@ -1,9 +1,10 @@
 import sqlparse
 
-from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
+from ambry.bundle.asql_parser import substitute_vids
+
 from ambry.util import get_logger
 
-from ..exceptions import MissingTableError
+from ..exceptions import BadSQLError
 
 logger = get_logger(__name__)
 
@@ -20,7 +21,8 @@ class DatabaseBackend(object):
         self._library = library
         self._dsn = dsn
 
-    def install(self, connection, partition, materialize=False):
+    def install(self, connection, partition, table_name=None, index_columns=None, materialize=False,
+                logger=None):
         """ Installs partition's mpr to the database to allow to execute sql queries over mpr.
 
         Args:
@@ -32,9 +34,10 @@ class DatabaseBackend(object):
             str: name of the created table.
 
         """
+
         raise NotImplementedError
 
-    def install_table(self, connection, table):
+    def install_table(self, connection, table, logger = None):
         """ Installs all partitons of the table and create view with union of all partitons.
 
         Args:
@@ -42,17 +45,47 @@ class DatabaseBackend(object):
             table (orm.Table):
         """
         # first install all partitions of the table
+
         queries = []
         query_tmpl = 'SELECT * FROM {}'
         for partition in table.partitions:
+            partition.localize()
             installed_name = self.install(connection, partition)
             queries.append(query_tmpl.format(installed_name))
 
         # now create view with union of all partitions.
-        query = 'CREATE VIEW {} AS {} '.format(
-            self.get_view_name(table), '\nUNION ALL\n'.join(queries))
+        query = 'CREATE VIEW {} AS {} '.format( table.vid, '\nUNION ALL\n'.join(queries))
         logger.debug('Creating view for table.\n    table: {}\n    query: {}'.format(table.vid, query))
         self._execute(connection, query, fetch=False)
+
+    def install_statement(self, connection, sql, logger = None):
+        """Convert an SQL statement to use vids and install all of the partitions and tables"""
+
+        sub_statement, tables, partitions = substitute_vids(self._library, sql)
+
+        print '!!!', sub_statement
+
+        materialize = False
+        return_null = False
+        if sub_statement.lower().startswith('materialize'):
+            materialize = True
+            return_null = True # All of MATERIALIZE is handled here; nothing else ot execute.
+
+            if  not partitions:
+                raise BadSQLError("Failed to find partition in MATERIALIZE statement: '{}' ".format(sub_statement))
+
+        for vid in partitions:
+            partition = self._library.partition(vid)
+            self.install(connection, partition, logger = logger, materialize=materialize)
+
+        for vid in tables:
+            table = self._library.table(vid)
+            self.install_table(connection, table, logger = logger)
+
+        if return_null:
+            return '';
+        else:
+            return sub_statement
 
     def query(self, connection, query, fetch=True):
         """ Creates virtual tables for all partitions found in the query and executes query.
@@ -62,73 +95,34 @@ class DatabaseBackend(object):
             fetch (bool): fetch result from database if True, do not fetch overwise.
 
         """
+
+        self.install_module(connection)
+
         statements = sqlparse.parse(sqlparse.format(query, strip_comments=True))
 
         # install all partitions and replace table names in the query.
         #
         logger.debug('Finding and installing all partitions from query. \n    query: {}'.format(query))
         new_query = []
-        for statement in statements:
-            logger.debug(
-                'Searching statement for partition ref.\n    statement: {}'.format(statement.to_unicode()))
-            table_names = _get_table_names(statement)
-            new_statement = statement.to_unicode()
 
-            if table_names:
-                for ref in table_names:
-                    partition = None
-                    table = None
-                    try:
-                        obj_number = ObjectNumber.parse(ref)
-                        if isinstance(obj_number, TableNumber):
-                            table = self._library.table(ref)
-                        else:
-                            # Do not care about other object numbers. Assume partition.
-                            raise NotObjectNumberError
-                    except NotObjectNumberError:
-                        # assume partition
-                        partition = self._library.partition(ref)
+        if len(statements) > 1:
+            raise BadSQLError("Can only query a single statement")
 
-                    if partition:
-                        logger.debug(
-                            'Searching partition table in the database.\n    partition: {}'
-                            .format(partition.name))
-                        try:
-                            # try to use existing fdw or materialized view.
-                            mpr_table = self._get_mpr_table(connection, partition)
-                            logger.debug(
-                                'Partition already installed. \n    partition: {}'.format(partition.vid))
-                        except MissingTableError:
-                            # FDW is not created, create.
-                            logger.debug(
-                                'Partition is not installed. Install now. \n    partition: {}'
-                                .format(partition.vid))
-                            mpr_table = self.install(connection, partition)
-                        new_statement = new_statement.replace(ref, mpr_table)
+        if len(statements) == 0:
+            raise BadSQLError("DIdn't get any statements in '{}'".format(query))
 
-                    if table:
-                        logger.debug(
-                            'Searching table view in the database. \n    table: {}'
-                            .format(table.vid))
-                        try:
-                            # try to use existing fdw or materialized view.
-                            self._get_mpr_view(connection, table)
-                            logger.debug(
-                                'Table view already exists. \n    table: {}'.format(table.vid))
-                        except MissingTableError:
-                            # View is not created, create.
-                            logger.debug(
-                                'Table view does not exist. Create now. \n    table: {}'.format(table.vid))
-                            self.install_table(connection, table)
-                        new_statement = new_statement.replace(table.vid, self.get_view_name(table))
-            new_query.append(new_statement)
+        statement = statements[0]
 
-        new_query = '\n'.join(new_query)
+        logger.debug( 'Searching statement for partition ref.\n    statement: {}'.format(statement.to_unicode()))
+
+        statement = self.install_statement(connection, statement.to_unicode())
+
         logger.debug(
             'Executing updated query after partition install.'
             '\n    query before update: {}\n    query to execute (updated query): {}'
-            .format(query, new_query))
-        return self._execute(connection, new_query, fetch=fetch)
+            .format(statement, new_query))
+
+        return self._execute(connection, statement, fetch=fetch)
 
     def index(self, connection, partition, columns):
         """ Create an index on the columns.
@@ -196,8 +190,11 @@ class DatabaseBackend(object):
         raise NotImplementedError
 
 
+
 def _get_table_names(statement):
     """ Returns table names found in the query.
+
+    NOTE. This routine would use the sqlparse parse tree, but vnames don't parse very well.
 
     Args:
         statement (sqlparse.sql.Statement): parsed by sqlparse sql statement.
@@ -205,9 +202,13 @@ def _get_table_names(statement):
     Returns:
         list of str
     """
+
     parts = statement.to_unicode().split()
+
     tables = set()
+
     for i, token in enumerate(parts):
         if token.lower() == 'from' or token.lower().endswith('join'):
             tables.add(parts[i + 1].rstrip(';'))
+
     return list(tables)

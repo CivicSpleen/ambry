@@ -181,6 +181,7 @@ def make_parser(cmd=None, parser=None):
                            help='Sync from files to records, and records to objects')
     command_p.add_argument('-f', '--files', default=False, action='store_true',
                            help='Sync from files to records')
+    command_p.add_argument('--force', default=False, action='store_true',help='Force sync')
     command_p.add_argument('-r', '--records', default=False, action='store_true',
                            help='Sync from records to objects')
     command_p.add_argument('-o', '--out', default=False, action='store_true',
@@ -346,6 +347,8 @@ def make_parser(cmd=None, parser=None):
     command_p.add_argument('-r', '--remote', help='Specify remote, rather than using default for bundle')
     command_p.add_argument('-s', '--source', default=False, action='store_true',
                            help='Only package source files')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Overwrite already uploaded files')
     #
     # Update Command
     #
@@ -844,7 +847,6 @@ def bundle_clean(args, l, rc):
 
     b.commit()
 
-
 def bundle_sync(args, l, rc):
 
     b = using_bundle(args, l)
@@ -861,7 +863,7 @@ def bundle_sync(args, l, rc):
 
     if args.out:
         prt('Sync out')
-        b.sync_out(file_name=args.file_name)
+        b.sync_out(file_name=args.file_name, force=args.force)
 
     if args.files:
         b.sync_in_files()
@@ -1056,7 +1058,6 @@ def bundle_exec(args, l, rc):
 
     prt('RETURN: ', r)
 
-
 def bundle_checkin(args, l, rc):
 
     ref, frm = get_bundle_ref(args, l)
@@ -1065,7 +1066,8 @@ def bundle_checkin(args, l, rc):
 
     remote_instance, path = b.checkin(remote_name=args.remote,
                                       no_partitions=args.no_partitions,
-                                      source_only=args.source)
+                                      source_only=args.source,
+                                      force=args.force)
 
     if path:
         b.log("Checked in to remote '{}' path '{}'".format(remote_instance, b.identity.fqname))
@@ -1244,13 +1246,9 @@ def bundle_dump(args, l, rc):
 
         b.import_lib()
 
-        if len(terms) == 2:
-            phase, source = terms
-        else:
-            phase = terms
-            source = None
 
-        pl = b.pipeline(phase, source)
+
+        pl = b.pipeline(terms)
 
         print(pl)
 

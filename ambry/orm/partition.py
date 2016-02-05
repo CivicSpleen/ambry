@@ -589,6 +589,7 @@ class Partition(Base):
         from filelock import FileLock
         from ambry.util import ensure_dir_exists
         from ambry_sources import MPRowsFile
+        from fs.errors import ResourceNotFoundError
 
         local = self._bundle.build_fs
 
@@ -607,8 +608,8 @@ class Partition(Base):
                           item_type='bytes',
                           state='downloading')
 
-        def progress(bts):
-            if ps:
+        if ps:
+            def progress(bts):
                 if ps.rec.item_total is None:
                     ps.rec.item_count = 0
 
@@ -616,13 +617,17 @@ class Partition(Base):
                     ps.rec.data = {} # Should not need to do this.
                     return self
 
-
                 item_count = ps.rec.item_count + bts
                 ps.rec.data['updates'] = ps.rec.data.get('updates', 0) + 1
 
                 if ps.rec.data['updates'] % 32 == 1:
                     ps.update(message='Localizing {}'.format(self.identity.name),
                               item_count=item_count)
+        else:
+            from ambry.bundle.process import call_interval
+            @call_interval(5)
+            def progress(bts):
+                self._bundle.log("Localizing {}. {} bytes downloaded".format(self.vname, bts))
 
         def exception_cb(e):
             raise e
@@ -633,14 +638,19 @@ class Partition(Base):
             if self.is_local:
                 return self
 
-            with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
-                event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
-                                                f,
-                                                progress_callback=progress,
-                                                error_callback=exception_cb)
-                event.wait()
-                if ps:
-                    ps.update_done()
+            try:
+                with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
+                    event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
+                                                    f,
+                                                    progress_callback=progress,
+                                                    error_callback=exception_cb)
+                    event.wait()
+                    if ps:
+                        ps.update_done()
+            except ResourceNotFoundError as e:
+                from ambry.orm.exc import NotFoundError
+                raise NotFoundError("Failed to get MPRfile '{}' from {} ".format(self.cache_key, remote.fs))
+
 
         return self
 
