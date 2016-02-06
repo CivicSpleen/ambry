@@ -36,11 +36,8 @@ class Mixin(object):
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
-        config = self._get_config()
-        library = self._get_library(config)
 
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
+        bundle = self.import_single_bundle('build.example.com/generators')
 
         # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
         # not matter here. Hacking it to speed up the test.
@@ -50,12 +47,12 @@ class Mixin(object):
 
         try:
             partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            rows = bundle.library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             bundle.progress.close()
-            library.warehouse.close()
-            library.database.close()
+            bundle.library.warehouse.close()
+            bundle.library.database.close()
 
     def test_install_and_query_materialized_partition(self):
         # materialized view for postgres and readonly table for sqlite.
@@ -65,11 +62,7 @@ class Mixin(object):
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
-
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
+        bundle = self.import_single_bundle('build.example.com/generators')
 
         # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
         # not matter here. Hacking it to speed up the test.
@@ -81,22 +74,22 @@ class Mixin(object):
             partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
 
             # materialize partition (materialized view for postgres, readonly table for sqlite)
-            library.warehouse.materialize(partition1.vid)
+            bundle.library.warehouse.materialize(partition1.vid)
 
             # query partition.
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            rows = bundle.library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
 
             # now drop the *.mpr file and check again. Query should return the same data.
             #
             syspath = partition1._datafile.syspath
             os.remove(syspath)
             self.assertFalse(os.path.exists(syspath))
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            rows = bundle.library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             bundle.progress.close()
-            library.warehouse.close()
-            library.database.close()
+            bundle.library.warehouse.close()
+            bundle.library.database.close()
 
     def test_index_creation(self):
         if isinstance(self, PostgreSQLTest):
@@ -187,11 +180,7 @@ class Mixin(object):
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
-
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
+        bundle = self.import_single_bundle('build.example.com/generators')
 
         # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
         # not matter here. Hacking it to speed up the test.
@@ -216,14 +205,14 @@ class Mixin(object):
                 UNION
                 SELECT col1, col2 FROM {};'''\
                 .format(partition1.vid, partition2.vid)
-            rows = library.warehouse.query(query)
+            rows = bundle.library.warehouse.query(query)
 
             # We need to sort rows before check because the order of the table partitions is unknown.
             self.assertEqual(sorted(rows), sorted([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]))
         finally:
             bundle.progress.close()
-            library.warehouse.close()
-            library.database.close()
+            bundle.library.warehouse.close()
+            bundle.library.database.close()
 
 
 class InMemorySQLiteTest(TestBase, Mixin):
