@@ -589,6 +589,9 @@ class Partition(Base):
         from ambry_sources import MPRowsFile
         from fs.errors import ResourceNotFoundError
 
+        if self.is_local:
+            return
+
         local = self._bundle.build_fs
 
         b = self._bundle.library.bundle(self.identity.as_dataset().vid)

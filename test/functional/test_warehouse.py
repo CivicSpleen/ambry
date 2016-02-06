@@ -26,13 +26,17 @@ class Mixin(object):
 
     def _assert_is_indexed(self, warehouse, partition, column):
         ''' Raises AssertionError if column is not indexed. '''
-        raise NotImplementedError('Override the method and provide db specific index check.')
 
-        # Check the DSN or engine, then switch to :
-        assert_sqlite_index(warehouse._backend._connection, partition, column)
-        assert_postgres_index(warehouse._backend._connection, table, column)
+        if warehouse.dsn.startswith('sqlite'):
+            assert_sqlite_index(warehouse._backend._connection, partition, column)
+        else:
+            assert_postgres_index(warehouse._backend._connection, partition, column)
+
+
 
     def test_query_mpr_with_auto_install(self):
+        from itertools import islice
+
         if isinstance(self, PostgreSQLTest):
             try:
                 assert_valid_ambry_sources('0.1.6')
@@ -43,24 +47,27 @@ class Mixin(object):
         library = self.library()
 
         bundle = library.bundle('build.example.com-generators')
+        partition = list(bundle.partitions)[0]
+        self.assertTrue(os.path.exists(partition.datafile.syspath))
 
-        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
-        # not matter here. Hacking it to speed up the test.
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        partition1 = PartitionFactory(dataset=bundle.dataset)
-        bundle.wrap_partition(partition1)
+        warehouse = self.get_warehouse()
 
         try:
-            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
+            # query partition.
+            rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
+
+            self.assertEqual('e9ebbe12-eea4-4411-a8a4-58c4706c24a8', rows[0][1])
+            self.assertEqual('e358f546-683f-476b-a8b8-184b58c550a2', rows[1][1])
+            self.assertEqual('4ac8a275-72a5-427a-bb91-92b936f9f625', rows[2][1])
         finally:
             bundle.progress.close()
-            library.warehouse.close()
+            warehouse.close()
             library.database.close()
 
     def test_install_and_query_materialized_partition(self):
         # materialized view for postgres and readonly table for sqlite.
+        from itertools import islice
+
         if isinstance(self, PostgreSQLTest):
             try:
                 assert_valid_ambry_sources('0.1.6')
@@ -70,31 +77,32 @@ class Mixin(object):
         library = self.library()
 
         bundle = library.bundle('build.example.com-generators')
+        partition = list(bundle.partitions)[0]
+        self.assertTrue(os.path.exists(partition.datafile.syspath))
 
         warehouse = self.get_warehouse()
 
-        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
-        # not matter here. Hacking it to speed up the test.
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        partition1 = PartitionFactory(dataset=bundle.dataset)
-        bundle.wrap_partition(partition1)
-
         try:
-            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
-
             # materialize partition (materialized view for postgres, readonly table for sqlite)
-            warehouse.materialize(partition1.vid)
+            warehouse.materialize(partition.vid)
 
             # query partition.
-            rows = warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            rows = list(islice( warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
 
-            # now drop the *.mpr file and check again. Query should return the same data.
-            #
-            syspath = partition1._datafile.syspath
-            os.remove(syspath)
-            self.assertFalse(os.path.exists(syspath))
-            rows = warehouse.query('SELECT * FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
+            self.assertEqual('e9ebbe12-eea4-4411-a8a4-58c4706c24a8', rows[0][1])
+            self.assertEqual('e358f546-683f-476b-a8b8-184b58c550a2', rows[1][1])
+            self.assertEqual('4ac8a275-72a5-427a-bb91-92b936f9f625', rows[2][1])
+
+            # Re-open the database through Sqlalchemy, which won't have the module installed,
+            # so the data can only come from materialization
+
+            rows = list(islice(warehouse.engine.execute('SELECT * FROM {};'.format(partition.vid)), None, 3))
+
+            self.assertEqual('e9ebbe12-eea4-4411-a8a4-58c4706c24a8', rows[0][1])
+            self.assertEqual('e358f546-683f-476b-a8b8-184b58c550a2', rows[1][1])
+            self.assertEqual('4ac8a275-72a5-427a-bb91-92b936f9f625', rows[2][1])
+
+
         finally:
             bundle.progress.close()
             warehouse.close()
@@ -110,36 +118,36 @@ class Mixin(object):
         library = self.library()
 
         bundle = library.bundle('build.example.com-generators')
+        partition = list(bundle.partitions)[0]
+        self.assertTrue(os.path.exists(partition.datafile.syspath))
 
         warehouse = self.get_warehouse()
 
-        # The way I use to get completed bundle is wrong (correct is ingest/source schema/dest schema/build),
-        # but it does not matter here. Hacking it to speed up the test.
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        partition1 = PartitionFactory(dataset=bundle.dataset)
-        bundle.wrap_partition(partition1)
+        print('DSN:', warehouse.dsn)
 
         try:
-            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
 
             # Index creation requires materialized tables.
-            warehouse.materialize(partition1.vid)
+            warehouse.materialize(partition.vid)
+
+            columns = partition.table.header[1:3] # 1: skips the primary key
 
             # Create indexes
-            warehouse.index(partition1.vid, ['col1', 'col2'])
+            warehouse.index(partition.vid,columns)
 
             # query partition.
-            self._assert_is_indexed(warehouse, partition1, 'col1')
-            self._assert_is_indexed(warehouse, partition1, 'col2')
+            self._assert_is_indexed(warehouse, partition, columns[0])
+            self._assert_is_indexed(warehouse, partition, columns[1])
 
             # query indexed data
-            rows = warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
+            rows = warehouse.query('SELECT col1, col2 FROM {};'.format(partition.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             bundle.progress.close()
             warehouse.close()
             library.database.close()
 
+    @unittest.SkipTest("This test needs a bundle that has multiple partitions of the same table")
     def test_table_install_and_query(self):
         try:
             assert_valid_ambry_sources('0.1.8')
@@ -148,18 +156,15 @@ class Mixin(object):
 
         library = self.library()
 
-        bundle = library.bundle('build.example.com-casters')
+        bundle = library.bundle('build.example.com-generators')
+        partition1 = list(bundle.partitions)[0]
+        partition2 = list(bundle.partitions)[1]
+        self.assertTrue(os.path.exists(partition1.datafile.syspath))
+        self.assertTrue(os.path.exists(partition2.datafile.syspath))
 
-        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
-        # not matter here. Hacking it to speed up the test.
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        TableFactory._meta.sqlalchemy_session = bundle.dataset.session
+        warehouse = self.get_warehouse()
 
-        table1 = TableFactory(dataset=bundle.dataset)
-        partition1 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=1)
-        partition2 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=2)
-        bundle.wrap_partition(partition1)
-        bundle.wrap_partition(partition2)
+        print('DSN:', warehouse.dsn)
 
         try:
             partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
@@ -178,6 +183,7 @@ class Mixin(object):
             library.warehouse.close()
             library.database.close()
 
+    @unittest.SkipTest("This test needs a bundle that has multiple partitions of the same table")
     def test_query_with_union(self):
         if isinstance(self, PostgreSQLTest):
             try:
@@ -193,26 +199,13 @@ class Mixin(object):
 
         library = self.library()
 
-        bundle = library.bundle('build.example.com-casters')
-
-        warehouse = self.get_warehouse()
-
-        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
-        # not matter here. Hacking it to speed up the test.
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        TableFactory._meta.sqlalchemy_session = bundle.dataset.session
-
-        table1 = TableFactory(dataset=bundle.dataset)
-        partition1 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=1)
-        partition2 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=2)
-        bundle.wrap_partition(partition1)
-        bundle.wrap_partition(partition2)
+        bundle = library.bundle('build.example.com-generators')
+        partition1 = list(bundle.partitions)[0]
+        partition2 = list(bundle.partitions)[1]
+        self.assertTrue(os.path.exists(partition1.datafile.syspath))
+        self.assertTrue(os.path.exists(partition2.datafile.syspath))
 
         try:
-            partition1._datafile = _get_datafile(
-                bundle.build_fs, partition1.cache_key)
-            partition2._datafile = _get_datafile(
-                bundle.build_fs, partition2.cache_key, rows=[[3, 3], [4, 4]])
 
             # execute nested query.
             query = '''
@@ -237,6 +230,7 @@ class InMemorySQLiteTest(TestBase, Mixin):
 
 # FIXME Run this test only if we have a Sqlite library
 class FileSQLiteTest(TestBase, Mixin):
+
 
     def get_warehouse(self):
         return self.library().warehouse()

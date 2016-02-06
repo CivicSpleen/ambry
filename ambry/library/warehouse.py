@@ -83,6 +83,10 @@ or via SQLAlchemy, to return datasets.
         connection = self._backend._get_connection()
         return list(self._backend.list(connection))
 
+    @property
+    def engine(self):
+        """Return A Sqlalchemy engine"""
+        return create_engine(self._warehouse_dsn)
 
     def query(self, query=''):
         """ Creates virtual tables for all partitions found in the query and executes query.
@@ -103,7 +107,7 @@ or via SQLAlchemy, to return datasets.
 
         connection = self._backend._get_connection()
 
-        return self._backend.query(connection, query)
+        return self._backend.query(connection, query, fetch=False)
 
     def install(self, ref, table_name=None, index_columns=None):
         """ Finds partition by reference and installs it to warehouse db.

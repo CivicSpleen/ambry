@@ -196,9 +196,10 @@ class Library(object):
     def filesystem(self):
         return self._fs
 
-    @property
     def warehouse(self, dsn=None):
+
         if not self._warehouse:
+
             from ambry.library.warehouse import Warehouse
             self._warehouse = Warehouse(self, dsn=dsn)
 

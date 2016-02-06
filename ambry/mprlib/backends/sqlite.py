@@ -99,7 +99,7 @@ class SQLiteBackend(DatabaseBackend):
 
         return table
 
-    def index(self, connection, table_name, columns):
+    def index(self, connection, partition, columns):
         """ Create an index on the columns.
 
         Args:
@@ -107,7 +107,9 @@ class SQLiteBackend(DatabaseBackend):
             partition (orm.Partition):
             columns (list of str):
         """
+
         import hashlib
+
         query_tmpl = '''
             CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({columns});
         '''
@@ -119,12 +121,15 @@ class SQLiteBackend(DatabaseBackend):
 
         col_hash = hashlib.md5(col_list).hexdigest()
 
+        table_name = partition.vid
+
         query = query_tmpl.format(
             index_name='{}_{}_i'.format(table_name, col_hash), table_name=table_name,
             columns=col_list)
 
         logger.debug('Creating sqlite index: query: {}'.format(query))
         cursor = connection.cursor()
+
         cursor.execute(query)
 
     def close(self):
@@ -312,6 +317,8 @@ class SQLiteBackend(DatabaseBackend):
 
         if fetch:
             return cursor.fetchall()
+        else:
+            return cursor
 
     def clean(self, connection):
 
