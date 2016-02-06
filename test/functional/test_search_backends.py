@@ -296,11 +296,11 @@ class WhooshTest(TestBase, AmbryReadyMixin):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        rc = self.get_rc()
-        rc.services.search = 'whoosh'
+
+        self._my_library = self.library()
+        self._my_library.config.services.search = 'whoosh'
 
         # we need clean backend for test
-        self._my_library = self.library(config=rc)
         WhooshSearchBackend(self._my_library).reset()
         assert isinstance(self._my_library.search.backend, WhooshSearchBackend)
 
