@@ -75,7 +75,7 @@ class LibraryContext(object):
 
 class Library(object):
 
-    def __init__(self,  config=None, search=None, echo=None, read_only=False):
+    def __init__(self, config=None, search=None, echo=None, read_only=False):
         from sqlalchemy.exc import OperationalError
         from ambry.orm.exc import DatabaseMissingError
 
