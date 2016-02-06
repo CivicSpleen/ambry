@@ -316,23 +316,23 @@ class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.rc = self.get_rc()
 
-        self._CONFIG_DATABASE = self.rc.library.database
-        if self.rc.library.database != 'sqlite://':
-            # switch to in-memory database.
-            self.rc.library.database = 'sqlite://'
+        self._my_library = self.library()
+        self._DATABASE_DSN = self._my_library.database.dsn
+        if self._my_library.database.dsn != 'sqlite://':
+            self._my_library.drop()
+            self._my_library.database.dsn = 'sqlite://'
+            self._my_library.create()
 
-        # force to use library database for search.
-        self.rc.services.search = None
-        self._my_library = self.library(self.rc)
+        # make library to use library database for search.
+        self._my_library.config.services.search = None
         assert isinstance(self._my_library.search.backend, SQLiteSearchBackend)
         self.assertEqual(self._my_library.database.dsn, 'sqlite://')
 
     def tearDown(self):
         super(self.__class__, self).tearDown()
-        if self.rc.library.database != self._CONFIG_DATABASE:
-            self.rc.library.database = self._CONFIG_DATABASE
+        if self._my_library.database.dsn != self._DATABASE_DSN:
+            self._my_library.database.dsn = self._DATABASE_DSN
 
 
 class FileSQLiteTest(TestBase, AmbryReadyMixin):
