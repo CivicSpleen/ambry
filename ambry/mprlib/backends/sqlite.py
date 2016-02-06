@@ -282,6 +282,7 @@ class SQLiteBackend(DatabaseBackend):
                 dsn = ':memory:'
             else:
                 dsn = dsn.replace('sqlite:///', '')
+
             logger.debug(
                 'Creating new apsw connection.\n   dsn: {}, config_dsn: {}'
                 .format(dsn, self._dsn))

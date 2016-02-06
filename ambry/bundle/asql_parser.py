@@ -41,6 +41,17 @@ def parse_view(query):
     Returns:
         View instance: parsed view.
     """
+
+    try:
+        idx = query.lower().index('where')
+        query = query[:idx]
+    except ValueError:
+        pass
+
+    if not query.endswith(';'):
+        query = query.strip()
+        query += ';'
+
     result = _view_stmt.parseString(query)
 
     return View(result)
@@ -200,7 +211,7 @@ reserved_words = (
     | right_kw | cross_kw | outer_kw | on_kw | insert_kw | into_kw
 )
 
-ident = ~reserved_words + Word(alphas, alphanums + '_$').setName('identifier')
+ident = ~reserved_words + Word(alphas, alphanums + '_$.').setName('identifier')
 
 column_name = delimitedList(ident, '.', combine=True)
 column_name_list = Group(delimitedList(column_name))
@@ -344,10 +355,13 @@ def substitute_vids(library, statement):
     from ambry.identity import ObjectNumber, TableNumber, NotObjectNumberError
     from ambry.orm.exc import NotFoundError
 
+
     try:
-        parts = statement.split()
+        stmt_str = statement.to_unicode()
     except AttributeError:
-        parts = statement.to_unicode().split()
+        stmt_str = statement
+
+    parts = stmt_str.strip(';').split()
 
     new_parts = []
 
@@ -356,7 +370,7 @@ def substitute_vids(library, statement):
 
     while parts:
         token = parts.pop(0).strip()
-        if token.lower() in ('from', 'join', 'materialize'):
+        if token.lower() in ('from', 'join', 'materialize', 'install'):
             ident = parts.pop(0).strip(';')
             new_parts.append(token)
 
@@ -378,9 +392,106 @@ def substitute_vids(library, statement):
                     new_parts.append(partition.vid)
                 except NotFoundError:
                     # Ok, maybe it is just a normal identifier...
+
                     new_parts.append(ident)
 
         else:
             new_parts.append(token)
 
-    return ' '.join(new_parts), tables, partitions
+    return ' '.join(new_parts).strip(), tables, partitions
+
+def validate(sql):
+    """
+    Parse a SQL statement and enforce some rules.
+
+    The rules are:
+
+    * If there are JOINs, all tables must be aliased.
+    * In the join clauses, all columns must have dotted forms, using the table aliases.
+
+    :param sql:
+    :return:
+    :raises: Exception that includes a list of the errors.
+    """
+
+    pass
+
+
+
+def find_indexable_materializable(sql, library):
+    """
+    Parse a statement, then call functions to install, materialize or create indexes for partitions
+    referenced in the statement.
+
+    :param sql:
+    :param materialize_f:
+    :param install_f:
+    :param index_f:
+    :return:
+    """
+
+    derefed, tables, partitions = substitute_vids(library, sql)
+
+    if derefed.lower().startswith('create index'):
+
+        parsed = parse_index(derefed)
+
+        return derefed, [], [(parsed.source, parsed.columns)], [], []
+
+    elif derefed.lower().startswith('materialize'):
+        _, vid = derefed.split()
+
+        return derefed, [], [], [vid], []
+
+    elif derefed.lower().startswith('install'):
+        _, vid = derefed.split()
+
+        return derefed, [], [vid], [], []
+
+    elif derefed.lower().startswith('select'):
+        parsed = parse_select(derefed)
+
+    elif derefed.lower().startswith('create view'):
+        parsed = parse_view(derefed)
+
+    else:
+        return derefed, list(tables), list(partitions), [], []
+
+    def partition_aliases(parsed):
+        d = {}
+
+        for source in parsed.sources:
+            d[source.alias] = source.name
+
+        for j in parsed.joins:
+            if j.source.alias:
+                d[j.source.alias] = j.source.name
+
+        return d
+
+    def indexable_columns(aliases, parsed):
+
+        indexes = []
+
+        for j in parsed.joins:
+            for col in j.join_cols:
+                if '.' in col:
+                    try:
+                        alias, col = col.split('.')
+                        indexes.append((aliases[alias], [col]))
+                    except KeyError:
+                        pass
+
+        return indexes
+
+    aliases = partition_aliases(parsed)
+
+    indexes = indexable_columns(aliases, parsed)
+
+    materialize = set([ vid for vid in set(aliases.values()) if vid.startswith('p') ])
+
+    install = set(partitions) - materialize
+
+    return derefed, list(tables), list(install), list(materialize), indexes
+
+

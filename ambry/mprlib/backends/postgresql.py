@@ -23,7 +23,7 @@ class PostgreSQLBackend(DatabaseBackend):
     def sql_processors(self):
         return [_preprocess_postgres_index]
 
-    def install(self, connection, partition, table_name=None, index_columns=None, materialize=False,
+    def install(self, connection, partition, table_name=None, columns=None, materialize=False,
                 logger=None):
         """ Creates FDW or materialize view for given partition.
 

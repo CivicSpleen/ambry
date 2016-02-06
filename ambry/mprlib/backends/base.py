@@ -58,32 +58,7 @@ class DatabaseBackend(object):
         logger.debug('Creating view for table.\n    table: {}\n    query: {}'.format(table.vid, query))
         self._execute(connection, query, fetch=False)
 
-    def install_statement(self, connection, sql, logger = None):
-        """Convert an SQL statement to use vids and install all of the partitions and tables"""
 
-        sub_statement, tables, partitions = substitute_vids(self._library, sql)
-
-        materialize = False
-        return_null = False
-        if sub_statement.lower().startswith('materialize'):
-            materialize = True
-            return_null = True # All of MATERIALIZE is handled here; nothing else ot execute.
-
-            if  not partitions:
-                raise BadSQLError("Failed to find partition in MATERIALIZE statement: '{}' ".format(sub_statement))
-
-        for vid in partitions:
-            partition = self._library.partition(vid)
-            self.install(connection, partition, logger = logger, materialize=materialize)
-
-        for vid in tables:
-            table = self._library.table(vid)
-            self.install_table(connection, table, logger = logger)
-
-        if return_null:
-            return '';
-        else:
-            return sub_statement
 
     def query(self, connection, query, fetch=True):
         """ Creates virtual tables for all partitions found in the query and executes query.
@@ -113,14 +88,14 @@ class DatabaseBackend(object):
 
         logger.debug( 'Searching statement for partition ref.\n    statement: {}'.format(statement.to_unicode()))
 
-        statement = self.install_statement(connection, statement.to_unicode())
+        #statement = self.install_statement(connection, statement.to_unicode())
 
         logger.debug(
             'Executing updated query after partition install.'
             '\n    query before update: {}\n    query to execute (updated query): {}'
             .format(statement, new_query))
 
-        return self._execute(connection, statement, fetch=fetch)
+        return self._execute(connection, statement.to_unicode(), fetch=fetch)
 
     def index(self, connection, partition, columns):
         """ Create an index on the columns.

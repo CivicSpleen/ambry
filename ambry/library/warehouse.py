@@ -130,7 +130,8 @@ or via SQLAlchemy, to return datasets.
             # assume partition.
             partition = self._library.partition(ref)
             connection = self._backend._get_connection()
-            return self._backend.install(connection, partition, table_name=table_name, index_coumns=index_columns)
+
+            return self._backend.install(connection, partition, table_name=table_name, index_columns=index_columns)
 
     def materialize(self, ref, table_name=None, index_columns=None):
         """ Creates materialized table for given partition reference.
@@ -165,7 +166,6 @@ or via SQLAlchemy, to return datasets.
         partition = self._library.partition(ref)
         self._backend.index(connection, partition, columns)
 
-
     def parse_sql(self, asql):
         """ Executes all sql statements from asql.
 
@@ -197,20 +197,46 @@ or via SQLAlchemy, to return datasets.
         """
         import sqlparse
         from ambry.mprlib.exceptions import BadSQLError
+        from ambry.bundle.asql_parser import find_indexable_materializable
 
         if not logger:
             logger = self._library.logger
 
         statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
 
-        for statement in statements:
-            statement = self._backend.install_statement(self.connection, statement, logger=logger)
+        for parsed_statement in statements:
 
-            if statement.strip():
+            statement, tables, install, materialize, indexes = \
+                find_indexable_materializable(parsed_statement, self._library)
+
+            logger.info("Process statement: {}".format(statement[:40]))
+
+            for vid in install:
+                logger.info('    Install {}'.format(vid))
+                self.install(vid)
+
+            for vid in materialize:
+                logger.info('    Materialize {}'.format(vid))
+                self.materialize(vid)
+
+            for vid, columns in indexes:
+                logger.info('    Index {}'.format(vid))
                 try:
-                    self._backend.query(self.connection, statement, fetch=False)
+                    self.index(vid, columns)
                 except Exception as e:
-                    raise BadSQLError("{}; {}".format(statement, e))
+                    logger.error('    Failed to index {}; {}'.format(vid, e))
+
+            if statement.lower().startswith('create'):
+                logger.info('    Create {}'.format(statement))
+                connection = self._backend._get_connection()
+                cursor = self._backend.query(connection, statement, fetch=False)
+                cursor.close()
+
+            if statement.lower().startswith('select'):
+                logger.info('Run query {}'.format(statement))
+                connection = self._backend._get_connection()
+
+                return self._backend.query(connection, statement, fetch=False)
 
 
     def close(self):

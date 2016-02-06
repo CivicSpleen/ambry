@@ -30,7 +30,7 @@ from ambry.library.search import Search
 from ambry.orm import Partition, File, Config, Table, Database, Dataset, Account
 from ambry.orm.exc import NotFoundError, ConflictError
 from ambry.run import get_runconfig
-from ambry.util import get_logger
+from ambry.util import get_logger, memoize
 
 from .filesystem import LibraryFilesystem
 
@@ -196,14 +196,20 @@ class Library(object):
     def filesystem(self):
         return self._fs
 
+    @memoize
     def warehouse(self, dsn=None):
 
-        if not self._warehouse:
+        from ambry.library.warehouse import Warehouse
 
-            from ambry.library.warehouse import Warehouse
-            self._warehouse = Warehouse(self, dsn=dsn)
+        if self.database.dsn.startswith('sqlite') and dsn is None:
+            from ambry.util import parse_url_to_dict, unparse_url_dict
 
-        return self._warehouse
+            d = parse_url_to_dict(self.database.dsn)
+
+            dsn = self.database.dsn.replace(os.path.basename(d['path']),'warehouse.db')
+
+        return Warehouse(self, dsn=dsn)
+
 
     @property
     def config(self):
