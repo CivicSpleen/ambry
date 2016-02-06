@@ -14,11 +14,8 @@ Example:
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
 from ambry.orm import Table
-
-
 from ambry.util import get_logger
 
 logger = get_logger(__name__)
@@ -67,7 +64,6 @@ or via SQLAlchemy, to return datasets.
             raise Exception('Do not know how to handle {} dsn.'.format(dsn))
 
         self._warehouse_dsn = dsn
-
 
     @property
     def dsn(self):

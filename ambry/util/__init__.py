@@ -5,7 +5,6 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-
 from collections import OrderedDict, defaultdict, Mapping, deque, MutableMapping, Callable
 from functools import partial, reduce, wraps
 import json
@@ -26,13 +25,10 @@ from bs4 import BeautifulSoup
 
 from six.moves import filterfalse, xrange as six_xrange
 from six import iteritems, iterkeys, itervalues, print_, StringIO
-from six.moves import zip as six_izip
 from six.moves.urllib.parse import urlparse, urlsplit, urlunsplit
 from six.moves.urllib.request import urlopen
 
-
 from ambry.dbexceptions import ConfigurationError
-
 
 logger_init = set()
 
@@ -43,8 +39,11 @@ def get_logger(name, file_name=None, stream=None, template=None, propagate=False
     """
 
     logger = logging.getLogger(name)
-    if 'test' in sys.argv and not level:
-        # testing without level, this means user does not want to see any log messages.
+    running_tests = (
+        'test' in sys.argv  # running with setup.py
+        or sys.argv[0].endswith('py.test'))  # running with py.test
+    if running_tests and not level:
+        # testing without level, this means tester does not want to see any log messages.
         level = logging.CRITICAL
 
     if not level:
@@ -210,7 +209,6 @@ def lru_cache(maxsize=128, maxtime=60):
         return wrapper
 
     return decorating_function
-
 
 
 class YamlIncludeLoader(yaml.Loader):
@@ -655,8 +653,6 @@ def md5_for_file(f, block_size=2 ** 20):
             return md5_for_file(f, block_size)
 
 
-
-
 def make_acro(past, prefix, s):  # pragma: no cover
     """Create a three letter acronym from the input string s.
 
@@ -1002,6 +998,7 @@ def filter_url(url, **kwargs):
 
     return unparse_url_dict({k: v for k, v in list(d.items()) if v})
 
+
 def select_from_url(url, key):
     d = parse_url_to_dict(url)
     return d.get(key)
@@ -1179,7 +1176,7 @@ def drop_empty(rows):
     return zip(*[col for col in zip(*rows) if bool(filter(bool, col[1:]))])
 
 
-#http://stackoverflow.com/a/20577580
+# http://stackoverflow.com/a/20577580
 def dequote(s):
     """
     If a string has single or double quotes around it, remove them.

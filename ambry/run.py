@@ -9,11 +9,11 @@ import os.path
 
 from six import string_types
 
-from ambry.util import AttrDict, lru_cache, parse_url_to_dict
+from ambry.util import AttrDict, parse_url_to_dict
 from .dbexceptions import ConfigurationError
 
 
-def get_runconfig(path=None, root = None, db= None):
+def get_runconfig(path=None, root=None, db=None):
     """Load the main configuration files and accounts file.
 
     Debprecated. Use load()
@@ -22,7 +22,7 @@ def get_runconfig(path=None, root = None, db= None):
     return load(path, root=root, db=db)
 
 
-def load(path=None, root = None, db = None):
+def load(path=None, root=None, db=None):
     "Like get_runconfig, but isn't cached"
 
     config = load_config(path)
@@ -98,7 +98,6 @@ def find_config_file(file_name, extra_path=None):
         os.path.expanduser('~/' + USER_DIR),
         ROOT_DIR
     ]
-
 
     for path in paths:
         if os.path.isdir(path) and os.path.exists(os.path.join(path, file_name)):

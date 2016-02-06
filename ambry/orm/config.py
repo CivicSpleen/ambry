@@ -48,9 +48,8 @@ class Config(Base):
 
     def incver(self):
         """Increment all of the version numbers and return a new object"""
-        from . import  incver
-        return incver(self, ['d_vid', 'id','parent_id'])
-
+        from . import incver
+        return incver(self, ['d_vid', 'id', 'parent_id'])
 
     @property
     def dict(self):
@@ -173,6 +172,7 @@ class ConfigTypeGroupAccessor(object):
 
     def __len__(self):
         return len(self._configs)
+
 
 class ConfigGroupAccessor(object):
 

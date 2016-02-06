@@ -38,6 +38,7 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 global_library = None
 
+
 def new_library(config=None):
 
     if config is None:
@@ -74,7 +75,7 @@ class LibraryContext(object):
 
 class Library(object):
 
-    def __init__(self,  config=None, search=None, echo=None, read_only=False):
+    def __init__(self, config=None, search=None, echo=None, read_only=False):
         from sqlalchemy.exc import OperationalError
         from ambry.orm.exc import DatabaseMissingError
 
@@ -121,10 +122,8 @@ class Library(object):
             read_only=self.read_only
         )
 
-
     def clone(self):
         """Create a deep copy of this library"""
-
         return Library(**self.ctor_args)
 
     @property
@@ -134,7 +133,6 @@ class Library(object):
         """
 
         return LibraryContext(self.ctor_args)
-
 
     def sync_config(self):
         """Sync the file config into the library proxy data in the root dataset """
@@ -199,7 +197,7 @@ class Library(object):
         return self._fs
 
     @property
-    def warehouse(self, dsn = None):
+    def warehouse(self, dsn=None):
         if not self._warehouse:
             from ambry.library.warehouse import Warehouse
             self._warehouse = Warehouse(self, dsn=dsn)
@@ -320,7 +318,6 @@ class Library(object):
         ds = self._db.dataset_by_cache_key(cache_key)
 
         return self.bundle(ds)
-
 
     @property
     def bundles(self):

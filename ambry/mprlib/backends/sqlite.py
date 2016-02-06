@@ -41,6 +41,7 @@ class SQLiteBackend(DatabaseBackend):
             str: name of the created table.
 
         """
+        virtual_table = partition.vid
 
         table = partition.vid if not table_name else table_name
 
@@ -324,7 +325,6 @@ class SQLiteBackend(DatabaseBackend):
 
         if os.path.exists(path):
             os.remove(path)
-
 
         # Tried this, but it thows an error:
         # SQLError: SQLError: no such module: mod_partition

@@ -27,7 +27,7 @@ class Test(TestBase):
         self._files = {}  # file sent to CKAN mock.
 
     def test_dataset_export(self):
-        bundle = self.setup_bundle('simple', source_url='temp://')
+        bundle = self.import_single_bundle('build.example.com/generators')
         FileFactory._meta.sqlalchemy_session = bundle.dataset._database.session
 
         bundle.dataset.config.metadata.about.access = 'public'
@@ -81,7 +81,7 @@ class Test(TestBase):
         else:
             assert dataset_package
 
-        self.assertEqual(dataset_package['name'], dataset.vid)
+        self.assertEqual(dataset_package['name'], dataset.vid.lower())
         self.assertIn('### Documentation', dataset_package['notes'])
 
         # test contacts.

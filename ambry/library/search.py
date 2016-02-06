@@ -102,7 +102,6 @@ class Search(object):
                     partition_n += 1
                     tick(dataset_n, partition_n)
             else:
-
                 # dataset already indexed
                 pass
 

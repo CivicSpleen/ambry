@@ -282,13 +282,11 @@ class Bundle(object):
 
         self.build_fs.makedir('warehouses', allow_recreate=True)
 
-        path = self.build_fs.getsyspath('warehouses/'+name)
+        path = self.build_fs.getsyspath('warehouses/' + name)
 
-        dsn = "sqlite:////{}.db".format(path)
+        dsn = 'sqlite:////{}.db'.format(path)
 
         return Warehouse(self.library, dsn=dsn)
-
-
 
     def dep(self, source_name):
         """Return a bundle dependency from the sources list
@@ -2246,7 +2244,7 @@ Caster Code
         parent.state = parent.STATES.COALESCING
 
         if parent.local_datafile.exists:
-            ps.add("Removing exisiting datafile", partition=parent)
+            ps.add('Removing existing datafile', partition=parent)
             parent.local_datafile.remove()
 
         if len(segments) == 1:

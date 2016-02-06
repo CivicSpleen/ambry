@@ -30,7 +30,7 @@ class TestBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        cls.dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
+        cls.dbname = os.environ.get('AMBRY_TEST_DB') or 'sqlite'
 
         config = ambry.run.load()  # not cached; get_config is
         cls.test_dsn_key = 'test-{}'.format(cls.dbname)
@@ -155,15 +155,11 @@ class TestBase(unittest.TestCase):
 
         from proto import ProtoLibrary
 
-        dsn = os.environ.get("AMBRY_TEST_DB", None)
+        dsn = os.environ.get('AMBRY_TEST_DB', None)
 
         proto = ProtoLibrary(dsn=dsn)
 
-        print proto
-
-        l =  proto.init_library(use_proto=use_proto)
-
-        print 'Build fs: ', l.filesystem.build()
+        l = proto.init_library(use_proto=use_proto)
 
         return l
 
@@ -217,12 +213,12 @@ class TestBase(unittest.TestCase):
         return db.new_dataset(**self.ds_params(n, source=source))
 
     def copy_bundle_files(self, source, dest):
-        from ambry.bundle.files import file_info_map
+        from ambry.bundle.files import file_classes
         from fs.errors import ResourceNotFoundError
 
-        for const_name, (path, clz) in list(file_info_map.items()):
+        for const_name, cls in file_classes.items():
             try:
-                dest.setcontents(path, source.getcontents(path))
+                dest.setcontents(cls._file_name, source.getcontents(cls._file_name))
             except ResourceNotFoundError:
                 pass
 
@@ -263,7 +259,7 @@ class TestBase(unittest.TestCase):
         self.copy_bundle_files(test_source_fs, b.source_fs)
         return b
 
-    def proto_library(self, dsn = None):
+    def proto_library(self, dsn=None):
         """Return a new proto library"""
 
         from proto import ProtoLibrary
@@ -271,6 +267,7 @@ class TestBase(unittest.TestCase):
         pl = ProtoLibrary(dsn=dsn)
 
         return pl.init_library()
+
 
 class PostgreSQLTestBase(TestBase):
     """ Base class for database tests who requires postgresql database.
