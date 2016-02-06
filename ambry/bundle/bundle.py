@@ -995,10 +995,10 @@ Caster Code
         return iter_source, source_pipe
 
     def _iterable_source(self, source, ps=None):
-        from ambry_sources.sources import FixedSource, GeneratorSource
+        from ambry_sources.sources import FixedSource, GeneratorSource, AspwCursorSource
         from ambry_sources.exceptions import MissingCredentials
         from ambry_sources import get_source
-        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe, BundleWarehouseSource
+        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe
         from ambry.bundle.process import call_interval
         from ambry.dbexceptions import ConfigurationError
 
@@ -1012,7 +1012,27 @@ Caster Code
 
         elif source.reftype == 'sql':
 
-            sp = BundleWarehouseSource(self, source)
+            sql_file, table = source.ref.split(':', 1)
+
+            w = self.warehouse(os.path.splitext(sql_file)[0])
+
+            f = self.build_source_files.file_by_path(sql_file)
+
+            w.execute_sql(f.unpacked_contents, logger=self.logger)
+
+            # For now, asuming knowledge that this is an ASPW connection
+            connection = w._backend._get_connection()
+
+            cursor = connection.cursor()
+
+            cursor.execute('SELECT * FROM {};'.format(table))
+
+            spec = source.spec
+            spec.start_line = 1
+            spec.header_lines = [0]
+
+            s = AspwCursorSource(spec, cursor)
+            sp = GeneratorSourcePipe(self, source, s)
 
         elif source.reftype == 'generator':
             import sys
@@ -1679,7 +1699,8 @@ Caster Code
 
             from ambry.orm.exc import NotFoundError
 
-            if not source.is_partition and not source.is_relation and source.datafile.exists:
+            if not source.is_partition and source.datafile.exists:
+
                 if not source.datafile.is_finalized:
                     source.datafile.remove()
                 elif force:
@@ -1720,11 +1741,12 @@ Caster Code
                 ps.update(
                     message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
 
-            intuit_type = not source.is_relation  # FIXME: Do not intuit rows for is_relation!
 
             source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
                                       limit=500 if self.limited_run else None,
-                                      intuit_type=intuit_type, run_stats = False)
+                                      intuit_type=True, run_stats = False)
+
+            ps.update(message='Ingested to {}'.format(source.datafile.syspath))
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 

@@ -428,51 +428,6 @@ class PartitionSourcePipe(Pipe):
         return 'Partition {}'.format(qualified_class_name(self))
 
 
-class BundleWarehouseSource(Pipe):
-    """Source pipe that implements iterator over sql database tables or views. """
-
-    def __init__(self, bundle, source):
-        from ..util import qualified_class_name
-
-        self._bundle = bundle
-        self._source = source
-
-        # file_name is for the pipeline logger, to generate a file
-        if self._source:
-            self.file_name = self._source.name
-        else:
-            self.file_name = qualified_class_name(self)
-
-
-    def __iter__(self):
-        import os
-
-        sql_file, table = self._source.ref.split(':', 1)
-
-        w = self._bundle.warehouse(os.path.splitext(sql_file)[0])
-
-        f = self._bundle.build_source_files.file_by_path(sql_file)
-
-        w.execute_sql(f.unpacked_contents, logger=self._bundle.logger)
-
-        # FOr now, asuming knowledge that this is an ASPW connection
-        connection = w._backend._get_connection()
-        cursor = connection.cursor()
-
-        for i, row in enumerate(cursor.execute('SELECT * FROM {};'.format(table))):
-
-            if i == 0:
-                self._headers = [ e[0] for e in cursor.getdescription()]
-                yield self._headers
-
-            yield row
-
-    def __str__(self):
-        from ..util import qualified_class_name
-        return 'DatabaseRelation {}'.format(qualified_class_name(self))
-
-
-
 class Sink(Pipe):
     """ A final stage pipe, which consumes its input and produces no output rows. """
 

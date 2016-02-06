@@ -44,8 +44,6 @@ names:
     vname: build.example.com-sql-0.0.1
 pipelines:
     build:
-        last:
-            - PrintEvery
         select_partition:
             - SelectPartitionFromSource
 requirements: {}

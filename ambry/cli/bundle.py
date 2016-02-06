@@ -1264,7 +1264,7 @@ def bundle_dump(args, l, rc):
         records = []
 
         for s in b.sources:
-            if s.is_downloadable:
+            if s.datafile.exists:
                 df = s.datafile
 
                 try:

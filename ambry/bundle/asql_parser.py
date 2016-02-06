@@ -19,6 +19,45 @@ from pyparsing import Word, delimitedList, Optional, Combine, Group, alphas, alp
 #
 
 
+def parse_select(query):
+    """ Parses asql query to view object.
+
+    Args:
+        query (str): asql query
+
+    Returns:
+        View instance: parsed view.
+    """
+    result = select_stmt.parseString(query)
+
+    return View(result)
+
+def parse_view(query):
+    """ Parses asql query to view object.
+
+    Args:
+        query (str): asql query
+
+    Returns:
+        View instance: parsed view.
+    """
+    result = _view_stmt.parseString(query)
+
+    return View(result)
+
+
+def parse_index(query):
+    """ Parses asql query to view object.
+
+    Args:
+        query (str): asql index create query.
+            Example: 'INDEX example.com-simple-simple (id, uuid);'
+
+    Returns:
+        Index instance: parsed index.
+    """
+    return Index(_index_stmt.parseString(query))
+
 class Source(object):
     """ Parsed source - table name or partition ref. """
 
@@ -80,6 +119,26 @@ class View(object):
         return 'name: {},\n sources: [{}],\n columns: [{}],\n joins: [{}]'.format(
             self.name, sources_str, columns_str, joins_str)
 
+class Select(object):
+    """ Parsed select """
+
+    def __init__(self, parse_result):
+
+        self.sources = [Source(s) for s in parse_result.sources]
+        self.columns = [Column(c) for c in parse_result.columns]
+        self.joins = [Join(j) for j in parse_result.joins]
+
+    def __str__(self):
+
+        def wr(o):
+            """ converts object to str and wraps it with curly braces. """
+            return '{%s}' % o
+
+        columns_str = ', '.join([wr(c) for c in self.columns])
+        sources_str = ', '.join([wr(s) for s in self.sources])
+        joins_str = ', '.join([wr(j) for j in self.joins])
+        return 'name: {},\n sources: [{}],\n columns: [{}],\n joins: [{}]'.format(
+            self.name, sources_str, columns_str, joins_str)
 
 class Index(object):
     """ Parsed index. """
@@ -88,32 +147,6 @@ class Index(object):
         self.source = parse_result.source
         self.columns = list(parse_result.columns)
 
-
-def parse_view(query):
-    """ Parses asql query to view object.
-
-    Args:
-        query (str): asql query
-
-    Returns:
-        View instance: parsed view.
-    """
-    result = _view_stmt.parseString(query)
-
-    return View(result)
-
-
-def parse_index(query):
-    """ Parses asql query to view object.
-
-    Args:
-        query (str): asql index create query.
-            Example: 'INDEX example.com-simple-simple (id, uuid);'
-
-    Returns:
-        Index instance: parsed index.
-    """
-    return Index(_index_stmt.parseString(query))
 
 
 # Parser implementation
@@ -230,6 +263,7 @@ select_stmt << (
     + from_kw
     + many_sources.setResultsName('sources')
     + ZeroOrMore(Group(join_stmt)).setResultsName('joins'))
+
 # Examples:
 # select = select_stmt.parseString(
 #     '''SELECT t1.col AS t1_c, t2.col AS t2_c, t3.col AS t3_c
@@ -289,6 +323,9 @@ _index_stmt.ignore(oracle_sql_comment)
 
 def substitute_vids(library, statement):
     """ Replace all of the references to tables and partitions with their vids.
+
+    This is a bit of a hack -- it ought to work with the parser, but instead it just looks for
+    common SQL tokens that indicate an identifier.
 
     :param statement: an sqlstatement. String.
     :return: tuple: new_statement, set of table vids, set of partition vids.

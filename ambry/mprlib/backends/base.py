@@ -63,8 +63,6 @@ class DatabaseBackend(object):
 
         sub_statement, tables, partitions = substitute_vids(self._library, sql)
 
-        print '!!!', sub_statement
-
         materialize = False
         return_null = False
         if sub_statement.lower().startswith('materialize'):
