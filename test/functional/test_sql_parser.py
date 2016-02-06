@@ -70,9 +70,13 @@ class Test(TestBase):
 
         self.assertEquals('cdph.ca.gov-hci-high_school_ed-city', select.joins[0].source.name)
         self.assertEquals('t2', select.joins[0].source.alias)
+        self.assertEquals(['t1_c', 't2_c'], list(select.joins[0].join_cols))
 
         self.assertEquals('cdph.ca.gov-hci-high_school_ed-state', select.joins[1].source.name)
         self.assertEquals('t3', select.joins[1].source.alias)
+        self.assertEquals(['t1_c', 't3_c'], select.joins[1].join_cols)
+
+
 
     def test_identifier_replacement(self):
         from ambry.bundle.asql_parser import substitute_vids

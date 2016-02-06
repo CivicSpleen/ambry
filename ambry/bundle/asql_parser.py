@@ -30,7 +30,7 @@ def parse_select(query):
     """
     result = select_stmt.parseString(query)
 
-    return View(result)
+    return Select(result)
 
 def parse_view(query):
     """ Parses asql query to view object.
@@ -92,6 +92,7 @@ class Join(object):
 
     def __init__(self, parsed_join):
         self.source = Source(parsed_join.source)
+        self.join_cols = parsed_join.join_cols.asList() if parsed_join.join_cols else None
 
     def __str__(self):
         return self.source.__str__()
@@ -106,6 +107,8 @@ class View(object):
         self.sources = [Source(s) for s in parse_result.sources]
         self.columns = [Column(c) for c in parse_result.columns]
         self.joins = [Join(j) for j in parse_result.joins]
+
+
 
     def __str__(self):
 
@@ -127,6 +130,7 @@ class Select(object):
         self.sources = [Source(s) for s in parse_result.sources]
         self.columns = [Column(c) for c in parse_result.columns]
         self.joins = [Join(j) for j in parse_result.joins]
+
 
     def __str__(self):
 
@@ -163,6 +167,7 @@ def _build_join(t):
     """ Populates join token fields. """
     t.source.name = t.source.parsed_name
     t.source.alias = t.source.parsed_alias[0] if t.source.parsed_alias else ''
+
     return t
 
 
@@ -177,6 +182,7 @@ as_kw = Keyword('as', caseless=True)
 from_kw = Keyword('from', caseless=True)
 where_kw = Keyword('where', caseless=True)
 join_kw = Keyword('join', caseless=True)
+on_kw = Keyword('on', caseless=True)
 left_kw = Keyword('left', caseless=True)
 right_kw = Keyword('right', caseless=True)
 cross_kw = Keyword('cross', caseless=True)
@@ -190,7 +196,7 @@ into_kw = Keyword('into', caseless=True)
 # define sql reserved words
 reserved_words = (
     update_kw | volatile_kw | create_kw | table_kw
-    | as_kw | from_kw | where_kw | join_kw | left_kw
+    | as_kw | from_kw | where_kw | join_kw | on_kw | left_kw
     | right_kw | cross_kw | outer_kw | on_kw | insert_kw | into_kw
 )
 
@@ -240,15 +246,19 @@ many_sources = OneOrMore(Group(source + Optional(comma_token)))
 
 # define join grammar
 #
+
+on_op = Optional( on_kw.suppress() + ident + Word('=').suppress() + ident )
+
 join_op = (
     comma_token
     | (
         Optional(natural_kw)
         + Optional(inner_kw | cross_kw | left_kw + outer_kw | left_kw | outer_kw)
-        + join_kw))
+        + join_kw)
+      )
 
+join_stmt = (join_op + source.setResultsName('source') + on_op.setResultsName('join_cols') ).setParseAction(_build_join)
 
-join_stmt = (join_op + source.setResultsName('source')).setParseAction(_build_join)
 # Example
 # join = join_stmt.parseString('join jtable1 as jt1')
 # print(join.source.name, join.source.alias)
@@ -257,6 +267,7 @@ join_stmt = (join_op + source.setResultsName('source')).setParseAction(_build_jo
 # define the select grammar
 #
 select_stmt = Forward()
+
 select_stmt << (
     select_kw
     + (Keyword('*').setResultsName('columns') | select_column_list.setResultsName('columns'))
