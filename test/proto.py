@@ -214,7 +214,6 @@ proto-dsn: {}
             b.finalize()
             b.close()
 
-
     def init_library(self, use_proto=True):
         """Initialize either the sqlite or pg library, based on the DSN """
         if self._db_type == 'sqlite':
@@ -222,7 +221,6 @@ proto-dsn: {}
         else:
 
             return self.init_pg(use_proto=use_proto)
-
 
     def init_sqlite(self, use_proto=True):
 
@@ -392,7 +390,6 @@ proto-dsn: {}
 
             conn.close()
 
-
         # Create the extensions, if they aren't already installed
         if load_extensions:
             with self.pg_engine(self.dsn).connect() as conn:
@@ -416,3 +413,16 @@ class TestBase(unittest.TestCase):
 
     def tearDown(self):
         pass
+
+    def library(self, dsn=None, use_proto=True):
+        """Return a new proto library"""
+
+        from proto import ProtoLibrary
+
+        # IMPLEMENT ME
+        # Check AMBRY_TEST_DB and databases.test-postgres for postgres database DSN
+
+        pl = ProtoLibrary(dsn=dsn)
+
+        return pl.init_library(use_proto=use_proto)
+

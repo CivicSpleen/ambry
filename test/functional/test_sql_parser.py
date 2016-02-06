@@ -72,3 +72,17 @@ class Test(unittest.TestCase):
 
         self.assertEquals('cdph.ca.gov-hci-high_school_ed-state', select.joins[1].source.name)
         self.assertEquals('t3', select.joins[1].source.alias)
+
+        def test_identifier_replacement(self):
+            from ambry.bundle.asql_parser import substitute_vids
+            l = self.library()
+
+            self.assertEquals('SELECT * FROM p00casters006003',
+                              substitute_vids(l, 'SELECT * FROM build.example.com-casters-simple')[0])
+
+            self.assertEquals('SELECT * FROM p00casters006003 LEFT JOIN pERJQxWUVb005001 ON foo = bar',
+                              substitute_vids(l,
+                                              """SELECT * FROM build.example.com-casters-simple
+                                                 LEFT JOIN build.example.com-generators-demo ON foo = bar
+                                              """)[0])
+

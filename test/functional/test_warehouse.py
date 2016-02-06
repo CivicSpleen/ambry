@@ -9,8 +9,7 @@ from ambry_sources.sources import GeneratorSource, SourceSpec
 
 from test.factories import PartitionFactory, TableFactory
 from test.helpers import assert_sqlite_index, assert_valid_ambry_sources, assert_postgres_index
-from test.test_base import TestBase, PostgreSQLTestBase
-
+from test.proto import TestBase
 
 class SQLiteInspector(object):
     # FIXME: Implement inspectors instead of mixin.
@@ -29,6 +28,10 @@ class Mixin(object):
         ''' Raises AssertionError if column is not indexed. '''
         raise NotImplementedError('Override the method and provide db specific index check.')
 
+        # Check the DSN or engine, then switch to :
+        assert_sqlite_index(warehouse._backend._connection, partition, column)
+        assert_postgres_index(warehouse._backend._connection, table, column)
+
     def test_query_mpr_with_auto_install(self):
         if isinstance(self, PostgreSQLTest):
             try:
@@ -36,11 +39,10 @@ class Mixin(object):
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
-        config = self._get_config()
-        library = self._get_library(config)
 
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
+        library = self.library()
+
+        bundle = library.bundle('build.example.com-generators')
 
         # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
         # not matter here. Hacking it to speed up the test.
@@ -65,11 +67,11 @@ class Mixin(object):
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
+        library = self.library()
 
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
+        bundle = library.bundle('build.example.com-generators')
+
+        warehouse = self.get_warehouse()
 
         # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
         # not matter here. Hacking it to speed up the test.
@@ -81,21 +83,21 @@ class Mixin(object):
             partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
 
             # materialize partition (materialized view for postgres, readonly table for sqlite)
-            library.warehouse.materialize(partition1.vid)
+            warehouse.materialize(partition1.vid)
 
             # query partition.
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            rows = warehouse.query('SELECT * FROM {};'.format(partition1.vid))
 
             # now drop the *.mpr file and check again. Query should return the same data.
             #
             syspath = partition1._datafile.syspath
             os.remove(syspath)
             self.assertFalse(os.path.exists(syspath))
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            rows = warehouse.query('SELECT * FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             bundle.progress.close()
-            library.warehouse.close()
+            warehouse.close()
             library.database.close()
 
     def test_index_creation(self):
@@ -105,7 +107,11 @@ class Mixin(object):
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
-        bundle = self.import_single_bundle('build.example.com/generators')
+        library = self.library()
+
+        bundle = library.bundle('build.example.com-generators')
+
+        warehouse = self.get_warehouse()
 
         # The way I use to get completed bundle is wrong (correct is ingest/source schema/dest schema/build),
         # but it does not matter here. Hacking it to speed up the test.
@@ -117,22 +123,22 @@ class Mixin(object):
             partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
 
             # Index creation requires materialized tables.
-            bundle.library.warehouse.materialize(partition1.vid)
+            warehouse.materialize(partition1.vid)
 
             # Create indexes
-            bundle.library.warehouse.index(partition1.vid, ['col1', 'col2'])
+            warehouse.index(partition1.vid, ['col1', 'col2'])
 
             # query partition.
-            self._assert_is_indexed(bundle.library.warehouse, partition1, 'col1')
-            self._assert_is_indexed(bundle.library.warehouse, partition1, 'col2')
+            self._assert_is_indexed(warehouse, partition1, 'col1')
+            self._assert_is_indexed(warehouse, partition1, 'col2')
 
             # query indexed data
-            rows = bundle.library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
+            rows = warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             bundle.progress.close()
-            bundle.library.warehouse.close()
-            bundle.library.database.close()
+            warehouse.close()
+            library.database.close()
 
     def test_table_install_and_query(self):
         try:
@@ -140,11 +146,9 @@ class Mixin(object):
         except AssertionError:
             self.SkipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
+        library = self.library()
 
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
+        bundle = library.bundle('build.example.com-casters')
 
         # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
         # not matter here. Hacking it to speed up the test.
@@ -187,11 +191,11 @@ class Mixin(object):
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
+        library = self.library()
 
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
+        bundle = library.bundle('build.example.com-casters')
+
+        warehouse = self.get_warehouse()
 
         # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
         # not matter here. Hacking it to speed up the test.
@@ -225,72 +229,24 @@ class Mixin(object):
             library.warehouse.close()
             library.database.close()
 
-
+# FIXME Run this test only if we have a Sqlite library
 class InMemorySQLiteTest(TestBase, Mixin):
 
-    def _get_config(self):
-        rc = self.get_rc()
-        # use file database for library for that test case.
-        self.__class__._real_warehouse_database = rc.library.get('warehouse')
-        self.__class__._real_test_database = rc.library.database
-        rc.library.warehouse = 'sqlite://'
-        rc.library.database = 'sqlite://'
-        return rc
+    def get_warehouse(self):
+        return self.library().warehouse(dsn="sqlite:///")
 
-    def _assert_is_indexed(self, warehouse, partition, column):
-        assert_sqlite_index(warehouse._backend._connection, partition, column)
-
-
+# FIXME Run this test only if we have a Sqlite library
 class FileSQLiteTest(TestBase, Mixin):
 
-    @classmethod
-    def setUpClass(cls):
-        TestBase.setUpClass()
-        if not cls._is_sqlite:
-            raise unittest.SkipTest('SQLite tests are disabled.')
-
-        cls._warehouse_db = 'sqlite:////tmp/test-warehouse-ambry-1.db'
-        try:
-            os.remove(cls._warehouse_db.replace('sqlite:///', ''))
-        except OSError:
-            pass
-
-    @classmethod
-    def tearDownClass(cls):
-        super(FileSQLiteTest, cls).tearDownClass()
-        rc = cls.get_rc()
-        if rc.library.database != cls._real_warehouse_database:
-            # restore database
-            rc.library.database = cls._real_warehouse_database
-
-    def tearDown(self):
-        super(self.__class__, self).tearDown()
-        os.remove(self._warehouse_db.replace('sqlite:///', ''))
-
-    def _get_config(self):
-        rc = TestBase.get_rc()
-        # use file database for library for that test case.
-        if not rc.library.warehouse == self._warehouse_db:
-            self.__class__._real_warehouse_database = rc.library.database
-            rc.library.warehouse = self._warehouse_db
-            rc.library.database = self._warehouse_db  # It's ok to use the same db file for that test case.
-        return rc
-
-    def _assert_is_indexed(self, warehouse, partition, column):
-        assert_sqlite_index(warehouse._backend._connection, partition, column)
+    def get_warehouse(self):
+        return self.library().warehouse()
 
 
-class PostgreSQLTest(PostgreSQLTestBase, Mixin):
+# FIXME: Run this test only if we have a Postgres library
+class PostgreSQLTest(TestBase, Mixin):
 
-    def _get_config(self):
-        rc = self.get_rc()
-        # replace database with postgres test database.
-        rc.library.warehouse = self.library_test_dsn  # It's ok to use the same database.
-        return rc
-
-    def _assert_is_indexed(self, warehouse, partition, column):
-        table = partition.vid + '_v'
-        assert_postgres_index(warehouse._backend._connection, table, column)
+    def get_warehouse(self):
+        return self.library().warehouse()
 
 
 def assert_shares_group(user=''):
@@ -350,23 +306,10 @@ def _get_generator_source(rows=None):
     return GeneratorSource(SourceSpec('foobar'), gen())
 
 
-class SqlParserTests(TestBase):
-
-    def test_identifier_replacement(self):
-        from ambry.bundle.asql_parser import substitute_vids
-        l = self.library()
-
-        self.assertEquals('SELECT * FROM p00casters006003',
-                          substitute_vids(l,'SELECT * FROM build.example.com-casters-simple')[0])
-
-        self.assertEquals('SELECT * FROM p00casters006003 LEFT JOIN pERJQxWUVb005001 ON foo = bar',
-                          substitute_vids(l,
-                                          """SELECT * FROM build.example.com-casters-simple
-                                             LEFT JOIN build.example.com-generators-demo ON foo = bar
-                                          """)[0])
-
-
-
+def _get_datafile(fs, path, rows=None):
+    datafile = MPRowsFile(fs, path)
+    datafile.load_rows(_get_generator_source(rows=rows))
+    return datafile
 
 
 class BundleWarehouse(TestBase):
@@ -428,10 +371,3 @@ class BundleWarehouse(TestBase):
         self.assertEqual(3, len(wh.list()))
 
 
-
-
-
-def _get_datafile(fs, path, rows=None):
-    datafile = MPRowsFile(fs, path)
-    datafile.load_rows(_get_generator_source(rows=rows))
-    return datafile
