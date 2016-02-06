@@ -8,7 +8,7 @@ AMBRY_SOURCES_VERSION = getattr(ambry_sources, '__version__', None) or ambry_sou
 
 def assert_sqlite_index(connection, partition, column):
     """ Checks either the given column indexed. Raises assertion error if not. """
-    table = sqlite_med.table_name(partition.vid) + '_v'
+    table = partition.vid + '_v'
     cursor = connection.cursor()
     query = 'EXPLAIN QUERY PLAN SELECT * FROM {} WHERE {} > 1;'.format(table, column)
     result = cursor.execute(query).fetchall()

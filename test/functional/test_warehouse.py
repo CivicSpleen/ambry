@@ -5,16 +5,19 @@ import stat
 import unittest
 
 from ambry_sources import MPRowsFile
-try:
-    from ambry_sources.med import postgresql as postgres_med
-except ImportError:
-    # FIXME. Signal to skip postgres tests
-    pass
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
 from test.factories import PartitionFactory, TableFactory
 from test.helpers import assert_sqlite_index, assert_valid_ambry_sources, assert_postgres_index
 from test.test_base import TestBase, PostgreSQLTestBase
+
+
+class SQLiteInspector(object):
+    # FIXME: Implement inspectors instead of mixin.
+
+    @staticmethod
+    def assert_is_indexed(warehouse, partition, column):
+        pass
 
 
 class Mixin(object):
@@ -102,14 +105,10 @@ class Mixin(object):
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
+        bundle = self.import_single_bundle('build.example.com/generators')
 
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
-
-        # The way I use to get completed bundle is wrong (correct is ingest/schema/build), but it does
-        # not matter here. Hacking it to speed up the test.
+        # The way I use to get completed bundle is wrong (correct is ingest/source schema/dest schema/build),
+        # but it does not matter here. Hacking it to speed up the test.
         PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
         partition1 = PartitionFactory(dataset=bundle.dataset)
         bundle.wrap_partition(partition1)
@@ -118,22 +117,22 @@ class Mixin(object):
             partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
 
             # Index creation requires materialized tables.
-            library.warehouse.materialize(partition1.vid)
+            bundle.library.warehouse.materialize(partition1.vid)
 
             # Create indexes
-            library.warehouse.index(partition1.vid, ['col1', 'col2'])
+            bundle.library.warehouse.index(partition1.vid, ['col1', 'col2'])
 
             # query partition.
-            self._assert_is_indexed(library.warehouse, partition1, 'col1')
-            self._assert_is_indexed(library.warehouse, partition1, 'col2')
+            self._assert_is_indexed(bundle.library.warehouse, partition1, 'col1')
+            self._assert_is_indexed(bundle.library.warehouse, partition1, 'col2')
 
             # query indexed data
-            rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
+            rows = bundle.library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
             self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
         finally:
             bundle.progress.close()
-            library.warehouse.close()
-            library.database.close()
+            bundle.library.warehouse.close()
+            bundle.library.database.close()
 
     def test_table_install_and_query(self):
         try:
@@ -290,7 +289,7 @@ class PostgreSQLTest(PostgreSQLTestBase, Mixin):
         return rc
 
     def _assert_is_indexed(self, warehouse, partition, column):
-        table = postgres_med.table_name(partition.vid) + '_v'
+        table = partition.vid + '_v'
         assert_postgres_index(warehouse._backend._connection, table, column)
 
 
@@ -350,10 +349,6 @@ def _get_generator_source(rows=None):
             yield row
     return GeneratorSource(SourceSpec('foobar'), gen())
 
-def _get_datafile(fs, path, rows=None):
-    datafile = MPRowsFile(fs, path)
-    datafile.load_rows(_get_generator_source(rows=rows))
-    return datafile
 
 class BundleWarehouse(TestBase):
 
@@ -379,4 +374,10 @@ class BundleWarehouse(TestBase):
         # But, it does not work for partitions from other bundles.
         print(wh.materialize('build.example.com-generators-demo'))
 
-        #print wh.install('build.example.com-casters-integers')
+        # print wh.install('build.example.com-casters-integers')
+
+
+def _get_datafile(fs, path, rows=None):
+    datafile = MPRowsFile(fs, path)
+    datafile.load_rows(_get_generator_source(rows=rows))
+    return datafile

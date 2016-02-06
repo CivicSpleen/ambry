@@ -17,18 +17,17 @@ library is created, it is constructed with the proto library as its template.
 
 """
 
-import os
-from ambry.util import ensure_dir_exists
-from ambry.library import Library
-from ambry.util import memoize
-
-from ambry.util import get_logger
 import logging
-logger = get_logger(__name__, level=logging.INFO, propagate=False)
-
+import os
 import unittest
 
-DEFAULT_ROOT = '/tmp/ambry-test' # Default root for the library roots ( The library root is one level down )
+from ambry.util import ensure_dir_exists, memoize, get_logger
+from ambry.library import Library
+
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
+
+DEFAULT_ROOT = '/tmp/ambry-test'  # Default root for the library roots ( The library root is one level down )
+
 
 class ProtoLibrary(object):
     """Manage test libraries. Creates a proto library, with pre-built bundles, that can be
@@ -37,7 +36,7 @@ class ProtoLibrary(object):
     def __init__(self, dsn=None, root=None, config_path=None):
         """
 
-        :param dsn: If specified, the dsn of the test databse. If not, defaults to sqlite.
+        :param dsn: If specified, the dsn of the test database. If not, defaults to sqlite.
         :param root:
         :param config_path:
         :return:
@@ -282,7 +281,6 @@ proto-dsn: {}
         self.pg_engine(self.dsn).dispose()
         self.pg_root_engine.dispose()
 
-
     @classmethod
     def postgres_db_exists(cls, db_name, conn):
         """ Returns True if database with given name exists in the postgresql. """
@@ -406,6 +404,7 @@ proto-dsn: {}
 
                 conn.close()
 
+
 class TestBase(unittest.TestCase):
 
     @classmethod
@@ -417,7 +416,3 @@ class TestBase(unittest.TestCase):
 
     def tearDown(self):
         pass
-
-
-
-

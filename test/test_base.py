@@ -213,12 +213,12 @@ class TestBase(unittest.TestCase):
         return db.new_dataset(**self.ds_params(n, source=source))
 
     def copy_bundle_files(self, source, dest):
-        from ambry.bundle.files import file_info_map
+        from ambry.bundle.files import file_classes
         from fs.errors import ResourceNotFoundError
 
-        for const_name, (path, clz) in list(file_info_map.items()):
+        for const_name, cls in file_classes.items():
             try:
-                dest.setcontents(path, source.getcontents(path))
+                dest.setcontents(cls._file_name, source.getcontents(cls._file_name))
             except ResourceNotFoundError:
                 pass
 
