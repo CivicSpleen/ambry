@@ -465,7 +465,8 @@ def find_indexable_materializable(sql, library):
         d = {}
 
         for source in parsed.sources:
-            d[source.alias] = source.name
+            if source.alias:
+                d[source.alias] = source.name
 
         for j in parsed.joins:
             if j.source.alias:
@@ -482,7 +483,8 @@ def find_indexable_materializable(sql, library):
                 if '.' in col:
                     try:
                         alias, col = col.split('.')
-                        indexes.append((aliases[alias], [col]))
+                        if alias:
+                            indexes.append((aliases[alias], [col]))
                     except KeyError:
                         pass
 

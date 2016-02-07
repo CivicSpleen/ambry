@@ -88,7 +88,6 @@ or via SQLAlchemy, to return datasets.
         """Return A Sqlalchemy engine"""
         return create_engine(self._warehouse_dsn)
 
-
     def install(self, ref, table_name=None, index_columns=None):
         """ Finds partition by reference and installs it to warehouse db.
 
@@ -204,7 +203,9 @@ or via SQLAlchemy, to return datasets.
 
         for statement, _, tables, install, materialize, indexes in processed_statements:
 
-            logger.info("Process statement: {}".format(statement[:40]))
+            statement = statement.strip()
+
+            logger.info("Process statement: {}".format(statement[:60]))
 
             for vid in install:
                 logger.info('    Install {}'.format(vid))
@@ -227,7 +228,7 @@ or via SQLAlchemy, to return datasets.
                 cursor = self._backend.query(connection, statement, fetch=False)
                 cursor.close()
 
-            if statement.lower().startswith('select'):
+            elif statement.lower().startswith('select'):
                 logger.info('Run query {}'.format(statement))
                 connection = self._backend._get_connection()
 
@@ -243,6 +244,27 @@ or via SQLAlchemy, to return datasets.
 
 
         return closable_iterable()
+
+    def dataframe(self,asql, logger = None):
+        """Like query(), but returns a Pandas dataframe"""
+        import pandas as pd
+
+        def yielder(cursor):
+
+            for i, row in enumerate(cursor):
+                if i == 0:
+                    yield [ e[0] for e in cursor.getdescription()]
+
+                yield row
+
+        cursor = self.query(asql, logger)
+
+        yld = yielder(cursor)
+
+        header = next(yld)
+
+        return pd.DataFrame(yld, columns=header)
+
 
 
     def close(self):

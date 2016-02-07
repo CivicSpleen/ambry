@@ -28,7 +28,6 @@ class SQLiteBackend(DatabaseBackend):
     def install_module(self, connection):
         sqlite_med.install_mpr_module(connection)
 
-
     def install(self, connection, partition, table_name = None, index_columns=None, materialize=False,
                 logger = None):
         """ Creates virtual table or read-only table for gion.
@@ -287,6 +286,7 @@ class SQLiteBackend(DatabaseBackend):
                 'Creating new apsw connection.\n   dsn: {}, config_dsn: {}'
                 .format(dsn, self._dsn))
             self._connection = apsw.Connection(dsn)
+
         return self._connection
 
     def _add_partition(self, connection, partition):
