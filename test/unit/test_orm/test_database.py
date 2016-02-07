@@ -4,15 +4,16 @@ import unittest
 
 try:
     # py2, mock is external lib.
-    from mock import patch, Mock
+    from mock import patch, Mock, PropertyMock
 except ImportError:
     # py3, mock is included
-    from unittest.mock import patch, Mock
+    from unittest.mock import patch, Mock, PropertyMock
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection as SQLAlchemyConnection, Engine
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from ambry.orm.database import get_stored_version, _validate_version, _migration_required, SCHEMA_VERSION,\
@@ -183,9 +184,17 @@ class DatabaseTest(unittest.TestCase):
         self.assertIsInstance(db.connection, SQLAlchemyConnection)
         self.assertIsInstance(db._connection, SQLAlchemyConnection)
 
-    # .session tests # FIXME:
+    # .session tests
+    def test_contains_sqlalchemy_session(self):
+        db = Database('sqlite://')
+        session = db.session
+        self.assertIsInstance(session, Session)
 
-    # .open tests # FIXME:
+    # .open tests
+    def test_creates_session(self):
+        db = Database('sqlite://')
+        db.open()
+        self.assertIsNotNone(db._session)
 
     # .close tests
     def test_closes_session_and_connection(self):
@@ -232,11 +241,25 @@ class DatabaseTest(unittest.TestCase):
             db.rollback()
             fake_rollback.assert_called_once_with()
 
-    # .clean tests FIXME:
+    # .clean tests
+    def test_removes_all_datasets(self):
+        db = Database('sqlite://')
+        ds1 = Mock(spec=Dataset)
+        ds1.name = 'ds1'
+        ds2 = Mock(spec=Dataset)
+        ds2.name = 'ds2'
+        ds3 = Mock(spec=Dataset)
+        ds3.name = 'ds3'
 
-    # .drop tests FIXME:
+        with patch.object(Database, 'datasets', PropertyMock(return_value=[ds1, ds2, ds3])):
+            with patch.object(Database, 'remove_dataset') as fake_remove:
+                db.clean()
+                self.assertEqual(len(fake_remove.mock_calls), 3)
 
-    # .metadata tests FIXME:
+    # .metadata tests
+    def test_contains_sqlachemy_metadata(self):
+        db = Database('sqlite://')
+        self.assertTrue(db.metadata.is_bound())
 
     # .inspector tests
     def test_contains_engine_inspector(self):
@@ -328,11 +351,40 @@ class DatabaseTest(unittest.TestCase):
             self.sqlite_db._add_config_root()
             fake_close.assert_called_once_with()
 
-    # .new_dataset test FIXME:
+    # .new_dataset test
+    def test_creates_new_dataset(self):
+        db = Database('sqlite://')
+        db.create()
+        ds = db.new_dataset(vid='d111', source='source', dataset='dataset')
+        self.assertTrue(ds.vid, 'd111')
 
-    # .root_dataset tests FIXME:
+    # .dataset tests
+    def test_finds_dataset_by_vid(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ds1 = DatasetFactory()
+        ret = self.sqlite_db.dataset(ds1.vid)
+        self.assertEqual(ds1.vid, ret.vid)
 
-    # .dataset tests FIXME:
+    def test_finds_dataset_by_id(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ds1 = DatasetFactory()
+        assert ds1.id != ds1.vid
+        ret = self.sqlite_db.dataset(ds1.id)
+        self.assertEqual(ds1.id, ret.id)
+
+    def test_finds_dataset_by_versioned_name(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ds1 = DatasetFactory()
+        assert ds1.vname != ds1.name
+        ret = self.sqlite_db.dataset(ds1.vname)
+        self.assertEqual(ds1.vname, ret.vname)
+
+    def test_finds_dataset_by_name(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ds1 = DatasetFactory()
+        assert ds1.vname != ds1.name
+        ret = self.sqlite_db.dataset(ds1.name)
+        self.assertEqual(ds1.name, ret.name)
 
     # .datasets tests
     def test_returns_list_with_all_datasets(self):
