@@ -168,7 +168,6 @@ class Table(Base, DictableMixin):
 
         return False
 
-
     @property
     def header(self):
         """Return an array of column names in the same order as the column
@@ -240,7 +239,6 @@ class Table(Base, DictableMixin):
             dataset_vid = ObjectNumber.parse(self.d_vid)
             self.vid = str(TableNumber(dataset_vid, self.sequence_id))
 
-
     @property
     def transforms(self):
         """Return an array of arrays of column transforms.
@@ -262,10 +260,11 @@ class Table(Base, DictableMixin):
         import six
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
+        SKIP_KEYS = ['id', 'd_id', 'd_vid', 'dataset', 'columns', 'data',
+                     'partitions', 'sources', 'process_records']
 
-        d = OrderedDict([( p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                         if p.key not in ['id','d_id','d_vid','dataset','columns','data',
-                                          'partitions', 'sources','process_records']])
+        d = OrderedDict([(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in SKIP_KEYS])
 
         for k, v in six.iteritems(self.data):
             d['d_' + k] = v
@@ -302,7 +301,7 @@ class Table(Base, DictableMixin):
         object and create an ObjectNumber value for the id"""
         if target.sequence_id is None:
             from ambry.orm.exc import DatabaseError
-            raise DatabaseError("Must have sequence id before insertion")
+            raise DatabaseError('Must have sequence id before insertion')
 
         Table.before_update(mapper, conn, target)
 
