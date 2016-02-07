@@ -55,7 +55,7 @@ class Migration(BaseMigration):
 '''
 
 logger = get_logger(__name__)
-#logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 class Database(object):
@@ -86,7 +86,7 @@ class Database(object):
         self._echo = echo
         self._foreign_keys = foreign_keys
 
-        self._raise_on_commit = False # For debugging
+        self._raise_on_commit = False  # For debugging
 
         if self.driver in ['postgres', 'postgresql', 'postgresql+psycopg2', 'postgis']:
             self.driver = 'postgres'
@@ -96,7 +96,7 @@ class Database(object):
 
         self.logger = logger
 
-        self.library = None # Set externally when checking in in
+        self.library = None  # Set externally when checking in in
 
         self._application_prefix = application_prefix
 
@@ -167,7 +167,7 @@ class Database(object):
 
                 if 'connect_args' not in self.engine_kwargs:
                     self.engine_kwargs['connect_args'] = {
-                        "application_name": "{}:{}".format(self._application_prefix, os.getpid())
+                        'application_name': '{}:{}'.format(self._application_prefix, os.getpid())
                     }
 
                 # For most use, a small pool is good to prevent connection exhaustion, but these settings may
@@ -205,10 +205,10 @@ class Database(object):
                 def pragma_on_connect(dbapi_con, con_record):
                     """ISSUE some Sqlite pragmas when the connection is created."""
 
-                    #dbapi_con.execute('PRAGMA foreign_keys = ON;')
+                    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
                     # Not clear that there is a performance improvement.
 
-                    #dbapi_con.execute('PRAGMA journal_mode = WAL')
+                    # dbapi_con.execute('PRAGMA journal_mode = WAL')
                     dbapi_con.execute('PRAGMA synchronous = OFF')
                     dbapi_con.execute('PRAGMA temp_store = MEMORY')
                     dbapi_con.execute('PRAGMA cache_size = 500000')
@@ -224,11 +224,11 @@ class Database(object):
     def connection(self):
         """Return an SqlAlchemy connection."""
         if not self._connection:
-            logger.debug("Opening connection to: {}".format(self.dsn))
+            logger.debug('Opening connection to: {}'.format(self.dsn))
             self._connection = self.engine.connect()
-            logger.debug("Opened connection to: {}".format(self.dsn))
+            logger.debug('Opened connection to: {}'.format(self.dsn))
 
-        #logger.debug("Opening connection to: {}".format(self.dsn))
+        # logger.debug("Opening connection to: {}".format(self.dsn))
         return self._connection
 
     @property
@@ -246,8 +246,8 @@ class Database(object):
 
             if self._schema:
                 def after_begin(session, transaction, connection):
-                    #import traceback
-                    #print traceback.print_stack()
+                    # import traceback
+                    # print traceback.print_stack()
                     session.execute('SET search_path TO {}'.format(self._schema))
 
                 listen(self._session, 'after_begin', after_begin)
@@ -273,8 +273,8 @@ class Database(object):
         self.close_connection()
 
         if self._engine:
-            self._engine.dispose() # CLose all of the connections in the pool
-            #self._engine = None
+            self._engine.dispose()  # CLose all of the connections in the pool
+            # self._engine = None
 
     def close_session(self):
 
@@ -291,8 +291,8 @@ class Database(object):
 
     def commit(self):
         from ambry.orm.exc import CommitTrap
-        if self._raise_on_commit: # For debugging
-            raise CommitTrap("Committed")
+        if self._raise_on_commit:  # For debugging
+            raise CommitTrap('Committed')
 
         self.session.commit()
         # self.close_session()
@@ -466,7 +466,7 @@ class Database(object):
     @property
     def root_dataset(self):
         """Return the root dataset, which hold configuration values for the library"""
-        ds =  self.dataset(ROOT_CONFIG_NAME_V)
+        ds = self.dataset(ROOT_CONFIG_NAME_V)
         ds._database = self
         return ds
 
@@ -530,7 +530,7 @@ class Database(object):
     def dataset_by_cache_key(self, cache_key):
 
         try:
-            ds =  self.session \
+            ds = self.session \
                 .query(Dataset) \
                 .filter(Dataset.cache_key == cache_key) \
                 .order_by(Dataset.revision.desc()) \
@@ -539,7 +539,6 @@ class Database(object):
             return ds
         except NoResultFound:
             raise NotFoundError('No dataset in library for vid : {} '.format(cache_key))
-
 
     @property
     def datasets(self):
@@ -586,7 +585,6 @@ class Database(object):
         ssq(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
         ssq(Partition).filter(Partition.d_vid == ds.vid).delete()
 
-
     def copy_dataset(self, ds, incver=False, cb=None, **kwargs):
         """
         Copy a dataset into the database.
@@ -595,9 +593,9 @@ class Database(object):
         :return:
         """
         from ambry.orm import Table, Column, Partition, File, ColumnStat, Code, \
-            DataSource, SourceTable, SourceColumn, Dataset, Config
+            DataSource, SourceTable, SourceColumn
 
-        tables = [ Table, Column, Partition, File, ColumnStat, Code, SourceTable, SourceColumn, DataSource ]
+        tables = [Table, Column, Partition, File, ColumnStat, Code, SourceTable, SourceColumn, DataSource]
 
         return self._copy_dataset_copy(ds, tables, incver, cb, **kwargs)
 
@@ -638,7 +636,7 @@ class Database(object):
 
         return self.dataset(dso.vid)
 
-    def _copy_dataset_merge(self, ds, source_session, dest_session, table_class, incver, cb = None):
+    def _copy_dataset_merge(self, ds, source_session, dest_session, table_class, incver, cb=None):
         from sqlalchemy.orm import noload, undefer
 
         i = [0]
@@ -676,7 +674,6 @@ class Database(object):
 
         dag = {c.id: set([c.parent_id]) for c in configs}
         refs = {c.id: c for c in configs}
-        ordered = []
 
         for e in toposort(dag):
             for ref in e:
@@ -687,7 +684,6 @@ class Database(object):
                     dest_session.merge(config)
 
         dest_session.commit()
-
 
     def next_sequence_id(self, parent_table_class, parent_vid, child_table_class):
         """Get the next sequence id for child objects for a parent object that has a child sequence
@@ -909,7 +905,8 @@ def _migration_required(connection):
     actual_version = SCHEMA_VERSION
     assert isinstance(stored_version, int)
     assert isinstance(actual_version, int)
-    assert stored_version <= actual_version, 'Db version can not be greater than models version. Update your source code.'
+    assert stored_version <= actual_version, \
+        'Db version can not be greater than models version. Update your source code.'
     return stored_version < actual_version
 
 
