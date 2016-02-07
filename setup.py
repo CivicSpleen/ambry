@@ -9,13 +9,11 @@ import uuid
 from pip.req import parse_requirements
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
-from distutils.cmd import Command
 
 if sys.version_info <= (2, 6):
     error = 'ERROR: ambry requires Python Version 2.7 or above...exiting.'
     print >> sys.stderr, error
     sys.exit(1)
-
 
 if sys.argv[-1] == 'publish':
     os.system('python setup.py sdist upload')
@@ -26,6 +24,7 @@ if sys.argv[-1] == 'publish':
 ambry_meta = imp.load_source('_meta', 'ambry/_meta.py')
 
 long_description = open('README.rst').read()
+
 
 def find_package_data():
     """ Returns package_data, because setuptools is too stupid to handle nested directories.
@@ -48,6 +47,7 @@ def find_package_data():
                 l.append(path)
 
     return {'ambry': l}
+
 
 class PyTest(TestCommand):
     user_options = [
@@ -145,8 +145,6 @@ class PyTest(TestCommand):
                 send_email([self.email], subject, message, attachments=[RESULT_LOG])
 
         sys.exit(total_errno)
-
-
 
 tests_require = ['pytest']
 
