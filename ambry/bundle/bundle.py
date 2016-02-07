@@ -569,7 +569,7 @@ class Bundle(object):
                 self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
                 if not self.is_remote_process:
-                    self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
+                    self.logger.warn('Failed to locate source dir {}; using default'.format(source_url))
                 source_url = self.library.filesystem.source(self.identity.cache_key)
                 self._source_fs = fsopendir(source_url)
 
@@ -984,7 +984,7 @@ Caster Code
         return iter_source, source_pipe
 
     def _iterable_source(self, source, ps=None):
-        from ambry_sources.sources import FixedSource, GeneratorSource
+        from ambry_sources.sources import FixedSource, GeneratorSource, AspwCursorSource
         from ambry_sources.exceptions import MissingCredentials
         from ambry_sources import get_source
         from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe
@@ -1034,7 +1034,7 @@ Caster Code
             spec.start_line = 1
             spec.header_lines = [0]
 
-            s = GeneratorSource(spec, cursor)
+            s = AspwCursorSource(spec, cursor)
             sp = GeneratorSourcePipe(self, source, s)
 
         elif source.reftype == 'generator':
