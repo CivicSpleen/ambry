@@ -65,7 +65,7 @@ class ProtoLibrary(object):
 
             self.dsn = dsn
             p = parse_url_to_dict((self.dsn))
-            p['path'] = p['path'].replace('.db','') + '-proto.db'
+            p['path'] = p['path'].replace('.db', '') + '-proto.db'
 
             self.proto_dsn = unparse_url_dict(p)
 
@@ -82,14 +82,13 @@ class ProtoLibrary(object):
             import test.support
             config_path = os.path.join(os.path.dirname(test.support.__file__), 'test-config')
 
-
         self.config = load_config(config_path)
 
         self.config.update(load_accounts())
 
         update_config(self.config, use_environ=False)
 
-        assert self.config.loaded[0] == config_path+'/config.yaml'
+        assert self.config.loaded[0] == config_path + '/config.yaml'
 
         self.config.library.database = self.dsn
 
@@ -108,13 +107,13 @@ proto-dsn: {}
 
     def proto_dir(self, *args):
 
-        base = os.path.join(self._root,'proto')
+        base = os.path.join(self._root, 'proto')
 
         self._ensure_exists(base)
 
         return os.path.join(base, *args)
 
-    def sqlite_dir(self, create = True, *args):
+    def sqlite_dir(self, create=True, *args):
 
         base = os.path.join(self._root, 'sqlite')
 
@@ -157,7 +156,7 @@ proto-dsn: {}
         from ambry.orm.exc import NotFoundError
 
         config = self.config.clone()
-        self.proto_dir() # Make sure it exists
+        self.proto_dir()  # Make sure it exists
         config.library.database = self.proto_dsn
 
         l = Library(config)
@@ -166,7 +165,7 @@ proto-dsn: {}
             b = l.bundle('ingest.example.com-headerstypes')
         except NotFoundError:
             b = self.import_bundle(l, 'ingest.example.com/headerstypes')
-            b.log("Build to: {}".format(b.build_fs))
+            b.log('Build to: {}'.format(b.build_fs))
             b.ingest()
             b.close()
 
@@ -187,7 +186,7 @@ proto-dsn: {}
         try:
             b = l.bundle('build.example.com-coverage')
         except NotFoundError:
-            b = self.import_bundle(l,'build.example.com/coverage')
+            b = self.import_bundle(l, 'build.example.com/coverage')
             b.ingest()
             b.source_schema()
             b.schema()
@@ -198,7 +197,7 @@ proto-dsn: {}
         try:
             b = l.bundle('build.example.com-generators')
         except NotFoundError:
-            b = self.import_bundle(l,'build.example.com/generators')
+            b = self.import_bundle(l, 'build.example.com/generators')
             b.run()
             b.finalize()
             b.close()
@@ -219,9 +218,7 @@ proto-dsn: {}
 
         except NotFoundError:
             b = self.import_bundle(l, 'build.example.com/sql')
-            b.build(sources=['integers','integers2','integers3'])
-
-
+            b.build(sources=['integers', 'integers2', 'integers3'])
 
     def init_library(self, use_proto=True):
         """Initialize either the sqlite or pg library, based on the DSN """
@@ -245,7 +242,7 @@ proto-dsn: {}
             return Library(self.config)
 
         else:
-            self.sqlite_dir() # Ensure it exists
+            self.sqlite_dir()  # Ensure it exists
             l = Library(self.config)
             l.create()
             return l
@@ -253,8 +250,8 @@ proto-dsn: {}
     def init_pg(self, use_proto=True):
 
         if use_proto:
-            #self.create_pg_template()
-            #self.build_proto()
+            # self.create_pg_template()
+            # self.build_proto()
             self.create_pg(re_create=True)
         else:
             self.create_pg(re_create=True, template_name='template1')
@@ -266,7 +263,6 @@ proto-dsn: {}
     @memoize
     def pg_engine(self, dsn):
         """Return a Sqlalchemy engine for a database, by dsn. The result is cached. """
-        from ambry.util import select_from_url, set_url_part
         from sqlalchemy import create_engine
         from sqlalchemy.pool import NullPool
 
@@ -310,10 +306,10 @@ proto-dsn: {}
             .fetchall()
         return result == [(1,)]
 
-    def drop_pg(self,database_name):
+    def drop_pg(self, database_name):
 
         with self.pg_root_engine.connect() as conn:
-            conn.execute('COMMIT') # we have to close opened transaction.
+            conn.execute('COMMIT')  # we have to close opened transaction.
 
             if self.postgres_db_exists(database_name, conn):
 
@@ -328,7 +324,7 @@ proto-dsn: {}
                     conn.close()
 
             else:
-                logger.warn("Not dropping {}; does not exist".format(database_name))
+                logger.warn('Not dropping {}; does not exist'.format(database_name))
 
             conn.close()
 
@@ -370,16 +366,14 @@ proto-dsn: {}
 
             conn.close()
 
-    def create_pg(self, re_create = False, template_name = None):
-        from ambry.util import  select_from_url
-
-        import unittest
+    def create_pg(self, re_create=False, template_name=None):
+        from ambry.util import select_from_url
 
         database_name = select_from_url(self.dsn, 'path').strip('/')
 
         if template_name is None:
             template_name = select_from_url(self.proto_dsn, 'path').strip('/')
-            load_extensions = False # They are already in template
+            load_extensions = False  # They are already in template
         else:
             load_extensions = True
 
@@ -434,4 +428,3 @@ class TestBase(unittest.TestCase):
         pl = ProtoLibrary(dsn=dsn)
 
         return pl.init_library(use_proto=use_proto)
-
