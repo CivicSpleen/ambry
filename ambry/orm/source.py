@@ -274,26 +274,22 @@ class DataSourceBase(object):
         if self.reftype == 'partition':
             for c in self.partition.table.columns:
                 st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name, datatype=c.datatype)
-        elif self.reftype == 'sql':
-            if self._bundle.library.database.engine.name == 'sqlite':
-                columns_getter = _get_sqlite_columns
-            elif self._bundle.library.database.engine.name == 'postgresql':
-                columns_getter = _get_postgres_columns
-            else:
-                raise NotImplementedError(
-                    '{} engine schema retrieve is not implemented.'
-                    .format(self._bundle.library.database.engine.name))
-
-            for name, datatype, position in columns_getter(self._bundle.library.database.connection,
-                                                           self.spec.url):
-                st.add_column(position, name, datatype, dest_header=name)
 
         elif self.datafile.exists:
             with self.datafile.reader as r:
 
+                names = set()
+
                 for col in r.columns:
 
-                    c = st.column(col['name'])
+                    name = col['name']
+
+                    if name in names: # Handle duplicate names.
+                        name = name+"_"+str(col['pos'])
+
+                    names.add(name)
+
+                    c = st.column(name)
 
                     dt = col['resolved_type'] if col['resolved_type'] != 'unknown' else unknown_type
 
@@ -303,8 +299,8 @@ class DataSourceBase(object):
                     else:
 
                         c = st.add_column(col['pos'],
-                                          source_header=col['name'],
-                                          dest_header=col['name'],
+                                          source_header=name,
+                                          dest_header=name,
                                           datatype=col['resolved_type'],
                                           description=col['description'],
                                           has_codes=col['has_codes'])

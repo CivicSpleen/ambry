@@ -19,6 +19,56 @@ from pyparsing import Word, delimitedList, Optional, Combine, Group, alphas, alp
 #
 
 
+def parse_select(query):
+    """ Parses asql query to view object.
+
+    Args:
+        query (str): asql query
+
+    Returns:
+        View instance: parsed view.
+    """
+    result = select_stmt.parseString(query)
+
+    return Select(result)
+
+def parse_view(query):
+    """ Parses asql query to view object.
+
+    Args:
+        query (str): asql query
+
+    Returns:
+        View instance: parsed view.
+    """
+
+    try:
+        idx = query.lower().index('where')
+        query = query[:idx]
+    except ValueError:
+        pass
+
+    if not query.endswith(';'):
+        query = query.strip()
+        query += ';'
+
+    result = _view_stmt.parseString(query)
+
+    return View(result)
+
+
+def parse_index(query):
+    """ Parses asql query to view object.
+
+    Args:
+        query (str): asql index create query.
+            Example: 'INDEX example.com-simple-simple (id, uuid);'
+
+    Returns:
+        Index instance: parsed index.
+    """
+    return Index(_index_stmt.parseString(query))
+
 class Source(object):
     """ Parsed source - table name or partition ref. """
 
@@ -34,8 +84,15 @@ class Column(object):
     """ Parsed column. """
 
     def __init__(self, parsed_column):
-        self.name = parsed_column.name
-        self.alias = parsed_column.alias
+
+        try:
+            self.name = parsed_column.name
+            self.alias = parsed_column.alias
+        except AttributeError:
+            # Assume the value is a string, usualla single column name or '*'
+            self.name = parsed_column
+            self.alias = None
+
 
     def __str__(self):
         return 'name: {}, alias: {}'.format(self.name, self.alias)
@@ -46,6 +103,7 @@ class Join(object):
 
     def __init__(self, parsed_join):
         self.source = Source(parsed_join.source)
+        self.join_cols = parsed_join.join_cols.asList() if parsed_join.join_cols else None
 
     def __str__(self):
         return self.source.__str__()
@@ -55,10 +113,13 @@ class View(object):
     """ Parsed view or materialized view. """
 
     def __init__(self, parse_result):
+
         self.name = parse_result.name
         self.sources = [Source(s) for s in parse_result.sources]
         self.columns = [Column(c) for c in parse_result.columns]
         self.joins = [Join(j) for j in parse_result.joins]
+
+
 
     def __str__(self):
 
@@ -72,6 +133,27 @@ class View(object):
         return 'name: {},\n sources: [{}],\n columns: [{}],\n joins: [{}]'.format(
             self.name, sources_str, columns_str, joins_str)
 
+class Select(object):
+    """ Parsed select """
+
+    def __init__(self, parse_result):
+
+        self.sources = [Source(s) for s in parse_result.sources]
+        self.columns = [Column(c) for c in parse_result.columns]
+        self.joins = [Join(j) for j in parse_result.joins]
+
+
+    def __str__(self):
+
+        def wr(o):
+            """ converts object to str and wraps it with curly braces. """
+            return '{%s}' % o
+
+        columns_str = ', '.join([wr(c) for c in self.columns])
+        sources_str = ', '.join([wr(s) for s in self.sources])
+        joins_str = ', '.join([wr(j) for j in self.joins])
+        return 'name: {},\n sources: [{}],\n columns: [{}],\n joins: [{}]'.format(
+            self.name, sources_str, columns_str, joins_str)
 
 class Index(object):
     """ Parsed index. """
@@ -80,30 +162,6 @@ class Index(object):
         self.source = parse_result.source
         self.columns = list(parse_result.columns)
 
-
-def parse_view(query):
-    """ Parses asql query to view object.
-
-    Args:
-        query (str): asql query
-
-    Returns:
-        View instance: parsed view.
-    """
-    return View(_view_stmt.parseString(query))
-
-
-def parse_index(query):
-    """ Parses asql query to view object.
-
-    Args:
-        query (str): asql index create query.
-            Example: 'INDEX example.com-simple-simple (id, uuid);'
-
-    Returns:
-        Index instance: parsed index.
-    """
-    return Index(_index_stmt.parseString(query))
 
 
 # Parser implementation
@@ -120,6 +178,7 @@ def _build_join(t):
     """ Populates join token fields. """
     t.source.name = t.source.parsed_name
     t.source.alias = t.source.parsed_alias[0] if t.source.parsed_alias else ''
+
     return t
 
 
@@ -134,6 +193,7 @@ as_kw = Keyword('as', caseless=True)
 from_kw = Keyword('from', caseless=True)
 where_kw = Keyword('where', caseless=True)
 join_kw = Keyword('join', caseless=True)
+on_kw = Keyword('on', caseless=True)
 left_kw = Keyword('left', caseless=True)
 right_kw = Keyword('right', caseless=True)
 cross_kw = Keyword('cross', caseless=True)
@@ -147,11 +207,11 @@ into_kw = Keyword('into', caseless=True)
 # define sql reserved words
 reserved_words = (
     update_kw | volatile_kw | create_kw | table_kw
-    | as_kw | from_kw | where_kw | join_kw | left_kw
+    | as_kw | from_kw | where_kw | join_kw | on_kw | left_kw
     | right_kw | cross_kw | outer_kw | on_kw | insert_kw | into_kw
 )
 
-ident = ~reserved_words + Word(alphas, alphanums + '_$').setName('identifier')
+ident = ~reserved_words + Word(alphas, alphanums + '_$.').setName('identifier')
 
 column_name = delimitedList(ident, '.', combine=True)
 column_name_list = Group(delimitedList(column_name))
@@ -197,15 +257,19 @@ many_sources = OneOrMore(Group(source + Optional(comma_token)))
 
 # define join grammar
 #
+
+on_op = Optional( on_kw.suppress() + ident + Word('=').suppress() + ident )
+
 join_op = (
     comma_token
     | (
         Optional(natural_kw)
         + Optional(inner_kw | cross_kw | left_kw + outer_kw | left_kw | outer_kw)
-        + join_kw))
+        + join_kw)
+      )
 
+join_stmt = (join_op + source.setResultsName('source') + on_op.setResultsName('join_cols') ).setParseAction(_build_join)
 
-join_stmt = (join_op + source.setResultsName('source')).setParseAction(_build_join)
 # Example
 # join = join_stmt.parseString('join jtable1 as jt1')
 # print(join.source.name, join.source.alias)
@@ -214,12 +278,14 @@ join_stmt = (join_op + source.setResultsName('source')).setParseAction(_build_jo
 # define the select grammar
 #
 select_stmt = Forward()
+
 select_stmt << (
     select_kw
     + (Keyword('*').setResultsName('columns') | select_column_list.setResultsName('columns'))
     + from_kw
     + many_sources.setResultsName('sources')
     + ZeroOrMore(Group(join_stmt)).setResultsName('joins'))
+
 # Examples:
 # select = select_stmt.parseString(
 #     '''SELECT t1.col AS t1_c, t2.col AS t2_c, t3.col AS t3_c
@@ -275,3 +341,161 @@ _index_stmt << (
 oracle_sql_comment = '--' + restOfLine
 _view_stmt.ignore(oracle_sql_comment)
 _index_stmt.ignore(oracle_sql_comment)
+
+
+def substitute_vids(library, statement):
+    """ Replace all of the references to tables and partitions with their vids.
+
+    This is a bit of a hack -- it ought to work with the parser, but instead it just looks for
+    common SQL tokens that indicate an identifier.
+
+    :param statement: an sqlstatement. String.
+    :return: tuple: new_statement, set of table vids, set of partition vids.
+    """
+    from ambry.identity import ObjectNumber, TableNumber, NotObjectNumberError
+    from ambry.orm.exc import NotFoundError
+
+
+    try:
+        stmt_str = statement.to_unicode()
+    except AttributeError:
+        stmt_str = statement
+
+    parts = stmt_str.strip(';').split()
+
+    new_parts = []
+
+    tables = set()
+    partitions = set()
+
+    while parts:
+        token = parts.pop(0).strip()
+        if token.lower() in ('from', 'join', 'materialize', 'install'):
+            ident = parts.pop(0).strip(';')
+            new_parts.append(token)
+
+            try:
+                obj_number = ObjectNumber.parse(token)
+                if isinstance(obj_number, TableNumber):
+                    table = library.table(ident)
+                    tables.add(table.vid)
+                    new_parts.append(table.vid)
+                else:
+                    # Do not care about other object numbers. Assume partition.
+                    raise NotObjectNumberError
+
+            except NotObjectNumberError:
+                # assume partition
+                try:
+                    partition = library.partition(ident)
+                    partitions.add(partition.vid)
+                    new_parts.append(partition.vid)
+                except NotFoundError:
+                    # Ok, maybe it is just a normal identifier...
+
+                    new_parts.append(ident)
+
+        else:
+            new_parts.append(token)
+
+    return ' '.join(new_parts).strip(), tables, partitions
+
+def validate(sql):
+    """
+    Parse a SQL statement and enforce some rules.
+
+    The rules are:
+
+    * If there are JOINs, all tables must be aliased.
+    * In the join clauses, all columns must have dotted forms, using the table aliases.
+
+    :param sql:
+    :return:
+    :raises: Exception that includes a list of the errors.
+    """
+
+    pass
+
+
+
+def find_indexable_materializable(sql, library):
+    """
+    Parse a statement, then call functions to install, materialize or create indexes for partitions
+    referenced in the statement.
+
+    :param sql:
+    :param materialize_f:
+    :param install_f:
+    :param index_f:
+    :return:
+    """
+
+    derefed, tables, partitions = substitute_vids(library, sql)
+
+    drop = None
+
+    if derefed.lower().startswith('create index'):
+
+        parsed = parse_index(derefed)
+
+        return derefed, drop, [], [(parsed.source, parsed.columns)], [], []
+
+    elif derefed.lower().startswith('materialize'):
+        _, vid = derefed.split()
+
+        return derefed, drop, [], [], [vid], []
+
+    elif derefed.lower().startswith('install'):
+        _, vid = derefed.split()
+
+        return derefed, drop, [], [vid], [], []
+
+    elif derefed.lower().startswith('select'):
+        parsed = parse_select(derefed)
+
+    elif derefed.lower().startswith('create view'):
+        parsed = parse_view(derefed)
+
+        drop = 'DROP VIEW IF EXISTS {};'.format(parsed.name)
+
+    else:
+        return derefed, drop, list(tables), list(partitions), [], []
+
+    def partition_aliases(parsed):
+        d = {}
+
+        for source in parsed.sources:
+            d[source.alias] = source.name
+
+        for j in parsed.joins:
+            if j.source.alias:
+                d[j.source.alias] = j.source.name
+
+        return d
+
+    def indexable_columns(aliases, parsed):
+
+        indexes = []
+
+        for j in parsed.joins:
+            for col in j.join_cols:
+                if '.' in col:
+                    try:
+                        alias, col = col.split('.')
+                        indexes.append((aliases[alias], [col]))
+                    except KeyError:
+                        pass
+
+        return indexes
+
+    aliases = partition_aliases(parsed)
+
+    indexes = indexable_columns(aliases, parsed)
+
+    materialize = set([ vid for vid in set(aliases.values()) if vid.startswith('p') ])
+
+    install = set(partitions) - materialize
+
+    return derefed, drop, list(tables), list(install), list(materialize), indexes
+
+

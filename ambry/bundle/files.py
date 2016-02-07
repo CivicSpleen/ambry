@@ -272,6 +272,9 @@ class BuildSourceFile(object):
 
     def sync_out(self):
         """Sync out from objects to the file system"""
+
+
+
         self.objects_to_record()
         self.record_to_fs()
 
@@ -482,7 +485,6 @@ class StringSourceFile(BuildSourceFile):
         fn_path = self.file_name
 
         with self._fs.open(fn_path, 'r', encoding='utf-8') as f:
-
             return self.fh_to_record(f)
 
     def fh_to_record(self, f):
@@ -659,12 +661,8 @@ class PythonSourceFile(StringSourceFile):
         fr = self.record
 
         if fr.contents:
-
             with self._fs.open(self.file_name, 'w', encoding='utf-8') as f:
-                f.write(fr.unpacked_contents)
-
-            fr.source_hash = self.fs_hash
-            fr.modified = self.fs_modtime
+                self.record_to_fh(f)
 
     def import_module(self, **kwargs):
         """
@@ -1105,37 +1103,21 @@ class SourceSchemaFile(RowBuildSourceFile):
 class ASQLSourceFile(StringSourceFile):
     """ Stores bundle.sql file content. """
 
+    multiplicity = 'n'
     file_const = File.BSFILE.SQL
-    _file_name = 'bundle.sql'
+    _file_name = '{base_name}.sql'
 
-    def fh_to_record(self, f):
-        pass
+    def parsed(self):
 
-    def record_to_fs(self):
-        """Create a filesystem file from a File. """
+        from ambry.mprlib import parse_sql
 
-        fr = self.record
-
-        if fr.contents:
-
-            with self._fs.open(self.file_name, 'w', encoding='utf-8') as f:
-                f.write(fr.unpacked_contents)
-
-            fr.source_hash = self.fs_hash
-            fr.modified = self.fs_modtime
+        return parse_sql(self._bundle.library, self.record_content)
 
     def execute(self):
         """ Executes all sql statements from bundle.sql. """
         from ambry.mprlib import execute_sql
-        if self._bundle.library.database.engine.name == 'sqlite':
-            # close current sqlite connection (pysqlite) because virtual tables
-            # implementation uses its own connection (apsw). Using both connections simultaneously
-            # leads to OperationalError: (pysqlite2.dbapi2.OperationalError) disk I/O error
-            #
-            # Note: Following code should care about detached objects. See BundleSQLPipe.process_header
-            #   for example.
-            self._bundle.library.database.close()
-        execute_sql(self._bundle.library, self.file_content)
+
+        execute_sql(self._bundle.library, self.record_content)
 
 file_classes = {
     File.BSFILE.BUILD: BuildPythonSourceFile,
@@ -1243,7 +1225,8 @@ class BuildSourceFileAccessor(object):
 
     def file_by_id(self, id):
         s = self._dataset._database.session
-        return s.query(File).filter(File.id == id).one()
+
+        return s.query(File).filter(File.d_vid == self._dataset.vid).filter(File.id == id).one()
 
     def record_to_objects(self, preference=None):
         """Create objects from files, or merge the files into the objects. """

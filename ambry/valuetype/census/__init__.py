@@ -83,20 +83,29 @@ class Geoid(ValueType):
     def tiger(self):
         return self.geoid.convert(geoid.tiger.TigerGeoid)
 
-
 class AcsGeoid(Geoid):
     parser = geoid.acs.AcsGeoid.parse
-
 
 class CensusGeoid(Geoid):
     parser = geoid.census.CensusGeoid.parse
 
-
 class CensusStateGeoid(Geoid):
-    parser = geoid.census.State.parse
+    @classmethod
+    def parser(cls, v):
+        """Ensure that the upstream parser gets two digits. """
+        return geoid.census.State.parse(str(v).zfill(2))
 
 class CensusCountyGeoid(Geoid):
     parser = geoid.census.County.parse
+
+class CensusPlaceGeoid(Geoid):
+    parser = geoid.census.Place.parse
+
+class CensusBlockgroupGeoid(Geoid):
+    parser = geoid.census.Blockgroup.parse
+
+class CensusTractGeoid(Geoid):
+    parser = geoid.census.Tract.parse
 
 class TigerGeoid(Geoid):
     parser = geoid.tiger.TigerGeoid.parse

@@ -47,7 +47,11 @@ class Dataset(Base):
 
     state = SAColumn('d_state', String(20), doc='Indicates last operation on the dataset') # Note! Different from Bundle.state!
 
+    upstream = SAColumn('d_upstream', String(200), doc='The URL of the upstream source')
+
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
+
+    # ----
 
     tables = relationship('Table', backref='dataset', cascade='all, delete-orphan')
 
@@ -574,6 +578,7 @@ class Dataset(Base):
             'bspace': self.bspace,
             'revision': self.revision,
             'version': self.version,
+            'upstream': self.upstream
         }
 
         if self.data:

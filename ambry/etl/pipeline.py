@@ -904,12 +904,11 @@ class MapSourceHeaders(Pipe):
     def process_header(self, headers):
 
         is_generator = isinstance(self._source_pipe, GeneratorSourcePipe)
-        is_relation = isinstance(self._source_pipe, DatabaseRelationSourcePipe)
         is_partition = isinstance(self._source_pipe, PartitionSourcePipe)
 
         if len(list(self.source.source_table.columns)) == 0:
 
-            if is_generator or is_relation or is_partition:
+            if is_generator or  is_partition:
                 # Generators or relations are assumed to return a valid, consistent header, so
                 # if the table is missing, carry on.
 
@@ -1776,6 +1775,9 @@ class SelectPartitionFromSource(Pipe):
                                              space=str(self.source.space) if self.source.space is not None else None,
                                              grain=str(self.source.grain) if self.source.grain is not None else None,
                                              segment=self.source.sequence_id if self._use_source_id else None)
+
+
+
         self._orig_headers = row
         self._row_proxy = RowProxy(row)
         return row + ['_pname']
@@ -2296,7 +2298,8 @@ class Pipeline(OrderedDict):
                 out.append([seg_name, qualified_class_name(pipe)])
             else:
                 try:
-                    v = [seg_name, qualified_class_name(pipe), len(pipe.headers)] + [str(e) for e in pipe.headers if e]
+                    v = [seg_name, qualified_class_name(pipe),
+                         len(pipe.headers)] + [str(e)[:10] for e in pipe.headers if e]
                     out.append(v)
 
                 except AttributeError:
@@ -2350,29 +2353,3 @@ def _to_ascii(s):
         raise Exception('Unknown text type - {}'.format(type(s)))
     return ascii_
 
-
-class DatabaseRelationSourcePipe(Pipe):
-    """Source pipe that implements iterator over sql database tables or views. """
-
-    def __init__(self, source, gen):
-        from ..util import qualified_class_name
-
-        self._source = source
-        self._gen = gen
-
-        # file_name is for the pipeline logger, to generate a file
-        if self._source:
-            self.file_name = self._source.name
-        else:
-            self.file_name = qualified_class_name(self)
-
-    def __iter__(self):
-
-        yield self._gen.headers
-
-        for row in self._gen:
-            yield row
-
-    def __str__(self):
-        from ..util import qualified_class_name
-        return 'DatabaseRelation {}'.format(qualified_class_name(self))

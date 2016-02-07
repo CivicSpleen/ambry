@@ -22,9 +22,8 @@ logger = get_logger(__name__)
 
 # debug logging
 #
-# import logging
-# logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
-
+import logging
+logger = get_logger(__name__, level=logging.ERROR, propagate=False)
 
 class Warehouse(object):
     """ Provides SQL access to datasets in the library, allowing users to issue SQL queries, either as SQL
@@ -32,6 +31,8 @@ or via SQLAlchemy, to return datasets.
     """
 
     def __init__(self, library, dsn=None):
+        from ambry.library import Library
+        assert isinstance(library, Library)
 
         self._library = library
 
@@ -45,15 +46,22 @@ or via SQLAlchemy, to return datasets.
             logger.debug('Initializing sqlite warehouse.')
             self._backend = SQLiteBackend(library, dsn)
 
-        elif dsn.startswith('postgresql'):
-            from ambry.mprlib.backends.postgresql import PostgreSQLBackend
-            logger.debug('Initializing postgres warehouse.')
-            self._backend = PostgreSQLBackend(library, dsn)
+        elif dsn.startswith('postgres'):
+            try:
+                from ambry.mprlib.backends.postgresql import PostgreSQLBackend
+                logger.debug('Initializing postgres warehouse.')
+                self._backend = PostgreSQLBackend(library, dsn)
+            except ImportError as e:
+                from ambry.mprlib.backends.sqlite import SQLiteBackend
+                from ambry.util import set_url_part, select_from_url
+                dsn = "sqlite:///{}/{}".format(self._library.filesystem.build('warehouses'),
+                                               select_from_url(dsn,'path').strip('/')+".db")
+                logging.error("Failed to import required modules ({})for Postgres warehouse. Using Sqlite dsn={}"
+                              .format(e, dsn))
+                self._backend = SQLiteBackend(library, dsn)
 
         else:
-            raise Exception(
-                'Do not know how to handle {} dsn.'
-                .format(dsn))
+            raise Exception('Do not know how to handle {} dsn.'.format(dsn))
 
         self._warehouse_dsn = dsn
 
@@ -61,31 +69,27 @@ or via SQLAlchemy, to return datasets.
     def dsn(self):
         return self._warehouse_dsn
 
+    @property
+    def connection(self):
+        return self._backend._get_connection()
+
     def clean(self):
         """Remove all of the tables and data from the warehouse"""
         connection = self._backend._get_connection()
         self._backend.clean(connection)
 
-    def query(self, query=''):
-        """ Creates virtual tables for all partitions found in the query and executes query.
-
-        Args:
-            query (str): sql query
-
-        """
-
-        if not query:
-            engine = create_engine(self._warehouse_dsn)
-            session = sessionmaker(bind=engine)
-            return session().query(Table)
-
-        logger.debug(
-            'Executing warehouse query using {} backend.\n    query: {}'
-            .format(self._backend._dsn, query))
+    def list(self):
+        """List the tables in the database"""
         connection = self._backend._get_connection()
-        return self._backend.query(connection, query)
+        return list(self._backend.list(connection))
 
-    def install(self, ref):
+    @property
+    def engine(self):
+        """Return A Sqlalchemy engine"""
+        return create_engine(self._warehouse_dsn)
+
+
+    def install(self, ref, table_name=None, index_columns=None):
         """ Finds partition by reference and installs it to warehouse db.
 
         Args:
@@ -97,17 +101,19 @@ or via SQLAlchemy, to return datasets.
             if isinstance(obj_number, TableNumber):
                 table = self._library.table(ref)
                 connection = self._backend._get_connection()
-                self._backend.install_table(connection, table)
+                return self._backend.install_table(connection, table)
             else:
                 # assume partition
                 raise NotObjectNumberError
+
         except NotObjectNumberError:
             # assume partition.
             partition = self._library.partition(ref)
             connection = self._backend._get_connection()
-            self._backend.install(connection, partition)
 
-    def materialize(self, ref):
+            return self._backend.install(connection, partition, table_name=table_name, index_columns=index_columns)
+
+    def materialize(self, ref, table_name=None, index_columns=None):
         """ Creates materialized table for given partition reference.
 
         Args:
@@ -117,11 +123,15 @@ or via SQLAlchemy, to return datasets.
             str: name of the partition table in the database.
 
         """
-        logger.debug(
-            'Materializing warehouse partition.\n    partition: {}'.format(ref))
+        from ambry.library import Library
+        assert isinstance(self._library, Library )
+
+        logger.debug('Materializing warehouse partition.\n    partition: {}'.format(ref))
         partition = self._library.partition(ref)
+
         connection = self._backend._get_connection()
-        return self._backend.install(connection, partition, materialize=True)
+        return self._backend.install(connection, partition, table_name = table_name,
+                                     index_columns=index_columns, materialize=True)
 
     def index(self, ref, columns):
         """ Create an index on the columns.
@@ -131,11 +141,109 @@ or via SQLAlchemy, to return datasets.
             columns (list of str): names of the columns needed indexes.
 
         """
-        logger.debug(
-            'Creating index for partition.\n    ref: {}, columns: {}'.format(ref, columns))
+        logger.debug('Creating index for partition.\n    ref: {}, columns: {}'.format(ref, columns))
         connection = self._backend._get_connection()
         partition = self._library.partition(ref)
         self._backend.index(connection, partition, columns)
+
+    def parse_sql(self, asql):
+        """ Executes all sql statements from asql.
+
+        Args:
+            library (library.Library):
+            asql (str): unified sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
+        """
+        import sqlparse
+
+        statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
+        parsed_statements = []
+        for statement in statements:
+
+            statement_str = statement.to_unicode().strip()
+
+            for preprocessor in self._backend.sql_processors():
+                statement_str = preprocessor(statement_str, self._library, self._backend, self.connection)
+
+            parsed_statements.append(statement_str)
+
+        return parsed_statements
+
+    def query(self, asql, logger = None):
+        """
+        Execute an ASQL file and return the result of the first SELECT statement.
+
+        :param asql:
+        :param logger:
+        :return:
+        """
+        import sqlparse
+        from ambry.mprlib.exceptions import BadSQLError
+        from ambry.bundle.asql_parser import find_indexable_materializable
+
+        if not logger:
+            logger = self._library.logger
+
+        statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
+
+        processed_statements = []
+
+        for parsed_statement in statements:
+            try:
+                processed_statements.append(find_indexable_materializable(parsed_statement, self._library))
+            except Exception as e:
+                logger.error("Failed to process statement: {}".format(parsed_statement))
+                raise
+
+        # Drop the views in reverse order
+        for _, drop, _, _, _, _ in reversed(processed_statements):
+
+            if drop:
+                connection = self._backend._get_connection()
+                cursor = self._backend.query(connection, drop, fetch=False)
+                cursor.close()
+
+        for statement, _, tables, install, materialize, indexes in processed_statements:
+
+            logger.info("Process statement: {}".format(statement[:40]))
+
+            for vid in install:
+                logger.info('    Install {}'.format(vid))
+                self.install(vid)
+
+            for vid in materialize:
+                logger.info('    Materialize {}'.format(vid))
+                self.materialize(vid)
+
+            for vid, columns in indexes:
+                logger.info('    Index {}'.format(vid))
+                try:
+                    self.index(vid, columns)
+                except Exception as e:
+                    logger.error('    Failed to index {}; {}'.format(vid, e))
+
+            if statement.lower().startswith('create'):
+                logger.info('    Create {}'.format(statement))
+                connection = self._backend._get_connection()
+                cursor = self._backend.query(connection, statement, fetch=False)
+                cursor.close()
+
+            if statement.lower().startswith('select'):
+                logger.info('Run query {}'.format(statement))
+                connection = self._backend._get_connection()
+
+                return self._backend.query(connection, statement, fetch=False)
+
+        # A fake cursor that can be closed and iterated
+        class closable_iterable(object):
+            def close(self):
+                pass
+
+            def __iter__(self):
+                pass
+
+
+        return closable_iterable()
+
 
     def close(self):
         """ Closes warehouse database. """

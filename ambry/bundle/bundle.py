@@ -37,7 +37,7 @@ def _CaptureException(f, *args, **kwargs):
     try:
         return f(*args, **kwargs)
     except Exception as e:
-
+        raise
         try:
             b.set_error_state()
             b.commit()
@@ -277,7 +277,8 @@ class Bundle(object):
     def library(self):
         return self._library
 
-    def warehouse(self, name):
+    def warehouse(self,name):
+        from ambry.library.warehouse import Warehouse
 
         self.build_fs.makedir('warehouses', allow_recreate=True)
 
@@ -285,9 +286,7 @@ class Bundle(object):
 
         dsn = 'sqlite:////{}.db'.format(path)
 
-        from ambry.library.warehouse import Warehouse
-
-        return Warehouse(self, dsn=dsn)
+        return Warehouse(self.library, dsn=dsn)
 
     def dep(self, source_name):
         """Return a bundle dependency from the sources list
@@ -794,7 +793,7 @@ class Bundle(object):
         except Exception as e:
             caster_code = str(e)
 
-        v = u("""
+        templ = u("""
 Pipeline     : {}
 run time     : {}
 phase        : {}
@@ -812,8 +811,13 @@ Caster Code
 ===========
 {}
 
-""".format(pl.name, str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
-           pl.dest_table, unicode(pl), pl.headers_report(), caster_code))
+""")
+        try:
+            v = templ.format(pl.name, str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
+            pl.dest_table, unicode(pl), pl.headers_report(), caster_code)
+        except UnicodeError as e:
+            v = ''
+            self.error("Faled to write pipeline log for pipeline {} ".format(pl.name))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
@@ -989,10 +993,10 @@ Caster Code
         return iter_source, source_pipe
 
     def _iterable_source(self, source, ps=None):
-        from ambry_sources.sources import FixedSource, GeneratorSource, DatabaseRelationSource
+        from ambry_sources.sources import FixedSource, GeneratorSource, AspwCursorSource
         from ambry_sources.exceptions import MissingCredentials
         from ambry_sources import get_source
-        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe, DatabaseRelationSourcePipe
+        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe
         from ambry.bundle.process import call_interval
         from ambry.dbexceptions import ConfigurationError
 
@@ -1005,11 +1009,42 @@ Caster Code
             sp = PartitionSourcePipe(self, source, source.partition)
 
         elif source.reftype == 'sql':
-            s = DatabaseRelationSource(
-                source.spec,
-                self.library.database.engine.name,
-                self.library.database.connection)
-            sp = DatabaseRelationSourcePipe(source, s)
+
+            if ':' in source.ref:
+                # The ref specifies a table/view to call
+                sql_file, table = source.ref.split(':', 1)
+            else:
+                # Just use the first select in the sql file.
+                sql_file, table = source.ref, None
+
+            w = self.warehouse(os.path.splitext(sql_file)[0])
+
+            f = self.build_source_files.file_by_path(sql_file)
+
+            cursor = w.query(f.unpacked_contents, logger=self.logger)
+
+            if table:
+                # If the table as secified, select all from it
+                # For now, asuming knowledge that this is an ASPW connection
+                cursor.close()
+
+                connection = w._backend._get_connection()
+
+                cursor = connection.cursor()
+
+                cursor.execute('SELECT * FROM {};'.format(table))
+
+            else:
+                # Otherwise, use the first select encountered in the sql file, which is
+                # already prepared in the cursor from the return value
+                pass
+
+            spec = source.spec
+            spec.start_line = 1
+            spec.header_lines = [0]
+
+            s = AspwCursorSource(spec, cursor)
+            sp = GeneratorSourcePipe(self, source, s)
 
         elif source.reftype == 'generator':
             import sys
@@ -1538,10 +1573,6 @@ Caster Code
 
         self.log('---- Ingesting ----')
 
-        # source may mention to sql relation defined in the bundle.sql. So process bundle.sql.
-        if self.build_source_files.sql.exists():
-            self.log('---- Execute bundle.sql ----')
-            self.build_source_files.sql.execute()
 
         self.dstate = self.STATES.BUILDING
         self.commit() # WTF? Without this, postgres blocks between table query, and update seq id in source tables.
@@ -1680,7 +1711,8 @@ Caster Code
 
             from ambry.orm.exc import NotFoundError
 
-            if not source.is_partition and not source.is_relation and source.datafile.exists:
+            if not source.is_partition and source.datafile.exists:
+
                 if not source.datafile.is_finalized:
                     source.datafile.remove()
                 elif force:
@@ -1721,11 +1753,12 @@ Caster Code
                 ps.update(
                     message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
 
-            intuit_type = not source.is_relation  # FIXME: Do not intuit rows for is_relation!
 
             source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
                                       limit=500 if self.limited_run else None,
-                                      intuit_type=intuit_type, run_stats = False)
+                                      intuit_type=True, run_stats = False)
+
+            ps.update(message='Ingested to {}'.format(source.datafile.syspath))
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 
@@ -2677,7 +2710,7 @@ Caster Code
         db.library = self.library
         return db
 
-    def checkin(self, no_partitions=False, remote_name=None, source_only=False, cb=None):
+    def checkin(self, no_partitions=False, remote_name=None, source_only=False, force=False, cb=None):
         from ambry.bundle.process import call_interval
 
         package = self.package(source_only=source_only)
@@ -2694,7 +2727,7 @@ Caster Code
 
         remote.account_accessor = self.library.account_accessor
 
-        remote_instance, path = remote.checkin(package, no_partitions=no_partitions, cb=cb)
+        remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)
 
         return remote_instance, package
 
@@ -2711,4 +2744,4 @@ Caster Code
         pass  # Remove files in the file system other resource.
 
     def __str__(self):
-        return self.identity.vname
+        return "<bundle: {}>".format(self.identity.vname)

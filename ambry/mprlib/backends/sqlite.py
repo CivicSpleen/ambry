@@ -16,14 +16,22 @@ logger = get_logger(__name__)
 # debug logging
 #
 import logging
-logger = get_logger(__name__, level=logging.ERROR, propagate=False)
+debug_logger = get_logger(__name__, level=logging.ERROR, propagate=False)
 
 
 class SQLiteBackend(DatabaseBackend):
     """ Backend to install/query MPR files for SQLite database. """
 
-    def install(self, connection, partition, materialize=False):
-        """ Creates virtual table or read-only table for partition.
+    def sql_processors(self):
+        return [_preprocess_sqlite_view, _preprocess_sqlite_index]
+
+    def install_module(self, connection):
+        sqlite_med.install_mpr_module(connection)
+
+
+    def install(self, connection, partition, table_name = None, index_columns=None, materialize=False,
+                logger = None):
+        """ Creates virtual table or read-only table for gion.
 
         Args:
             ref (str): id, vid, name or versioned name of the partition.
@@ -35,31 +43,44 @@ class SQLiteBackend(DatabaseBackend):
         """
         virtual_table = partition.vid
 
-        if not self._relation_exists(connection, virtual_table):
-            self._add_partition(connection, partition)
+        table = partition.vid if not table_name else table_name
 
-        table = '{}_v'.format(virtual_table)
+        if self._relation_exists(connection, table):
+            if logger:
+                logger.info("Skipping '{}'; already installed".format(table))
+            return
+        else:
+            if logger:
+                logger.info("Installing '{}'".format(table))
+
+        partition.localize()
+
+
+        virtual_table = partition.vid + '_vt'
+
+        self._add_partition(connection, partition)
 
         if materialize:
 
             if self._relation_exists(connection, table):
-                logger.debug(
-                    'Materialized table of the partition already exists.\n    partition: {}, table: {}'
+                debug_logger.debug(
+                    'Materialized table of the partition already exists.\n partition: {}, table: {}'
                     .format(partition.name, table))
             else:
                 cursor = connection.cursor()
 
                 # create table
                 create_query = self.__class__._get_create_query(partition, table)
-                logger.debug(
+                debug_logger.debug(
                     'Creating new materialized view for partition mpr.'
                     '\n    partition: {}, view: {}, query: {}'
                     .format(partition.name, table, create_query))
+
                 cursor.execute(create_query)
 
                 # populate just created table with data from virtual table.
                 copy_query = '''INSERT INTO {} SELECT * FROM {};'''.format(table, virtual_table)
-                logger.debug(
+                debug_logger.debug(
                     'Populating sqlite table with rows from partition mpr.'
                     '\n    partition: {}, view: {}, query: {}'
                     .format(partition.name, table, copy_query))
@@ -67,17 +88,16 @@ class SQLiteBackend(DatabaseBackend):
 
                 cursor.close()
 
-        final_table = table if materialize else virtual_table
-
-        try:
+        else:
             cursor = connection.cursor()
-            view_q = "CREATE VIEW IF NOT EXISTS {} AS SELECT * FROM {} ".format(partition.vid, final_table)
+            view_q = "CREATE VIEW IF NOT EXISTS {} AS SELECT * FROM {} ".format(partition.vid, virtual_table)
             cursor.execute(view_q)
-
-        finally:
             cursor.close()
 
-        return partition.vid
+        if index_columns is not None:
+            self.index(connection,table, index_columns)
+
+        return table
 
     def index(self, connection, partition, columns):
         """ Create an index on the columns.
@@ -87,17 +107,30 @@ class SQLiteBackend(DatabaseBackend):
             partition (orm.Partition):
             columns (list of str):
         """
+
+        import hashlib
+
         query_tmpl = '''
-            CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({column});
+            CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({columns});
         '''
-        table_name = '{}_v'.format(partition.vid)
-        for column in columns:
-            query = query_tmpl.format(
-                index_name='{}_{}_i'.format(partition.vid, column), table_name=table_name,
-                column=column)
-            logger.debug('Creating sqlite index.\n    column: {}, query: {}'.format(column, query))
-            cursor = connection.cursor()
-            cursor.execute(query)
+
+        if not isinstance(columns,(list,tuple)):
+            columns = [columns]
+
+        col_list = ','.join('"{}"'.format(col) for col in columns)
+
+        col_hash = hashlib.md5(col_list).hexdigest()
+
+        table_name = partition.vid
+
+        query = query_tmpl.format(
+            index_name='{}_{}_i'.format(table_name, col_hash), table_name=table_name,
+            columns=col_list)
+
+        logger.debug('Creating sqlite index: query: {}'.format(query))
+        cursor = connection.cursor()
+
+        cursor.execute(query)
 
     def close(self):
         """ Closes connection to sqlite database. """
@@ -229,7 +262,7 @@ class SQLiteBackend(DatabaseBackend):
             sqlite_type = TYPE_MAP.get(column['type'])
             if not sqlite_type:
                 raise Exception('Do not know how to convert {} to sql column.'.format(column['type']))
-            columns_types.append('    {} {}'.format(column['name'], sqlite_type))
+            columns_types.append('    "{}" {}'.format(column['name'], sqlite_type))
         columns_types_str = ',\n'.join(columns_types)
         query = 'CREATE TABLE IF NOT EXISTS {}(\n{})'.format(tablename, columns_types_str)
         return query
@@ -249,6 +282,7 @@ class SQLiteBackend(DatabaseBackend):
                 dsn = ':memory:'
             else:
                 dsn = dsn.replace('sqlite:///', '')
+
             logger.debug(
                 'Creating new apsw connection.\n   dsn: {}, config_dsn: {}'
                 .format(dsn, self._dsn))
@@ -264,7 +298,7 @@ class SQLiteBackend(DatabaseBackend):
 
         """
         logger.debug('Creating virtual table for partition.\n    partition: {}'.format(partition.name))
-        sqlite_med.add_partition(connection, partition.datafile, partition.vid)
+        sqlite_med.add_partition(connection, partition.datafile, partition.vid+'_vt')
 
     def _execute(self, connection, query, fetch=True):
         """ Executes given query using given connection.
@@ -279,9 +313,17 @@ class SQLiteBackend(DatabaseBackend):
 
         """
         cursor = connection.cursor()
-        cursor.execute(query)
+
+        try:
+            cursor.execute(query)
+        except Exception as e:
+            from ambry.mprlib.exceptions import BadSQLError
+            raise BadSQLError("Failed to execute query: {}; {}".format(query, e))
+
         if fetch:
             return cursor.fetchall()
+        else:
+            return cursor
 
     def clean(self, connection):
 
@@ -302,6 +344,17 @@ class SQLiteBackend(DatabaseBackend):
         #    logger.debug("Dropping {}".format(r[0]))
         #    self._execute(connection, "DROP TABLE '{}'".format(r[0]))
 
+    def list(self, connection):
+        from ambry.identity import PartitionNumber, NotObjectNumberError
+
+        cursor = connection.cursor()
+        for r in cursor.execute("SELECT type, name from sqlite_master "):
+            try:
+                PartitionNumber.parse(r[1]) # Terrible, unreliabile way to do it. Should keep track in a special table
+                yield r[1]
+            except NotObjectNumberError:
+                pass
+
 
 def _preprocess_sqlite_view(asql_query, library, backend, connection):
     """ Finds view or materialized view in the asql query and converts it to create table/insert rows.
@@ -320,11 +373,15 @@ def _preprocess_sqlite_view(asql_query, library, backend, connection):
             'create materialized view'. If asql_query does not contain 'create materialized view' returns
             asql_query as is.
     """
+
     new_query = None
+
     if 'create materialized view' in asql_query.lower() or 'create view' in asql_query.lower():
+
         logger.debug(
             '_preprocess_sqlite_view: materialized view found.\n    asql query: {}'
             .format(asql_query))
+
         view = parse_view(asql_query)
 
         tablename = view.name.replace('-', '_').lower().replace('.', '_')
@@ -383,6 +440,7 @@ def _preprocess_sqlite_view(asql_query, library, backend, connection):
                             '    {} {}'
                             .format(column.alias if column.alias else column.name, sqlite_type))
                         column_names.append(column.alias if column.alias else column.name)
+
         column_types_str = ',\n'.join(column_types)
         column_names_str = ', '.join(column_names)
 
@@ -406,6 +464,8 @@ def _preprocess_sqlite_view(asql_query, library, backend, connection):
     logger.debug(
         '_preprocess_sqlite_view: preprocess finished.\n    asql query: {}\n\n    new query: {}'
         .format(asql_query, new_query))
+
+
     return new_query or asql_query
 
 
@@ -421,11 +481,15 @@ def _preprocess_sqlite_index(asql_query, library, backend, connection):
     Returns:
         str: converted asql if it contains index query. If not, returns asql_query as is.
     """
+
     new_query = None
+
     if asql_query.strip().lower().startswith('index'):
+
         logger.debug(
             '_preprocess_index: create index query found.\n    asql query: {}'
             .format(asql_query))
+
         index = parse_index(asql_query)
         partition = library.partition(index.source)
         table = backend.install(connection, partition, materialize=True)
@@ -436,4 +500,5 @@ def _preprocess_sqlite_index(asql_query, library, backend, connection):
     logger.debug(
         '_preprocess_index: preprocess finished.\n    asql query: {}\n    new query: {}'
         .format(asql_query, new_query))
+
     return new_query or asql_query

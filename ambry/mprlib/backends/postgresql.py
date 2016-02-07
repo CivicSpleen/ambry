@@ -20,7 +20,11 @@ logger = get_logger(__name__)
 class PostgreSQLBackend(DatabaseBackend):
     """ Warehouse backend for PostgreSQL database. """
 
-    def install(self, connection, partition, materialize=False):
+    def sql_processors(self):
+        return [_preprocess_postgres_index]
+
+    def install(self, connection, partition, table_name=None, columns=None, materialize=False,
+                logger=None):
         """ Creates FDW or materialize view for given partition.
 
         Args:
@@ -32,6 +36,9 @@ class PostgreSQLBackend(DatabaseBackend):
             str: name of the created table.
 
         """
+
+        partition.localize()
+
         self._add_partition(connection, partition)
         fdw_table = partition.vid
         view_table = '{}_v'.format(fdw_table)

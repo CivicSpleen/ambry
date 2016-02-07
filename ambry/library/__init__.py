@@ -30,7 +30,7 @@ from ambry.library.search import Search
 from ambry.orm import Partition, File, Config, Table, Database, Dataset, Account
 from ambry.orm.exc import NotFoundError, ConflictError
 from ambry.run import get_runconfig
-from ambry.util import get_logger
+from ambry.util import get_logger, memoize
 
 from .filesystem import LibraryFilesystem
 
@@ -196,13 +196,20 @@ class Library(object):
     def filesystem(self):
         return self._fs
 
-    @property
+    @memoize
     def warehouse(self, dsn=None):
-        if not self._warehouse:
-            from ambry.library.warehouse import Warehouse
-            self._warehouse = Warehouse(self, dsn=dsn)
 
-        return self._warehouse
+        from ambry.library.warehouse import Warehouse
+
+        if self.database.dsn.startswith('sqlite') and dsn is None:
+            from ambry.util import parse_url_to_dict, unparse_url_dict
+
+            d = parse_url_to_dict(self.database.dsn)
+
+            dsn = self.database.dsn.replace(os.path.basename(d['path']),'warehouse.db')
+
+        return Warehouse(self, dsn=dsn)
+
 
     @property
     def config(self):
@@ -326,17 +333,13 @@ class Library(object):
         for ds in self.datasets:
             yield self.bundle(ds.vid)
 
-    def partition(self, ref):
+    def partition(self, ref, localize = False):
         """ Finds partition by ref and converts to bundle partition.
 
-        Args:
-            ref (str): id, vid (versioned id), name or vname (versioned name)
-
-        Raises:
-            NotFoundError: if partition with given ref not found.
-
-        Returns:
-            orm.Partition: found partition.
+        :param ref: A partition reference
+        :param localize: If True, copy a remote partition to local filesystem. Defaults to False
+        :raises: NotFoundError: if partition with given ref not found.
+        :return: orm.Partition: found partition.
         """
 
         try:
@@ -363,7 +366,13 @@ class Library(object):
             raise NotFoundError("No partition for ref: '{}'".format(ref))
 
         b = self.bundle(p.d_vid)
-        return b.wrap_partition(p)
+        p =  b.wrap_partition(p)
+
+        if localize:
+            p.localize()
+
+        return p
+
 
     def table(self, ref):
         """ Finds table by ref and returns it.
@@ -621,6 +630,8 @@ class Library(object):
         if not remote:
             raise NotFoundError("Failed to find bundle ref '{}' in any remote".format(ref))
 
+        self.logger.info("Load '{}' from '{}'".format(ref, remote))
+
         vid = self._checkin_remote_bundle(remote, ref)
 
         self.commit()
@@ -650,7 +661,6 @@ class Library(object):
             b = self.bundle(ref)
             self.logger.info("{}: Already installed".format(ref))
             vid = b.identity.vid
-            b.progress.close()
 
         except NotFoundError:
             self.logger.info("{}: Syncing".format(ref))
@@ -663,10 +673,16 @@ class Library(object):
 
             b = self.bundle(ref)  # Should exist now.
 
+
             b.dataset.data['remote_name'] = remote.short_name
             b.dataset.data['remote_url'] = remote.url
-            vid = b.identity.vid
+            b.dataset.upstream = remote.url
+            b.commit()
+
+        finally:
             b.progress.close()
+
+        vid = b.identity.vid
 
         return vid
 
@@ -681,9 +697,12 @@ class Library(object):
             yield self.remote(r.short_name)
 
     def _remote(self, name):
+        """Return a remote for which 'name' matches the short_name or url """
         from ambry.orm import Remote
+        from sqlalchemy import or_
 
-        return self.database.session.query(Remote).filter(Remote.short_name == name).one()
+        return (self.database.session.query(Remote)
+                .filter(or_(Remote.url == name, Remote.short_name == name)).one())
 
     def remote(self, name_or_bundle):
 
@@ -695,6 +714,12 @@ class Library(object):
             try:
                 r = self._remote(text_type(name_or_bundle))
             except NoResultFound:
+                r = None
+
+        if not r:
+            try:
+                r = self._remote(name_or_bundle.dataset.upstream)
+            except (NoResultFound, AttributeError, KeyError):
                 r = None
 
         if not r:
@@ -713,6 +738,8 @@ class Library(object):
             raise NotFoundError("Failed to find remote for ref '{}'".format(str(name_or_bundle)))
 
         r.account_accessor = self.account_accessor
+
+
 
         return r
 

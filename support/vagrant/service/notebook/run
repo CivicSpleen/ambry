@@ -1,0 +1,2 @@
+#!/bin/sh
+exec su vagrant -c 'ambry ui notebook -w -H 0.0.0.0 -p8081'

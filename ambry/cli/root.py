@@ -140,7 +140,7 @@ def root_list(args, l, rc):
 
     elif not args.partitions:
         display_header = True
-        header = ['vid', 'vname', 'dstate', 'bstate', 'about.title']
+        header = ['vid', 'vname', 'dstate', 'bstate', 'about.title', 'upstream']
     else:
         header = ['vid', 'vname', 'dstate', 'bstate', 'table']
 
@@ -293,6 +293,7 @@ def root_sync(args, l, config):
                 l.sync_remote(l.remote(ref))
 
             else: # It's a bundle reference
+
                 l.checkin_remote_bundle(ref)
 
         except NotFoundError as e:

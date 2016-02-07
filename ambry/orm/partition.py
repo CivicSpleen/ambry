@@ -587,6 +587,10 @@ class Partition(Base):
         from filelock import FileLock
         from ambry.util import ensure_dir_exists
         from ambry_sources import MPRowsFile
+        from fs.errors import ResourceNotFoundError
+
+        if self.is_local:
+            return
 
         local = self._bundle.build_fs
 
@@ -605,8 +609,8 @@ class Partition(Base):
                           item_type='bytes',
                           state='downloading')
 
-        def progress(bts):
-            if ps:
+        if ps:
+            def progress(bts):
                 if ps.rec.item_total is None:
                     ps.rec.item_count = 0
 
@@ -620,6 +624,11 @@ class Partition(Base):
                 if ps.rec.data['updates'] % 32 == 1:
                     ps.update(message='Localizing {}'.format(self.identity.name),
                               item_count=item_count)
+        else:
+            from ambry.bundle.process import call_interval
+            @call_interval(5)
+            def progress(bts):
+                self._bundle.log("Localizing {}. {} bytes downloaded".format(self.vname, bts))
 
         def exception_cb(e):
             raise e
@@ -630,14 +639,19 @@ class Partition(Base):
             if self.is_local:
                 return self
 
-            with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
-                event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
-                                                f,
-                                                progress_callback=progress,
-                                                error_callback=exception_cb)
-                event.wait()
-                if ps:
-                    ps.update_done()
+            try:
+                with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
+                    event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
+                                                    f,
+                                                    progress_callback=progress,
+                                                    error_callback=exception_cb)
+                    event.wait()
+                    if ps:
+                        ps.update_done()
+            except ResourceNotFoundError as e:
+                from ambry.orm.exc import NotFoundError
+                raise NotFoundError("Failed to get MPRfile '{}' from {} ".format(self.cache_key, remote.fs))
+
 
         return self
 
@@ -716,8 +730,17 @@ class Partition(Base):
         else:
             return pd.DataFrame([row.values() for row in self.reader], columns=self.table.header)
 
-    def geoframe(self, simplify=None, predicate=None, crs=None, epsg=None):
-        """Return geopandas dataframe"""
+
+    def geoframe(self, simplify=None, predicate=None, crs = None, epsg = None):
+        """
+        Return geopandas dataframe
+
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+        :param crs: Coordinate reference system information
+        :param epsg: Specifiy the CRS as an EPGS number.
+        :return: A Geopandas GeoDataFrame
+        """
         import geopandas
         from shapely.wkt import loads
 
@@ -743,6 +766,76 @@ class Partition(Base):
         df['geometry'] = geopandas.GeoSeries(s)
 
         return geopandas.GeoDataFrame(df, crs=crs, geometry='geometry')
+
+    def shapes(self, simplify=None, predicate=None):
+        """
+        Return geodata as a list of Shapely shapes
+
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+
+        :return: A list of Shapely objects
+        """
+
+        from shapely.wkt import loads
+
+        if not predicate:
+            predicate = lambda row: True
+
+        if simplify:
+            return [ loads(row.geometry).simplify(simplify) for row in self if predicate(row) ]
+        else:
+            return [ loads(row.geometry) for row in self if predicate(row) ]
+
+    def patches(self, basemap, simplify=None, predicate=None, args_f=None, **kwargs):
+        """
+        Return geodata as a list of Matplotlib patches
+
+        :param basemap: A mpl_toolkits.basemap.Basemap
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+        :param args_f: A function that takes a row and returns a dict of additional args for the Patch constructor
+
+        :param kwargs: Additional args to be passed to the descartes Path constructor
+        :return: A list of patch objects
+        """
+        from descartes import PolygonPatch
+        from shapely.wkt import loads
+        from shapely.ops import transform
+
+        if not predicate:
+            predicate = lambda row: True
+
+
+        def map_xform(x, y, z=None):
+            return basemap(x, y)
+
+        def make_patch(shape, row):
+
+            args = dict(kwargs.items())
+
+            if args_f:
+                args.update(args_f(row))
+
+            return PolygonPatch(transform(map_xform, shape), **args)
+
+        def yield_patches(row):
+
+            if simplify:
+                shape = loads(row.geometry).simplify(simplify)
+            else:
+                shape = loads(row.geometry)
+
+            if shape.geom_type == 'MultiPolygon':
+                for subshape in shape.geoms:
+                    yield make_patch(subshape, row)
+            else:
+                yield make_patch(shape,row )
+
+        return [ patch for row in self if predicate(row)
+                       for patch in yield_patches(row) ]
+
+
 
     # ============================
 

@@ -136,7 +136,6 @@ def config_install(args, l, rc):
     from ambry.run import ROOT_DIR, USER_DIR, CONFIG_FILE, ACCOUNTS_FILE
     from ambry.util import AttrDict
 
-
     user = getpass.getuser()
 
     default_config_file = join(dirname(ambry.support.__file__),'ambry-{}.yaml'.format(args.template))
@@ -161,7 +160,6 @@ def config_install(args, l, rc):
 
     if args.root:
         default_root = args.root
-
 
     if not os.path.exists(user_config_dir):
         os.makedirs(user_config_dir)
@@ -189,7 +187,14 @@ def config_install(args, l, rc):
 
     if not os.path.exists(user_accounts_file):
         with open(user_accounts_file, 'w') as f:
-            d = dict(accounts=dict(ambry=dict(name=None, email=None)))
+            from ambry.util import random_string
+            d = dict(accounts=dict(
+                        password=random_string(16),
+                        ambry=dict(
+                            name=None, email=None
+                        )
+                    )
+                )
 
             prt('Writing accounts file: {}'.format(user_accounts_file))
             f.write(yaml.dump(d, indent=4, default_flow_style=False))

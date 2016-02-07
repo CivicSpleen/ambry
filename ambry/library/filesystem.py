@@ -20,9 +20,6 @@ class LibraryFilesystem(object):
 
         self._config = config
 
-
-
-
     def _compose(self, name, args, mkdir=True):
         """Get a named filesystem entry, and extend it into a path with additional
         path arguments"""
@@ -32,7 +29,9 @@ class LibraryFilesystem(object):
         root = p = self._config.filesystem[name].format(root=self._root)
 
         if args:
+            args = [e.strip() for e in args]
             p = join(p, *args)
+
 
         if not isdir(p) and mkdir:
             makedirs(p)
@@ -46,7 +45,7 @@ class LibraryFilesystem(object):
         return p
 
     def compose(self, name, *args):
-        """Compose, but doin't create base directory"""
+        """Compose, but don't create base directory"""
 
         return self._compose(name, args, mkdir=False)
 

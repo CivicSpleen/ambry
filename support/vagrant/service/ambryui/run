@@ -1,0 +1,9 @@
+#!/bin/sh
+
+HOST=0.0.0.0
+PORT=80
+WORKERS=4
+
+exec gunicorn -w  --max-requests 10 --timeout 300 \
+--access-logfile - --error-logfile - \
+-b : ambry_ui:app
