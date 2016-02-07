@@ -231,7 +231,6 @@ or via SQLAlchemy, to return datasets.
             if statement.lower().startswith('select'):
                 logger.info('Run query {}'.format(statement))
                 connection = self._backend._get_connection()
-
                 return self._backend.query(connection, statement, fetch=False)
 
         # A fake cursor that can be closed and iterated

@@ -43,12 +43,86 @@ class WarehouseTest(TestCase):
         w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
         with patch.object(w._backend, 'query') as fake_query:
             w.query(query, logger=Mock())
-
             # second argument of the first call was drop query.
             self.assertEqual(fake_query.mock_calls[0][1][1], drop)
 
-            # second argument of the third call was create view query
-            self.assertEqual(fake_query.mock_calls[2][1][1], query)
+    @patch('ambry.bundle.asql_parser.find_indexable_materializable')
+    def test_installs_vids_recognized_as_installable(self, fake_find):
+
+        query = 'INSTALL p1vid;'
+        drop = None
+        tables = []
+        install = ['p1vid']
+        materialize = []
+        indexes = []
+        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
+        with patch.object(w, 'install') as fake_install:
+            w.query(query, logger=Mock())
+            fake_install.assert_called_once_with('p1vid')
+
+    @patch('ambry.bundle.asql_parser.find_indexable_materializable')
+    def test_materializes_vids_recognized_as_materializable(self, fake_find):
+
+        query = 'MATERIALIZE p1vid;'
+        drop = None
+        tables = []
+        install = []
+        materialize = ['p1vid']
+        indexes = []
+        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
+        with patch.object(w, 'materialize') as fake_materialize:
+            w.query(query, logger=Mock())
+            fake_materialize.assert_called_once_with('p1vid')
+
+    @patch('ambry.bundle.asql_parser.find_indexable_materializable')
+    def test_indexes_vids_recognized_as_indexable(self, fake_find):
+        query = 'INDEX p1vid (col1, col2);'
+        drop = None
+        tables = []
+        install = []
+        materialize = []
+        indexes = [('p1vid', ('col1', 'col2'))]
+        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
+        with patch.object(w, 'index') as fake_index:
+            w.query(query, logger=Mock())
+            fake_index.assert_called_once_with('p1vid', ('col1', 'col2'))
+
+    @patch('ambry.bundle.asql_parser.find_indexable_materializable')
+    def test_sends_create_query_to_backend(self, fake_find):
+
+        query = 'CREATE VIEW view1 AS SELECT * FROM p1vid;'
+        drop = ''
+        tables = []
+        install = []
+        materialize = []
+        indexes = []
+        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
+        with patch.object(w._backend, 'query') as fake_query:
+            w.query(query, logger=Mock())
+
+            # second argument of the first call was create view query
+            self.assertEqual(fake_query.mock_calls[0][1][1], query)
+
+    @patch('ambry.bundle.asql_parser.find_indexable_materializable')
+    def test_sends_select_query_to_backend(self, fake_find):
+
+        query = 'SELECT * FROM p1vid;'
+        drop = ''
+        tables = []
+        install = []
+        materialize = []
+        indexes = []
+        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
+        with patch.object(w._backend, 'query') as fake_query:
+            w.query(query, logger=Mock())
+
+            # second argument of the first call was create view query
+            self.assertEqual(fake_query.mock_calls[0][1][1], query)
 
     # .install() tests
     def test_finds_partition_by_refs_and_installs_partition_to_backend(self):
