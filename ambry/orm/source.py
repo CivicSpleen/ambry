@@ -20,7 +20,7 @@ from .table import Table
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
 from ..util import Constant
-from sqlalchemy.orm import deferred
+
 
 class DataSourceBase(object):
     """Base class for data soruces, so we can have a persistent and transient versions"""
@@ -173,7 +173,6 @@ class DataSourceBase(object):
             else:
                 self._datafile = MPRowsFile(self._bundle.build_ingest_fs, self.name)
 
-
         return self._datafile
 
     @property
@@ -284,7 +283,7 @@ class DataSourceBase(object):
 
                     name = col['name']
 
-                    if name in names: # Handle duplicate names.
+                    if name in names:  # Handle duplicate names.
                         name = name+"_"+str(col['pos'])
 
                     names.add(name)
@@ -426,7 +425,8 @@ class TransientDataSource(DataSourceBase):
         :return:
 
         """
-        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash', 'process_records')
+        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id',
+                     'dataset', 'hash', 'process_records')
         return OrderedDict([(k, getattr(self, k)) for k in self.properties if k not in SKIP_KEYS])
 
 
