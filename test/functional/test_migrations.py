@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
-import unittest
-import fudge
 
-import os
 import pkgutil
+import os
+import unittest
 
 from sqlalchemy.pool import NullPool
+
+try:
+    # py2, mock is external lib.
+    from mock import patch
+except ImportError:
+    # py3, mock is included
+    from unittest.mock import patch
 
 from ambry.orm.database import Database
 from ambry.orm import database
@@ -46,8 +52,7 @@ class MigrationTest(TestBase):
                 'See migrations documentation for details.'.format(current, previous[0] + 1)
             self.assertEqual(current[0] - previous[0], 1, error_msg)
 
-    @fudge.patch(
-        'ambry.orm.database._get_all_migrations')
+    @patch('ambry.orm.database._get_all_migrations')
     def test_applies_new_migration_to_sqlite_database(self, fake_get):
         # replace real migrations with tests migrations.
 
@@ -58,16 +63,16 @@ class MigrationTest(TestBase):
             (103, 'test.functional.migrations.0103_not_ready')  # that should not apply
         ]
 
-        fake_get.expects_call().returns(test_migrations)
+        fake_get.return_value = test_migrations
 
         # create database with initial schema
-        with fudge.patched_context(database, 'SCHEMA_VERSION', 100):
+        with patch.object(database, 'SCHEMA_VERSION', 100):
             db = Database('sqlite:///{}'.format(self.sqlite_db_file))
             db.create_tables()
             db.close()
 
         # switch version and reconnect. Now both migrations should apply.
-        with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
+        with patch.object(database, 'SCHEMA_VERSION', 102):
             db = Database('sqlite:///{}'.format(self.sqlite_db_file))
             try:
                 # check column created by migration 101.
@@ -81,7 +86,7 @@ class MigrationTest(TestBase):
             finally:
                 db.close()
 
-    @fudge.patch('ambry.orm.database._get_all_migrations')
+    @patch('ambry.orm.database._get_all_migrations')
     def test_applies_new_migration_to_postgresql_database(self, fake_get):
         # replace real migrations with tests migrations.
         test_migrations = [
@@ -91,19 +96,19 @@ class MigrationTest(TestBase):
             (103, 'test.test_orm.functional.migrations.0103_not_ready')  # that should not apply
         ]
 
-        fake_get.expects_call().returns(test_migrations)
+        fake_get.return_value = test_migrations
 
         # create postgresql db
         try:
             postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
 
             # populate database with initial schema
-            with fudge.patched_context(database, 'SCHEMA_VERSION', 100):
+            with patch.object(database, 'SCHEMA_VERSION', 100):
                 db = Database(postgres_test_db_dsn, engine_kwargs={'poolclass': NullPool})
                 db.create()
                 db.close()
             # switch version and reconnect. Now both migrations should apply.
-            with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
+            with patch.object(database, 'SCHEMA_VERSION', 102):
                 db = Database(postgres_test_db_dsn, engine_kwargs={'poolclass': NullPool})
                 try:
                     # check column created by migration 101.
