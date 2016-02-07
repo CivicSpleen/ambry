@@ -128,7 +128,7 @@ class Test(TestBase):
 
         library = self.library()
 
-        stmt, tables, install, materialize, indexes = find_indexable_materializable(stmt, library)
+        stmt, drop, tables, install, materialize, indexes = find_indexable_materializable(stmt, library)
 
         self.assertEquals(sorted([u'p00casters002003', u'p00casters004003', u'p00casters006003']),
                           sorted(materialize))
@@ -182,7 +182,7 @@ CREATE VIEW view1 AS SELECT col1 as c1, col2 as c2 FROM table1 WHERE foo is None
 
         for i, stmt in enumerate(statements):
 
-            actual_statement, tables, install, materialize, indexes = find_indexable_materializable(stmt, library)
+            actual_statement, drop, tables, install, materialize, indexes = find_indexable_materializable(stmt, library)
 
             if not actual_statement:
                 continue
@@ -213,7 +213,29 @@ SELECT * FROM build.example.com-casters-simple;
 
         w = library.warehouse()
 
-        rows = list(w.execute_sql(sql))
+        rows = list(w.query(sql))
+
+        self.assertTrue('Alabama' in rows[0])
+        self.assertTrue('Alaska' in rows[1])
+
+        # As before, but without the installs.
+        sql = """
+
+    CREATE VIEW simple_stats AS
+    SELECT * FROM build.example.com-casters-simple_stats;
+
+    SELECT * FROM simple_stats AS ss
+    JOIN build.example.com-casters-integers as intr ON intr.a = ss.id;
+
+    SELECT * FROM build.example.com-casters-simple;
+
+
+    """
+
+        w = library.warehouse()
+
+
+        rows = list(w.query(sql))
 
         self.assertTrue('Alabama' in rows[0])
         self.assertTrue('Alaska' in rows[1])

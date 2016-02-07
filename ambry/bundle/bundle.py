@@ -1010,20 +1010,34 @@ Caster Code
 
         elif source.reftype == 'sql':
 
-            sql_file, table = source.ref.split(':', 1)
+            if ':' in source.ref:
+                # The ref specifies a table/view to call
+                sql_file, table = source.ref.split(':', 1)
+            else:
+                # Just use the first select in the sql file.
+                sql_file, table = source.ref, None
 
             w = self.warehouse(os.path.splitext(sql_file)[0])
 
             f = self.build_source_files.file_by_path(sql_file)
 
-            w.execute_sql(f.unpacked_contents, logger=self.logger)
+            cursor = w.query(f.unpacked_contents, logger=self.logger)
 
-            # For now, asuming knowledge that this is an ASPW connection
-            connection = w._backend._get_connection()
+            if table:
+                # If the table as secified, select all from it
+                # For now, asuming knowledge that this is an ASPW connection
+                cursor.close()
 
-            cursor = connection.cursor()
+                connection = w._backend._get_connection()
 
-            cursor.execute('SELECT * FROM {};'.format(table))
+                cursor = connection.cursor()
+
+                cursor.execute('SELECT * FROM {};'.format(table))
+
+            else:
+                # Otherwise, use the first select encountered in the sql file, which is
+                # already prepared in the cursor from the return value
+                pass
 
             spec = source.spec
             spec.start_line = 1

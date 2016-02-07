@@ -214,6 +214,15 @@ proto-dsn: {}
             b.finalize()
             b.close()
 
+        try:
+            b = l.bundle('build.example.com-sql')
+
+        except NotFoundError:
+            b = self.import_bundle(l, 'build.example.com/sql')
+            b.build(sources=['integers','integers2','integers3'])
+
+
+
     def init_library(self, use_proto=True):
         """Initialize either the sqlite or pg library, based on the DSN """
         if self._db_type == 'sqlite':

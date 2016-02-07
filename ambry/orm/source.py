@@ -278,9 +278,18 @@ class DataSourceBase(object):
         elif self.datafile.exists:
             with self.datafile.reader as r:
 
+                names = set()
+
                 for col in r.columns:
 
-                    c = st.column(col['name'])
+                    name = col['name']
+
+                    if name in names: # Handle duplicate names.
+                        name = name+"_"+str(col['pos'])
+
+                    names.add(name)
+
+                    c = st.column(name)
 
                     dt = col['resolved_type'] if col['resolved_type'] != 'unknown' else unknown_type
 
@@ -290,8 +299,8 @@ class DataSourceBase(object):
                     else:
 
                         c = st.add_column(col['pos'],
-                                          source_header=col['name'],
-                                          dest_header=col['name'],
+                                          source_header=name,
+                                          dest_header=name,
                                           datatype=col['resolved_type'],
                                           description=col['description'],
                                           has_codes=col['has_codes'])

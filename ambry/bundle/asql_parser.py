@@ -432,21 +432,23 @@ def find_indexable_materializable(sql, library):
 
     derefed, tables, partitions = substitute_vids(library, sql)
 
+    drop = None
+
     if derefed.lower().startswith('create index'):
 
         parsed = parse_index(derefed)
 
-        return derefed, [], [(parsed.source, parsed.columns)], [], []
+        return derefed, drop, [], [(parsed.source, parsed.columns)], [], []
 
     elif derefed.lower().startswith('materialize'):
         _, vid = derefed.split()
 
-        return derefed, [], [], [vid], []
+        return derefed, drop, [], [], [vid], []
 
     elif derefed.lower().startswith('install'):
         _, vid = derefed.split()
 
-        return derefed, [], [vid], [], []
+        return derefed, drop, [], [vid], [], []
 
     elif derefed.lower().startswith('select'):
         parsed = parse_select(derefed)
@@ -454,8 +456,10 @@ def find_indexable_materializable(sql, library):
     elif derefed.lower().startswith('create view'):
         parsed = parse_view(derefed)
 
+        drop = 'DROP VIEW IF EXISTS {};'.format(parsed.name)
+
     else:
-        return derefed, list(tables), list(partitions), [], []
+        return derefed, drop, list(tables), list(partitions), [], []
 
     def partition_aliases(parsed):
         d = {}
@@ -492,6 +496,6 @@ def find_indexable_materializable(sql, library):
 
     install = set(partitions) - materialize
 
-    return derefed, list(tables), list(install), list(materialize), indexes
+    return derefed, drop, list(tables), list(install), list(materialize), indexes
 
 

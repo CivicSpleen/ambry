@@ -147,7 +147,7 @@ class Mixin(object):
             warehouse.close()
             library.database.close()
 
-    @unittest.SkipTest("This test needs a bundle that has multiple partitions of the same table")
+    @unittest.skip("This test needs a bundle that has multiple partitions of the same table")
     def test_table_install_and_query(self):
         try:
             assert_valid_ambry_sources('0.1.8')
@@ -183,7 +183,7 @@ class Mixin(object):
             library.warehouse.close()
             library.database.close()
 
-    @unittest.SkipTest("This test needs a bundle that has multiple partitions of the same table")
+    @unittest.skip("This test needs a bundle that has multiple partitions of the same table")
     def test_query_with_union(self):
         if isinstance(self, PostgreSQLTest):
             try:
@@ -353,7 +353,7 @@ class BundleWarehouse(TestBase):
         l = self.library()
 
         b = l.bundle('build.example.com-casters')
-        wh = l.warehouse
+        wh = l.warehouse()
         wh.clean()
 
         self.assertEqual(0, len(wh.list()))
@@ -364,4 +364,25 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(3, len(wh.list()))
 
+    def test_library_build_from_sql(self):
+
+        l = self.library()
+
+        b = l.bundle('build.example.com-sql')
+        wh = l.warehouse()
+        wh.clean()
+
+        for source in ['use_select', 'use_view']:
+
+            b.ingest(sources=[source])
+
+            b.source_schema(sources=[source])
+
+            b.schema(sources=[source])
+
+            b.build(sources=[source])
+
+        self.assertEqual(20, sum(1 for _ in b.partition(table='use_select')))
+
+        self.assertEqual(20, sum(1 for _ in b.partition(table='use_view')))
 

@@ -1,5 +1,6 @@
-name,source_table_name,dest_table_name,stage,time,start_line,end_line,header_lines,reftype,ref,state
-int100,,,2,,1,21,0,sql,example1.sql:intj,ingest_done
-integers,integers,integers,1,1,1,21,0,,http://public.source.civicknowledge.com/example.com/basics/integers.csv,built
-integers2,integers,integers,1,2,1,21,0,,http://public.source.civicknowledge.com/example.com/basics/integers.csv,built
-integers3,integers,integers,1,3,1,21,0,,http://public.source.civicknowledge.com/example.com/basics/integers.csv,built
+"name","source_table_name","dest_table_name","stage","time","start_line","end_line","header_lines","reftype","ref","state"
+"use_view",,,2,,,,,"sql","example1.sql:joined_integers","synced"
+"use_select",,,2,,,,,"sql","example2.sql","synced"
+"integers","integers","integers",1,1,1,21,0,,"http://public.source.civicknowledge.com/example.com/basics/integers.csv","ingest_done"
+"integers2","integers","integers",1,2,1,21,0,,"http://public.source.civicknowledge.com/example.com/basics/integers.csv","ingest_done"
+"integers3","integers","integers",1,3,1,21,0,,"http://public.source.civicknowledge.com/example.com/basics/integers.csv","ingest_done"

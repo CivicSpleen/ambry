@@ -904,12 +904,11 @@ class MapSourceHeaders(Pipe):
     def process_header(self, headers):
 
         is_generator = isinstance(self._source_pipe, GeneratorSourcePipe)
-        is_relation = isinstance(self._source_pipe, BundleWarehouseSource)
         is_partition = isinstance(self._source_pipe, PartitionSourcePipe)
 
         if len(list(self.source.source_table.columns)) == 0:
 
-            if is_generator or is_relation or is_partition:
+            if is_generator or  is_partition:
                 # Generators or relations are assumed to return a valid, consistent header, so
                 # if the table is missing, carry on.
 

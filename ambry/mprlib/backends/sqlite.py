@@ -314,7 +314,11 @@ class SQLiteBackend(DatabaseBackend):
         """
         cursor = connection.cursor()
 
-        cursor.execute(query)
+        try:
+            cursor.execute(query)
+        except Exception as e:
+            from ambry.mprlib.exceptions import BadSQLError
+            raise BadSQLError("Failed to execute query: {}; {}".format(query, e))
 
         if fetch:
             return cursor.fetchall()
