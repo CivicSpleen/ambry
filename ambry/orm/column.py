@@ -6,7 +6,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
-
 import sys
 import datetime
 
@@ -60,7 +59,8 @@ class Column(Base):
 
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
-    lom = SAColumn('c_lom', String(1), doc='Level of Measurement: n,o,i,r for Nominal, Ordinal, Interval, Ratio')
+    lom = SAColumn('c_lom', String(1),
+                   doc='Level of Measurement: n,o,i,r for Nominal, Ordinal, Interval, Ratio')
 
     # Type Codes, major / minor
     # err/se Standard Error
@@ -79,7 +79,6 @@ class Column(Base):
     # ids of columns used for computing ratios, rates and densities
     numerator = SAColumn('c_numerator', String(20))
     denominator = SAColumn('c_denominator', String(20))
-
 
     indexes = SAColumn('t_indexes', MutationList.as_mutable(JSONEncodedObj))
     uindexes = SAColumn('t_uindexes', MutationList.as_mutable(JSONEncodedObj))
