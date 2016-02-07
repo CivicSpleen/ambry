@@ -11,19 +11,20 @@ Example:
     w.close()
 """
 
+import logging
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
-from ambry.orm import Table
 from ambry.util import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, level=logging.ERROR)
 
 # debug logging
 #
-import logging
-logger = get_logger(__name__, level=logging.ERROR, propagate=False)
+# import logging
+# logger = get_logger(__name__, level=logging.DEBUG, propagate=False)
+
 
 class Warehouse(object):
     """ Provides SQL access to datasets in the library, allowing users to issue SQL queries, either as SQL
@@ -53,10 +54,11 @@ or via SQLAlchemy, to return datasets.
                 self._backend = PostgreSQLBackend(library, dsn)
             except ImportError as e:
                 from ambry.mprlib.backends.sqlite import SQLiteBackend
-                from ambry.util import set_url_part, select_from_url
-                dsn = "sqlite:///{}/{}".format(self._library.filesystem.build('warehouses'),
-                                               select_from_url(dsn,'path').strip('/')+".db")
-                logging.error("Failed to import required modules ({})for Postgres warehouse. Using Sqlite dsn={}"
+                from ambry.util import select_from_url
+                dsn = 'sqlite:///{}/{}'.format(self._library.filesystem.build('warehouses'),
+                                               select_from_url(dsn, 'path').strip('/') + '.db')
+                logging.error('Failed to import required modules ({})for Postgres warehouse.'
+                              'Using Sqlite dsn={}'
                               .format(e, dsn))
                 self._backend = SQLiteBackend(library, dsn)
 
@@ -88,7 +90,6 @@ or via SQLAlchemy, to return datasets.
         """Return A Sqlalchemy engine"""
         return create_engine(self._warehouse_dsn)
 
-
     def install(self, ref, table_name=None, index_columns=None):
         """ Finds partition by reference and installs it to warehouse db.
 
@@ -111,7 +112,8 @@ or via SQLAlchemy, to return datasets.
             partition = self._library.partition(ref)
             connection = self._backend._get_connection()
 
-            return self._backend.install(connection, partition, table_name=table_name, index_columns=index_columns)
+            return self._backend.install(
+                connection, partition, table_name=table_name, index_columns=index_columns)
 
     def materialize(self, ref, table_name=None, index_columns=None):
         """ Creates materialized table for given partition reference.
@@ -124,13 +126,13 @@ or via SQLAlchemy, to return datasets.
 
         """
         from ambry.library import Library
-        assert isinstance(self._library, Library )
+        assert isinstance(self._library, Library)
 
         logger.debug('Materializing warehouse partition.\n    partition: {}'.format(ref))
         partition = self._library.partition(ref)
 
         connection = self._backend._get_connection()
-        return self._backend.install(connection, partition, table_name = table_name,
+        return self._backend.install(connection, partition, table_name=table_name,
                                      index_columns=index_columns, materialize=True)
 
     def index(self, ref, columns):
@@ -151,7 +153,7 @@ or via SQLAlchemy, to return datasets.
 
         Args:
             library (library.Library):
-            asql (str): unified sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
+            asql (str): ambry sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
         """
         import sqlparse
 
@@ -168,7 +170,7 @@ or via SQLAlchemy, to return datasets.
 
         return parsed_statements
 
-    def query(self, asql, logger = None):
+    def query(self, asql, logger=None):
         """
         Execute an ASQL file and return the result of the first SELECT statement.
 
@@ -177,7 +179,6 @@ or via SQLAlchemy, to return datasets.
         :return:
         """
         import sqlparse
-        from ambry.mprlib.exceptions import BadSQLError
         from ambry.bundle.asql_parser import find_indexable_materializable
 
         if not logger:
@@ -191,7 +192,7 @@ or via SQLAlchemy, to return datasets.
             try:
                 processed_statements.append(find_indexable_materializable(parsed_statement, self._library))
             except Exception as e:
-                logger.error("Failed to process statement: {}".format(parsed_statement))
+                logger.error('Failed to process statement: {}'.format(parsed_statement))
                 raise
 
         # Drop the views in reverse order
@@ -204,7 +205,7 @@ or via SQLAlchemy, to return datasets.
 
         for statement, _, tables, install, materialize, indexes in processed_statements:
 
-            logger.info("Process statement: {}".format(statement[:40]))
+            logger.info('Process statement: {}'.format(statement[:40]))
 
             for vid in install:
                 logger.info('    Install {}'.format(vid))
@@ -241,9 +242,7 @@ or via SQLAlchemy, to return datasets.
             def __iter__(self):
                 pass
 
-
         return closable_iterable()
-
 
     def close(self):
         """ Closes warehouse database. """

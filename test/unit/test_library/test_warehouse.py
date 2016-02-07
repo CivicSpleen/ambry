@@ -8,10 +8,10 @@ from ambry.orm import Partition
 
 try:
     # py2, mock is external lib.
-    from mock import patch, MagicMock
+    from mock import patch, MagicMock, Mock
 except ImportError:
     # py3, mock is included
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import patch, MagicMock, Mock
 
 
 class WarehouseTest(TestCase):
@@ -30,17 +30,25 @@ class WarehouseTest(TestCase):
         self.assertEqual('sqlite:////tmp/temp1.db', warehouse._backend._dsn)
 
     # .query() tests
-    def test_sends_query_to_database_backend(self):
+    @patch('ambry.bundle.asql_parser.find_indexable_materializable')
+    def test_sends_drop_query_to_backend(self, fake_find):
+
+        query = 'CREATE VIEW view1 AS SELECT * FROM p1vid;'
+        drop = 'DROP VIEW IF EXISTS view1;'
+        tables = []
+        install = []
+        materialize = []
+        indexes = []
+        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
         w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
         with patch.object(w._backend, 'query') as fake_query:
-            query = 'SELECT * FROM p1vid;'
-            w.query(query)
+            w.query(query, logger=Mock())
 
-            # backend.query called once.
-            self.assertEqual(len(fake_query.mock_calls), 1)
+            # second argument of the first call was drop query.
+            self.assertEqual(fake_query.mock_calls[0][1][1], drop)
 
-            # second argument of the call was the same query.
-            self.assertEqual(fake_query.mock_calls[0][1][1], query)
+            # second argument of the third call was create view query
+            self.assertEqual(fake_query.mock_calls[2][1][1], query)
 
     # .install() tests
     def test_finds_partition_by_refs_and_installs_partition_to_backend(self):
