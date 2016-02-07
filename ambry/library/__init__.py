@@ -5,7 +5,6 @@ of the bundles that have been installed into it.
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 import imp
-import logging
 import os
 import sys
 import tempfile
@@ -34,8 +33,10 @@ from ambry.util import get_logger, memoize
 
 from .filesystem import LibraryFilesystem
 
-logger = get_logger(__name__, level=logging.INFO, propagate=False)
-
+logger = get_logger(__name__)
+# debug logging
+# import logging
+# logger = get_logger(__name__, level=logging.DEBUG)
 global_library = None
 
 
@@ -202,14 +203,13 @@ class Library(object):
         from ambry.library.warehouse import Warehouse
 
         if self.database.dsn.startswith('sqlite') and dsn is None:
-            from ambry.util import parse_url_to_dict, unparse_url_dict
+            from ambry.util import parse_url_to_dict
 
             d = parse_url_to_dict(self.database.dsn)
 
-            dsn = self.database.dsn.replace(os.path.basename(d['path']),'warehouse.db')
+            dsn = self.database.dsn.replace(os.path.basename(d['path']), 'warehouse.db')
 
         return Warehouse(self, dsn=dsn)
-
 
     @property
     def config(self):
@@ -333,7 +333,7 @@ class Library(object):
         for ds in self.datasets:
             yield self.bundle(ds.vid)
 
-    def partition(self, ref, localize = False):
+    def partition(self, ref, localize=False):
         """ Finds partition by ref and converts to bundle partition.
 
         :param ref: A partition reference
@@ -366,13 +366,12 @@ class Library(object):
             raise NotFoundError("No partition for ref: '{}'".format(ref))
 
         b = self.bundle(p.d_vid)
-        p =  b.wrap_partition(p)
+        p = b.wrap_partition(p)
 
         if localize:
             p.localize()
 
         return p
-
 
     def table(self, ref):
         """ Finds table by ref and returns it.
@@ -495,7 +494,9 @@ class Library(object):
 
         try:
             b = self.bundle(ds.vid)
-            self.logger.info("Removing old bundle before checking in new one of same number: '{}'".format(ds.vid))
+            self.logger.info(
+                "Removing old bundle before checking in new one of same number: '{}'"
+                .format(ds.vid))
             self.remove(b)
         except NotFoundError:
             pass
@@ -512,7 +513,6 @@ class Library(object):
         # self.search.index_library_datasets(tick)
 
         self.search.index_bundle(b)
-
 
         return b
 
@@ -588,7 +588,7 @@ class Library(object):
 
             return remote_name, db_ck
 
-    def _init_git(self,b):
+    def _init_git(self, b):
         """If the source directory is configured for git, create a new repo and
         add the bundle to it. """
 
@@ -615,7 +615,8 @@ class Library(object):
         """ Checkin a remote bundle to this library.
 
         :param ref: Any bundle reference
-        :param remote: If specified, use this remote. If not, search for the reference in cached directory listings
+        :param remote: If specified, use this remote. If not, search for the reference
+            in cached directory listings
         :param cb: A one argument progress callback
         :return:
         """
@@ -645,11 +646,11 @@ class Library(object):
         :param ref: Any bundle reference
         :return: The vid of the loaded bundle
         """
+        from ambry.bundle.process import call_interval
         from ambry.orm.exc import NotFoundError
+        from ambry.orm import Remote
         from ambry.util.flo import copy_file_or_flo
         from tempfile import NamedTemporaryFile
-        from ambry.orm import Remote
-        from ambry.bundle.process import call_interval
 
         assert isinstance(remote, Remote)
 
@@ -672,7 +673,6 @@ class Library(object):
                     self.checkin_bundle(temp.name)
 
             b = self.bundle(ref)  # Should exist now.
-
 
             b.dataset.data['remote_name'] = remote.short_name
             b.dataset.data['remote_url'] = remote.url
@@ -739,8 +739,6 @@ class Library(object):
 
         r.account_accessor = self.account_accessor
 
-
-
         return r
 
     def add_remote(self, r):
@@ -774,8 +772,9 @@ class Library(object):
 
     def _find_remote_bundle(self, ref, remote_service_type='s3'):
         """
-        Locate a bundle, by any reference, among the configured remotes. The routine will only look in the cache
-        directory lists stored in the remotes, which must be updated to be current.
+        Locate a bundle, by any reference, among the configured remotes. The routine will
+        only look in the cache directory lists stored in the remotes, which must
+        be updated to be current.
 
         :param ref:
         :return: (remote,vname) or (None,None) if the ref is not found
@@ -1049,7 +1048,7 @@ class Library(object):
 
         for f in fs.walkfiles(wildcard='bundle.yaml'):
 
-            self.logger.info("Visiting {}".format(f))
+            self.logger.info('Visiting {}'.format(f))
             config = yaml.load(fs.getcontents(f))
 
             if not config:
@@ -1075,11 +1074,11 @@ class Library(object):
             b.sync_in()
 
             if detach:
-                self.logger.info("{} Detaching".format(b.identity.fqname))
+                self.logger.info('{} Detaching'.format(b.identity.fqname))
                 b.set_file_system(source_url=None)
 
             if force:
-                self.logger.info("{} Sync out".format(b.identity.fqname))
+                self.logger.info('{} Sync out'.format(b.identity.fqname))
                 # FIXME. It won't actually sync out until re-starting the bundle.
                 # The source_file_system is probably cached
                 b = self.bundle(bid)
