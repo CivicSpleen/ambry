@@ -510,12 +510,12 @@ class Partition(Base):
 
         if self.is_local:
             # Use the local version, if it exists
-            logger.debug("datafile: Using local datafile {}".format(self.vname))
+            logger.debug('datafile: Using local datafile {}'.format(self.vname))
             return self.local_datafile
         else:
             # If it doesn't try to get the remote.
             try:
-                logger.debug("datafile: Using remote datafile {}".format(self.vname))
+                logger.debug('datafile: Using remote datafile {}'.format(self.vname))
                 return self.remote_datafile
             except NotFoundError:
                 # If the remote doesnt exist, return the local, so the caller can call  exists() on it,
@@ -550,12 +550,10 @@ class Partition(Base):
 
             if 'remote_name' not in ds.data:
 
-                raise NotFoundError("Failed to find both local and remote file for partition: {}"
+                raise NotFoundError('Failed to find both local and remote file for partition: {}'
                                     .format(self.identity.fqname))
 
             remote = self._bundle.library.remote(ds.data['remote_name'])
-
-            b = self._bundle
 
             datafile = MPRowsFile(remote.fs, self.cache_key)
 
@@ -565,7 +563,7 @@ class Partition(Base):
                     .format(self.identity.fqname, remote))
 
         except ResourceNotFoundError as e:
-            raise NotFoundError("Could not locate data file for partition {} (remote): {}"
+            raise NotFoundError('Could not locate data file for partition {} (remote): {}'
                                 .format(self.identity.fqname, e))
 
         return datafile
