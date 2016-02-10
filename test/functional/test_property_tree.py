@@ -5,7 +5,7 @@ from ambry.metadata.schema import Top
 from ambry.orm import Config
 
 from test.factories import DatasetFactory
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class DatabaseConfigUpdateTest(TestBase):
