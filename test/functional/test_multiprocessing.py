@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 import unittest
 
-from test.test_base import TestBase
-from ambry.identity import DatasetNumber
-from ambry.orm import Database, Dataset
+from ambry.orm import Database
+
+from test.proto import TestBase
+
+# TODO: This is completely broken because base class changed.
+
 
 @unittest.skip
 class Test(TestBase):
