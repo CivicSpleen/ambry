@@ -3,17 +3,15 @@ Created on Jul 6, 2013
 
 @author: eric
 """
-
+from unittest import TestCase
 from semantic_version import Version, Spec
 
 from ambry.identity import DatasetNumber, TableNumber, ObjectNumber, ColumnNumber, PartitionNumber,\
     Name, NameQuery, PartitionName, PartitionNameQuery,\
     Identity, PartitionIdentity, NumberServer, GeneralNumber1
 
-from test.test_base import TestBase
 
-
-class Test(TestBase):
+class Test(TestCase):
 
     def test_id(self):
         dnn = 1000000
@@ -462,10 +460,6 @@ class Test(TestBase):
 
         p = PartialPartitionName(time=10, space="CA", table='table', format='format')
 
-        # print(p.promote(ds_name).cache_key)
-        # self.assertEquals('', p.promote(ds_name).cache_key)
-
-
     def test_increment(self):
 
         dnn = 1000000
@@ -486,5 +480,3 @@ class Test(TestBase):
 
         tn2 = ObjectNumber.increment(tn)
         self.assertEqual(103, tn2.revision)
-
-
