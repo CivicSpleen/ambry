@@ -5,7 +5,7 @@ from ambry.library import new_library
 from ambry.library.config import LibraryConfigSyncProxy
 from ambry.orm.account import Account
 
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class Test(TestBase):
@@ -48,15 +48,7 @@ class Test(TestBase):
         for remote in l.remotes:
             self.assertTrue(bool(remote.url))
 
-        # Delete the config and get the library again, this time from the
-        # library DSN.
-        rc = self.config()
-
-        # print 'Removing', rc.loaded[0]
-        os.remove(rc.loaded[0])
-
-        self.assertFalse(os.path.exists(rc.loaded[0]))
-        os.environ['AMBRY_DB'] = l.database.dsn
+        os.environ['AMBRY_DB'] = l.database.dsn = 'sqlite://'
         os.environ['AMBRY_ACCOUNT_PASSWORD'] = l._account_password
 
         self.assertEqual(l.database.dsn, os.getenv('AMBRY_DB'))
