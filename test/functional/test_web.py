@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import os
-
-from test.test_base import TestBase
+from unittest import TestCase
 
 # FIXME! These tests need both a running web UI, and to have the ambry_client installed
 # neither of which is automatic yet.
@@ -11,13 +9,13 @@ from test.test_base import TestBase
 
 
 jwt_secret = 'WaeW77qy8yqJM2mP'
-api_password= 'qHPaMbgGUXIUobpB2ET0'
+api_password = 'qHPaMbgGUXIUobpB2ET0'
 
-class Test(TestBase):
+
+class Test(TestCase):
 
     def test_basic(self):
         from ambry_client import Client
-        import time
 
         c = Client('http://localhost:8080')
         l = c.library
@@ -32,7 +30,7 @@ class Test(TestBase):
         l.remotes = remotes
 
         if b:
-            for k, v in  b.files.items():
+            for k, v in b.files.items():
                 print k
 
             print b.files.schema.hash
@@ -42,14 +40,11 @@ class Test(TestBase):
         """
 
         """
-        from ambry.orm.account import Account
         from ambry_client import Client
-        import time
-        import yaml
 
         c = Client('http://localhost:8080')
 
-        print c.authenticate('api', api_password, jwt_secret )
+        print c.authenticate('api', api_password, jwt_secret)
 
         print c.test()
 
@@ -57,10 +52,7 @@ class Test(TestBase):
         """
 
         """
-        from ambry.orm.account import Account
         from ambry_client import Client
-        import time
-        import yaml
 
         c = Client('http://localhost:8080')
         c.authenticate('api', api_password, jwt_secret)
