@@ -41,6 +41,8 @@ class ProtoLibrary(object):
         :param config_path:
         :return:
         """
+        assert dsn is None, 'Change library database config instead.'
+        assert root is None, 'Change config instead.'
 
         from ambry.run import load_config, update_config, load_accounts
         from ambry.util import parse_url_to_dict, unparse_url_dict
@@ -409,7 +411,9 @@ class TestBase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        pass
+        cls._proto = ProtoLibrary()
+        cls.config = cls._proto.config
+        cls._db_type = cls._proto._db_type
 
     def setUp(self):
         pass
@@ -435,13 +439,10 @@ class TestBase(unittest.TestCase):
         return b
 
     def library(self, dsn=None, use_proto=True):
-        """Return a new proto library"""
-
-        from proto import ProtoLibrary
+        """Return a new proto library. """
+        assert dsn is None, 'Change self.config.library.database instead!'
 
         # IMPLEMENT ME
         # Check AMBRY_TEST_DB and databases.test-postgres for postgres database DSN
 
-        pl = ProtoLibrary(dsn=dsn)
-
-        return pl.init_library(use_proto=use_proto)
+        return self._proto.init_library(use_proto=use_proto)
