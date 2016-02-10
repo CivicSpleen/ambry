@@ -11,14 +11,14 @@ Example:
     w.close()
 """
 
+import logging
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from ambry.identity import ObjectNumber, NotObjectNumberError, TableNumber
-from ambry.orm import Table
 from ambry.util import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, level=logging.ERROR)
 
 # debug logging
 #
@@ -115,7 +115,8 @@ or via SQLAlchemy, to return datasets.
             partition = self._library.partition(ref)
             connection = self._backend._get_connection()
 
-            return self._backend.install(connection, partition, table_name=table_name, index_columns=index_columns)
+            return self._backend.install(
+                connection, partition, table_name=table_name, index_columns=index_columns)
 
     def materialize(self, ref, table_name=None, index_columns=None):
         """ Creates materialized table for given partition reference.
@@ -128,13 +129,13 @@ or via SQLAlchemy, to return datasets.
 
         """
         from ambry.library import Library
-        assert isinstance(self._library, Library )
+        assert isinstance(self._library, Library)
 
         logger.debug('Materializing warehouse partition.\n    partition: {}'.format(ref))
         partition = self._library.partition(ref)
 
         connection = self._backend._get_connection()
-        return self._backend.install(connection, partition, table_name = table_name,
+        return self._backend.install(connection, partition, table_name=table_name,
                                      index_columns=index_columns, materialize=True)
 
     def index(self, ref, columns):
@@ -155,7 +156,7 @@ or via SQLAlchemy, to return datasets.
 
         Args:
             library (library.Library):
-            asql (str): unified sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
+            asql (str): ambry sql query - see https://github.com/CivicKnowledge/ambry/issues/140 for details.
         """
         import sqlparse
 
@@ -172,7 +173,7 @@ or via SQLAlchemy, to return datasets.
 
         return parsed_statements
 
-    def query(self, asql, logger = None):
+    def query(self, asql, logger=None):
         """
         Execute an ASQL file and return the result of the first SELECT statement.
 
@@ -230,7 +231,6 @@ or via SQLAlchemy, to return datasets.
             elif statement.lower().startswith('select'):
                 logger.debug('Run query {}'.format(statement))
                 connection = self._backend._get_connection()
-
                 return self._backend.query(connection, statement, fetch=False)
 
         # A fake cursor that can be closed and iterated
@@ -240,7 +240,6 @@ or via SQLAlchemy, to return datasets.
 
             def __iter__(self):
                 pass
-
 
         return closable_iterable()
 

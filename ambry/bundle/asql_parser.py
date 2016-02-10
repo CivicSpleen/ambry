@@ -363,7 +363,6 @@ def substitute_vids(library, statement):
     from ambry.identity import ObjectNumber, TableNumber, NotObjectNumberError
     from ambry.orm.exc import NotFoundError
 
-
     try:
         stmt_str = statement.to_unicode()
     except AttributeError:
@@ -400,13 +399,12 @@ def substitute_vids(library, statement):
                     new_parts.append(partition.vid)
                 except NotFoundError:
                     # Ok, maybe it is just a normal identifier...
-
                     new_parts.append(ident)
-
         else:
             new_parts.append(token)
 
     return ' '.join(new_parts).strip(), tables, partitions
+
 
 def validate(sql):
     """

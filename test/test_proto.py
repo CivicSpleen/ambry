@@ -3,7 +3,6 @@ import unittest
 
 class TestProto(unittest.TestCase):
 
-
     def _test_basic(self, dsn):
 
         from proto import ProtoLibrary
@@ -21,7 +20,7 @@ class TestProto(unittest.TestCase):
         l.close()
 
         l = pl.init_library(use_proto=False)
-        self.assertEquals(0,len(list(l.bundles)) )
+        self.assertEquals(0, len(list(l.bundles)))
 
     def test_basic_sqlite(self):
         self._test_basic(dsn=None)

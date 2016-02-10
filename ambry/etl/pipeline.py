@@ -32,7 +32,6 @@ class PipelineError(Exception):
     def __str__(self):
         return "Pipeline error: {}; {}".format(self.exc_name, self.message)
 
-
     def details(self):
         return """
 ======================================
@@ -184,8 +183,8 @@ class Pipe(object):
         except Exception as e:
             if self.bundle:
                 pass
-                #self.bundle.error("Exception during pipeline processing, in pipe {}: {} "
-                #                  .format(qualified_class_name(self), e))
+                # self.bundle.error("Exception during pipeline processing, in pipe {}: {} "
+                #                   .format(qualified_class_name(self), e))
             raise
 
         self.finish()
@@ -258,7 +257,8 @@ class DatafileSourcePipe(Pipe):
             if r.n_rows == 0:
                 return
 
-            # Gets the headers from the source table, which assumes that the source table was created in ingestion.
+            # Gets the headers from the source table, which assumes that the
+            # source table was created in ingestion.
             self.headers = self._source.headers
 
             # No? then get the headers from the datafile
@@ -397,7 +397,6 @@ class PartitionSourcePipe(Pipe):
     """Base class for a source pipe that implements it own iterator """
 
     def __init__(self, bundle, source, partition):
-        from ..util import qualified_class_name
 
         self.bundle = bundle
         self._source = source
@@ -803,6 +802,7 @@ class AddDestHeader(Pipe):
         for row in rg:
             yield row
 
+
 class AddSourceHeader(Pipe):
     """Uses the source table header for the header row"""
 
@@ -908,7 +908,7 @@ class MapSourceHeaders(Pipe):
 
         if len(list(self.source.source_table.columns)) == 0:
 
-            if is_generator or  is_partition:
+            if is_generator or is_partition:
                 # Generators or relations are assumed to return a valid, consistent header, so
                 # if the table is missing, carry on.
 
@@ -1659,7 +1659,7 @@ class Reduce(Pipe):
 
 
 def make_table_map(table, headers):
-    """"Create a function to map from rows with the structure of the headers to the structure of the table. """
+    """Create a function to map from rows with the structure of the headers to the structure of the table."""
 
     header_parts = {}
     for i, h in enumerate(headers):
@@ -1733,7 +1733,7 @@ class SelectPartition(Pipe):
 
     def process_body(self, row):
         """This method gets replaced by process_body_select() or process_body_default()"""
-        raise NotImplemented("This function should be patched into nonexistence")
+        raise NotImplemented('This function should be patched into nonexistence')
 
     def process_body_select(self, row):
 
@@ -1749,12 +1749,10 @@ class SelectPartition(Pipe):
         return list(row) + [name]
 
     def process_body_default(self, row):
-
         return list(row) + [self._default]
 
     def __str__(self):
-
-        return qualified_class_name(self) + " selector = {}".format(self._code)
+        return qualified_class_name(self) + ' selector = {}'.format(self._code)
 
 
 class SelectPartitionFromSource(Pipe):
@@ -1770,13 +1768,12 @@ class SelectPartitionFromSource(Pipe):
     def process_header(self, row):
         from ambry_sources.sources.util import RowProxy
 
-        self._default = PartialPartitionName(table=self.source.dest_table.name,
-                                             time=str(self.source.time) if self.source.time is not None else None,
-                                             space=str(self.source.space) if self.source.space is not None else None,
-                                             grain=str(self.source.grain) if self.source.grain is not None else None,
-                                             segment=self.source.sequence_id if self._use_source_id else None)
-
-
+        self._default = PartialPartitionName(
+            table=self.source.dest_table.name,
+            time=str(self.source.time) if self.source.time is not None else None,
+            space=str(self.source.space) if self.source.space is not None else None,
+            grain=str(self.source.grain) if self.source.grain is not None else None,
+            segment=self.source.sequence_id if self._use_source_id else None)
 
         self._orig_headers = row
         self._row_proxy = RowProxy(row)
@@ -1786,7 +1783,7 @@ class SelectPartitionFromSource(Pipe):
         return list(row) + [self._default]
 
     def __str__(self):
-        return qualified_class_name(self) + " selector = {}".format(self._code)
+        return qualified_class_name(self) + ' selector = {}'.format(self._code)
 
 
 class PartitionWriter(object):
@@ -1822,8 +1819,8 @@ class WriteToPartition(Pipe, PartitionWriter):
 
     def process_header(self, row):
         if '_pname' not in row:
-            raise PipelineError("Did not get a _pname header. The pipeline must insert a _pname value"
-                                " to write to partitions ")
+            raise PipelineError('Did not get a _pname header. The pipeline must insert a _pname value'
+                                ' to write to partitions ')
 
         self.p_name_index = row.index('_pname')
 
@@ -1888,12 +1885,12 @@ class WriteToPartition(Pipe, PartitionWriter):
             mapped_row = body_mapper(row)
 
             # Assuming it is an ID!
-            if mapped_row[0] == None:
+            if mapped_row[0] is None:
                 mapped_row[0] = self._count
 
             writer.insert_row(mapped_row)
         except Exception as e:
-            self.bundle.logger.error("Insert failed to {}: {}\n{}".format(p.datafile.path, mapped_row, e))
+            self.bundle.logger.error('Insert failed to {}: {}\n{}'.format(p.datafile.path, mapped_row, e))
             raise
 
         return row
@@ -1907,7 +1904,7 @@ class WriteToPartition(Pipe, PartitionWriter):
             try:
                 writer.close()
             except Exception as e:
-                self.bundle.logger.error("Failed to close {}: {}".format(p.datafile.path, e))
+                self.bundle.logger.error('Failed to close {}: {}'.format(p.datafile.path, e))
                 raise
 
     @property
@@ -2168,7 +2165,7 @@ class Pipeline(OrderedDict):
             # This maybe should be an error?
             super(Pipeline, self).__setitem__(k, v)
 
-        assert isinstance(self[k], PipelineSegment), "Unexpected type: {} for {}".format(type(self[k]), k)
+        assert isinstance(self[k], PipelineSegment), 'Unexpected type: {} for {}'.format(type(self[k]), k)
 
     def __getitem__(self, k):
 
@@ -2194,7 +2191,7 @@ class Pipeline(OrderedDict):
 
     def __setattr__(self, k, v):
         if k.startswith('_OrderedDict__') or k in (
-        'name', 'phase', 'sink', 'dest_table', 'source_name', 'source_table', 'final'):
+                'name', 'phase', 'sink', 'dest_table', 'source_name', 'source_table', 'final'):
             return super(Pipeline, self).__setattr__(k, v)
 
         self.__setitem__(k, v)
@@ -2352,4 +2349,3 @@ def _to_ascii(s):
     else:
         raise Exception('Unknown text type - {}'.format(type(s)))
     return ascii_
-

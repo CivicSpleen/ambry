@@ -278,7 +278,7 @@ class Bundle(object):
     def library(self):
         return self._library
 
-    def warehouse(self,name):
+    def warehouse(self, name):
         from ambry.library.warehouse import Warehouse
 
         self.build_fs.makedir('warehouses', allow_recreate=True)
@@ -387,10 +387,6 @@ class Bundle(object):
             p = self.library.partition(ref)
             p._bundle = self
             return p
-
-
-            raise NotFoundError("No partition found for '{}' (a)".format(ref))
-
         elif kwargs:
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
@@ -402,7 +398,6 @@ class Bundle(object):
             except NoResultFound:
                 raise NotFoundError("No partition found for '{}' (b)".format(kwargs))
 
-
     def partition_by_vid(self, ref):
         """A much faster way to get partitions, by vid only"""
         from ambry.orm import Partition
@@ -412,7 +407,6 @@ class Bundle(object):
             return self.wrap_partition(p)
         else:
             return None
-
 
     def new_partition(self, table, **kwargs):
         """
@@ -580,7 +574,7 @@ class Bundle(object):
                 self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
                 if not self.is_remote_process:
-                    self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
+                    self.logger.warn('Failed to locate source dir {}; using default'.format(source_url))
                 source_url = self.library.filesystem.source(self.identity.cache_key)
                 self._source_fs = fsopendir(source_url)
 
@@ -819,10 +813,10 @@ Caster Code
 """)
         try:
             v = templ.format(pl.name, str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
-            pl.dest_table, unicode(pl), pl.headers_report(), caster_code)
+                             pl.dest_table, unicode(pl), pl.headers_report(), caster_code)
         except UnicodeError as e:
             v = ''
-            self.error("Faled to write pipeline log for pipeline {} ".format(pl.name))
+            self.error('Faled to write pipeline log for pipeline {} '.format(pl.name))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
@@ -863,8 +857,6 @@ Caster Code
         if phase_config:
             pl.configure(phase_config)
 
-        body = []
-
         # Find the pipe configuration, from the metadata
         pipe_config = None
         pipe_name = None
@@ -881,7 +873,6 @@ Caster Code
                 if name in self.metadata.pipelines:
                     pipe_config = self.metadata.pipelines[name]
                     pipe_name = name
-
                     break
 
         if pipe_name:
@@ -1283,14 +1274,13 @@ Caster Code
             f = self.build_source_files.instance_from_name(path_name)
 
             if not f:
-                self.warn("Ignoring unknown file: {}".format(path_name))
+                self.warn('Ignoring unknown file: {}'.format(path_name))
                 continue
 
             if f and f.exists and (f.fs_is_newer or force):
                 self.log('Sync: {}'.format(f.record.path))
                 f.fs_to_record()
                 f.record_to_objects()
-
 
         self.commit()
 
@@ -1383,7 +1373,6 @@ Caster Code
     def sync_sources(self, force=False):
         """Sync in only the sources.csv file"""
         from ambry.orm.file import File
-        from ambry.bundle.files import BuildSourceFile
 
         self.dstate = self.STATES.BUILDING
 
@@ -1409,7 +1398,7 @@ Caster Code
         for fc in [File.BSFILE.SCHEMA, File.BSFILE.SOURCESCHEMA]:
             bsf = self.build_source_files.file(fc)
             if bsf.fs_is_newer:
-                self.log("Syncing {}".format(bsf.file_name))
+                self.log('Syncing {}'.format(bsf.file_name))
                 bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
                 synced += 1
 
@@ -1566,7 +1555,6 @@ Caster Code
 
     def clean_build_files(self):
         """Remove all of the build files"""
-
         pass
 
     def clean_build_state(self):
@@ -1660,7 +1648,7 @@ Caster Code
         finally:
             self._run_events(TAG.AFTER_INGEST, 0)
 
-        self.log("Ingested {} sources".format(count))
+        self.log('Ingested {} sources'.format(count))
 
         self.commit()
 
@@ -1740,7 +1728,9 @@ Caster Code
                 elif force:
                     source.datafile.remove()
                 else:
-                    ps.update(message='Source {} already ingested, skipping'.format(source.name), state='skipped')
+                    ps.update(
+                        message='Source {} already ingested, skipping'.format(source.name),
+                        state='skipped')
                     return True
 
             if source.is_partition:
@@ -1779,7 +1769,7 @@ Caster Code
             source.datafile.load_rows(iterable_source,
                                       callback=ingest_progress_f,
                                       limit=500 if self.limited_run else None,
-                                      intuit_type=True, run_stats = False)
+                                      intuit_type=True, run_stats=False)
 
             ps.update(message='Ingested to {}'.format(source.datafile.syspath))
 
@@ -1789,7 +1779,7 @@ Caster Code
             source.update_spec()  # Update header_lines, start_line, etc.
 
             if self.limited_run:
-                source.end_line = None # Otherwize, it will be 500
+                source.end_line = None  # Otherwize, it will be 500
 
             self.build_source_files.sources.objects_to_record()
 
@@ -1804,7 +1794,7 @@ Caster Code
             from ambry.util import qualified_class_name
 
             ps.update(
-                message="Source {} failed with exception: {}".format(source.name, e),
+                message='Source {} failed with exception: {}'.format(source.name, e),
                 exception_class=qualified_class_name(e),
                 exception_trace=str(traceback.format_exc()),
                 state='error'
@@ -1839,7 +1829,7 @@ Caster Code
         for source in sources:
             source.update_table()
             self.log('Creating source schema for: {}; {} columns'
-                 .format(source.name, len(source.source_table.columns)))
+                     .format(source.name, len(source.source_table.columns)))
 
         self.commit()
 
@@ -1863,7 +1853,7 @@ Caster Code
         from ambry.orm.exc import NotFoundError
 
         self.dstate = self.STATES.BUILDING
-        self.commit() # Workaround for https://github.com/CivicKnowledge/ambry/issues/171
+        self.commit()  # Workaround for https://github.com/CivicKnowledge/ambry/issues/171
 
         self.log('---- Schema ----')
 
@@ -2016,7 +2006,7 @@ Caster Code
 
         self.commit()
 
-    #@CaptureException
+    # @CaptureException
     def build(self, sources=None, tables=None, stage=None, force=False):
         """
         :param phase:
@@ -2105,7 +2095,7 @@ Caster Code
                         r = pool.map_async(build_mp, args, 1)
                         completed_sources = r.get()
 
-                        ps.add("Finished MP building {} sources. Starting MP coalescing"
+                        ps.add('Finished MP building {} sources. Starting MP coalescing'
                                .format(len(completed_sources)))
 
                         partition_names = [(self.identity.vid, k) for k, v
@@ -2115,7 +2105,7 @@ Caster Code
 
                         completed_partitions = r.get()
 
-                        ps.add("Finished MP coalescing {} partitions".format(len(completed_partitions)))
+                        ps.add('Finished MP coalescing {} partitions'.format(len(completed_partitions)))
 
                         pool.close()
                         pool.join()
@@ -2167,7 +2157,6 @@ Caster Code
 
     def build_source(self, stage, source, ps, force=False):
         """Build a single source"""
-        from ambry.bundle.events import TAG
         from ambry.bundle.process import call_interval
 
         assert source.is_processable, source.name
@@ -2307,7 +2296,6 @@ Caster Code
 
         else:
 
-            headers = None
             i = 1  # Row id.
 
             def coalesce_progress_f(i):
@@ -2676,7 +2664,7 @@ Caster Code
         from ambry.orm import Database, Partition, Config
 
         identity = self.identity
-        kwargs = {} # Alter values of the new dataset
+        kwargs = {}  # Alter values of the new dataset
 
         if incver:
             identity = self.identity.rev(identity.on.revision + 1)
@@ -2781,4 +2769,4 @@ Caster Code
         pass  # Remove files in the file system other resource.
 
     def __str__(self):
-        return "<bundle: {}>".format(self.identity.vname)
+        return '<bundle: {}>'.format(self.identity.vname)

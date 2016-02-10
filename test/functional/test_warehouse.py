@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 import os
 import stat
 import unittest
@@ -7,16 +6,8 @@ import unittest
 from ambry_sources import MPRowsFile
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
-from test.factories import PartitionFactory, TableFactory
 from test.helpers import assert_sqlite_index, assert_valid_ambry_sources, assert_postgres_index
 from test.proto import TestBase
-
-class SQLiteInspector(object):
-    # FIXME: Implement inspectors instead of mixin.
-
-    @staticmethod
-    def assert_is_indexed(warehouse, partition, column):
-        pass
 
 
 class Mixin(object):
@@ -31,8 +22,6 @@ class Mixin(object):
             assert_sqlite_index(warehouse._backend._connection, partition, column)
         else:
             assert_postgres_index(warehouse._backend._connection, partition, column)
-
-
 
     def test_query_mpr_with_auto_install(self):
         from itertools import islice
@@ -87,7 +76,7 @@ class Mixin(object):
             warehouse.materialize(partition.vid)
 
             # query partition.
-            rows = list(islice( warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
+            rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
 
             self.assertEqual('e9ebbe12-eea4-4411-a8a4-58c4706c24a8', rows[0][1])
             self.assertEqual('e358f546-683f-476b-a8b8-184b58c550a2', rows[1][1])
@@ -101,7 +90,6 @@ class Mixin(object):
             self.assertEqual('e9ebbe12-eea4-4411-a8a4-58c4706c24a8', rows[0][1])
             self.assertEqual('e358f546-683f-476b-a8b8-184b58c550a2', rows[1][1])
             self.assertEqual('4ac8a275-72a5-427a-bb91-92b936f9f625', rows[2][1])
-
 
         finally:
             bundle.progress.close()
@@ -118,36 +106,44 @@ class Mixin(object):
         library = self.library()
 
         bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
+
         partition = list(bundle.partitions)[0]
         self.assertTrue(os.path.exists(partition.datafile.syspath))
 
         warehouse = self.get_warehouse()
-
-        print('DSN:', warehouse.dsn)
 
         try:
 
             # Index creation requires materialized tables.
             warehouse.materialize(partition.vid)
 
-            columns = partition.table.header[1:3] # 1: skips the primary key
+            column = 'int'
+            assert column in partition.table.header
 
             # Create indexes
-            warehouse.index(partition.vid,columns)
+            warehouse.index(partition.vid, column)
 
             # query partition.
-            self._assert_is_indexed(warehouse, partition, columns[0])
-            self._assert_is_indexed(warehouse, partition, columns[1])
+            self._assert_is_indexed(warehouse, partition, column)
 
             # query indexed data
-            rows = warehouse.query('SELECT col1, col2 FROM {};'.format(partition.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
+            # rows = warehouse.query('SELECT {} FROM {} LIMIT 1;'.format(partition.vid, column))
+            rows = warehouse \
+                .query(
+                    'SELECT {} FROM {} ORDER BY int ASC LIMIT 2;'
+                    .format(column, partition.vid)) \
+                .fetchall()
+            self.assertEqual(rows, [(0,), (0,)])
         finally:
             bundle.progress.close()
             warehouse.close()
             library.database.close()
 
-    @unittest.skip("This test needs a bundle that has multiple partitions of the same table")
+    @unittest.skip('This test needs a bundle that has multiple partitions of the same table')
     def test_table_install_and_query(self):
         try:
             assert_valid_ambry_sources('0.1.8')
@@ -163,8 +159,6 @@ class Mixin(object):
         self.assertTrue(os.path.exists(partition2.datafile.syspath))
 
         warehouse = self.get_warehouse()
-
-        print('DSN:', warehouse.dsn)
 
         try:
             partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
@@ -183,7 +177,7 @@ class Mixin(object):
             library.warehouse.close()
             library.database.close()
 
-    @unittest.skip("This test needs a bundle that has multiple partitions of the same table")
+    @unittest.skip('This test needs a bundle that has multiple partitions of the same table')
     def test_query_with_union(self):
         if isinstance(self, PostgreSQLTest):
             try:
@@ -222,15 +216,16 @@ class Mixin(object):
             library.warehouse.close()
             library.database.close()
 
+
 # FIXME Run this test only if we have a Sqlite library
 class InMemorySQLiteTest(TestBase, Mixin):
 
     def get_warehouse(self):
-        return self.library().warehouse(dsn="sqlite:///")
+        return self.library().warehouse(dsn='sqlite://')
+
 
 # FIXME Run this test only if we have a Sqlite library
 class FileSQLiteTest(TestBase, Mixin):
-
 
     def get_warehouse(self):
         return self.library().warehouse()
@@ -300,12 +295,6 @@ def _get_generator_source(rows=None):
     return GeneratorSource(SourceSpec('foobar'), gen())
 
 
-def _get_datafile(fs, path, rows=None):
-    datafile = MPRowsFile(fs, path)
-    datafile.load_rows(_get_generator_source(rows=rows))
-    return datafile
-
-
 class BundleWarehouse(TestBase):
 
     def test_bundle_warehouse_install(self):
@@ -315,7 +304,6 @@ class BundleWarehouse(TestBase):
         b = l.bundle('build.example.com-casters')
 
         wh = b.warehouse('test')
-        print(wh.dsn)
 
         wh.clean()
 
@@ -337,15 +325,14 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(0, len(wh.list()))
 
-        self.assertEqual(20, sum( 1 for row in wh.query("SELECT * FROM p00casters004003")))
-        self.assertEqual(6000, sum(1 for row in wh.query("SELECT * FROM p00casters006003")))
-        self.assertEqual(4000, sum(1 for row in wh.query("SELECT * FROM pERJQxWUVb005001")))
+        self.assertEqual(20, sum(1 for row in wh.query("SELECT * FROM p00casters004003")))
+        self.assertEqual(6000, sum(1 for row in wh.query('SELECT * FROM p00casters006003;')))
+        self.assertEqual(4000, sum(1 for row in wh.query('SELECT * FROM pERJQxWUVb005001;')))
 
         p = l.partition('p00casters004003')
 
-        self.assertEqual(20, sum(1 for row in wh.query("SELECT * FROM {}".format(p.vname))))
-        self.assertEqual(20, sum(1 for row in wh.query("SELECT * FROM {}".format(p.name))))
-
+        self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM {};'.format(p.vname))))
+        self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM {};'.format(p.name))))
 
         self.assertEqual(3, len(wh.list()))
 
@@ -386,3 +373,8 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(20, sum(1 for _ in b.partition(table='use_view')))
 
+
+def _get_datafile(fs, path, rows=None):
+    datafile = MPRowsFile(fs, path)
+    datafile.load_rows(_get_generator_source(rows=rows))
+    return datafile
