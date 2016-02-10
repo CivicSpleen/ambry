@@ -251,7 +251,7 @@ class InMemorySQLiteTest(TestBase, Mixin):
 class FileSQLiteTest(TestBase, Mixin):
 
     def setUp(self):
-        super(InMemorySQLiteTest, self).setUp()
+        super(FileSQLiteTest, self).setUp()
         if self._db_type != 'sqlite':
             self.skipTest('SQLite tests are disabled.')
 
