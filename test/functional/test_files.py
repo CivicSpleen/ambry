@@ -10,9 +10,9 @@ from pysqlite2.dbapi2 import OperationalError
 from fs.opener import fsopendir
 
 from test.test_base import TestBase
-from test.helpers import assert_sqlite_index, assert_postgres_index, assert_valid_ambry_sources
+from test.helpers import assert_sqlite_index, assert_postgres_index, assert_ambry_sources
 
-assert_valid_ambry_sources('0.1.12')
+assert_ambry_sources('0.1.12')
 
 
 class InspectorBase(object):

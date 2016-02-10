@@ -7,7 +7,7 @@ import unittest
 from ambry_sources import MPRowsFile
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
-from test.helpers import assert_sqlite_index, assert_valid_ambry_sources, assert_postgres_index
+from test.helpers import assert_sqlite_index, assert_ambry_sources, assert_postgres_index
 from test.proto import TestBase
 
 
@@ -28,7 +28,7 @@ class Mixin(object):
 
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
@@ -63,7 +63,7 @@ class Mixin(object):
 
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
@@ -101,7 +101,7 @@ class Mixin(object):
     def test_index_creation(self):
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
@@ -148,7 +148,7 @@ class Mixin(object):
     @unittest.skip('This test needs a bundle that has multiple partitions of the same table')
     def test_table_install_and_query(self):
         try:
-            assert_valid_ambry_sources('0.1.8')
+            assert_ambry_sources('0.1.8')
         except AssertionError:
             self.SkipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
@@ -187,13 +187,13 @@ class Mixin(object):
     def test_query_with_union(self):
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
         else:
             # sqlite tests
             try:
-                assert_valid_ambry_sources('0.1.8')
+                assert_ambry_sources('0.1.8')
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
