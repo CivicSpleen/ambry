@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-import os
 import unittest
 
-from test.test_base import TestBase, PostgreSQLTestBase
+from test.proto import TestBase
 
 from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
 from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
@@ -13,7 +12,7 @@ from test.factories import PartitionFactory, DatasetFactory, TableFactory
 # Description of the search system:
 # https://docs.google.com/document/d/1jLGRsYt4G6Tfo6m_Dtry6ZFRnDWpW6gXUkNPVaGxoO4/edit#
 
-# FIXME: Add identifier index tests.
+# TODO: Add identifier index tests.
 
 
 class AmbryReadyMixin(object):
@@ -46,7 +45,8 @@ class AmbryReadyMixin(object):
         self.assertIn(dataset.vid, all_vids)
 
     def test_search_dataset_by_vid(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory()
         self._my_library.search.index_dataset(dataset)
 
         found = self._my_library.search.search(dataset.vid)
@@ -54,42 +54,49 @@ class AmbryReadyMixin(object):
         self.assertIn(dataset.vid, all_vids)
 
     def test_search_dataset_by_title(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory()
         dataset.config.metadata.about.title = 'title'
         self._my_library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, 'title')
 
     def test_search_dataset_by_summary(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory()
         dataset.config.metadata.about.summary = 'Some summary of the dataset'
         self._my_library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, 'summary of the')
 
     def test_search_dataset_by_id(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory()
         self._my_library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.id_))
 
     def test_search_dataset_by_source(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0, source='example.com')
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory(source='example.com')
         assert dataset.identity.source
         self._my_library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, 'source example.com')
 
     def test_search_dataset_by_name(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0, source='example.com')
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory()
         assert str(dataset.identity.name)
         self._my_library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.name))
 
     def test_search_dataset_by_vname(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0, source='example.com')
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory()
         assert str(dataset.identity.vname)
         self._my_library.search.index_dataset(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.vname))
 
     def test_does_not_add_dataset_twice(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory()
         self._my_library.search.index_dataset(dataset)
 
         datasets = self._my_library.search.backend.dataset_index.all()
@@ -101,7 +108,6 @@ class AmbryReadyMixin(object):
 
     # partition add
     def test_add_partition_to_the_index(self):
-        # dataset = self.new_db_dataset(self._my_library.database, n=0)
         DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
         PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
         dataset = DatasetFactory()
@@ -132,15 +138,18 @@ class AmbryReadyMixin(object):
         self._assert_finds_partition(partition, partition.identity.id_)
 
     def test_search_partition_by_name(self):
-        dataset = self.new_db_dataset(self._my_library.database, n=0, source='example.com')
-        table = dataset.new_table('table2', description='table2')
-        partition = dataset.new_partition(table, time=1, name='Partition1')
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+        TableFactory._meta.sqlalchemy_session = self._my_library.database.session
+
+        dataset = DatasetFactory()
+        table = TableFactory(dataset=dataset, name='table2', description='table2')
+        partition = PartitionFactory(dataset=dataset, table=table, time=1, name='Partition1')
         self._my_library.database.commit()
         self._my_library.search.index_partition(partition)
         self._assert_finds_partition(partition, str(partition.identity.name))
 
     def test_search_partition_by_vname(self):
-        # dataset = self.new_db_dataset(self._my_library.database, n=0, source='example.com')
         DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
         PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
         dataset = DatasetFactory()
@@ -152,10 +161,14 @@ class AmbryReadyMixin(object):
     # search tests
     def test_search_years_range(self):
         """ search by `source example.com from 1978 to 1979` (temporal bounds) """
-        dataset = self.new_db_dataset(self._my_library.database, n=0, source='example.com')
-        table = dataset.new_table('table2', description='table2')
-        partition = dataset.new_partition(
-            table, time=1,
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+        TableFactory._meta.sqlalchemy_session = self._my_library.database.session
+
+        dataset = DatasetFactory()
+        table = TableFactory(dataset=dataset, name='table2', description='table2')
+        partition = PartitionFactory(
+            dataset=dataset, table=table, time=1,
             time_coverage=['1978', '1979'])
         self._my_library.database.commit()
         self._my_library.search.index_partition(partition)
@@ -172,11 +185,17 @@ class AmbryReadyMixin(object):
 
     def test_search_about(self):
         """ search by `* about cucumber` """
-        dataset = self.new_db_dataset(self._my_library.database, n=0)
-        table = dataset.new_table('table2', description='table2')
-        partition = dataset.new_partition(table, time=1)
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        TableFactory._meta.sqlalchemy_session = self._my_library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+
+        dataset = DatasetFactory()
+        table = TableFactory(dataset=dataset, name='table2', description='table2')
+        partition = PartitionFactory(dataset=dataset, table=table, time=1)
         self._my_library.database.commit()
+        partition.table.add_column('id')
         partition.table.add_column('column1', description='cucumber')
+
         self._my_library.database.commit()
         self._my_library.search.index_partition(partition)
         self._my_library.search.index_dataset(dataset)
@@ -192,10 +211,15 @@ class AmbryReadyMixin(object):
 
     def test_search_with(self):
         """ search by `* with cucumber` """
-        dataset = self.new_db_dataset(self._my_library.database, n=0)
-        table = dataset.new_table('table2', description='table2')
-        partition = dataset.new_partition(table, time=1)
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+        TableFactory._meta.sqlalchemy_session = self._my_library.database.session
+
+        dataset = DatasetFactory()
+        table = TableFactory(dataset=dataset, name='table2', description='table2')
+        partition = PartitionFactory(dataset=dataset, table=table, time=1)
         self._my_library.database.commit()
+        partition.table.add_column('id')
         partition.table.add_column('column1', description='cucumber')
         self._my_library.database.commit()
         self._my_library.search.index_dataset(dataset)
@@ -212,10 +236,12 @@ class AmbryReadyMixin(object):
 
     def test_search_in(self):
         """ search by `source example.com in California` (geographic bounds) """
-        dataset = self.new_db_dataset(self._my_library.database, n=0, source='example.com')
-        table = dataset.new_table('table2', description='table2')
-        partition = dataset.new_partition(table, time=1, space_coverage=['california'])
-        self._my_library.database.commit()
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+        TableFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = DatasetFactory()
+        table = TableFactory(dataset=dataset, name='table2', description='table2')
+        partition = PartitionFactory(dataset=dataset, table=table, time=1, space_coverage=['california'])
         self._my_library.search.index_dataset(dataset)
         self._my_library.search.index_partition(partition)
 
@@ -255,11 +281,15 @@ class AmbryReadyMixin(object):
     # test some complex examples.
     def test_range_and_in(self):
         """ search by `table2 from 1978 to 1979 in california` (geographic bounds and temporal bounds) """
-        dataset = self.new_db_dataset(self._my_library.database, n=0)
-        self._my_library.database.session.commit()
-        table = dataset.new_table('table2', description='table2')
-        partition = dataset.new_partition(
-            table, time=1, space_coverage=['california'],
+        DatasetFactory._meta.sqlalchemy_session = self._my_library.database.session
+        TableFactory._meta.sqlalchemy_session = self._my_library.database.session
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+
+        dataset = DatasetFactory()
+        table = TableFactory(dataset=dataset, description='table2', name='table2')
+        partition = PartitionFactory(
+            dataset=dataset, table=table, time=1,
+            grain_coverage=['county'], space_coverage=['california'],
             time_coverage=['1978', '1979'])
         self._my_library.database.commit()
         self._my_library.search.index_dataset(dataset)
@@ -311,7 +341,7 @@ class InMemorySQLiteTest(TestBase, AmbryReadyMixin):
     @classmethod
     def setUpClass(cls):
         super(InMemorySQLiteTest, cls).setUpClass()
-        if not cls._is_sqlite:
+        if cls._db_type != 'sqlite':
             raise unittest.SkipTest('SQLite tests are disabled.')
 
     def setUp(self):
@@ -341,7 +371,7 @@ class FileSQLiteTest(TestBase, AmbryReadyMixin):
     @classmethod
     def setUpClass(cls):
         super(FileSQLiteTest, cls).setUpClass()
-        if not cls._is_sqlite:
+        if cls._db_type != 'sqlite':
             raise unittest.SkipTest('SQLite tests are disabled.')
 
     def setUp(self):
@@ -356,14 +386,15 @@ class FileSQLiteTest(TestBase, AmbryReadyMixin):
         self.assertIn('.db', self._my_library.database.dsn)
 
 
-class PostgreSQLTest(PostgreSQLTestBase, AmbryReadyMixin):
+class PostgreSQLTest(TestBase, AmbryReadyMixin):
     """ Library database is postgres, search backend is postgres. """
 
     def setUp(self):
         super(PostgreSQLTest, self).setUp()
+        if self._db_type != 'postgresql':
+            self.skipTest('PostgreSQL tests are disabled.')
 
         # force to use library database for search.
-        rc = self.get_rc()
-        rc.services.search = None
-        self._my_library = self.library(rc)
+        self._my_library = self.library()
+        self.config.services.search = None
         assert isinstance(self._my_library.search.backend, PostgreSQLSearchBackend)
