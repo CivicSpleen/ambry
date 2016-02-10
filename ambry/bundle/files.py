@@ -437,6 +437,8 @@ class DictBuildSourceFile(BuildSourceFile):
         fr = self.record
         fr.path = fn_path
 
+
+
         fr.update_contents(msgpack.packb(yaml.safe_load(f)), 'application/msgpack')
 
         fr.source_hash = self.fs_hash # FIXME! Assumes a file system entry, but may only be a file handle!
@@ -563,8 +565,6 @@ class MetadataFile(DictBuildSourceFile):
 
     def record_to_fh(self, f):
 
-        # FIXME: -- this looks more like records to file
-
         fr = self.record
 
         if fr.has_contents:
@@ -589,8 +589,6 @@ class MetadataFile(DictBuildSourceFile):
         with self._fs.open(self.file_name, 'w', encoding='utf-8') as f:
             yaml.safe_dump(o, f, default_flow_style=False, indent=4, encoding='utf-8')
 
-        fr.update_contents(msgpack.packb(o), 'application/msgpack')
-
         return fr
 
     def update_identity(self):
@@ -604,6 +602,28 @@ class MetadataFile(DictBuildSourceFile):
         d['names'] = self._dataset.identity.names_dict
 
         fr.update_contents(msgpack.packb(d), 'application/msgpack')
+
+
+    def get_object(self):
+        """Return contents in object form, an AttrDict"""
+
+        from ..util import AttrDict
+
+        c = yaml.safe_load(self.getcontent())
+
+        if not c:
+            c = yaml.safe_load(self.default)
+
+        return AttrDict(c)
+
+    def set_object(self, o):
+        """Set contents as an AttrDict"""
+        import yaml
+
+        self.setcontent(
+            yaml.safe_dump(o.to_dict(), default_flow_style=False, encoding='utf-8')
+        )
+
 
 
 class NotebookFile(StringSourceFile):
@@ -647,6 +667,24 @@ class NotebookFile(StringSourceFile):
         }
 
         return json.dumps(c, indent=4)
+
+    def execute(self):
+        """Convert the notebook to a python script and execute it, returning the local context
+        as a dict"""
+
+        from nbformat import read
+        from nbconvert.exporters import export_script
+        from cStringIO import StringIO
+
+        notebook = read(StringIO(self.record.unpacked_contents), 4)
+
+        script, resources = export_script(notebook)
+
+        env_dict = {}
+
+        exec (compile(script.replace('# coding: utf-8', ''), 'script', 'exec'), env_dict)
+
+        return env_dict
 
 
 class PythonSourceFile(StringSourceFile):
@@ -1160,10 +1198,29 @@ class BuildSourceFileAccessor(object):
 
         """
 
-        if item not in file_classes:
-            return super(BuildSourceFileAccessor, self).__getattr__(item)
-        else:
+        if item in file_classes:
             return self.file(item)
+        else:
+            raise AttributeError(item)
+
+    def __getitem__(self, item):
+        """Converts the file_constants into acessor names to return bsfiles.
+
+        See File.BSFILE for the const string values. Returns a file via the self.file() method
+
+        """
+        from sqlalchemy.orm.exc import NoResultFound
+
+        try:
+            f = self.file_by_path(item)
+            return f
+        except NoResultFound:
+            pass
+
+        if item in file_classes:
+            return self.file(item)
+
+        raise KeyError(item)
 
     def __iter__(self):
         """Iterate through all of the files, both records and files in filesystem"""
@@ -1227,6 +1284,7 @@ class BuildSourceFileAccessor(object):
         s = self._dataset._database.session
 
         return s.query(File).filter(File.d_vid == self._dataset.vid).filter(File.id == id).one()
+
 
     def record_to_objects(self, preference=None):
         """Create objects from files, or merge the files into the objects. """

@@ -92,6 +92,8 @@ class File(Base, DictableMixin):
         :return:
         """
 
+        from nbformat import read
+
         import msgpack
 
         if self.mime_type == 'text/plain':

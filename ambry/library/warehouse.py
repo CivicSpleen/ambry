@@ -23,18 +23,23 @@ logger = get_logger(__name__)
 # debug logging
 #
 import logging
-logger = get_logger(__name__, level=logging.ERROR, propagate=False)
+module_logger = get_logger(__name__, level=logging.ERROR, propagate=False)
 
 class Warehouse(object):
     """ Provides SQL access to datasets in the library, allowing users to issue SQL queries, either as SQL
 or via SQLAlchemy, to return datasets.
     """
 
-    def __init__(self, library, dsn=None):
+    def __init__(self, library, dsn=None,  logger = None):
         from ambry.library import Library
         assert isinstance(library, Library)
 
         self._library = library
+
+        if not logger:
+            logger = module_logger
+
+        self._logger = logger
 
         if not dsn:
             # Use library database.
@@ -49,14 +54,14 @@ or via SQLAlchemy, to return datasets.
         elif dsn.startswith('postgres'):
             try:
                 from ambry.mprlib.backends.postgresql import PostgreSQLBackend
-                logger.debug('Initializing postgres warehouse.')
+                self._logger.debug('Initializing postgres warehouse.')
                 self._backend = PostgreSQLBackend(library, dsn)
             except ImportError as e:
                 from ambry.mprlib.backends.sqlite import SQLiteBackend
                 from ambry.util import set_url_part, select_from_url
                 dsn = "sqlite:///{}/{}".format(self._library.filesystem.build('warehouses'),
                                                select_from_url(dsn,'path').strip('/')+".db")
-                logging.error("Failed to import required modules ({})for Postgres warehouse. Using Sqlite dsn={}"
+                self._logger.error("Failed to import required modules ({})for Postgres warehouse. Using Sqlite dsn={}"
                               .format(e, dsn))
                 self._backend = SQLiteBackend(library, dsn)
 
@@ -177,59 +182,53 @@ or via SQLAlchemy, to return datasets.
         """
         import sqlparse
         from ambry.mprlib.exceptions import BadSQLError
-        from ambry.bundle.asql_parser import find_indexable_materializable
+        from ambry.bundle.asql_parser import process_sql
+        from ambry.orm.exc import NotFoundError
 
         if not logger:
             logger = self._library.logger
 
-        statements = sqlparse.parse(sqlparse.format(asql, strip_comments=True))
+        rec = process_sql(asql, self._library)
 
-        processed_statements = []
-
-        for parsed_statement in statements:
-            try:
-                processed_statements.append(find_indexable_materializable(parsed_statement, self._library))
-            except Exception as e:
-                logger.error("Failed to process statement: {}".format(parsed_statement))
-                raise
-
-        # Drop the views in reverse order
-        for _, drop, _, _, _, _ in reversed(processed_statements):
-
+        for drop in reversed(rec.drop):
             if drop:
                 connection = self._backend._get_connection()
                 cursor = self._backend.query(connection, drop, fetch=False)
                 cursor.close()
 
-        for statement, _, tables, install, materialize, indexes in processed_statements:
+        for vid in rec.materialize:
+            logger.debug('Materialize {}'.format(vid))
+            self.materialize(vid)
+
+        for vid in rec.install:
+            logger.debug('Install {}'.format(vid))
+            self.install(vid)
+
+        for vid, columns in rec.indexes:
+            logger.debug('Index {}'.format(vid))
+            try:
+                self.index(vid, columns)
+            except NotFoundError as e:
+                # Not logging as an error becauseits common when views are referenced
+                logger.debug('Failed to index {}; {}'.format(vid, e))
+            except Exception as e:
+
+                logger.error('Failed to index {}; {}'.format(vid, e))
+
+        for statement in rec.statements:
 
             statement = statement.strip()
 
-            logger.info("Process statement: {}".format(statement[:60]))
-
-            for vid in install:
-                logger.info('    Install {}'.format(vid))
-                self.install(vid)
-
-            for vid in materialize:
-                logger.info('    Materialize {}'.format(vid))
-                self.materialize(vid)
-
-            for vid, columns in indexes:
-                logger.info('    Index {}'.format(vid))
-                try:
-                    self.index(vid, columns)
-                except Exception as e:
-                    logger.error('    Failed to index {}; {}'.format(vid, e))
+            logger.debug("Process statement: {}".format(statement[:60]))
 
             if statement.lower().startswith('create'):
-                logger.info('    Create {}'.format(statement))
+                logger.debug('    Create {}'.format(statement))
                 connection = self._backend._get_connection()
                 cursor = self._backend.query(connection, statement, fetch=False)
                 cursor.close()
 
             elif statement.lower().startswith('select'):
-                logger.info('Run query {}'.format(statement))
+                logger.debug('Run query {}'.format(statement))
                 connection = self._backend._get_connection()
 
                 return self._backend.query(connection, statement, fetch=False)
@@ -248,23 +247,123 @@ or via SQLAlchemy, to return datasets.
     def dataframe(self,asql, logger = None):
         """Like query(), but returns a Pandas dataframe"""
         import pandas as pd
+        from ambry.mprlib.exceptions import BadSQLError
 
-        def yielder(cursor):
+        try:
+            def yielder(cursor):
 
-            for i, row in enumerate(cursor):
-                if i == 0:
-                    yield [ e[0] for e in cursor.getdescription()]
+                for i, row in enumerate(cursor):
+                    if i == 0:
+                        yield [ e[0] for e in cursor.getdescription()]
 
-                yield row
+                    yield row
 
-        cursor = self.query(asql, logger)
+            cursor = self.query(asql, logger)
 
-        yld = yielder(cursor)
+            yld = yielder(cursor)
 
-        header = next(yld)
+            header = next(yld)
 
-        return pd.DataFrame(yld, columns=header)
+            return pd.DataFrame(yld, columns=header)
+        except BadSQLError as e:
+            import traceback
+            self._logger.error("SQL Error: {}".format( e))
+            self._logger.debug(traceback.format_exc())
 
+    def geoframe(self, sql, simplify=None, crs=None, epsg=4326):
+        """
+        Return geopandas dataframe
+
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param crs: Coordinate reference system information
+        :param epsg: Specifiy the CRS as an EPGS number.
+        :return: A Geopandas GeoDataFrame
+        """
+        import geopandas
+        from shapely.wkt import loads
+        from fiona.crs import from_epsg
+
+        if crs is None:
+            try:
+                crs = from_epsg(epsg)
+            except TypeError:
+                raise TypeError('Must set either crs or epsg for output.')
+
+        df = self.dataframe(sql)
+        geometry = df['geometry']
+
+        if simplify:
+            s = geometry.apply(lambda x: loads(x).simplify(simplify))
+        else:
+            s = geometry.apply(lambda x: loads(x))
+
+        df['geometry'] = geopandas.GeoSeries(s)
+
+        return geopandas.GeoDataFrame(df, crs=crs, geometry='geometry')
+
+    def shapes(self, simplify=None):
+        """
+        Return geodata as a list of Shapely shapes
+
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+
+        :return: A list of Shapely objects
+        """
+
+        from shapely.wkt import loads
+
+        if simplify:
+            return [loads(row.geometry).simplify(simplify) for row in self]
+        else:
+            return [loads(row.geometry) for row in self]
+
+    def patches(self, basemap, simplify=None, predicate=None, args_f=None, **kwargs):
+        """
+        Return geodata as a list of Matplotlib patches
+
+        :param basemap: A mpl_toolkits.basemap.Basemap
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+        :param args_f: A function that takes a row and returns a dict of additional args for the Patch constructor
+
+        :param kwargs: Additional args to be passed to the descartes Path constructor
+        :return: A list of patch objects
+        """
+        from descartes import PolygonPatch
+        from shapely.wkt import loads
+        from shapely.ops import transform
+
+        if not predicate:
+            predicate = lambda row: True
+
+        def map_xform(x, y, z=None):
+            return basemap(x, y)
+
+        def make_patch(shape, row):
+
+            args = dict(kwargs.items())
+
+            if args_f:
+                args.update(args_f(row))
+
+            return PolygonPatch(transform(map_xform, shape), **args)
+
+        def yield_patches(row):
+
+            if simplify:
+                shape = loads(row.geometry).simplify(simplify)
+            else:
+                shape = loads(row.geometry)
+
+            if shape.geom_type == 'MultiPolygon':
+                for subshape in shape.geoms:
+                    yield make_patch(subshape, row)
+            else:
+                yield make_patch(shape, row)
+
+        return [patch for row in self if predicate(row)
+                for patch in yield_patches(row)]
 
 
     def close(self):

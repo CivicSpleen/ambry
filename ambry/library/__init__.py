@@ -342,6 +342,9 @@ class Library(object):
         :return: orm.Partition: found partition.
         """
 
+        if not ref:
+            raise NotFoundError("No partition for empty ref")
+
         try:
             on = ObjectNumber.parse(ref)
             ds_on = on.as_dataset
@@ -701,8 +704,11 @@ class Library(object):
         from ambry.orm import Remote
         from sqlalchemy import or_
 
-        return (self.database.session.query(Remote)
+
+        r =  (self.database.session.query(Remote)
                 .filter(or_(Remote.url == name, Remote.short_name == name)).one())
+
+        return r
 
     def remote(self, name_or_bundle):
 

@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class Test(TestBase):
-
 
 
     def test_headerstypes(self):

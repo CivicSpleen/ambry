@@ -836,7 +836,6 @@ class Partition(Base):
                        for patch in yield_patches(row) ]
 
 
-
     # ============================
 
     def update_id(self, sequence_id=None):

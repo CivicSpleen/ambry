@@ -16,13 +16,16 @@ class County(IntValue):
 
     _county_map = None
 
-    def __init__(self, v):
-        #FIXME. loading a global library is probably a really bad idea.
-        from ambry.library import global_library
+    def __new__(cls, bundle, v):
+        o = super(IntValue, cls).__new__(cls, cls.parse(v))
+        return o
+
+    def __init__(self, bundle, v):
+
         # v is set in __new__
 
         self.state = None
-        self.library = global_library
+        self.library = bundle.library
 
 
     def intuit_name(self, name):

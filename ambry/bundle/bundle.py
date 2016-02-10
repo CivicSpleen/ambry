@@ -205,14 +205,15 @@ class Bundle(object):
         try:
             clz = bsf.import_bundle()
 
-            b = clz(self._dataset, self._library, self._source_url, self._build_url)
-            b.limited_run = self.limited_run
-            b.capture_exceptions = self.capture_exceptions
-            b.multi = self.multi
-            return b
-
         except Exception as e:
+
             raise BundleError('Failed to load bundle code file, skipping : {}'.format(e))
+
+        b = clz(self._dataset, self._library, self._source_url, self._build_url)
+        b.limited_run = self.limited_run
+        b.capture_exceptions = self.capture_exceptions
+        b.multi = self.multi
+        return b
 
     def import_lib(self):
         """Import the lib.py file from the bundle"""
@@ -286,7 +287,7 @@ class Bundle(object):
 
         dsn = 'sqlite:////{}.db'.format(path)
 
-        return Warehouse(self.library, dsn=dsn)
+        return Warehouse(self.library, dsn=dsn, logger=self._logger)
 
     def dep(self, source_name):
         """Return a bundle dependency from the sources list
@@ -295,10 +296,14 @@ class Bundle(object):
         :return:
         """
         from ambry.orm.exc import NotFoundError
+        from ambry.dbexceptions import ConfigurationError
 
         source = self.source(source_name)
 
         ref = source.url
+
+        if not ref:
+            raise ValueError("Got an empty ref for source '{}' ".format(source.name))
 
         try:
             try:
@@ -306,7 +311,7 @@ class Bundle(object):
                 p = self.library.partition(ref)
             except NotFoundError:
 
-                self.warn("Partition reference {} not find, try to download it".format(ref))
+                self.warn("Partition reference {} not found, try to download it".format(ref))
                 remote, vname = self.library.find_remote_bundle(ref, try_harder=True)
                 if remote:
                     self.warn("Installing {} from {}".format(remote, vname))
@@ -993,7 +998,7 @@ Caster Code
         return iter_source, source_pipe
 
     def _iterable_source(self, source, ps=None):
-        from ambry_sources.sources import FixedSource, GeneratorSource, AspwCursorSource
+        from ambry_sources.sources import FixedSource, GeneratorSource, AspwCursorSource, PandasDataframeSource
         from ambry_sources.exceptions import MissingCredentials
         from ambry_sources import get_source
         from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe
@@ -1044,6 +1049,23 @@ Caster Code
             spec.header_lines = [0]
 
             s = AspwCursorSource(spec, cursor)
+            sp = GeneratorSourcePipe(self, source, s)
+
+        elif source.reftype == 'notebook':
+
+            notebook_file, env_key = source.ref.split(':', 1)
+
+            f = self.build_source_files.instance_from_name(notebook_file)
+
+            env_dict = f.execute()
+
+            o =  env_dict[env_key]
+
+            spec = source.spec
+            spec.start_line = 1
+            spec.header_lines = [0]
+
+            s = PandasDataframeSource(spec, o)
             sp = GeneratorSourcePipe(self, source, s)
 
         elif source.reftype == 'generator':
@@ -1754,7 +1776,8 @@ Caster Code
                     message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
 
 
-            source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
+            source.datafile.load_rows(iterable_source,
+                                      callback=ingest_progress_f,
                                       limit=500 if self.limited_run else None,
                                       intuit_type=True, run_stats = False)
 
@@ -1837,6 +1860,7 @@ Caster Code
         from itertools import groupby
         from operator import attrgetter
         from ambry.etl import Collect, Head
+        from ambry.orm.exc import NotFoundError
 
         self.dstate = self.STATES.BUILDING
         self.commit() # Workaround for https://github.com/CivicKnowledge/ambry/issues/171
@@ -1849,11 +1873,10 @@ Caster Code
             self.dataset.delete_tables_partitions()
             self.commit()
 
+
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
         for t, table_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
-            if not force and not t.is_empty():
-                continue
 
             if use_pipeline:
                 for source in table_sources:
@@ -1893,13 +1916,26 @@ Caster Code
                 columns = sorted(set([(i, col.dest_header, col.datatype, col.description, col.has_codes)
                                       for source in table_sources for i, col in source_cols(source)]))
 
+
                 initial_count = len(t.columns)
 
                 for pos, name, datatype, desc, has_codes in columns:
-                    c = t.add_column(name=name,
-                                     datatype=datatype,
-                                     description=desc,
-                                     update_existing=True)
+
+                    kwds = dict(
+                        name=name,
+                        datatype=datatype,
+                        update_existing=True
+                    )
+
+                    try:
+                        extant = t.column(name)
+                    except NotFoundError:
+                        extant = None
+
+                    if extant is None or not extant.description:
+                        kwds['description'] = desc
+
+                    c = t.add_column(**kwds)
 
                     if has_codes:
                         c.datatype = 'types.{}OrCode'.format(datatype.title())
@@ -2532,6 +2568,7 @@ Caster Code
 
         self.commit()
         return True
+
 
     def import_tests(self):
         bsf = self.build_source_files.file(File.BSFILE.TEST)

@@ -64,10 +64,8 @@ def row_{table}_{stage}(row, row_n, errors, scratch, accumulator, pipe, bundle, 
 """
 
 
-
 def column_processor_code():
     pass
-
 
 
 def make_env(bundle, base_env):
@@ -79,7 +77,6 @@ def make_env(bundle, base_env):
             return None
 
     return _ff
-
 
 
 def make_row_processors(bundle, source_headers, dest_table, env):
@@ -178,7 +175,13 @@ def calling_code(f, f_name=None, raise_for_missing=True):
     import inspect
     from ambry.dbexceptions import ConfigurationError
 
-    args = inspect.getargspec(f).args
+
+    if inspect.isclass(f):
+        args = inspect.getargspec(f.__init__).args
+
+    else:
+        args = inspect.getargspec(f).args
+
 
     if len(args) > 1 and args[0] == 'self':
         args = args[1:]
@@ -195,6 +198,7 @@ def calling_code(f, f_name=None, raise_for_missing=True):
 
     return "{}({})".format(f_name if f_name else f.__name__, ','.join(args))
 
+
 def make_stack(env, stage, segment):
     import string
     import random
@@ -208,7 +212,7 @@ def make_stack(env, stage, segment):
 
         if isinstance(t, type) and issubclass(t, ValueType):  # A valuetype class, from the datatype column.
             tn = qualified_name(t)
-            line = "v = {}(v) if v is not None else None # {}".format(tn, file_loc())
+            line = "v = {} if v is not None else None # {}".format(calling_code(t, tn), file_loc())
             preamble.append('import ambry.valuetype')
 
         elif isinstance(t, type):  # A python type, from the datatype columns.

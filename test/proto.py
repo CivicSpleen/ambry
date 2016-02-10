@@ -423,6 +423,23 @@ class TestBase(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def import_single_bundle(self, cache_path, clean=True):
+        from test import bundle_tests
+
+        l = self.library(use_proto=False)
+
+        if clean:
+            l.clean()
+            l.create()
+
+        orig_source = os.path.join(os.path.dirname(bundle_tests.__file__), cache_path)
+        l.import_bundles(orig_source, detach=True, force=True)
+
+        b = next(b for b in l.bundles).cast_to_subclass()
+        b.clean()
+        b.sync_in(force=True)
+        return b
+
     def library(self, dsn=None, use_proto=True):
         """Return a new proto library"""
 

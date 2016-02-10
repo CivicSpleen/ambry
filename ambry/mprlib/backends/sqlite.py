@@ -26,6 +26,7 @@ class SQLiteBackend(DatabaseBackend):
         return [_preprocess_sqlite_view, _preprocess_sqlite_index]
 
     def install_module(self, connection):
+
         sqlite_med.install_mpr_module(connection)
 
     def install(self, connection, partition, table_name = None, index_columns=None, materialize=False,

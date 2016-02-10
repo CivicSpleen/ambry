@@ -1329,7 +1329,14 @@ def bundle_new(args, l, rc):
 
     try:
         b = l.new_bundle(assignment_class=args.key, **d)
-        b.metadata.contacts.wrangler.email = 'non@eample.com'
+        config = b.build_source_files.bundle_meta.get_object()
+
+        config.contacts.wrangler.email = ambry_account.get('email')
+        config.contacts.wrangler.name = ambry_account.get('name')
+        config.contacts.wrangler.url = ambry_account.get('url')
+
+        b.build_source_files.bundle_meta.set_object(config)
+        b.commit()
 
     except ConflictError:
         fatal("Can't create dataset; one with a conflicting name already exists")
@@ -1436,7 +1443,7 @@ def bundle_export(args, l, rc):
 
         b.set_file_system(source_url=source_dir)
 
-    b.build_source_files.set_defaults()
+    #b.build_source_files.set_defaults()
 
     b.sync_out(force=True)
 
@@ -1784,7 +1791,7 @@ def bundle_ui(args, l, rc):
         app.config['SECRET_KEY'] = 'secret'  # To Ensure logins persist
         app.config["WTF_CSRF_SECRET_KEY"] = 'secret'
 
-        webbrowser.open("http://{}:{}/bundles/{}.html".format(host, args.port, b.identity.vid))
+        webbrowser.open("http://{}:{}/bundles/{}".format(host, args.port, b.identity.vid))
         l.root.config.library.ui.url = app.connection_url = "http://{}:{}".format(host, args.port)
         l.commit()
         app.run(host=host, port=int(args.port), debug=args.debug)

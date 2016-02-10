@@ -213,6 +213,11 @@ reserved_words = (
 
 ident = ~reserved_words + Word(alphas, alphanums + '_$.').setName('identifier')
 
+function = (
+    (Word(alphas) + '(' + Word(alphanums + '*_$.') + ')')
+    + Optional(as_kw.suppress() + delimitedList(ident, '.', combine=True))
+)
+
 column_name = delimitedList(ident, '.', combine=True)
 column_name_list = Group(delimitedList(column_name))
 
@@ -221,12 +226,14 @@ select_column = (
     delimitedList(ident, '.', combine=True).setResultsName('parsed_name')
     + Optional(as_kw.suppress() + delimitedList(ident, '.', combine=True)).setResultsName('parsed_alias')
 ).setParseAction(_flat_alias)
+
 # Examples:
 # column = select_column.parseString('col1 as c1')
 # print(column.name, column.alias)
 # (col1, c1)
 
-select_column_list = OneOrMore(Group(select_column + Optional(comma_token)))
+select_column_list = OneOrMore(Group( (function | select_column) + Optional(comma_token)))
+
 # Examples:
 # columns = select_column_list.parseString('col1 as c1, col2 as c2')
 # print(columns[0].name, columns[0].alias)
@@ -330,6 +337,7 @@ _index_stmt << (
     index_kw
     + index_source.setResultsName('source')
     + '(' + column_name_list.setResultsName('columns') + ')')
+
 # Examples:
 # index = index_stmt.parseString('INDEX partition1 (col1, col2, col3);')
 # print(index.source)
@@ -417,6 +425,44 @@ def validate(sql):
     pass
 
 
+class FIMRecord(object):
+
+    def __init__(self, statement, drop=None, tables=None, install=None,
+                 materialize=None, indexes=None, joins=0, views=0):
+
+        self.statements = None
+        self.statement = statement
+        self.drop = [drop] if drop else []
+        self.tables = set(tables) if tables else set()
+        self.install = set(install) if install else set()
+        self.materialize = set(materialize) if materialize else set()
+        self.indexes = set(indexes) if indexes else set()
+        self.joins = joins
+        self.views = views
+
+    def update(self, rec=None, drop=[], tables = set(), install = set(), materialize = set(),
+               indexes = set(), joins=0, views=0):
+
+        if rec:
+            self.update(
+                drop=rec.drop, tables=rec.tables, install=rec.install, materialize=rec.materialize,
+                indexes=rec.indexes, joins=rec.joins
+            )
+
+        self.drop += drop
+        self.tables |= set(tables)
+        self.install |= set(install)
+        self.materialize |= set(materialize)
+        self.indexes |= set(indexes)
+
+        self.joins += joins
+        self.views += views
+
+        # Joins or views promote installed partitions to materialized partitions
+        if self.joins > 0 or self.views > 0:
+            self.materialize |= self.install
+            self.install = set()
+
 
 def find_indexable_materializable(sql, library):
     """
@@ -432,34 +478,30 @@ def find_indexable_materializable(sql, library):
 
     derefed, tables, partitions = substitute_vids(library, sql)
 
-    drop = None
+
 
     if derefed.lower().startswith('create index'):
-
         parsed = parse_index(derefed)
-
-        return derefed, drop, [], [(parsed.source, parsed.columns)], [], []
+        return FIMRecord(statement=derefed, index=[(parsed.source, tuple(parsed.columns))])
 
     elif derefed.lower().startswith('materialize'):
         _, vid = derefed.split()
-
-        return derefed, drop, [], [], [vid], []
+        return FIMRecord(statement=derefed, materialize=set([vid]))
 
     elif derefed.lower().startswith('install'):
         _, vid = derefed.split()
-
-        return derefed, drop, [], [vid], [], []
+        return FIMRecord(statement=derefed, install=set([vid]))
 
     elif derefed.lower().startswith('select'):
+        rec = FIMRecord(statement=derefed)
         parsed = parse_select(derefed)
 
     elif derefed.lower().startswith('create view'):
         parsed = parse_view(derefed)
-
-        drop = 'DROP VIEW IF EXISTS {};'.format(parsed.name)
+        rec = FIMRecord(statement=derefed, drop= 'DROP VIEW IF EXISTS {};'.format(parsed.name), views=1 )
 
     else:
-        return derefed, drop, list(tables), list(partitions), [], []
+        return FIMRecord(statement=derefed, tables=set(tables), install = set(partitions) )
 
     def partition_aliases(parsed):
         d = {}
@@ -478,15 +520,17 @@ def find_indexable_materializable(sql, library):
 
         indexes = []
 
+
         for j in parsed.joins:
-            for col in j.join_cols:
-                if '.' in col:
-                    try:
-                        alias, col = col.split('.')
-                        if alias:
-                            indexes.append((aliases[alias], [col]))
-                    except KeyError:
-                        pass
+            if j and j.join_cols:
+                for col in j.join_cols:
+                    if '.' in col:
+                        try:
+                            alias, col = col.split('.')
+                            if alias:
+                                indexes.append((aliases[alias], (col,)))
+                        except KeyError:
+                            pass
 
         return indexes
 
@@ -494,10 +538,30 @@ def find_indexable_materializable(sql, library):
 
     indexes = indexable_columns(aliases, parsed)
 
-    materialize = set([ vid for vid in set(aliases.values()) if vid.startswith('p') ])
+    rec.joins = len(parsed.joins)
 
-    install = set(partitions) - materialize
+    install = set(partitions)
 
-    return derefed, drop, list(tables), list(install), list(materialize), indexes
+    rec.update(tables=tables, install=install, indexes=indexes)
 
+    return rec
+
+def process_sql(sql,library):
+    import sqlparse
+
+    processed_statements = []
+    statements = sqlparse.parse(sqlparse.format(sql, strip_comments=True))
+
+    sum_rec = FIMRecord(None)
+    for parsed_statement in statements:
+        rec = find_indexable_materializable(parsed_statement, library)
+
+        sum_rec.update(rec=rec)
+
+        processed_statements.append(rec.statement)
+
+
+    sum_rec.statements = processed_statements
+
+    return sum_rec
 

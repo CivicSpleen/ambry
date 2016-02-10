@@ -115,9 +115,52 @@ class Test(TestBase):
 
         self.assertEqual(2, len(select.joins))
 
+    def test_parse_function(self):
+        from pyparsing import Word, delimitedList, Optional, Combine, Group, alphas, alphanums, \
+            Forward, restOfLine, Keyword, OneOrMore, ZeroOrMore, Suppress
+
+        from ambry.bundle.asql_parser import select_column, select_stmt, function, select_column_list
+
+        column = select_column.parseString('count(*) as c1')
+
+        print(column.name, column.alias)
+
+        fn = function.parseString("foobar(t)")
+        print fn
+
+        fn = function.parseString("foobar(t) as foob")
+        print fn
+
+        fn = function.parseString("foobar(*) as foob")
+        print fn
+
+        columns = select_column_list.parseString('col1 as c1')
+        print columns
+
+        columns = select_column_list.parseString('col1 as c1, col2 as c2')
+        print columns
+
+        columns = select_column_list.parseString('count(t)')
+        print columns
+
+        columns = select_column_list.parseString('count(t), col2 as c2')
+        print columns
+
+
+        select = select_stmt.parseString(
+            'SELECT t1.col AS cnt, t2.col AS t2_c, t3.col AS t3_c FROM table1 AS t1')
+
+        print(select.columns)
+
+        select = select_stmt.parseString(
+             'SELECT count(*) AS cnt, t2.col AS t2_c, t3.col AS t3_c FROM table1 AS t1')
+
+        print(select.columns)
+
+
     def test_visitor(self):
         import sqlparse
-        from ambry.bundle.asql_parser import find_indexable_materializable
+        from ambry.bundle.asql_parser import find_indexable_materializable, FIMRecord
 
         stmt = """
         SELECT t1.uuid AS t1_uuid, t2.float_a AS t2_float_a, t3.a AS t3_a
@@ -128,14 +171,14 @@ class Test(TestBase):
 
         library = self.library()
 
-        stmt, drop, tables, install, materialize, indexes = find_indexable_materializable(stmt, library)
+        rec = find_indexable_materializable(stmt, library)
 
         self.assertEquals(sorted([u'p00casters002003', u'p00casters004003', u'p00casters006003']),
-                          sorted(materialize))
-        self.assertEquals(sorted([(u'p00casters006003', [u'id']),
-                           (u'p00casters002003', [u'index']),
-                           (u'p00casters002003', [u'index'])]),
-                           sorted(indexes))
+                          sorted(rec.materialize))
+
+        self.assertEquals(sorted([(u'p00casters006003', (u'id',)), (u'p00casters002003', (u'index',))]),
+                           sorted(rec.indexes))
+
 
         sql = """
 
@@ -156,42 +199,55 @@ CREATE VIEW view1 AS SELECT col1 as c1, col2 as c2 FROM table1 WHERE foo is None
 
         statements = sqlparse.parse(sqlparse.format(sql, strip_comments=True))
 
+        rec_keys = ['statement','install', 'materialize', 'tables',  'drop', 'indexes', 'joins']
 
-        expected_statements = [
-            'INSTALL p00casters006003',
-            'INSTALL p00casters002003',
-            'MATERIALIZE p00casters004003',
-            'MATERIALIZE p00casters002003',
-            'SELECT t1.uuid AS t1_uuid, t2.float_a AS t2_float_a, t3.a AS t3_a FROM '
-            'p00casters006003 AS t1 JOIN p00casters002003 AS t2 ON t1.id = t2.index '
-            'JOIN p00casters004003 AS t3 ON t3_a = t2.index',
-            'CREATE VIEW view1 AS SELECT col1 as c1, col2 as c2 FROM table1 WHERE foo is None and bar is baz'
-
+        expected = [
+            [u'INSTALL p00casters006003', set([u'p00casters006003']), None, None, None, None, None],
+            [u'INSTALL p00casters002003', set([u'p00casters002003']), None, None, None, None, None],
+            [u'MATERIALIZE p00casters004003', None, set([u'p00casters004003']), None, None, None, None],
+            [u'MATERIALIZE p00casters002003', None, set([u'p00casters002003']), None, None, None, None],
+            [u'SELECT t1.uuid AS t1_uuid, t2.float_a AS t2_float_a, t3.a AS t3_a FROM p00casters006003 AS t1 JOIN p00casters002003 AS t2 ON t1.id = t2.index JOIN p00casters004003 AS t3 ON t3_a = t2.index',
+             None, set([u'p00casters004003', u'p00casters006003', u'p00casters002003']), None, None,
+             set([(u'p00casters006003', (u'id',)), (u'p00casters002003', (u'index',))]), None],
+            [u'CREATE VIEW view1 AS SELECT col1 as c1, col2 as c2 FROM table1 WHERE foo is None and bar is baz',
+             None, None, None, ['DROP VIEW IF EXISTS view1;'], None, None],
+            [None, None, None, None, None, None, None]
         ]
 
-        expected_parts = [
-            [[], [u'p00casters006003'], [], []],
-            [[], [u'p00casters002003'], [], []],
-            [[], [], [u'p00casters004003'], []],
-            [[], [], [u'p00casters002003'], []],
-            [[], [], [u'p00casters004003', u'p00casters006003', u'p00casters002003'],
-             [(u'p00casters006003', [u'id']), (u'p00casters002003',
-                                               [u'index']), (u'p00casters002003', [u'index'])]],
-            [[], [], [], []]
-        ]
+        def copy_rec(rec):
+            d = []
+
+            for k in rec_keys:
+                if getattr(rec, k):
+                    d.append(getattr(rec, k))
+                else:
+                    d.append(None)
+
+            return d
 
         for i, stmt in enumerate(statements):
 
-            actual_statement, drop, tables, install, materialize, indexes = find_indexable_materializable(stmt, library)
+            rec = find_indexable_materializable(stmt, library)
 
-            if not actual_statement:
-                continue
+            self.assertEqual(expected[i], copy_rec(rec))
 
-            parts = [tables, install, materialize, indexes]
-            self.assertEqual(expected_statements[i], str(actual_statement))
+        sum_rec = FIMRecord(None)
+        for i, stmt in enumerate(statements):
+            rec = find_indexable_materializable(stmt, library)
 
-            for actual_part, expected_part in zip(parts, expected_parts[i]):
-                self.assertEqual(expected_part, actual_part)
+            sum_rec.update(rec=rec)
+
+        expected = {'materialize': set([u'p00casters004003', u'p00casters006003', u'p00casters002003']),
+                   'tables': set([]),
+                   'statement': None,
+                   'statements': None,
+                   'drop': ['DROP VIEW IF EXISTS view1;'],
+                   'indexes': set([(u'p00casters006003', (u'id',)), (u'p00casters002003', (u'index',))]),
+                   'install': set([u'p00casters006003', u'p00casters002003']),
+                   'joins': 0,
+                'views': 0}
+
+        self.assertEqual(expected, sum_rec.__dict__)
 
         sql = """
 
@@ -210,6 +266,8 @@ SELECT * FROM build.example.com-casters-simple;
 
 
 """
+
+        return
 
         w = library.warehouse()
 
