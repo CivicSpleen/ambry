@@ -5,7 +5,6 @@ from test.proto import TestBase
 
 class Test(TestBase):
 
-
     def test_headerstypes(self):
         b = self.import_single_bundle('ingest.example.com/headerstypes')
         try:
@@ -58,4 +57,3 @@ class Test(TestBase):
         finally:
             b.clean_all()
             b.close()
-
