@@ -376,10 +376,8 @@ class FileSQLiteTest(TestBase, AmbryReadyMixin):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.rc = self.get_rc()
-
         # force to use library database for search.
-        self.rc.services.search = None
+        self.config.services.search = None
 
         self._my_library = self.library()
         assert isinstance(self._my_library.search.backend, SQLiteSearchBackend)
