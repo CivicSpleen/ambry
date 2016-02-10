@@ -1,4 +1,4 @@
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class Test(TestBase):
@@ -50,7 +50,6 @@ class Test(TestBase):
         self.assertEqual(
             sorted([u'Fronking', u'1', u'4', u'6']),
             sorted(messages))
-        ##
 
         with self.assertRaises(ValueError):
             with pl.start('Exc', 3, message='Get Exceptions') as ps:
@@ -64,10 +63,14 @@ class Test(TestBase):
         exc_type = [r.message for r in pl.dataset.process_records if r.stage == 3 and r.exception_trace][0]
         self.assertEqual('This is an exception', exc_type)
 
+        records = []
+        children = []
         for r in pl.records:
-            print r
+            records.append(r)
             for c in r.children:
-                print "    ", c
+                children.append(c)
+        self.assertEqual(len(records), 14)
+        self.assertEqual(len(children), 10)
 
         return
         ##
