@@ -1,25 +1,11 @@
 # -*- coding: utf-8 -*-
-import os
-import shutil
 
 from ambry.orm.column import Column
 
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class Test(TestBase):
-
-    def setup_temp_dir(self):
-        build_url = '/tmp/ambry-build-test'
-
-        try:
-            shutil.rmtree(build_url)
-        except OSError:
-            pass
-
-        os.makedirs(build_url)
-
-        return build_url
 
     def test_basic(self):
 
@@ -87,22 +73,17 @@ class Test(TestBase):
         self.assertEqual(['init'], [e['init'] for e in c.expanded_transform])
         self.assertEqual([['t1', 't2', 't3', 't4']], [e['transforms'] for e in c.expanded_transform])
 
-
-
     def test_code_calling_pipe(self):
 
         from ambry.etl import CastColumns
 
-        d = self.setup_temp_dir()
-        b = self.setup_bundle('casters', build_url=d, source_url=d)
-        b.sync_in(force = True)  # Required to get bundle for cast_to_subclass to work.
+        b = self.import_single_bundle('build.example.com/casters')
+        b.sync_in(force=True)  # Required to get bundle for cast_to_subclass to work.
         b = b.cast_to_subclass()
 
         b.ingest()
         b.source_schema()
         b.commit()
-
-        print b.build_fs
 
         pl = b.pipeline(source=b.source('simple_stats'))
 
