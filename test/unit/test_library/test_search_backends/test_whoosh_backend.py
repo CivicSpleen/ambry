@@ -15,7 +15,7 @@ from test.proto import TestBase
 class WhooshSearchBackendTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.my_library = self.library()
+        self.my_library = self.library(use_proto=False)
         self.backend = WhooshSearchBackend(self.my_library)
 
     def test_initializes_root_dir(self):
