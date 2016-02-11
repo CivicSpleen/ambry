@@ -11,7 +11,7 @@ For Sqlite libraries, the prototype is held in the /proto directory and copied t
 then lirbary is initalized
 
 For postgres libraries, a prototype database is constructed by appending -proto to the end of the name of the
-test database. THe proto databse is created and populated, and then flagged for use as a template. When a test
+test database. The proto databse is created and populated, and then flagged for use as a template. When a test
 library is created, it is constructed with the proto library as its template.
 
 
@@ -227,7 +227,6 @@ proto-dsn: {}
         if self._db_type == 'sqlite':
             return self.init_sqlite(use_proto=use_proto)
         else:
-
             return self.init_pg(use_proto=use_proto)
 
     def init_sqlite(self, use_proto=True):
