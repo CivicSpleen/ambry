@@ -14,7 +14,6 @@ For postgres libraries, a prototype database is constructed by appending -proto 
 test database. The proto databse is created and populated, and then flagged for use as a template. When a test
 library is created, it is constructed with the proto library as its template.
 
-
 """
 
 import logging
@@ -56,8 +55,8 @@ class ProtoLibrary(object):
 
             self.dsn = dsn
 
-            p = parse_url_to_dict((self.dsn))
-            p['path'] = p['path']+'-proto'
+            p = parse_url_to_dict(self.dsn)
+            p['path'] = p['path'] + '-proto'
 
             self.proto_dsn = unparse_url_dict(p)
 
@@ -345,7 +344,7 @@ proto-dsn: {}
             if self.postgres_db_exists(template_name, conn):
                 return
 
-            conn.execute('COMMIT')  # we have to close opened transaction.
+            conn.execute('COMMIT;')  # we have to close opened transaction.
 
             query = 'CREATE DATABASE "{}" OWNER postgres TEMPLATE template1 encoding \'UTF8\';' \
                 .format(template_name)
@@ -385,7 +384,7 @@ proto-dsn: {}
 
         with self.pg_root_engine.connect() as conn:
 
-            conn.execute('COMMIT')  # we have to close opened transaction.
+            conn.execute('COMMIT;')  # we have to close opened transaction.
 
             query = 'CREATE DATABASE "{}" OWNER "{}" TEMPLATE "{}" encoding \'UTF8\';' \
                 .format(database_name, username, template_name)
