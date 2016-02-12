@@ -438,8 +438,27 @@ class FIMRecord(object):
         self.joins = joins
         self.views = views
 
-    def update(self, rec=None, drop=[], tables=set(), install=set(), materialize=set(),
-               indexes=set(), joins=0, views=0):
+    def update(self, rec=None, drop=None, tables=None, install=None, materialize=None,
+               indexes=None, joins=0, views=0):
+        """ Updates current record.
+
+        Args:
+            rec (FIMRecord):
+        """
+        if not drop:
+            drop = []
+
+        if not tables:
+            tables = set()
+
+        if not install:
+            install = set()
+
+        if not materialize:
+            materialize = set()
+
+        if not indexes:
+            indexes = set()
 
         if rec:
             self.update(
