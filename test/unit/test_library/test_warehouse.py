@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from unittest import TestCase
 
+from ambry.bundle.asql_parser import FIMRecord
 from ambry.library import Library
 from ambry.library.warehouse import Warehouse
-
 from ambry.orm import Partition
 
 try:
@@ -35,11 +35,7 @@ class WarehouseTest(TestCase):
 
         query = 'CREATE VIEW view1 AS SELECT * FROM p1vid;'
         drop = 'DROP VIEW IF EXISTS view1;'
-        tables = []
-        install = []
-        materialize = []
-        indexes = []
-        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        fake_find.return_value = FIMRecord(statement=query, drop=drop)
         w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
         with patch.object(w._backend, 'query') as fake_query:
             w.query(query, logger=Mock())
@@ -50,12 +46,8 @@ class WarehouseTest(TestCase):
     def test_installs_vids_recognized_as_installable(self, fake_find):
 
         query = 'INSTALL p1vid;'
-        drop = None
-        tables = []
         install = ['p1vid']
-        materialize = []
-        indexes = []
-        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        fake_find.return_value = FIMRecord(statement=query, install=install)
         w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
         with patch.object(w, 'install') as fake_install:
             w.query(query, logger=Mock())
@@ -65,12 +57,8 @@ class WarehouseTest(TestCase):
     def test_materializes_vids_recognized_as_materializable(self, fake_find):
 
         query = 'MATERIALIZE p1vid;'
-        drop = None
-        tables = []
-        install = []
         materialize = ['p1vid']
-        indexes = []
-        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        fake_find.return_value = FIMRecord(statement=query, materialize=materialize)
         w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
         with patch.object(w, 'materialize') as fake_materialize:
             w.query(query, logger=Mock())
@@ -79,12 +67,8 @@ class WarehouseTest(TestCase):
     @patch('ambry.bundle.asql_parser.find_indexable_materializable')
     def test_indexes_vids_recognized_as_indexable(self, fake_find):
         query = 'INDEX p1vid (col1, col2);'
-        drop = None
-        tables = []
-        install = []
-        materialize = []
         indexes = [('p1vid', ('col1', 'col2'))]
-        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        fake_find.return_value = FIMRecord(statement=query, indexes=indexes)
         w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
         with patch.object(w, 'index') as fake_index:
             w.query(query, logger=Mock())
@@ -94,12 +78,7 @@ class WarehouseTest(TestCase):
     def test_sends_create_query_to_backend(self, fake_find):
 
         query = 'CREATE VIEW view1 AS SELECT * FROM p1vid;'
-        drop = ''
-        tables = []
-        install = []
-        materialize = []
-        indexes = []
-        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        fake_find.return_value = FIMRecord(statement=query)
         w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
         with patch.object(w._backend, 'query') as fake_query:
             w.query(query, logger=Mock())
@@ -111,12 +90,7 @@ class WarehouseTest(TestCase):
     def test_sends_select_query_to_backend(self, fake_find):
 
         query = 'SELECT * FROM p1vid;'
-        drop = ''
-        tables = []
-        install = []
-        materialize = []
-        indexes = []
-        fake_find.return_value = (query, drop, tables, install, materialize, indexes)
+        fake_find.return_value = FIMRecord(statement=query)
         w = Warehouse(self._my_library, dsn='sqlite:////tmp/temp1.db')
         with patch.object(w._backend, 'query') as fake_query:
             w.query(query, logger=Mock())

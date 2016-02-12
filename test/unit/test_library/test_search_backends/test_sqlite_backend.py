@@ -4,13 +4,12 @@ import unittest
 
 from sqlalchemy.sql.expression import text
 
-from test.test_base import TestBase
-
 from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
-from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult,\
+from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult, \
     PartitionSearchResult
 
 from test.factories import PartitionFactory, DatasetFactory
+from test.proto import TestBase
 
 
 class SQLiteSearchTestBase(TestBase):
@@ -18,12 +17,12 @@ class SQLiteSearchTestBase(TestBase):
     @classmethod
     def setUpClass(cls):
         super(SQLiteSearchTestBase, cls).setUpClass()
-        if not cls._is_sqlite:
+        if cls._db_type != 'sqlite':
             raise unittest.SkipTest('SQLite tests are disabled.')
 
     def setUp(self):
         super(SQLiteSearchTestBase, self).setUp()
-        self.my_library = self.library()
+        self.my_library = self.library(use_proto=False)
         self.backend = SQLiteSearchBackend(self.my_library)
 
 

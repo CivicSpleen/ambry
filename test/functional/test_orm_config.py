@@ -5,8 +5,8 @@ from sqlalchemy.exc import IntegrityError
 
 from ambry.orm.config import Config
 
-from test.test_base import TestBase
 from test.factories import DatasetFactory
+from test.proto import TestBase
 
 
 class Test(TestBase):
@@ -81,7 +81,7 @@ class Test(TestBase):
         except IntegrityError as exc:
             self.assertIn('UNIQUE constraint failed', str(exc))
 
-    @unittest.skip("Credentials need to be fixed")
+    @unittest.skip('Credentials need to be fixed')
     def test_config_postgres_unicode(self):
 
         from ambry.orm.database import Database

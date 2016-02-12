@@ -11,9 +11,8 @@ For Sqlite libraries, the prototype is held in the /proto directory and copied t
 then lirbary is initalized
 
 For postgres libraries, a prototype database is constructed by appending -proto to the end of the name of the
-test database. THe proto databse is created and populated, and then flagged for use as a template. When a test
+test database. The proto databse is created and populated, and then flagged for use as a template. When a test
 library is created, it is constructed with the proto library as its template.
-
 
 """
 
@@ -41,6 +40,8 @@ class ProtoLibrary(object):
         :param config_path:
         :return:
         """
+        assert dsn is None, 'Change library database config instead.'
+        assert root is None, 'Change config instead.'
 
         from ambry.run import load_config, update_config, load_accounts
         from ambry.util import parse_url_to_dict, unparse_url_dict
@@ -54,8 +55,8 @@ class ProtoLibrary(object):
 
             self.dsn = dsn
 
-            p = parse_url_to_dict((self.dsn))
-            p['path'] = p['path']+'-proto'
+            p = parse_url_to_dict(self.dsn)
+            p['path'] = p['path'] + '-proto'
 
             self.proto_dsn = unparse_url_dict(p)
 
@@ -225,7 +226,6 @@ proto-dsn: {}
         if self._db_type == 'sqlite':
             return self.init_sqlite(use_proto=use_proto)
         else:
-
             return self.init_pg(use_proto=use_proto)
 
     def init_sqlite(self, use_proto=True):
@@ -344,7 +344,7 @@ proto-dsn: {}
             if self.postgres_db_exists(template_name, conn):
                 return
 
-            conn.execute('COMMIT')  # we have to close opened transaction.
+            conn.execute('COMMIT;')  # we have to close opened transaction.
 
             query = 'CREATE DATABASE "{}" OWNER postgres TEMPLATE template1 encoding \'UTF8\';' \
                 .format(template_name)
@@ -384,7 +384,7 @@ proto-dsn: {}
 
         with self.pg_root_engine.connect() as conn:
 
-            conn.execute('COMMIT')  # we have to close opened transaction.
+            conn.execute('COMMIT;')  # we have to close opened transaction.
 
             query = 'CREATE DATABASE "{}" OWNER "{}" TEMPLATE "{}" encoding \'UTF8\';' \
                 .format(database_name, username, template_name)
@@ -409,7 +409,9 @@ class TestBase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        pass
+        cls._proto = ProtoLibrary()
+        cls.config = cls._proto.config
+        cls._db_type = cls._proto._db_type
 
     def setUp(self):
         pass
@@ -435,13 +437,10 @@ class TestBase(unittest.TestCase):
         return b
 
     def library(self, dsn=None, use_proto=True):
-        """Return a new proto library"""
-
-        from proto import ProtoLibrary
+        """Return a new proto library. """
+        assert dsn is None, 'dsn parameter is deprecated. Change self.config.library.database instead!'
 
         # IMPLEMENT ME
         # Check AMBRY_TEST_DB and databases.test-postgres for postgres database DSN
 
-        pl = ProtoLibrary(dsn=dsn)
-
-        return pl.init_library(use_proto=use_proto)
+        return self._proto.init_library(use_proto=use_proto)

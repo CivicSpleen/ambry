@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ambry.metadata.schema import Top
 
-from test.test_base import TestBase
+from test.proto import TestBase
 from test.factories import DatasetFactory
 
 

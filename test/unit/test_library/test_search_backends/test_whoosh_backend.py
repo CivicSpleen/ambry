@@ -4,19 +4,18 @@ import os
 
 from six import u
 
-from test.test_base import TestBase
-
 from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
-from ambry.library import new_library
 from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult,\
     PartitionSearchResult
-from test.factories import PartitionFactory
+
+from test.factories import PartitionFactory, DatasetFactory
+from test.proto import TestBase
 
 
 class WhooshSearchBackendTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.my_library = self.library()
+        self.my_library = self.library(use_proto=False)
         self.backend = WhooshSearchBackend(self.my_library)
 
     def test_initializes_root_dir(self):
@@ -27,7 +26,7 @@ class DatasetWhooshIndexTest(TestBase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.my_library = self.library()
+        self.my_library = self.library(use_proto=False)
 
         # we need clear index for each test
         WhooshSearchBackend(self.my_library).dataset_index.reset()
@@ -52,7 +51,8 @@ class DatasetWhooshIndexTest(TestBase):
     def test_returns_found_dataset(self):
 
         # add dataset to backend.
-        dataset = self.new_db_dataset(self.my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
+        dataset = DatasetFactory()
         self.backend.dataset_index.index_one(dataset)
 
         # search just added document.
@@ -64,17 +64,19 @@ class DatasetWhooshIndexTest(TestBase):
     def test_extends_found_dataset_with_partitions(self):
 
         # create and index some partitions
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
         PartitionFactory._meta.sqlalchemy_session = self.my_library.database.session
 
-        dataset = self.new_db_dataset(self.my_library.database, n=0)
+        dataset = DatasetFactory(source='example.com')
         dataset.config.metadata.about.title = 'Test dataset'
-        self.backend.dataset_index.index_one(dataset)
         partition1 = PartitionFactory(dataset=dataset, vname=dataset.vname)
+
+        self.backend.dataset_index.index_one(dataset)
         self.my_library.database.session.commit()
         self.backend.partition_index.index_one(partition1)
 
-        # search just added document.
-        found = self.backend.dataset_index.search('dataset')
+        # look for just added document.
+        found = self.backend.dataset_index.search('example.com')
         found_dataset = found[0]
         assert found_dataset.vid == dataset.vid
         self.assertEqual(len(found_dataset.partitions), 1)
@@ -82,7 +84,8 @@ class DatasetWhooshIndexTest(TestBase):
 
     # _index_document tests
     def test_adds_dataset_document_to_the_index(self):
-        dataset = self.new_db_dataset(self.my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
+        dataset = DatasetFactory()
         self.backend.dataset_index.index_one(dataset)
 
         # search just added document.
@@ -90,7 +93,8 @@ class DatasetWhooshIndexTest(TestBase):
         self.assertEqual(all_docs[0]['vid'], dataset.vid)
 
     def test_replaces_document_in_the_index(self):
-        dataset = self.new_db_dataset(self.my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
+        dataset = DatasetFactory()
         doc = self.backend.dataset_index._as_document(dataset)
         self.backend.dataset_index._index_document(doc)
 
@@ -115,10 +119,11 @@ class DatasetWhooshIndexTest(TestBase):
 
     # _delete tests
     def test_deletes_dataset_from_index(self):
-        dataset = self.new_db_dataset(self.my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
+        dataset = DatasetFactory()
         self.backend.dataset_index.index_one(dataset)
 
-        # search just added document.
+        # look for just added document.
         all_docs = list(self.backend.dataset_index.index.searcher().documents())
         self.assertIn(dataset.vid, [x['vid'] for x in all_docs])
         self.backend.dataset_index._delete(vid=dataset.vid)
@@ -126,14 +131,16 @@ class DatasetWhooshIndexTest(TestBase):
         self.assertNotIn(dataset.vid, [x['vid'] for x in all_docs])
 
     def test_returns_true_if_dataset_is_already_indexed(self):
-        dataset = self.new_db_dataset(self.my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
+        dataset = DatasetFactory()
         self.backend.dataset_index.index_one(dataset)
 
         # search just added document.
         self.assertTrue(self.backend.dataset_index.is_indexed(dataset))
 
     def test_returns_false_if_dataset_is_not_indexed(self):
-        dataset = self.new_db_dataset(self.my_library.database, n=0)
+        DatasetFactory._meta.sqlalchemy_session = self.my_library.database.session
+        dataset = DatasetFactory()
 
         # search just added document.
         self.assertFalse(self.backend.dataset_index.is_indexed(dataset))

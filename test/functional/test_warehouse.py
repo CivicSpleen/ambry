@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from itertools import islice
 import os
 import stat
 import unittest
@@ -6,7 +7,7 @@ import unittest
 from ambry_sources import MPRowsFile
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
-from test.helpers import assert_sqlite_index, assert_valid_ambry_sources, assert_postgres_index
+from test.helpers import assert_sqlite_index, assert_ambry_sources, assert_postgres_index
 from test.proto import TestBase
 
 
@@ -16,7 +17,7 @@ class Mixin(object):
     # helpers
 
     def _assert_is_indexed(self, warehouse, partition, column):
-        ''' Raises AssertionError if column is not indexed. '''
+        """ Raises AssertionError if column is not indexed. """
 
         if warehouse.dsn.startswith('sqlite'):
             assert_sqlite_index(warehouse._backend._connection, partition, column)
@@ -24,11 +25,10 @@ class Mixin(object):
             assert_postgres_index(warehouse._backend._connection, partition, column)
 
     def test_query_mpr_with_auto_install(self):
-        from itertools import islice
 
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
@@ -36,6 +36,11 @@ class Mixin(object):
         library = self.library()
 
         bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
+
         partition = list(bundle.partitions)[0]
         self.assertTrue(os.path.exists(partition.datafile.syspath))
 
@@ -45,9 +50,9 @@ class Mixin(object):
             # query partition.
             rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
 
-            self.assertEqual('e9ebbe12-eea4-4411-a8a4-58c4706c24a8', rows[0][1])
-            self.assertEqual('e358f546-683f-476b-a8b8-184b58c550a2', rows[1][1])
-            self.assertEqual('4ac8a275-72a5-427a-bb91-92b936f9f625', rows[2][1])
+            self.assertEqual(0, rows[0][2])
+            self.assertEqual(1, rows[1][2])
+            self.assertEqual(2, rows[2][2])
         finally:
             bundle.progress.close()
             warehouse.close()
@@ -55,17 +60,21 @@ class Mixin(object):
 
     def test_install_and_query_materialized_partition(self):
         # materialized view for postgres and readonly table for sqlite.
-        from itertools import islice
 
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
         library = self.library()
 
         bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
+
         partition = list(bundle.partitions)[0]
         self.assertTrue(os.path.exists(partition.datafile.syspath))
 
@@ -78,18 +87,11 @@ class Mixin(object):
             # query partition.
             rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
 
-            self.assertEqual('e9ebbe12-eea4-4411-a8a4-58c4706c24a8', rows[0][1])
-            self.assertEqual('e358f546-683f-476b-a8b8-184b58c550a2', rows[1][1])
-            self.assertEqual('4ac8a275-72a5-427a-bb91-92b936f9f625', rows[2][1])
+            self.assertEqual(0, rows[0][2])
+            self.assertEqual(1, rows[1][2])
+            self.assertEqual(2, rows[2][2])
 
-            # Re-open the database through Sqlalchemy, which won't have the module installed,
-            # so the data can only come from materialization
-
-            rows = list(islice(warehouse.engine.execute('SELECT * FROM {};'.format(partition.vid)), None, 3))
-
-            self.assertEqual('e9ebbe12-eea4-4411-a8a4-58c4706c24a8', rows[0][1])
-            self.assertEqual('e358f546-683f-476b-a8b8-184b58c550a2', rows[1][1])
-            self.assertEqual('4ac8a275-72a5-427a-bb91-92b936f9f625', rows[2][1])
+            self._assert_materialized(warehouse, partition)
 
         finally:
             bundle.progress.close()
@@ -99,7 +101,7 @@ class Mixin(object):
     def test_index_creation(self):
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
@@ -146,13 +148,17 @@ class Mixin(object):
     @unittest.skip('This test needs a bundle that has multiple partitions of the same table')
     def test_table_install_and_query(self):
         try:
-            assert_valid_ambry_sources('0.1.8')
+            assert_ambry_sources('0.1.8')
         except AssertionError:
             self.SkipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
         library = self.library()
 
         bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
         partition1 = list(bundle.partitions)[0]
         partition2 = list(bundle.partitions)[1]
         self.assertTrue(os.path.exists(partition1.datafile.syspath))
@@ -181,19 +187,23 @@ class Mixin(object):
     def test_query_with_union(self):
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
         else:
             # sqlite tests
             try:
-                assert_valid_ambry_sources('0.1.8')
+                assert_ambry_sources('0.1.8')
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
         library = self.library()
 
         bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
         partition1 = list(bundle.partitions)[0]
         partition2 = list(bundle.partitions)[1]
         self.assertTrue(os.path.exists(partition1.datafile.syspath))
@@ -217,25 +227,66 @@ class Mixin(object):
             library.database.close()
 
 
-# FIXME Run this test only if we have a Sqlite library
 class InMemorySQLiteTest(TestBase, Mixin):
+
+    def setUp(self):
+        super(InMemorySQLiteTest, self).setUp()
+        if self._db_type != 'sqlite':
+            self.skipTest('SQLite tests are disabled.')
 
     def get_warehouse(self):
         return self.library().warehouse(dsn='sqlite://')
 
+    def _assert_materialized(self, warehouse, partition):
+        # Drop partition datafile and check again. So the data can only come from materialization.
+        partition.datafile.remove()
+        self.assertFalse(partition.datafile.exists)
+        rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
 
-# FIXME Run this test only if we have a Sqlite library
+        self.assertEqual(0, rows[0][2])
+        self.assertEqual(1, rows[1][2])
+        self.assertEqual(2, rows[2][2])
+
+
 class FileSQLiteTest(TestBase, Mixin):
 
+    def setUp(self):
+        super(FileSQLiteTest, self).setUp()
+        if self._db_type != 'sqlite':
+            self.skipTest('SQLite tests are disabled.')
+
     def get_warehouse(self):
         return self.library().warehouse()
 
+    def _assert_materialized(self, warehouse, partition):
 
-# FIXME: Run this test only if we have a Postgres library
+        # Re-open the database through SQLalchemy, which won't have the module installed,
+        # so the data can only come from materialization
+
+        rows = list(islice(warehouse.engine.execute('SELECT * FROM {};'.format(partition.vid)), None, 3))
+
+        self.assertEqual(0, rows[0][2])
+        self.assertEqual(1, rows[1][2])
+        self.assertEqual(2, rows[2][2])
+
+
 class PostgreSQLTest(TestBase, Mixin):
 
+    def setUp(self):
+        super(PostgreSQLTest, self).setUp()
+        if self._db_type != 'postgres':
+            self.skipTest('PostgreSQL tests are disabled.')
+
     def get_warehouse(self):
         return self.library().warehouse()
+
+    def _assert_materialized(self, warehouse, partition):
+        # Drop partition datafile and check again. So the data can only come from materialization.
+        rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
+
+        self.assertEqual(0, rows[0][2])
+        self.assertEqual(1, rows[1][2])
+        self.assertEqual(2, rows[2][2])
 
 
 def assert_shares_group(user=''):
@@ -309,9 +360,9 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(0, len(wh.list()))
 
-        self.assertEquals('p00casters006003', wh.install('build.example.com-casters-simple'))
-        self.assertEquals('p00casters004003', wh.install('build.example.com-casters-integers'))
-        self.assertEquals('p00casters002003', wh.install('build.example.com-casters-simple_stats'))
+        self.assertEqual('p00casters006003', wh.install('build.example.com-casters-simple'))
+        self.assertEqual('p00casters004003', wh.install('build.example.com-casters-integers'))
+        self.assertEqual('p00casters002003', wh.install('build.example.com-casters-simple_stats'))
         self.assertEqual('pERJQxWUVb005001', wh.materialize('build.example.com-generators-demo'))
 
         self.assertEqual(4, len(wh.list()))
@@ -325,7 +376,7 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(0, len(wh.list()))
 
-        self.assertEqual(20, sum(1 for row in wh.query("SELECT * FROM p00casters004003")))
+        self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM p00casters004003;')))
         self.assertEqual(6000, sum(1 for row in wh.query('SELECT * FROM p00casters006003;')))
         self.assertEqual(4000, sum(1 for row in wh.query('SELECT * FROM pERJQxWUVb005001;')))
 
@@ -345,9 +396,9 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(0, len(wh.list()))
 
-        self.assertEqual(20, sum(1 for row in wh.query("SELECT * FROM p00casters004003")))
-        self.assertEqual(6000, sum(1 for row in wh.query("SELECT * FROM p00casters006003")))
-        self.assertEqual(4000, sum(1 for row in wh.query("SELECT * FROM pERJQxWUVb005001")))
+        self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM p00casters004003;')))
+        self.assertEqual(6000, sum(1 for row in wh.query('SELECT * FROM p00casters006003;')))
+        self.assertEqual(4000, sum(1 for row in wh.query('SELECT * FROM pERJQxWUVb005001;')))
 
         self.assertEqual(3, len(wh.list()))
 

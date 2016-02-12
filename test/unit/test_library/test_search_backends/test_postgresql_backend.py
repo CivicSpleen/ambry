@@ -5,15 +5,18 @@ from ambry.orm.database import POSTGRES_SCHEMA_NAME
 from ambry.util import AttrDict
 
 from test.factories import PartitionFactory
-from test.test_base import PostgreSQLTestBase
+from test.proto import TestBase
 
 from sqlalchemy.exc import ProgrammingError
 
 
-class PostgreSQLBackendBaseTest(PostgreSQLTestBase):
+class PostgreSQLBackendBaseTest(TestBase):
     def setUp(self):
         super(PostgreSQLBackendBaseTest, self).setUp()
-        self._my_library = self.library()
+        if self._db_type != 'postgres':
+            self.skipTest('Postgres tests are disabled.')
+
+        self._my_library = self.library(use_proto=False)
         self.backend = PostgreSQLSearchBackend(self._my_library)
 
 

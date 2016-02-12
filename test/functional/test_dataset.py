@@ -3,7 +3,7 @@
 from ambry.identity import DatasetNumber
 from ambry.orm.exc import ConflictError
 
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class Test(TestBase):
@@ -60,4 +60,3 @@ class Test(TestBase):
         db.root_dataset.config.library.config.path = 'foobar'
 
         self.assertEqual('foobar',  db.root_dataset.config.library.config.path)
-

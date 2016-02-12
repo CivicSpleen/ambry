@@ -4,13 +4,13 @@ from ambry.orm import Partition
 from ambry.orm.exc import NotFoundError
 
 from test.factories import PartitionFactory
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class LibraryTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.my_library = self.library()
+        self.my_library = self.library(use_proto=False)
 
     def _assert_finds_by_ref(self, library, partition, ref):
         """ Asserts that partition can be found in the library by given vid.

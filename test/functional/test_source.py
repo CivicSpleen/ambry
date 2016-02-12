@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from test.test_base import TestBase
 from test.factories import DatasetFactory
+from test.proto import TestBase
 
 
 class Test(TestBase):

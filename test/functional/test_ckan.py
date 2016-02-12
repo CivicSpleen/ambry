@@ -10,7 +10,7 @@ except ImportError:
 from ambry.exporters.ckan.core import export, MISSING_CREDENTIALS_MSG
 
 from test.factories import FileFactory
-from test.test_base import TestBase
+from test.proto import TestBase
 
 # CKAN is mocked by default. If you really want to hit CKAN instance set MOCK_CKAN to False.
 MOCK_CKAN = True
@@ -20,8 +20,7 @@ class Test(TestBase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        rc = self.config()
-        if 'ckan' not in rc.accounts:
+        if 'ckan' not in self.config.accounts:
             raise EnvironmentError(MISSING_CREDENTIALS_MSG)
         self._requests = {}  # calls to CKAN mock.
         self._files = {}  # file sent to CKAN mock.

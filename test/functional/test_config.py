@@ -7,36 +7,14 @@ from ambry.library import Library
 from ambry.library.filesystem import LibraryFilesystem
 from ambry.run import load, CONFIG_FILE
 
-from test.test_base import TestBase
-
-
-class TempDirContext(object):
-    """Setup and tear down a chroot jail. """
-
-    def __init__(self):
-        from tempfile import mkdtemp
-
-        self.tmp_dir = mkdtemp()
-
-    def __enter__(self):
-        return self.tmp_dir
-
-    def __exit__(self, type, value, traceback):
-        from shutil import rmtree
-        rmtree(self.tmp_dir)
+from test.proto import TestBase
 
 
 class Test(TestBase):
 
-    def tearDown(self):
-        super(self.__class__, self).tearDown()
-        #if hasattr(self, '_temp_file'):
-        #    os.remove(self._temp_file)
-
     def test_run_config_filesystem(self):
-        rc = self.get_rc()
-        self.assertEqual('{root}/downloads', rc.filesystem.downloads)
-        self.assertEqual('{root}/extracts', rc.filesystem.extracts)
+        self.assertEqual('{root}/downloads', self.config.filesystem.downloads)
+        self.assertEqual('{root}/extracts', self.config.filesystem.extracts)
 
     def test_dsn_config(self):
         from ambry.run import normalize_dsn_or_dict as n

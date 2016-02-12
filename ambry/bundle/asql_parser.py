@@ -32,6 +32,7 @@ def parse_select(query):
 
     return Select(result)
 
+
 def parse_view(query):
     """ Parses asql query to view object.
 
@@ -69,6 +70,7 @@ def parse_index(query):
     """
     return Index(_index_stmt.parseString(query))
 
+
 class Source(object):
     """ Parsed source - table name or partition ref. """
 
@@ -92,7 +94,6 @@ class Column(object):
             # Assume the value is a string, usualla single column name or '*'
             self.name = parsed_column
             self.alias = None
-
 
     def __str__(self):
         return 'name: {}, alias: {}'.format(self.name, self.alias)
@@ -119,8 +120,6 @@ class View(object):
         self.columns = [Column(c) for c in parse_result.columns]
         self.joins = [Join(j) for j in parse_result.joins]
 
-
-
     def __str__(self):
 
         def wr(o):
@@ -132,6 +131,7 @@ class View(object):
         joins_str = ', '.join([wr(j) for j in self.joins])
         return 'name: {},\n sources: [{}],\n columns: [{}],\n joins: [{}]'.format(
             self.name, sources_str, columns_str, joins_str)
+
 
 class Select(object):
     """ Parsed select """
@@ -142,7 +142,6 @@ class Select(object):
         self.columns = [Column(c) for c in parse_result.columns]
         self.joins = [Join(j) for j in parse_result.joins]
 
-
     def __str__(self):
 
         def wr(o):
@@ -155,6 +154,7 @@ class Select(object):
         return 'name: {},\n sources: [{}],\n columns: [{}],\n joins: [{}]'.format(
             self.name, sources_str, columns_str, joins_str)
 
+
 class Index(object):
     """ Parsed index. """
 
@@ -163,9 +163,9 @@ class Index(object):
         self.columns = list(parse_result.columns)
 
 
-
 # Parser implementation
 #
+
 
 def _flat_alias(t):
     """ Populates token (column or table) fields from parse result. """
@@ -232,7 +232,7 @@ select_column = (
 # print(column.name, column.alias)
 # (col1, c1)
 
-select_column_list = OneOrMore(Group( (function | select_column) + Optional(comma_token)))
+select_column_list = OneOrMore(Group((function | select_column) + Optional(comma_token)))
 
 # Examples:
 # columns = select_column_list.parseString('col1 as c1, col2 as c2')
@@ -265,17 +265,17 @@ many_sources = OneOrMore(Group(source + Optional(comma_token)))
 # define join grammar
 #
 
-on_op = Optional( on_kw.suppress() + ident + Word('=').suppress() + ident )
+on_op = Optional(on_kw.suppress() + ident + Word('=').suppress() + ident)
 
 join_op = (
     comma_token
-    | (
-        Optional(natural_kw)
-        + Optional(inner_kw | cross_kw | left_kw + outer_kw | left_kw | outer_kw)
-        + join_kw)
-      )
+    | (Optional(natural_kw)
+       + Optional(inner_kw | cross_kw | left_kw + outer_kw | left_kw | outer_kw)
+       + join_kw)
+)
 
-join_stmt = (join_op + source.setResultsName('source') + on_op.setResultsName('join_cols') ).setParseAction(_build_join)
+join_stmt = (
+    join_op + source.setResultsName('source') + on_op.setResultsName('join_cols')).setParseAction(_build_join)
 
 # Example
 # join = join_stmt.parseString('join jtable1 as jt1')
@@ -438,8 +438,27 @@ class FIMRecord(object):
         self.joins = joins
         self.views = views
 
-    def update(self, rec=None, drop=[], tables = set(), install = set(), materialize = set(),
-               indexes = set(), joins=0, views=0):
+    def update(self, rec=None, drop=None, tables=None, install=None, materialize=None,
+               indexes=None, joins=0, views=0):
+        """ Updates current record.
+
+        Args:
+            rec (FIMRecord):
+        """
+        if not drop:
+            drop = []
+
+        if not tables:
+            tables = set()
+
+        if not install:
+            install = set()
+
+        if not materialize:
+            materialize = set()
+
+        if not indexes:
+            indexes = set()
 
         if rec:
             self.update(
@@ -476,8 +495,6 @@ def find_indexable_materializable(sql, library):
 
     derefed, tables, partitions = substitute_vids(library, sql)
 
-
-
     if derefed.lower().startswith('create index'):
         parsed = parse_index(derefed)
         return FIMRecord(statement=derefed, index=[(parsed.source, tuple(parsed.columns))])
@@ -496,10 +513,9 @@ def find_indexable_materializable(sql, library):
 
     elif derefed.lower().startswith('create view'):
         parsed = parse_view(derefed)
-        rec = FIMRecord(statement=derefed, drop= 'DROP VIEW IF EXISTS {};'.format(parsed.name), views=1 )
-
+        rec = FIMRecord(statement=derefed, drop='DROP VIEW IF EXISTS {};'.format(parsed.name), views=1)
     else:
-        return FIMRecord(statement=derefed, tables=set(tables), install = set(partitions) )
+        return FIMRecord(statement=derefed, tables=set(tables), install=set(partitions))
 
     def partition_aliases(parsed):
         d = {}
@@ -517,7 +533,6 @@ def find_indexable_materializable(sql, library):
     def indexable_columns(aliases, parsed):
 
         indexes = []
-
 
         for j in parsed.joins:
             if j and j.join_cols:
@@ -544,7 +559,8 @@ def find_indexable_materializable(sql, library):
 
     return rec
 
-def process_sql(sql,library):
+
+def process_sql(sql, library):
     import sqlparse
 
     processed_statements = []
@@ -558,8 +574,6 @@ def process_sql(sql,library):
 
         processed_statements.append(rec.statement)
 
-
     sum_rec.statements = processed_statements
 
     return sum_rec
-
