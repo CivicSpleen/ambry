@@ -438,7 +438,7 @@ class TestBase(unittest.TestCase):
 
     def library(self, dsn=None, use_proto=True):
         """Return a new proto library. """
-        assert dsn is None, 'Change self.config.library.database instead!'
+        assert dsn is None, 'dsn parameter is deprecated. Change self.config.library.database instead!'
 
         # IMPLEMENT ME
         # Check AMBRY_TEST_DB and databases.test-postgres for postgres database DSN
