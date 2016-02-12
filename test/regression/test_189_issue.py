@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from test.test_base import TestBase
+from test.proto import TestBase
 
 from ambry.mprlib.backends.postgresql import PostgreSQLBackend
 from ambry_sources.med.postgresql import POSTGRES_PARTITION_SCHEMA_NAME
@@ -29,9 +29,9 @@ class Test(TestBase):
 
     def setUp(self):
         super(Test, self).setUp()
-        if self.dbname == 'sqlite':
+        if self._db_type == 'sqlite':
             self._inspector = SQLiteInspector
-        elif self.dbname == 'postgres':
+        elif self._db_type == 'postgres':
             self._inspector = PostgreSQLInspector
         else:
             raise Exception('Do not know inspector for {} database.'.format(self.dbname))
@@ -45,11 +45,12 @@ class Test(TestBase):
         partition = bundle.library.datasets[0].partitions[0]
         warehouse = bundle.warehouse('temp1')
         warehouse.install(partition.vid)
-        self.assertIn('sqlite', warehouse._backend._dsn)
 
         # First ensure query is working
         expected_result = [(1, u'eb385c36-9298-4427-8925-fe09294dbd5f', 30, 99.7346915319786)]
         result = warehouse.query('SELECT * FROM {} LIMIT 1;'.format(partition.vid))
+        if 'sqlite' in warehouse._backend._dsn:
+            result = result.fetchall()
         self.assertEqual(result, expected_result)
 
         # Now check created table. The name should match to partition.vid.

@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from ambry.library import new_library
 from ambry.orm import Dataset, Config
 
-from test.test_base import TestBase
+from test.proto import TestBase
 
 # https://github.com/CivicKnowledge/ambry/issues/93 bug tests
 
@@ -11,10 +10,10 @@ from test.test_base import TestBase
 class Test(TestBase):
 
     def test_deletes_removed_keys_from_db(self):
-        library = self.library()
+        # library = self.library()
 
         # populate database with initial bundle.yaml
-        bundle = self.setup_bundle('simple', library=library)
+        bundle = self.import_single_bundle('build.example.com/simple')
         bundle.sync_in()
 
         # retrieve config from database to be sure all saved properly.
@@ -48,10 +47,9 @@ class Test(TestBase):
         self.assertEqual(contacts.analyst.url, '')
 
     def test_deletes_removed_group_from_db(self):
-        library = self.library()
 
         # populate database with initial bundle.yaml
-        bundle = self.setup_bundle('simple', library=library)
+        bundle = self.import_single_bundle('build.example.com/simple')
         bundle.sync_in()
 
         # retrieve config from database to be sure all saved properly.

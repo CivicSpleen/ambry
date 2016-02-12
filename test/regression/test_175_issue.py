@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import unittest
 
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class Test(TestBase):
