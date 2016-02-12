@@ -261,8 +261,10 @@ class Library(object):
                           build_url=self._fs.build(b.identity.source_path))
 
         bs_meta = b.build_source_files.file(File.BSFILE.META)
-        bs_meta.objects_to_record()
+        bs_meta.set_defaults()
         bs_meta.record_to_objects()
+        bs_meta.objects_to_record()
+        b.commit()
 
         self._db.commit()
         return b
@@ -678,8 +680,11 @@ class Library(object):
             b = self.bundle(ref)  # Should exist now.
 
             b.dataset.data['remote_name'] = remote.short_name
-            b.dataset.data['remote_url'] = remote.url
+
             b.dataset.upstream = remote.url
+
+            b.dstate = b.STATES.CHECKEDOUT
+
             b.commit()
 
         finally:
@@ -703,41 +708,48 @@ class Library(object):
         """Return a remote for which 'name' matches the short_name or url """
         from ambry.orm import Remote
         from sqlalchemy import or_
+        from ambry.orm.exc import NotFoundError
+        from sqlalchemy.orm.exc import NoResultFound
 
+        if not name.strip():
+            raise NotFoundError("Empty remote name")
 
-        r =  (self.database.session.query(Remote)
+        try:
+            r =  (self.database.session.query(Remote)
                 .filter(or_(Remote.url == name, Remote.short_name == name)).one())
+        except NoResultFound as e:
+            raise NotFoundError(str(e))
 
         return r
 
     def remote(self, name_or_bundle):
 
-        from sqlalchemy.orm.exc import NoResultFound
+        from ambry.orm.exc import NotFoundError
 
         r = None
 
-        if not isinstance(name_or_bundle, Bundle):
+        if not isinstance(name_or_bundle, Bundle): # It is a remote short_name
             try:
                 r = self._remote(text_type(name_or_bundle))
-            except NoResultFound:
+            except NotFoundError:
                 r = None
 
-        if not r:
-            try:
-                r = self._remote(name_or_bundle.dataset.upstream)
-            except (NoResultFound, AttributeError, KeyError):
-                r = None
-
-        if not r:
+        if not r: # Explicitly named in the metadata
             try:
                 r = self._remote(name_or_bundle.metadata.about.remote)
-            except (NoResultFound, AttributeError, KeyError):
+            except (NotFoundError, AttributeError, KeyError):
                 r = None
 
-        if not r:
+        if not r: # Inferred from the metadata
             try:
                 r = self._remote(name_or_bundle.metadata.about.access)
-            except (NoResultFound, AttributeError, KeyError):
+            except (NotFoundError, AttributeError, KeyError):
+                r = None
+
+        if not r: # It is the upstream for the dataset -- where it was checked out from
+            try:
+                r = self._remote(name_or_bundle.dataset.upstream)
+            except (NotFoundError, AttributeError, KeyError):
                 r = None
 
         if not r:

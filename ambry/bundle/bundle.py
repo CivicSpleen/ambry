@@ -74,6 +74,8 @@ class Bundle(object):
     STATES.FINALIZED = 'finalized'
     STATES.INSTALLING = 'install'
     STATES.INSTALLED = 'installed'
+    STATES.CHECKEDIN = 'checkedin'
+    STATES.CHECKEDOUT = 'checkedou'
     STATES.META = 'meta'
     STATES.SCHEMA = 'schema'
     STATES.INGESTING = 'ingest'
@@ -506,6 +508,8 @@ class Bundle(object):
 
         elif not isinstance(sources, (list, tuple)):
             sources = [sources]
+
+
 
         def objectify(source):
             if isinstance(source, basestring):
@@ -999,9 +1003,6 @@ Caster Code
         s = None
 
         if source.reftype == 'partition':
-            if ps:
-                ps.update(message='Ingested partition: {}'.format(source.datafile.path), state='done')
-
             sp = PartitionSourcePipe(self, source, source.partition)
 
         elif source.reftype == 'sql':
@@ -1271,6 +1272,7 @@ Caster Code
         self.dstate = self.STATES.BUILDING
 
         for path_name in self.source_fs.listdir():
+
             f = self.build_source_files.instance_from_name(path_name)
 
             if not f:
@@ -1324,24 +1326,33 @@ Caster Code
         self.dstate = self.STATES.BUILDING
 
         for f in self.build_source_files.list_records():
-            if f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path == file_name or force:
+
+            if (f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path == file_name) or force:
                 self.log('Sync: {}'.format(f.record.path))
                 f.record_to_fs()
 
+
         self.commit()
 
-        # self.state = self.STATES.SYNCED
 
     def sync_objects_in(self):
         """Synchronize from records to objects"""
         self.dstate = self.STATES.BUILDING
         self.build_source_files.record_to_objects()
 
-    def sync_objects_out(self):
+    def sync_objects_out(self, force=False):
         """Synchronize from objects to records, and records to files"""
-        self.log('---- Sync Out ----')
+        self.log('---- Sync Objects Out ----')
+        from ambry.bundle.files import BuildSourceFile
+
         self.dstate = self.STATES.BUILDING
-        self.build_source_files.objects_to_record()
+
+        for f in self.build_source_files.list_records():
+
+            self.log('Sync: {}'.format(f.record.path))
+            f.objects_to_record()
+
+        self.commit()
 
     def sync_objects(self):
         self.dstate = self.STATES.BUILDING
@@ -1567,7 +1578,7 @@ Caster Code
     #
 
     @CaptureException
-    def ingest(self, sources=None, tables=None, stage=None, force=False):
+    def ingest(self, sources=None, tables=None, stage=None, force=False, load_meta=False):
         """Ingest a set of sources, specified as source objects, source names, or destination tables.
         If no stage is specified, execute the sources in groups by stage.
 
@@ -1582,7 +1593,6 @@ Caster Code
         import zlib
 
         self.log('---- Ingesting ----')
-
 
         self.dstate = self.STATES.BUILDING
         self.commit() # WTF? Without this, postgres blocks between table query, and update seq id in source tables.
@@ -1649,6 +1659,24 @@ Caster Code
             self._run_events(TAG.AFTER_INGEST, 0)
 
         self.log('Ingested {} sources'.format(count))
+
+        if load_meta:
+
+            if len(sources) == 1:
+                iterable_source, source_pipe = self.source_pipe(sources[0])
+
+                try:
+                    meta = iterable_source.meta
+                    if meta:
+                        self.metadata.about.title =  meta['title']
+                        self.metadata.about.summary = meta['summary']
+                        self.build_source_files.bundle_meta.objects_to_record()
+
+                except AttributeError as e:
+                    self.warn("Failed to set metadata: {}".format(e))
+                    pass
+            else:
+                self.warn("Didn't not load meta from source. Must have exactly one soruce, got {}".format(len(sources)))
 
         self.commit()
 
@@ -1748,6 +1776,7 @@ Caster Code
 
             iterable_source, source_pipe = self.source_pipe(source, ps)
 
+
             if not source.is_ingestible:
                 ps.update(message='Not an ingestiable source: {}'.format(source.name),
                           state='skipped', source=source)
@@ -1843,7 +1872,6 @@ Caster Code
         :param clean: Delete tables and partitions first
         :param force: Population tables even if the table isn't empty
         :param use_pipeline: If True, use the build pipeline to determine columns. If False,
-            use the source schemas.
 
         :return: True on success.
         """
@@ -1992,6 +2020,10 @@ Caster Code
                     pass
 
         for s in sources:
+
+            # Don't delete partitions fro mother bundles!
+            if s.reftype == 'partition':
+                continue
 
             p = s.partition
             if p:
@@ -2328,6 +2360,9 @@ Caster Code
 
         for s in segments:
             assert s.segment is not None
+            assert s.type == s.TYPE.SEGMENT
+            assert s.d_vid == self.identity.vid # Be sure it is in our bundle
+
             self.wrap_partition(s).local_datafile.remove()
             self.session.delete(s)
 
@@ -2753,6 +2788,15 @@ Caster Code
         remote.account_accessor = self.library.account_accessor
 
         remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)
+
+        self.dataset.upstream = remote.url
+
+        if not source_only:
+            self.finalize()
+
+        self.dstate = self.STATES.CHECKEDIN
+
+        self.commit()
 
         return remote_instance, package
 

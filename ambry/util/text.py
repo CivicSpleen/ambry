@@ -8,61 +8,71 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from six import StringIO
 
 
-def generate_pdf_pages(fp):
+def generate_pdf_pages(fp, maxpages = 0, logger = None):
 
     from pdfminer.pdfdocument import PDFDocument
     from pdfminer.pdfparser import PDFParser
-    from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
     from pdfminer.pdfdevice import PDFDevice
+    from pdfminer.cmapdb import CMapDB
+    from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
     from pdfminer.pdfpage import PDFPage
     from pdfminer.converter import TextConverter
-    from pdfminer.cmapdb import CMapDB
     from pdfminer.layout import LAParams
 
     import re
 
-    debug = 0
-    # input option
     password = ''
     pagenos = set()
-    maxpages = 0
     imagewriter = None
     rotation = 0
     caching = True
 
     laparams = LAParams()
 
+    #debug = 0
+    #PDFDocument.debug = debug
+    #PDFParser.debug = debug
+    #CMapDB.debug = debug
+    #PDFResourceManager.debug = debug
+    #PDFPageInterpreter.debug = debug
+    #PDFDevice.debug = debug
     #
-    PDFDocument.debug = debug
-    PDFParser.debug = debug
-    CMapDB.debug = debug
-    PDFResourceManager.debug = debug
-    PDFPageInterpreter.debug = debug
-    PDFDevice.debug = debug
-    #
+
     rsrcmgr = PDFResourceManager(caching=caching)
 
-    outfp = StringIO()
+    pages = []
 
-    device = TextConverter(rsrcmgr, outfp, codec='utf-8', laparams=laparams,
-                           imagewriter=imagewriter)
-
-    interpreter = PDFPageInterpreter(rsrcmgr, device)
-    for page in PDFPage.get_pages(fp, pagenos,
+    for i, page in enumerate(PDFPage.get_pages(fp, pagenos,
                                   maxpages=maxpages, password=password,
-                                  caching=caching, check_extractable=True):
-        page.rotate = (page.rotate + rotation) % 360
+                                  caching=caching, check_extractable=True),1):
+
+        # page.rotate = (page.rotate + rotation) % 360
+
+        outfp = StringIO()
+
+        outfp.write('{} ===========================\n'.format(i))
+
+        device = TextConverter(rsrcmgr, outfp, codec='utf-8', laparams=laparams,
+                               imagewriter=imagewriter)
+
+        interpreter = PDFPageInterpreter(rsrcmgr, device)
+
         interpreter.process_page(page)
+
+        if logger:
+            logger.info("Processing page: {}".format(i))
+
+        device.close()
+
+        r = outfp.getvalue()
+
+        outfp.close()
+
+        pages.append(re.sub(r'[ ]+', ' ', r) ) # Get rid of all of those damn spaces.
 
     fp.close()
 
-    device.close()
-
-    r = outfp.getvalue()
-
-    outfp.close()
-
-    return re.sub(r'[ ]+', ' ', r)  # Get rid of all of those damn spaces.
+    return  pages
 
 def getTerminalSize():
     import os

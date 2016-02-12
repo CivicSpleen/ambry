@@ -149,6 +149,9 @@ class BuildSourceFile(object):
             with open(path, 'rt', encoding='utf-8') as f:
                 return f.read()
 
+    def set_defaults(self):
+        self.setcontent(self.default)
+
     @property
     def path(self):
         """ Returns system path of the file. """
@@ -306,6 +309,7 @@ class BuildSourceFile(object):
         self.record_to_objects()
 
     def setcontent(self, content):
+
         from cStringIO import StringIO
 
         return self.fh_to_record(StringIO(content))
@@ -437,14 +441,18 @@ class DictBuildSourceFile(BuildSourceFile):
         fr = self.record
         fr.path = fn_path
 
-
-
-        fr.update_contents(msgpack.packb(yaml.safe_load(f)), 'application/msgpack')
+        self.set_dict(yaml.safe_load(f))
 
         fr.source_hash = self.fs_hash # FIXME! Assumes a file system entry, but may only be a file handle!
 
         fr.synced_fs = self.fs_modtime
         fr.modified = self.fs_modtime
+
+
+
+    def set_dict(self, d):
+        self.record.update_contents(msgpack.packb(d), 'application/msgpack')
+
 
     def record_to_fh(self, f):
         """Write the record, in filesystem format, to a file handle or file object"""
@@ -550,6 +558,7 @@ class MetadataFile(DictBuildSourceFile):
 
         ad = AttrDict(contents)
 
+
         # Get time that filessystem was synchronized to the File record.
         # Maybe use this to avoid overwriting configs that changed by bundle program.
         # fs_sync_time = self._dataset.config.sync[self.file_const][self.file_to_record]
@@ -561,7 +570,17 @@ class MetadataFile(DictBuildSourceFile):
         return ad
 
     def objects_to_record(self):
-        pass  # The metadata file never gets written back from objects
+        """Write from object metadata to the record. Note that we don't write everything"""
+
+        o = self.get_object()
+
+        o.about = self._bundle.metadata.about
+        o.identity = self._dataset.identity.ident_dict
+        o.names = self._dataset.identity.names_dict
+        o.contacts = self._bundle.metadata.contacts
+
+        self.set_object(o)
+
 
     def record_to_fh(self, f):
 
@@ -583,8 +602,8 @@ class MetadataFile(DictBuildSourceFile):
             except ConfigurationError:
                 pass
 
-        o['identity'] = self._dataset.identity.ident_dict
-        o['names'] = self._dataset.identity.names_dict
+            o['identity'] = self._dataset.identity.ident_dict
+            o['names'] = self._dataset.identity.names_dict
 
         with self._fs.open(self.file_name, 'w', encoding='utf-8') as f:
             yaml.safe_dump(o, f, default_flow_style=False, indent=4, encoding='utf-8')
@@ -609,7 +628,7 @@ class MetadataFile(DictBuildSourceFile):
 
         from ..util import AttrDict
 
-        c = yaml.safe_load(self.getcontent())
+        c = self.record.unpacked_contents
 
         if not c:
             c = yaml.safe_load(self.default)
@@ -618,12 +637,8 @@ class MetadataFile(DictBuildSourceFile):
 
     def set_object(self, o):
         """Set contents as an AttrDict"""
-        import yaml
 
-        self.setcontent(
-            yaml.safe_dump(o.to_dict(), default_flow_style=False, encoding='utf-8')
-        )
-
+        self.set_dict(o.to_dict())
 
 
 class NotebookFile(StringSourceFile):
@@ -784,7 +799,12 @@ class PythonSourceFile(StringSourceFile):
         if not bf.has_contents:
             return
 
-        exec(bf.contents, module.__dict__)
+        try:
+            exec (compile(bf.contents, self.path, 'exec'), module.__dict__)
+
+        except Exception:
+            self._bundle.error("Failed to load code from {}".format(self.path))
+            raise
 
         # print(self.file_const, bundle.__dict__.keys())
         # print(bf.contents)
@@ -1322,7 +1342,8 @@ class BuildSourceFileAccessor(object):
         for const_name, c in file_classes.items():
             if c.multiplicity == '1':
                 f = self.file(const_name)
-                f.setcontent(f.default)
+                if not f.record.unpacked_contents:
+                    f.setcontent(f.default)
 
     def sync(self, force=None, defaults=False):
         raise NotImplementedError()

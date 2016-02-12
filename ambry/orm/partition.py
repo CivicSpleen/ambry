@@ -905,5 +905,10 @@ class Partition(Base):
         target._update_names()
 
 
+    @staticmethod
+    def before_delete(mapper, conn, target):
+        pass
+
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
+event.listen(Partition, 'before_delete', Partition.before_delete)

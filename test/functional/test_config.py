@@ -175,3 +175,36 @@ library:
         self.assertEqual(
             sorted(['test', 'restricted', 'census', 'public']),
             sorted([x.short_name for x in l.remotes]))
+
+from test.proto import TestBase as TestBaseProto
+
+class MetadataTest(TestBaseProto):
+
+    def test_dump_metadata(self):
+        from ambry.util import AttrDict
+
+        l = self.library()
+
+        b = l.bundle('build.example.com-casters')
+
+        v = 'Packaged for [Ambry](http://ambry.io) by {{contact_bundle.creator.org}}'
+
+        self.assertEqual(v, AttrDict(b.metadata.about.items()).processed)
+        self.assertEqual(v, b.metadata.about.processed)
+        self.assertEqual(v, b.build_source_files.bundle_meta.record.unpacked_contents['about']['processed'])
+        self.assertEqual(v, b.build_source_files.bundle_meta.get_object().about.processed)
+
+        b.metadata.about.processed = 'foobar'
+        b.commit()
+
+        self.assertEqual('foobar', b.metadata.about.processed)
+
+        self.assertNotEqual(b.metadata.about.processed,
+                            b.build_source_files.bundle_meta.get_object().about.processed)
+
+
+        b.build_source_files.bundle_meta.objects_to_record()
+
+        self.assertEqual(b.metadata.about.processed,
+                            b.build_source_files.bundle_meta.get_object().about.processed)
+

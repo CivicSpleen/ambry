@@ -175,7 +175,6 @@ def calling_code(f, f_name=None, raise_for_missing=True):
     import inspect
     from ambry.dbexceptions import ConfigurationError
 
-
     if inspect.isclass(f):
         args = inspect.getargspec(f.__init__).args
 
@@ -212,7 +211,12 @@ def make_stack(env, stage, segment):
 
         if isinstance(t, type) and issubclass(t, ValueType):  # A valuetype class, from the datatype column.
             tn = qualified_name(t)
-            line = "v = {} if v is not None else None # {}".format(calling_code(t, tn), file_loc())
+            try:
+                line = "v = {} if v is not None else None # {}".format(calling_code(t, tn), file_loc())
+            except TypeError:
+                # Usually, trying to get args from a method implemented in C. Just assume that it is a
+                # one-arg initializer
+                line = "v = {}(v) if v is not None else None # {}".format(tn, file_loc())
             preamble.append('import ambry.valuetype')
 
         elif isinstance(t, type):  # A python type, from the datatype columns.

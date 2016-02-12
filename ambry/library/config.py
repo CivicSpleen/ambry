@@ -125,7 +125,7 @@ class LibraryConfigSyncProxy(object):
                 if k in ('id',):
                     continue
                 try:
-                    if kmap[k] == 'secret':
+                    if kmap[k] == 'secret' and v:
                         a.encrypt_secret(v)
                     else:
                         setattr(a, kmap[k], v)

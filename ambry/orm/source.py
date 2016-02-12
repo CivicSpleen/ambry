@@ -34,7 +34,7 @@ class DataSourceBase(object):
     # reftypes for sources that should not be built or have schemas create for
     NON_PROCESS_REFTYPES = ('ref', 'template')
 
-    # reftypes for sources that should not be built or have schemas create for
+    # reftypes for sources that should not be ingested
     NON_INGEST_REFTYPES = ('ref', 'template', 'partition',)
 
     STATES = Constant()
