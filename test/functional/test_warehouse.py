@@ -371,7 +371,12 @@ class BundleWarehouse(TestBase):
     def test_bundle_warehouse_query(self):
         l = self.library()
 
-        b = l.bundle('build.example.com-casters')
+        b = self.import_single_bundle('build.example.com/casters')
+        b.ingest()
+        b.source_schema()
+        b.schema()
+        b.build()
+
         wh = b.warehouse('test')
         wh.clean()
 
@@ -379,7 +384,6 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM p00casters004003;')))
         self.assertEqual(6000, sum(1 for row in wh.query('SELECT * FROM p00casters006003;')))
-        self.assertEqual(4000, sum(1 for row in wh.query('SELECT * FROM pERJQxWUVb005001;')))
 
         p = l.partition('p00casters004003')
 
