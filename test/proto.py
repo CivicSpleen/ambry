@@ -32,50 +32,18 @@ class ProtoLibrary(object):
     """Manage test libraries. Creates a proto library, with pre-built bundles, that can be
     copied quickly into a test library, providing bundles to test against"""
 
-    def __init__(self, dsn=None, root=None, config_path=None):
+    def __init__(self, config_path=None):
         """
 
-        :param dsn: If specified, the dsn of the test database. If not, defaults to sqlite.
-        :param root:
         :param config_path:
         :return:
         """
-        assert dsn is None, 'Change library database config instead.'
-        assert root is None, 'Change config instead.'
 
         from ambry.run import load_config, update_config, load_accounts
         from ambry.util import parse_url_to_dict, unparse_url_dict
 
-        self._root = root
-
-        if not self._root:
-            self._root = DEFAULT_ROOT
-
-        if dsn and dsn.startswith('post'):
-
-            self.dsn = dsn
-
-            p = parse_url_to_dict(self.dsn)
-            p['path'] = p['path'] + '-proto'
-
-            self.proto_dsn = unparse_url_dict(p)
-
-            self._db_type = 'postgres'
-
-        elif dsn and dsn.startswith('sqlite'):
-
-            self.dsn = dsn
-            p = parse_url_to_dict((self.dsn))
-            p['path'] = p['path'].replace('.db', '') + '-proto.db'
-
-            self.proto_dsn = unparse_url_dict(p)
-
-            self._db_type = 'sqlite'
-
-        else:
-            self.dsn = 'sqlite:///{}/library.db'.format(self.sqlite_dir())
-            self.proto_dsn = 'sqlite:///{}/library.db'.format(self.proto_dir())
-            self._db_type = 'sqlite'
+        self._root = DEFAULT_ROOT
+        # TODO: Update root from config.
 
         ensure_dir_exists(self._root)
 
@@ -91,7 +59,37 @@ class ProtoLibrary(object):
 
         assert self.config.loaded[0] == config_path + '/config.yaml'
 
-        self.config.library.database = self.dsn
+        # Populate library and proto DSNs
+        if os.environ.get('AMBRY_TEST_DB'):
+            library_dsn = os.environ['AMBRY_TEST_DB']
+        else:
+            # Derive from library.database setting.
+            dsn = self.config.library.database
+            if dsn.startswith('post'):
+                # postgres case.
+                p = parse_url_to_dict(dsn)
+                parsed_library = dict(p, path=p['path'] + '-test1k')
+            elif dsn.startswith('sqlite'):
+                # sqlite case
+                p = parse_url_to_dict(dsn)
+                parsed_library = dict(p, path=p['path'].replace('.db', '') + '-test1k.db')
+            library_dsn = unparse_url_dict(parsed_library)
+
+        if library_dsn.startswith('post'):
+            self._db_type = 'postgres'
+            p = parse_url_to_dict(library_dsn)
+            parsed_proto = dict(p, path=p['path'] + '-proto')
+            proto_dsn = unparse_url_dict(parsed_proto)
+        elif library_dsn.startswith('sqlite'):
+            self._db_type = 'sqlite'
+            p = parse_url_to_dict(library_dsn)
+            parsed_proto = dict(p, path=p['path'].replace('.db', '') + '-proto.db')
+            proto_dsn = unparse_url_dict(parsed_proto)
+        else:
+            raise Exception('Do not know how to process {} database.'.format(library_dsn))
+
+        self.proto_dsn = proto_dsn
+        self.config.library.database = library_dsn
 
     def __str__(self):
         return """
@@ -444,3 +442,7 @@ class TestBase(unittest.TestCase):
         # Check AMBRY_TEST_DB and databases.test-postgres for postgres database DSN
 
         return self._proto.init_library(use_proto=use_proto)
+
+    def runTest(self):
+        # This method needed to test library database dsn.
+        pass
