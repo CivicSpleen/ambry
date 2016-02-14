@@ -58,6 +58,7 @@ class ProtoLibrary(object):
         update_config(self.config, use_environ=False)
 
         assert self.config.loaded[0] == config_path + '/config.yaml'
+        import pdb; pdb.set_trace()
 
         # Populate library and proto DSNs
         if os.environ.get('AMBRY_TEST_DB'):
@@ -96,7 +97,7 @@ class ProtoLibrary(object):
 root:      {}
 dsn:       {}
 proto-dsn: {}
-""".format(self._root, self.dsn, self.proto_dsn)
+""".format(self._root, self.config.library.database, self.proto_dsn)
 
     def _ensure_exists(self, dir):
         """Ensure the full path to a directory exists. """
@@ -274,12 +275,12 @@ proto-dsn: {}
         from sqlalchemy import create_engine
         from sqlalchemy.pool import NullPool
 
-        root_dsn = set_url_part(self.dsn, path='postgres')
+        root_dsn = set_url_part(self.config.library.database, path='postgres')
 
         return create_engine(root_dsn, poolclass=NullPool)
 
     def dispose(self):
-        self.pg_engine(self.dsn).dispose()
+        self.pg_engine(self.config.library.database).dispose()
         self.pg_root_engine.dispose()
 
     @classmethod
@@ -366,8 +367,9 @@ proto-dsn: {}
 
     def create_pg(self, re_create=False, template_name=None):
         from ambry.util import select_from_url
+        import pdb; pdb.set_trace()
 
-        database_name = select_from_url(self.dsn, 'path').strip('/')
+        database_name = select_from_url(self.config.library.database, 'path').strip('/')
 
         if template_name is None:
             template_name = select_from_url(self.proto_dsn, 'path').strip('/')
@@ -375,7 +377,7 @@ proto-dsn: {}
         else:
             load_extensions = True
 
-        username = select_from_url(self.dsn, 'username')
+        username = select_from_url(self.config.library.database, 'username')
 
         if re_create:
             self.drop_pg(database_name)
@@ -393,7 +395,7 @@ proto-dsn: {}
 
         # Create the extensions, if they aren't already installed
         if load_extensions:
-            with self.pg_engine(self.dsn).connect() as conn:
+            with self.pg_engine(self.config.library.database).connect() as conn:
                 conn.execute('CREATE EXTENSION IF NOT EXISTS pg_trgm;')
                 # Prevents error:   operator class "gist_trgm_ops" does not exist for access method "gist"
                 conn.execute('alter extension pg_trgm set schema pg_catalog;')
