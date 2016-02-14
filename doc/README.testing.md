@@ -25,14 +25,13 @@ The `python setup.py test` invocation will only run the bundle and function test
 
 ## Test Setup
 
-The `test.test_base.TestBase` base class has methods for setting up a test library, including:
+The `test.proto.TestBase` base class has fields and methods for setting up a test library, including:
 
- * config()
+ * config
  * library()
- * import_bundles()
+ * import_single_bundle()
  
- The `config()` method will create a new `.ambry.yaml` file, based on the users current `.ambry.yaml` file. So, your 
- development environment where you run these tests must have access to your `.ambry.yaml` file. 
+ The `config` field contains config used for all tests base on the support/test-config/config.yaml` file.
  
  The user's `.ambry.yaml` file should have a few extra configuration values for testing: 
  
@@ -46,18 +45,17 @@ The `test.test_base.TestBase` base class has methods for setting up a test libra
  environmental variable. The code actually looks for a database entry named "database.test-$AMBRY_TEST_DB" and if 
  that is not found, will default to `test-sqlite`
  
- Many of the old tests imported bundles. THe most important of these bundles are still available in the old locations
+ Many of the old tests imported bundles. The most important of these bundles are still available in the old locations
  but new code should use the new bundles, located in test.bundle_tests. To get to these bundles in functional tests, 
- they should be loaded in the test library, which is most often done in the test class  set up method: 
+ they will be loaded in the test library if you use TestBase.
  
-```class Test(TestBase):
-
-    @classmethod
-    def setUpClass(cls):
-        cls.import_bundles()
+```
+class Test(TestBase):
+    def setUp(cls):
+        library = self.library()
 ```
  
-After this call, `self.library().bundles` will be an iterator to access of of the loaded bundles. 
+After this call, `library` will contain loaded bundles.
 
 ## Bundle functional tests. 
 
@@ -66,7 +64,6 @@ bundles. See the `ambry/test/bundle_tests/ingest.example.com/stages` bundle as a
 and it is a normal python `uittest` test class, with annotations to mark tests for specific parts of the build process:
 
 ```class Test(BundleTest):
-
 
     @before_run
     def test_before_run(self):
