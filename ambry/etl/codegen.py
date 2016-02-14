@@ -40,6 +40,7 @@ def {f_name}(v, i_s, i_d, header_s, header_d, row, row_n, errors, scratch, accum
 
     # funcs created by transform generators must be called with kwargs
     # because their signatures aren't known when the code is generated.
+    # FIXME: col_args is only needed for transform generators, but is included everywhere.
     col_args = dict(v=v, i_s=i_s, i_d=i_d, header_s=header_s, header_d=header_d,
                     scratch=scratch, errors=errors, accumulator = accumulator,
                     row=row, row_n=row_n)

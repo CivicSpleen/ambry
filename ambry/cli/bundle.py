@@ -42,7 +42,7 @@ def make_parser(cmd=None, parser=None):
     parser.set_defaults(command='bundle')
 
     parser.add_argument('-i', '--id', required=False,
-                        help='Bundle reference. May be an id, name, vid or vname')
+                        help='Bundle reference. May be an id, name, vid or vname. See also, bundle_ref')
     parser.add_argument('-D', '--debug', required=False, default=False, action='store_true',
                         help='THE USR1 signal will break to interactive prompt')
     parser.add_argument('-L', '--limited-run', default=False, action='store_true',
@@ -57,6 +57,9 @@ def make_parser(cmd=None, parser=None):
                         help='Run in multiprocessing mode')
     parser.add_argument('-p', '--processes',  type=int,
                         help='Number of multiprocessing processors. implies -m')
+
+    #parser.add_argument('bundle_ref', nargs='?', type=str,
+    #                    help='Bundle reference. May be an id, name, vid or vname. See also, -i')
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -113,9 +116,7 @@ def make_parser(cmd=None, parser=None):
     group.add_argument('-t', '--dest_tables', default=False, action='store_const',
                        const='tables', dest='table',
                        help='Dump destination tables, but not the table columns')
-    group.add_argument('-C', '--dest_table_columns', default=False, action='store_const',
-                       const='columns', dest='table',
-                       help='Dump destination tables along with their columns')
+
     group.add_argument('-f', '--files', default=False, action='store_const', const='files', dest='table',
                        help='Dump bundle definition files')
     group.add_argument('-i', '--ingested', default=False, action='store_const',
@@ -542,6 +543,10 @@ def get_bundle_ref(args, l, use_history=False):
 
         if args.id:
             return (args.id, '-i argument')
+
+        if hasattr(args, 'bundle_ref') and args.bundle_ref:
+            return (args.bundle_ref, 'bundle_ref argument')
+
 
         if 'AMBRY_BUNDLE' in os.environ:
             return (os.environ['AMBRY_BUNDLE'], 'environment')
@@ -973,6 +978,14 @@ def bundle_schema(args, l, rc):
     if args.source_clean:
         b.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
         b.dataset.source_tables[:] = []
+        prt("Cleaned source schema")
+        b.commit()
+
+    if args.dest_clean:
+        b.build_source_files.file(File.BSFILE.SCHEMA).remove()
+        b.clean_tables()
+        b.commit()
+        prt("Cleaned destination schema")
         b.commit()
 
     if args.source or args.source_clean:
@@ -1147,7 +1160,6 @@ def bundle_dump(args, l, rc):
 
     b = l.bundle(ref, True)
 
-
     if not args.table == 'files':
         # So we can cat output to other tools
         prt('Dumping {} for {}\n'.format(args.table, b.identity.fqname))
@@ -1238,27 +1250,10 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'sourcetables':
 
-        records = []
-        for t in b.dataset.source_tables:
-            for c in t.columns:
-                if not records:
-                    records.append(['vid'] + list(c.row.keys()))
+        if args.ref:
+            print('---{}'.format(args.ref))
 
-                records.append([c.vid] + list(c.row.values()))
-
-        # Transpose, remove empty columns, transpose back
-        records = drop_empty(records)
-
-        if records:
-            headers, records = records[0], records[1:]
-        else:
-            headers = []
-
-    elif args.table == 'columns':
-
-        for t in b.dataset.tables:
-
-            print('---{}'.format(t.name))
+            t = b.source_table(args.ref)
 
             def record_gen():
                 for i, row in enumerate([c.row for c in t.columns]):
@@ -1270,28 +1265,63 @@ def bundle_dump(args, l, rc):
 
             records = drop_empty(records)
 
-            print(tabulate(records[1:], headers=records[0]))
 
-        return  # Can't follow the normal process b/c we have to run each table seperately.
 
-    elif args.table == 'tables':
+        else:
 
-        records = []
+            records = [['vid','name']]
 
-        for table in b.dataset.tables:
-            row = table.row
-            if not records:
-                records.append(row.keys())
-            records.append(row.values())
+            for table in b.dataset.source_tables:
+                records.append([table.vid, table.name])
 
-        records = drop_empty(records)
+            records = drop_empty(records)
 
         if records:
             headers, records = records[0], records[1:]
         else:
             headers, records = [], []
 
-        records = sorted(records, key=lambda row: (row[0]))
+    elif args.table == 'tables':
+
+        if args.ref:
+            print('---{}'.format(args.ref))
+
+            t = b.table(args.ref)
+
+            def record_gen():
+                for i, row in enumerate([c.row for c in t.columns]):
+                    if i == 0:
+                        yield row.keys()
+
+                    yield row.values()
+
+            records = list(record_gen())
+
+            records = drop_empty(records)
+
+            if records:
+                headers, records = records[0], records[1:]
+            else:
+                headers, records = [], []
+
+        else:
+
+            records = []
+
+            for table in b.dataset.tables:
+                row = table.row
+                if not records:
+                    records.append(row.keys())
+                records.append(row.values())
+
+            records = drop_empty(records)
+
+            if records:
+                headers, records = records[0], records[1:]
+            else:
+                headers, records = [], []
+
+            records = sorted(records, key=lambda row: (row[0]))
 
     elif args.table == 'pipes':
         terms = args.ref

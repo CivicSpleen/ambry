@@ -41,6 +41,9 @@ class Dataset(Base):
     time_coverage = SAColumn('d_tcov', MutationList.as_mutable(JSONEncodedObj))
     grain_coverage = SAColumn('d_gcov', MutationList.as_mutable(JSONEncodedObj))
 
+    # Sequence IDs for various objects. We need records if these IDs to be able to
+    # construct objects in multi-process environments. The sequence numbers become part of the VIDs and must
+    # be unique
     p_sequence_id = SAColumn('d_p_sequence_id', Integer, default=1)
     t_sequence_id = SAColumn('d_t_sequence_id', Integer, default=1)
     st_sequence_id = SAColumn('d_st_sequence_id', Integer, default=1)
@@ -51,7 +54,7 @@ class Dataset(Base):
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
-    # ----
+    # ---- Relationships
 
     tables = relationship('Table', backref='dataset', cascade='all, delete-orphan')
 

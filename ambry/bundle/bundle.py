@@ -75,7 +75,7 @@ class Bundle(object):
     STATES.INSTALLING = 'install'
     STATES.INSTALLED = 'installed'
     STATES.CHECKEDIN = 'checkedin'
-    STATES.CHECKEDOUT = 'checkedou'
+    STATES.CHECKEDOUT = 'checkedout'
     STATES.META = 'meta'
     STATES.SCHEMA = 'schema'
     STATES.INGESTING = 'ingest'
