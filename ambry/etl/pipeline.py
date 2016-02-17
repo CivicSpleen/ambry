@@ -1704,7 +1704,7 @@ class SelectPartition(Pipe):
         # Under the theory that removing an if is faster.
         if select_f:
 
-            if not six.callable(self):
+            if not six.callable(select_f):
                 self._code = 'lambda pipe, bundle, source, row: {}'.format(select_f)
                 select_f = eval(self._code)
             else:
@@ -1832,6 +1832,11 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         return row
 
+    def new_partition(self, pname, type_, **kwargs):
+
+
+        return self.bundle.partitions.new_partition(pname, type=type_, **kwargs)
+
     def process_body(self, row):
         from ambry.orm.exc import NotFoundError
 
@@ -1856,7 +1861,7 @@ class WriteToPartition(Pipe, PartitionWriter):
 
                     type_ = Partition.TYPE.SEGMENT if pname.segment else Partition.TYPE.UNION
 
-                    p = self.bundle.partitions.new_partition(pname, type=type_, epsg=self.source.epsg)
+                    p = self.new_partition(pname, type_, epsg=self.source.epsg)
 
                     p.state = p.STATES.BUILDING
                     self.bundle.commit()

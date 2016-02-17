@@ -110,3 +110,14 @@ class SearchTest(TestCase):
 
         # test
         tick_f.assert_called_once_with('datasets: 1 partitions: 0')
+
+class SearchTermParserTest(TestCase):
+
+
+    def test_basic(self):
+        from library.search_backends.base import SearchTermParser
+
+        print SearchTermParser().parse('table2 from 1978 to 1979 in california')
+
+        print SearchTermParser().parse('about food from 2012 to 2015')
+

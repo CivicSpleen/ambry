@@ -115,8 +115,11 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
             list of DatasetSearchResult instances.
 
         """
+
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+
         assert isinstance(query, TextClause)
+
         results = self.execute(query, **query_params)
         datasets = {}
 
@@ -309,11 +312,13 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex,PostgresExecMixin):
             list of IdentifierSearchResult instances.
 
         """
+
         query_parts = [
             'SELECT identifier, type, name, similarity(name, :word) AS sml',
             'FROM identifier_index',
             'WHERE name % :word',
             'ORDER BY sml DESC, name']
+
         query_params = {
             'word': search_phrase}
 
@@ -328,6 +333,7 @@ class IdentifierPostgreSQLIndex(BaseIdentifierIndex,PostgresExecMixin):
         self.backend.library.database.set_connection_search_path()
 
         results = self.execute(query, **query_params).fetchall()
+
         for result in results:
             vid, type, name, score = result
             yield IdentifierSearchResult(
@@ -508,7 +514,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             PartitionSearchResult instances.
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
-
 
         if query is not None:
 

@@ -32,6 +32,85 @@ logger = get_logger(__name__)
 
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
 
+class PartitionDisplay(object):
+    """Helper object to select what to display for titles and descriptions"""
+    def __init__(self, p):
+
+        self._p = p
+
+        desc_used = False
+        self.title = self._p.title
+        self.description = ''
+
+        if not self.title:
+            self.title = self._p.table.description
+            desc_used = True
+
+        if not self.title:
+            self.title = self._p.vname
+
+        if not desc_used:
+            self.description = self._p.description.strip('.') + '.' if self._p.description else ''
+
+        self.notes = self._p.notes
+
+    @property
+    def geo_description(self):
+        """Return a description of the geographic extents, using the largest scale
+        space and grain coverages"""
+        from geoid.civick import GVid
+
+        sc = self._p.space_coverage
+        gc = self._p.grain_coverage
+
+        if sc and gc:
+            if GVid.parse(gc[0]).level == 'state' and GVid.parse(sc[0]).level == 'state':
+                return GVid.parse(sc[0]).geo_name
+            else:
+                return ("{} in {}".format(
+                    GVid.parse(gc[0]).level_plural.title(),
+                    GVid.parse(sc[0]).geo_name))
+        elif sc:
+            return GVid.parse(sc[0]).geo_name.title()
+        elif sc:
+            return GVid.parse(gc[0]).level_plural.title()
+        else:
+            return ''
+
+    @property
+    def time_description(self):
+        """String description of the year or year range"""
+
+        tc = [t for t in self._p.time_coverage if t]
+
+        if not tc:
+            return ''
+
+        mn = min(tc)
+        mx = max(tc)
+
+        if not mn and not mx:
+            return ''
+        elif mn == mx:
+            return mn
+        else:
+            return "{} to {}".format(mn, mx)
+
+    @property
+    def sub_description(self):
+        """Time and space dscription"""
+        gd = self.geo_description
+        td = self.time_description
+
+        if gd and td:
+            return '{}, {}. {} Rows.'.format(gd, td, self._p.count)
+        elif gd:
+            return '{}. {} Rows.'.format(gd, self._p.count)
+        elif td:
+            return '{}. {} Rows.'.format(td, self._p.count)
+        else:
+            return '{} Rows.'.format(self._p.count)
+
 
 class Partition(Base):
     __tablename__ = 'partitions'
@@ -64,6 +143,11 @@ class Partition(Base):
     name = SAColumn('p_name', String(200), nullable=False, index=True)
     vname = SAColumn('p_vname', String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('p_fqname', String(200), unique=True, nullable=False, index=True)
+
+    title = SAColumn('p_title', String())
+    description = SAColumn('p_description', String())
+    notes = SAColumn('p_notes', String())
+
     cache_key = SAColumn('p_cache_key', String(200), unique=True, nullable=False, index=True)
     parent_vid = SAColumn('p_p_vid', String(16), ForeignKey('partitions.p_vid'), nullable=True, index=True)
     ref = SAColumn('p_ref', String(16), index=True,
@@ -132,11 +216,17 @@ class Partition(Base):
             'time': self.time,
             'table': self.table_name,
             'grain': self.grain,
+            'variant': self.variant,
             'segment': self.segment,
             'format': self.format if self.format else 'db'
         }
 
         return PartitionIdentity.from_dict(dict(list(ds.dict.items()) + list(d.items())))
+
+    @property
+    def display(self):
+        """Return an acessor object to get display titles and descriptions"""
+        return PartitionDisplay(self)
 
     @property
     def bundle(self):
@@ -146,9 +236,7 @@ class Partition(Base):
     def is_segment(self):
         return self.type == self.TYPE.SEGMENT
 
-    @property
-    def description(self):
-        return self.table.description
+
 
     @property
     def headers(self):
@@ -208,6 +296,9 @@ class Partition(Base):
             parsed = []
 
             for gvid in values:
+                # The gvid should not be a st
+                if gvid is None or gvid == 'None':
+                    continue
                 try:
                     parsed.append(GVid.parse(gvid))
                 except ValueError as e:
@@ -294,62 +385,6 @@ class Partition(Base):
 
         self.grain_coverage = sorted(str(g) for g in grains if g)
 
-    @property
-    def geo_description(self):
-        """Return a description of the geographic extents, using the largest scale
-        space and grain coverages"""
-        from geoid.civick import GVid
-
-        sc = self.space_coverage
-        gc = self.grain_coverage
-
-        if sc and gc:
-            if GVid.parse(gc[0]).level == 'state' and GVid.parse(sc[0]).level == 'state':
-                return GVid.parse(sc[0]).geo_name
-            else:
-                return ("{} in {}".format(
-                    GVid.parse(gc[0]).level_plural.title(),
-                    GVid.parse(sc[0]).geo_name))
-        elif sc:
-            return GVid.parse(sc[0]).geo_name.title()
-        elif sc:
-            return GVid.parse(gc[0]).level_plural.title()
-        else:
-            return ''
-
-    @property
-    def time_description(self):
-        """String description of the year or year range"""
-
-        tc = [t for t in self.time_coverage if t]
-
-        if not tc:
-            return ''
-
-        mn = min(tc)
-        mx = max(tc)
-
-        if not mn and not mx:
-            return ''
-        elif mn == mx:
-            return mn
-        else:
-            return "{} to {}".format(mn, mx)
-
-    @property
-    def sub_description(self):
-        """Time and space dscription"""
-        gd = self.geo_description
-        td = self.time_description
-
-        if gd and td:
-            return '{}, {}'.format(gd, td)
-        elif gd:
-            return gd
-        elif td:
-            return td
-        else:
-            return ''
 
     @property
     def dict(self):
@@ -394,7 +429,11 @@ class Partition(Base):
                 return iter(self.__dict__.items())
 
             def __getitem__(self, k):
-                return self.__dict__[k]
+                if k in self.__dict__:
+                    return self.__dict__[k]
+                else:
+                    from . import ColumnStat
+                    return ColumnStat(hist=[])
 
         if not self._stats_dict:
             cols = {s.column.name: Bunch(s.dict) for s in self.stats}
@@ -474,6 +513,10 @@ class Partition(Base):
             self.set_coverage(stats)
 
         self._location = 'build'
+
+        self.title = PartitionDisplay(self).title
+        self.description = PartitionDisplay(self).description
+
 
         self.state = self.STATES.FINALIZED
 
@@ -876,6 +919,7 @@ class Partition(Base):
             time=self.time,
             space=self.space,
             grain=self.grain,
+            variant=self.variant,
             segment=self.segment
         )
 

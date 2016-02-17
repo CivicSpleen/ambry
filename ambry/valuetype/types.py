@@ -94,6 +94,22 @@ def nullify(v):
     else:
         return v
 
+def clean_float(v):
+    """Remove commas from a float"""
+
+    if v is None or not str(v).strip():
+        return None
+
+    return float(str(v).replace(',',''))
+
+def clean_int(v):
+    """Remove commas from a float"""
+
+    if v is None or not str(v).strip():
+        return None
+
+    return int(str(v).replace(',',''))
+
 
 #
 # Casters that retiurn a default valur
@@ -130,7 +146,7 @@ def int_n(v):
 
 
 def float_n(v):
-    """Cast to int, or on failure, return None"""
+    """Cast to float, or on failure, return None"""
 
     try:
         return float(v)  # Just to be sure the code property exists
@@ -270,6 +286,36 @@ def parse_datetime(v,  header_d):
         raise CastingError(int, header_d, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
 
 
+class IntOrNone(IntValue):
+    "An Integer value that stores values that fail to convert in the 'code' property"
+    _pythontype = int
+
+    code = None
+
+    def __new__(cls, v):
+        try:
+            o = super(IntOrCode, cls).__new__(cls, v)
+        except Exception as e:
+            o = super(IntOrCode, cls).__new__(cls, None)
+            o.code = v
+        return o
+
+
+class FloatOrNone(FloatValue):
+    "An Float value that stores values that fail to convert in the 'code' property"
+    _pythontype = float
+
+    code = None
+
+    def __new__(cls, v):
+        try:
+            o = super(FloatOrCode, cls).__new__(cls, v)
+        except Exception as e:
+            o = super(FloatOrCode, cls).__new__(cls, None)
+            o.code = v
+        return o
+
+
 class IntOrCode(IntValue):
     "An Integer value that stores values that fail to convert in the 'code' property"
     _pythontype = int
@@ -287,7 +333,7 @@ class IntOrCode(IntValue):
 
 class FloatOrCode(FloatValue):
     "An Float value that stores values that fail to convert in the 'code' property"
-    _pythontype = int
+    _pythontype = float
 
     code = None
 
@@ -301,7 +347,7 @@ class FloatOrCode(FloatValue):
 
 class DateOrCode(DateValue):
     "An Integer value that stores values that fail to convert in the 'code' property"
-    _pythontype = int
+    _pythontype = datetime.date
 
     code = None
 

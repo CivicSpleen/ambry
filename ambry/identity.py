@@ -348,6 +348,7 @@ class PartialPartitionName(Name):
     table = None
     grain = None
     format = None
+    variant = None
     segment = None
 
     _name_parts = [
@@ -356,6 +357,7 @@ class PartialPartitionName(Name):
         ('space', None, True),
         ('grain', None, True),
         ('format', None, True),
+        ('variant', None, True),
         ('segment', None, True)]
 
     def promote(self, name):
@@ -367,14 +369,16 @@ class PartialPartitionName(Name):
 
     def __eq__(self, o):
         return (self.time == o.time and self.space == o.space and self.table == o.table and
-                self.grain == o.grain and self.format == o.format and self.segment == o.segment)
+                self.grain == o.grain and self.format == o.format and self.segment == o.segment
+                and self.variant == o.variant
+                )
 
     def __cmp__(self, o):
         return cmp(str(self), str(o))
 
     def __hash__(self):
         return (hash(self.time) ^ hash(self.space) ^ hash(self.table) ^
-                hash(self.grain) ^ hash(self.format) ^ hash(self.segment))
+                hash(self.grain) ^ hash(self.format) ^ hash(self.segment) ^ hash(self.variant))
 
 
 class PartitionName(PartialPartitionName, Name):
@@ -407,6 +411,8 @@ class PartitionName(PartialPartitionName, Name):
         l = []
         if self.grain:
             l.append(str(self.grain))
+        if self.variant:
+            l.append(str(self.variant))
 
         if self.segment:
             l.append(str(self.segment))

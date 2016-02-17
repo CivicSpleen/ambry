@@ -7,7 +7,7 @@ from unittest import TestCase
 from semantic_version import Version, Spec
 
 from ambry.identity import DatasetNumber, TableNumber, ObjectNumber, ColumnNumber, PartitionNumber,\
-    Name, NameQuery, PartitionName, PartitionNameQuery,\
+    Name, NameQuery, PartitionName, PartitionNameQuery, PartialPartitionName, \
     Identity, PartitionIdentity, NumberServer, GeneralNumber1
 
 
@@ -113,6 +113,27 @@ class Test(TestCase):
         self.assertEqual(
             'source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101-0.0.1',
             part_name.vname)
+
+        part_name = PartitionName(time='time',
+                                  space='space',
+                                  table='table',
+                                  grain='grain',
+                                  variant='variant',
+                                  segment=101,
+                                  **name.dict)
+
+        self.assertEqual(
+            'source.com-dataset-subset-type-part-variation-table-time-space-grain-variant-101',
+            str(part_name))
+
+        part_name =  PartialPartitionName(time='time',
+                             space='space',
+                             table='table',
+                             grain='grain',
+                             variant='variant',
+                             segment=101)
+
+        self.assertEqual('table-time-space-grain-variant-101',str(part_name))
 
         # Name Query
 

@@ -215,6 +215,7 @@ class Bundle(object):
         b.limited_run = self.limited_run
         b.capture_exceptions = self.capture_exceptions
         b.multi = self.multi
+
         return b
 
     def import_lib(self):
@@ -913,6 +914,7 @@ Caster Code
             apply_config(pl, self.metadata.pipelines['all'])
 
         # Allows developer to over ride pipe configuration in code
+
         self.edit_pipeline(pl)
 
         try:
@@ -932,6 +934,7 @@ Caster Code
 
     def edit_pipeline(self, pipeline):
         """Called after the meta pipeline is constructed, to allow per-pipeline modification."""
+
 
         if self._pipeline_editor:
             self._pipeline_editor(pipeline)
@@ -2281,8 +2284,8 @@ Caster Code
         return partitions
 
     def unify_partitions(self):
-        """For all of the segments for a partition, create the parent partition, combine the children into the parent,
-        and delete the children. """
+        """For all of the segments for a partition, create the parent partition, combine the
+        children into the parent, and delete the children. """
 
         partitions = self.collect_segment_partitions()
 
@@ -2312,6 +2315,7 @@ Caster Code
                         segments.add(p)
 
         parent = self.partitions.get_or_new_partition(partition_name, type=Partition.TYPE.UNION)
+
         parent.state = parent.STATES.COALESCING
 
         if parent.local_datafile.exists:
@@ -2325,6 +2329,9 @@ Caster Code
             with self.wrap_partition(seg).local_datafile.open() as f:
                 parent.local_datafile.set_contents(f)
                 parent.epsg = seg.epsg
+                parent.title = seg.title
+                parent.description = seg.description
+                parent.notes = parent.notes
 
         else:
 

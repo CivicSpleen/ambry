@@ -186,6 +186,7 @@ class Partitions(object):
 
         p = self.bundle.partitions.partition(pname)
         if not p:
+
             p = self.bundle.partitions.new_partition(pname, data=data, **kwargs)
             self.bundle.commit()
 

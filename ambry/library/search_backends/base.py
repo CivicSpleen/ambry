@@ -269,8 +269,11 @@ class BaseIndex(object):
             self._index_document(doc, force=force)
             logger.debug('{} indexed as\n {}'.format(instance.__class__, pformat(doc)))
             return True
+
         logger.debug('{} already indexed.'.format(instance.__class__))
         return False
+
+
 
     def index_many(self, instances, tick_f=None):
         """ Index all given instances.
@@ -407,7 +410,8 @@ class BaseDatasetIndex(BaseIndex):
         return document
 
     def _expand_terms(self, terms):
-        """ Expands terms of the dataset to the appropriate fields.
+        """ Expands terms of the dataset to the appropriate fields. It will parse the search phrase
+         and return only the search term components that are applicable to a Dataset query.
 
         Args:
             terms (dict or str):

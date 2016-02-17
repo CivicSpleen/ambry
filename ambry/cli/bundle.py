@@ -137,7 +137,8 @@ def make_parser(cmd=None, parser=None):
     group.add_argument('-m', '--metadata', default=False, action='store_const',
                        const='metadata', dest='table',
                        help='Dump metadata as json')
-    command_p.add_argument('ref', nargs='?', type=str, help='Bundle or file reference')
+
+    command_p.add_argument('ref', nargs='?', type=str, help='Specific object ID to dump')
 
     # Set command
     #
@@ -1215,17 +1216,25 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'partitions':
 
-        records = []
-        headers = 'Vid Name State Type EPSG'.split()
-        for row in b.dataset.partitions:
-            records.append((
-                row.vid,
-                row.name,
-                row.state,
-                row.type,
-                row.epsg
-            ))
-        records = sorted(records, key=lambda row: (row[0]))
+        if args.ref:
+            p = b.partition(args.ref)
+
+            headers = ['property','value']
+            records = sorted(p.dict.items())
+
+        else:
+
+            records = []
+            headers = 'Vid Name State Type EPSG'.split()
+            for row in b.dataset.partitions:
+                records.append((
+                    row.vid,
+                    row.name,
+                    row.state,
+                    row.type,
+                    row.epsg
+                ))
+            records = sorted(records, key=lambda row: (row[0]))
 
     elif args.table == 'datasources':
 
@@ -1500,14 +1509,17 @@ def bundle_extract(args, l, rc):
             continue
 
         b.logger.info('Extracting: {} '.format(p.name))
-        with bfs.open(p.name + '.csv', 'wb') as f, p.datafile.reader as r:
-            w = csv.writer(f)
-            w.writerow(r.headers)
-            if limit:
-                from itertools import islice
-                w.writerows(islice(r.rows, None, limit))
-            else:
-                w.writerows(r.rows)
+        try:
+            with bfs.open(p.name + '.csv', 'wb') as f, p.datafile.reader as r:
+                w = csv.writer(f)
+                w.writerow(r.headers)
+                if limit:
+                    from itertools import islice
+                    w.writerows(islice(r.rows, None, limit))
+                else:
+                    w.writerows(r.rows)
+        except Exception as e:
+            b.error('Failed to extract {}: {}'.format(p.name, e))
 
     b.logger.info('Extracted to: {}'.format(bfs.getsyspath('/')))
 
