@@ -95,7 +95,6 @@ class PostgreSQLSearchBackend(BaseSearchBackend):
             return '(' + self._and_join(keywords) + ')'
         return keywords
 
-
 class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
 
     def __init__(self, backend=None):
@@ -273,7 +272,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
 
             kw_q = "to_tsvector(coalesce(keywords::text,'')) @@ to_tsquery(:keywords)"
 
-            query_parts.append( ("OR " if where_counter else "WHERE ") + kw_q )
+            query_parts.append( ("AND " if where_counter else "WHERE ") + kw_q )
 
 
         query_parts.append('ORDER BY score DESC')
@@ -304,130 +303,6 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
             WHERE vid = :vid;
         """)
         self.execute(query, vid=vid)
-
-
-class IdentifierPostgreSQLIndex(BaseIdentifierIndex,PostgresExecMixin):
-
-    def __init__(self, backend=None):
-        assert backend is not None, 'backend argument can not be None.'
-        super(self.__class__, self).__init__(backend=backend)
-
-        self.create()
-
-    def search(self, search_phrase, limit=None):
-        """ Finds identifiers by search phrase.
-
-        Args:
-            search_phrase (str or unicode):
-            limit (int, optional): how many results to return. None means without limit.
-
-        Returns:
-            list of IdentifierSearchResult instances.
-
-        """
-
-        query_parts = [
-            'SELECT identifier, type, name, similarity(name, :word) AS sml',
-            'FROM identifier_index',
-            'WHERE name % :word',
-            'ORDER BY sml DESC, name']
-
-        query_params = {
-            'word': search_phrase}
-
-        if limit:
-            query_parts.append('LIMIT :limit')
-            query_params['limit'] = limit
-
-        query_parts.append(';')
-
-        query = text('\n'.join(query_parts))
-
-        self.backend.library.database.set_connection_search_path()
-
-        results = self.execute(query, **query_params).fetchall()
-
-        for result in results:
-            vid, type, name, score = result
-            yield IdentifierSearchResult(
-                score=score, vid=vid,
-                type=type, name=name)
-
-    def _index_document(self, identifier, force=False):
-        """ Adds identifier document to the index. """
-
-        query = text("""
-            INSERT INTO identifier_index(identifier, type, name)
-            VALUES(:identifier, :type, :name);
-        """)
-        self.execute(query, **identifier)
-
-    def create(self):
-
-        if self.has_table('identifier_index'):
-            return
-
-        logger.debug('Creating identifier FTS table.')
-
-        query = """
-            CREATE TABLE identifier_index (
-                identifier VARCHAR(256) NOT NULL,
-                type VARCHAR(256) NOT NULL,
-                name TEXT);
-        """
-        self.execute(query)
-
-        # create index for name.
-        query = """
-            CREATE INDEX identifier_index_name_idx ON identifier_index USING gist (name gist_trgm_ops);
-        """
-        self.execute(query)
-
-    def reset(self):
-        """ Drops identifier index table. """
-        query = """
-            DROP TABLE identifier_index;
-        """
-        self.execute(query)
-
-    def _delete(self, identifier=None):
-        """ Deletes given identifier from index.
-
-        Args:
-            identifier (str): identifier of the document to delete.
-
-        """
-        query = text("""
-            DELETE FROM identifier_index
-            WHERE identifier = :identifier;
-        """)
-        self.execute(query, identifier=identifier)
-
-    def is_indexed(self, identifier):
-        """ Returns True if identifier is already indexed. Otherwise returns False. """
-        query = text("""
-            SELECT identifier
-            FROM identifier_index
-            WHERE identifier = :identifier;
-        """)
-        result = self.execute(query, identifier=identifier['identifier'])
-        return bool(result.fetchall())
-
-    def all(self):
-        """ Returns list with all indexed identifiers. """
-        identifiers = []
-
-        query = text("""
-            SELECT identifier, type, name
-            FROM identifier_index;""")
-
-        for result in self.execute(query):
-            vid, type_, name = result
-            res = IdentifierSearchResult(
-                score=1, vid=vid, type=type_, name=name)
-            identifiers.append(res)
-        return identifiers
-
 
 class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
 
@@ -513,6 +388,8 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
+
+        print str(text('\n'.join(query_parts)))
 
         return text('\n'.join(query_parts)), query_params
 
@@ -653,3 +530,127 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             dataset_vid, vid = result
             partitions.append(PartitionSearchResult(dataset_vid=dataset_vid, vid=vid, score=1))
         return partitions
+
+
+class IdentifierPostgreSQLIndex(BaseIdentifierIndex,PostgresExecMixin):
+
+    def __init__(self, backend=None):
+        assert backend is not None, 'backend argument can not be None.'
+        super(self.__class__, self).__init__(backend=backend)
+
+        self.create()
+
+    def search(self, search_phrase, limit=None):
+        """ Finds identifiers by search phrase.
+
+        Args:
+            search_phrase (str or unicode):
+            limit (int, optional): how many results to return. None means without limit.
+
+        Returns:
+            list of IdentifierSearchResult instances.
+
+        """
+
+        query_parts = [
+            'SELECT identifier, type, name, similarity(name, :word) AS sml',
+            'FROM identifier_index',
+            'WHERE name % :word',
+            'ORDER BY sml DESC, name']
+
+        query_params = {
+            'word': search_phrase}
+
+        if limit:
+            query_parts.append('LIMIT :limit')
+            query_params['limit'] = limit
+
+        query_parts.append(';')
+
+        query = text('\n'.join(query_parts))
+
+        self.backend.library.database.set_connection_search_path()
+
+        results = self.execute(query, **query_params).fetchall()
+
+        for result in results:
+            vid, type, name, score = result
+            yield IdentifierSearchResult(
+                score=score, vid=vid,
+                type=type, name=name)
+
+    def _index_document(self, identifier, force=False):
+        """ Adds identifier document to the index. """
+
+        query = text("""
+            INSERT INTO identifier_index(identifier, type, name)
+            VALUES(:identifier, :type, :name);
+        """)
+        self.execute(query, **identifier)
+
+    def create(self):
+
+        if self.has_table('identifier_index'):
+            return
+
+        logger.debug('Creating identifier FTS table.')
+
+        query = """
+            CREATE TABLE identifier_index (
+                identifier VARCHAR(256) NOT NULL,
+                type VARCHAR(256) NOT NULL,
+                name TEXT);
+        """
+        self.execute(query)
+
+        # create index for name.
+        query = """
+            CREATE INDEX identifier_index_name_idx ON identifier_index USING gist (name gist_trgm_ops);
+        """
+        self.execute(query)
+
+    def reset(self):
+        """ Drops identifier index table. """
+        query = """
+            DROP TABLE identifier_index;
+        """
+        self.execute(query)
+
+    def _delete(self, identifier=None):
+        """ Deletes given identifier from index.
+
+        Args:
+            identifier (str): identifier of the document to delete.
+
+        """
+        query = text("""
+            DELETE FROM identifier_index
+            WHERE identifier = :identifier;
+        """)
+        self.execute(query, identifier=identifier)
+
+    def is_indexed(self, identifier):
+        """ Returns True if identifier is already indexed. Otherwise returns False. """
+        query = text("""
+            SELECT identifier
+            FROM identifier_index
+            WHERE identifier = :identifier;
+        """)
+        result = self.execute(query, identifier=identifier['identifier'])
+        return bool(result.fetchall())
+
+    def all(self):
+        """ Returns list with all indexed identifiers. """
+        identifiers = []
+
+        query = text("""
+            SELECT identifier, type, name
+            FROM identifier_index;""")
+
+        for result in self.execute(query):
+            vid, type_, name = result
+            res = IdentifierSearchResult(
+                score=1, vid=vid, type=type_, name=name)
+            identifiers.append(res)
+        return identifiers
+

@@ -427,7 +427,7 @@ class BaseDatasetIndex(BaseIndex):
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
-            terms = stp.parse(terms, or_join=self.backend._or_join)
+            terms = stp.parse(terms, term_join=self.backend._and_join)
 
         if 'about' in terms:
             ret['doc'].append(terms['about'])
@@ -532,7 +532,7 @@ class BasePartitionIndex(BaseIndex):
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
-            terms = stp.parse(terms, or_join=self.backend._or_join)
+            terms = stp.parse(terms, term_join=self.backend._and_join)
 
         if 'about' in terms:
             ret['doc'].append(terms['about'])
@@ -692,7 +692,7 @@ class SearchTermParser(object):
     def stem(self, w):
         return self.stemmer.stem(w)
 
-    def parse(self, s, or_join=None):
+    def parse(self, s, term_join=None):
         """ Parses search term to
 
         Args:
@@ -707,8 +707,8 @@ class SearchTermParser(object):
             {'to': 1979, 'about': 'table2', 'from': 1978, 'in': 'california'}
         """
 
-        if not or_join:
-            or_join = lambda x: '(' + ' OR '.join(x) + ')'
+        if not term_join:
+            term_join = lambda x: '(' + ' OR '.join(x) + ')'
 
         toks = self.scan(s)
 
@@ -799,7 +799,7 @@ class SearchTermParser(object):
                 if marker in 'in':
                     groups[marker] = ' '.join(terms)
                 else:
-                    groups[marker] = or_join(terms)
+                    groups[marker] = term_join(terms)
             elif len(terms) == 1:
                 groups[marker] = terms[0]
             else:

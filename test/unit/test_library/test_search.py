@@ -124,7 +124,7 @@ class SearchTest(TestCase):
 
         pg = be._get_dataset_index()
 
-        q = pg._make_query_from_terms('source healthindicators.gov diabetes')
+        q = pg._make_query_from_terms('source healthindicators.gov diabetes asthma')
 
 
         print str(q[0])
@@ -138,7 +138,7 @@ class SearchTermParserTest(TestCase):
     def test_basic(self):
         from library.search_backends.base import SearchTermParser
 
-        print SearchTermParser().parse('source healthindicators.gov diabetes')
+        print SearchTermParser().parse('source healthindicators.gov diabetes copd ')
 
         return
 
