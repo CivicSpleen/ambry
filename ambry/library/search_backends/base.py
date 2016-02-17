@@ -638,8 +638,6 @@ class SearchTermParser(object):
     # Terms that can have more than one value/
     multiterms=('about', )
 
-    by_terms = 'state county zip zcta tract block blockgroup place city cbsa msa'.split()
-
     @staticmethod
     def s_quotedterm(scanner, token):
         return SearchTermParser.QUOTEDTERM, token.lower().strip()
@@ -682,7 +680,20 @@ class SearchTermParser(object):
 
         self.stemmer = LancasterStemmer()
 
-        self.by_terms = [self.stem(x) for x in self.by_terms]
+        self.geograins = self._geograins()
+
+    def _geograins(self):
+        """Create a map geographic area terms to the geo grain GVid values """
+
+        from geoid.civick import GVid
+
+        geo_grains = {}
+
+        for sl, cls in GVid.sl_map.items():
+            if '_' not in cls.level:
+                geo_grains[self.stem(cls.level)] = str(cls.nullval().summarize())
+
+        return geo_grains
 
     def scan(self, s):
         s = ' '.join(s.splitlines())  # make a single line
@@ -747,12 +758,15 @@ class SearchTermParser(object):
         # ('source', [(0, 'healthindicators.gov')])
         # ]
 
-        # Convert some of the markers based on their contents
+        # Convert some of the markers based on their contents. This just changes the marker type for keywords
+        # we'll do more adjustments later.
         comps = []
         for t in bymarker:
+
             t = list(t)
+
             if t[0] == 'in' and len(t[1]) == 1 and isinstance(t[1][0][1], string_types) and self.stem(
-                    t[1][0][1]) in self.by_terms:
+                    t[1][0][1]) in self.geograins.keys():
                 t[0] = 'by'
 
             # If the from term isn't an integer, then it is really a source.
@@ -760,7 +774,6 @@ class SearchTermParser(object):
                 t[0] = 'source'
 
             comps.append(t)
-
 
         # After conversions
         # [['about', [(0, 'diabetes')]],
@@ -787,11 +800,14 @@ class SearchTermParser(object):
 
             if len(group) > 1 and marker not in self.multiterms:
                 groups[marker], extras = [group[0]], group[1:]
+
                 if not 'about' in groups:
                     groups['about'] = extras
                 else:
                     groups['about'] += extras
 
+            if marker == 'by':
+                groups['by'] = [ self.geograins.get(self.stem(e)) for e in group]
 
         for marker, terms in iteritems(groups):
 

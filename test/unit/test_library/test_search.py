@@ -132,19 +132,16 @@ class SearchTest(TestCase):
 
 class SearchTermParserTest(TestCase):
 
-
-
-
     def test_basic(self):
         from library.search_backends.base import SearchTermParser
 
         print SearchTermParser().parse('source healthindicators.gov diabetes copd ')
 
-        return
-
         print SearchTermParser().parse('table2 from 1978 to 1979 in california')
 
         print SearchTermParser().parse('about food from 2012 to 2015')
+
+        print SearchTermParser().parse('about food in counties by tract by csa')
 
 
 
