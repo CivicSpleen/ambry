@@ -118,6 +118,8 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         search_phrase = search_phrase.replace('-', '_')
         query, query_params = self._make_query_from_terms(search_phrase)
 
+        self._parsed_query = (query, query_params)
+
         connection = self.backend.library.database.connection
         # Operate on the raw connection
         connection.connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
@@ -136,7 +138,7 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         logger.debug('Extending datasets with partitions.')
         for partition in self.backend.partition_index.search(search_phrase):
             datasets[partition.dataset_vid].p_score += partition.score
-            datasets[partition.dataset_vid].partitions.add(partition.vid)
+            datasets[partition.dataset_vid].partitions.add(partition)
         return list(datasets.values())
 
     def list_documents(self, limit=None):
@@ -400,6 +402,8 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         to_year = terms.pop('to', None)
 
         query, query_params = self._make_query_from_terms(terms)
+
+        self._parsed_query = (query, query_params)
 
         connection = self.backend.library.database.connection
 

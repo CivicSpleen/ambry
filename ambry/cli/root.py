@@ -47,16 +47,6 @@ def make_parser(cmd):
                        help='Information about accounts')
 
 
-    sp = cmd.add_parser('search', help='Search the full-text index')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='search')
-    sp.add_argument('term', type=str, nargs=argparse.REMAINDER, help='Query term')
-    sp.add_argument('-l', '--list', default=False, action='store_true',
-                    help='List documents instead of search')
-    sp.add_argument('-i', '--identifiers', default=False, action='store_true',
-                    help='Search only the identifiers index')
-    sp.add_argument('-r', '--reindex', default=False, action='store_true',
-                    help='Generate documentation files and index the full-text search')
 
     sp = cmd.add_parser('sync', help='Sync with the remotes')
     sp.set_defaults(command='root')
@@ -85,6 +75,8 @@ def make_parser(cmd):
     sp = cmd.add_parser('search', help='Search for bundles and partitions')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='search')
+    sp.add_argument('-c', '--clean', default=False, action='store_true',
+                    help='Clean all of the indexes')
     sp.add_argument('-r', '--reindex', default=False, action='store_true',
                     help='Reindex the bundles')
     sp.add_argument('terms', nargs='*', type=str, help='additional arguments')
@@ -306,6 +298,10 @@ def root_sync(args, l, config):
 
 def root_search(args, l, rc):
     from six import text_type
+    from . import prt_no_format
+
+    if args.clean:
+        l.search.reset()
 
     if args.reindex:
         def tick(message):
@@ -319,15 +315,17 @@ def root_search(args, l, rc):
         return
 
     terms = ' '.join(text_type(t) for t in args.terms)
-    print(terms)
 
-    results = l.search.search(terms)
+    prt("Input terms: {}".format(terms))
+    prt_no_format("Parsed Terms: {}".format(l.search.parse_search_terms(terms)))
+
+    results = list(l.search.search(terms))
 
     for r in results:
-        print(r.vid, r.bundle.metadata.about.title)
+        print(r.score, r.b_score, r.p_score,r.vid, r.bundle.metadata.about.title)
         for p in r.partition_records:
             if p:
-                print('    ', p.vid, p.vname)
+                print('    ', p.score, p.vid, p.vname, p.display.title)
 
 
 

@@ -37,9 +37,11 @@ class DatasetSearchResult(object):
 
         assert bool(self.bundle)
 
-        for p in self.partitions:
+        for p_result in self.partitions:
             try:
-                yield self.bundle.partition_by_vid(p)
+                p = self.bundle.partition_by_vid(p_result.vid)
+                p.score = p_result.score
+                yield p
             except NotFoundError:
                 continue
 
@@ -47,7 +49,7 @@ class DatasetSearchResult(object):
     def score(self):
         """Compute a total score using the log of the partition score, to reduce the include of bundles
         with a lot of partitions """
-        return self.b_score + (log(self.p_score) if self.p_score else 0)
+        return self.b_score + self.p_score if self.p_score else 0
 
 
 class IdentifierSearchResult(object):
@@ -274,7 +276,6 @@ class BaseIndex(object):
         return False
 
 
-
     def index_many(self, instances, tick_f=None):
         """ Index all given instances.
 
@@ -490,12 +491,20 @@ class BasePartitionIndex(BaseIndex):
             ' '.join(str(x) for x in partition.time_coverage)
         )
 
-        doc_field = u('{} {} {}').format(
-            values, schema, ' '.join([
+        doc_field = u('{} {} {} {} {} {}').format(
+            values,
+            schema,
+            ' '.join([
                 u('{}').format(partition.identity.vid),
                 u('{}').format(partition.identity.id_),
                 u('{}').format(partition.identity.name),
-                u('{}').format(partition.identity.vname)]))
+                u('{}').format(partition.identity.vname)]),
+            partition.display.title,
+            partition.display.description,
+            partition.display.sub_description,
+            partition.display.time_description,
+            partition.display.geo_description
+        )
 
         document = dict(
             vid=u('{}').format(partition.identity.vid),
@@ -602,6 +611,7 @@ class BaseIdentifierIndex(BaseIndex):
 
 class SearchTermParser(object):
     """Decompose a search term in to conceptual parts, according to the Ambry search model."""
+
     TERM = 0
     QUOTEDTERM = 1
     LOGIC = 2
@@ -624,6 +634,9 @@ class SearchTermParser(object):
         'from': ('year', 'source'),
         'to': 'year',
         'source': 'source'}
+
+    # Terms that can have more than one value/
+    multiterms=('about', )
 
     by_terms = 'state county zip zcta tract block blockgroup place city cbsa msa'.split()
 
@@ -699,18 +712,40 @@ class SearchTermParser(object):
 
         toks = self.scan(s)
 
+        # Examples: starting with this query:
+        # diabetes from 2014 to 2016 source healthindicators.gov
+
         # Assume the first term is ABOUT, if it is not marked with a marker.
         if toks and toks[0] and (toks[0][0] == self.TERM or toks[0][0] == self.QUOTEDTERM):
             toks = [(self.MARKER, 'about')] + toks
 
+
+        # The example query produces this list of tokens:
+        #[(3, 'about'),
+        # (0, 'diabetes'),
+        # (3, 'from'),
+        # (4, 2014),
+        # (3, 'to'),
+        # (4, 2016),
+        # (3, 'source'),
+        # (0, 'healthindicators.gov')]
+
         # Group the terms by their marker.
-        # last_marker = None
+
         bymarker = []
         for t in toks:
             if t[0] == self.MARKER:
                 bymarker.append((t[1], []))
             else:
                 bymarker[-1][1].append(t)
+
+
+        # After grouping tokens by their markers
+        # [('about', [(0, 'diabetes')]),
+        # ('from', [(4, 2014)]),
+        # ('to', [(4, 2016)]),
+        # ('source', [(0, 'healthindicators.gov')])
+        # ]
 
         # Convert some of the markers based on their contents
         comps = []
@@ -726,11 +761,37 @@ class SearchTermParser(object):
 
             comps.append(t)
 
+
+        # After conversions
+        # [['about', [(0, 'diabetes')]],
+        #  ['from', [(4, 2014)]],
+        #  ['to', [(4, 2016)]],
+        #  ['source', [(0, 'healthindicators.gov')]]]
+
         # Join all of the terms into single marker groups
         groups = {marker: [] for marker, _ in comps}
 
         for marker, terms in comps:
             groups[marker] += [term for marker, term in terms]
+
+        # At this point, the groups dict is formed, but it will have a list
+        # for each marker that has multiple terms.
+
+        # Only a few of the markers should have more than one term, so move
+        # extras to the about group
+
+        for marker, group in groups.items():
+
+            if marker == 'about':
+                continue
+
+            if len(group) > 1 and marker not in self.multiterms:
+                groups[marker], extras = [group[0]], group[1:]
+                if not 'about' in groups:
+                    groups['about'] = extras
+                else:
+                    groups['about'] += extras
+
 
         for marker, terms in iteritems(groups):
 
@@ -743,5 +804,14 @@ class SearchTermParser(object):
                 groups[marker] = terms[0]
             else:
                 pass
+
+        # After grouping:
+        # {'to': 2016,
+        #  'about': 'diabetes',
+        #  'from': 2014,
+        #  'source': 'healthindicators.gov'}
+
+        # If there were any markers with multiple terms, they would be cast in the or_join form.
+
 
         return groups

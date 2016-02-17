@@ -118,9 +118,10 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
 
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
 
+        self._parsed_query = (str(query), query_params)
+
         assert isinstance(query, TextClause)
 
-        results = self.execute(query, **query_params)
         datasets = {}
 
         def make_result(vid=None, b_score=0, p_score=0):
@@ -131,10 +132,14 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
             res.vid = vid
             return res
 
-        for result in results:
-            vid, dataset_score = result
+        if query_params:
+            results = self.execute(query, **query_params)
 
-            datasets[vid] = make_result(vid, b_score=dataset_score)
+            for result in results:
+                vid, dataset_score = result
+
+                datasets[vid] = make_result(vid, b_score=dataset_score)
+
 
         logger.debug('Extending datasets with partitions.')
 
@@ -144,7 +149,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
                 datasets[partition.dataset_vid] = make_result(partition.dataset_vid)
 
             datasets[partition.dataset_vid].p_score += partition.score
-            datasets[partition.dataset_vid].partitions.add(partition.vid)
+            datasets[partition.dataset_vid].partitions.add(partition)
 
         return list(datasets.values())
 
@@ -244,7 +249,11 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
 
         if expanded_terms['doc']:
             # create query with real score.
-            query_parts = ['SELECT vid, ts_rank_cd(doc, to_tsquery(:doc)) as score']
+            query_parts = ["SELECT vid, ts_rank_cd(setweight(doc,'C'), to_tsquery(:doc)) as score"]
+        if expanded_terms['doc'] and expanded_terms['keywords']:
+            query_parts = ["SELECT vid, ts_rank_cd(setweight(doc,'C'), to_tsquery(:doc)) "
+                           " +  ts_rank_cd(setweight(to_tsvector(coalesce(keywords::text,'')),'B'), to_tsquery(:keywords))"
+                           ' as score']
         else:
             # create query with score = 1 because query will not touch doc field.
             query_parts = ['SELECT vid, 1 as score']
@@ -259,11 +268,13 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
             query_params['doc'] = self.backend._and_join(expanded_terms['doc'])
 
         if expanded_terms['keywords']:
+
             query_params['keywords'] = self.backend._and_join(expanded_terms['keywords'])
-            if where_counter:
-                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \')')
-            else:
-                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \')')
+
+            kw_q = "to_tsvector(coalesce(keywords::text,'')) @@ to_tsquery(:keywords)"
+
+            query_parts.append( ("OR " if where_counter else "WHERE ") + kw_q )
+
 
         query_parts.append('ORDER BY score DESC')
         if limit:
@@ -274,6 +285,8 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
         deb_msg = 'Dataset terms conversion: `{}` terms converted to `{}` with `{}` params query.'\
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
+
+
         q = text('\n'.join(query_parts)), query_params
         logger.debug('Dataset search query: {}'.format(q))
         return q
@@ -441,8 +454,11 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
 
         if expanded_terms['doc']:
             # create query with real score.
-            query_parts = ['SELECT vid, dataset_vid, ts_rank_cd(doc, to_tsquery(:doc)) as score']
-            terms_used += 1
+            query_parts = ["SELECT vid, dataset_vid, ts_rank_cd(setweight(doc,'C'), to_tsquery(:doc)) as score"]
+        if expanded_terms['doc'] and expanded_terms['keywords']:
+            query_parts = ["SELECT vid, dataset_vid, ts_rank_cd(setweight(doc,'C'), to_tsquery(:doc)) "
+                           " +  ts_rank_cd(setweight(to_tsvector(coalesce(keywords::text,'')),'B'), to_tsquery(:keywords))"
+                           ' as score']
         else:
             # create query with score = 1 because query will not touch doc field.
             query_parts = ['SELECT vid, dataset_vid, 1 as score']
@@ -458,30 +474,27 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             terms_used += 1
 
         if expanded_terms['keywords']:
-            query_params['keywords'] = ' '.join(expanded_terms['keywords'])
-            if where_count:
-                query_parts.append('AND keywords::text[] @> string_to_array(:keywords, \' \')')
-            else:
-                query_parts.append('WHERE keywords::text[] @> string_to_array(:keywords, \' \')')
+            query_params['keywords'] = self.backend._and_join(expanded_terms['keywords'])
+
+            kw_q = "to_tsvector(coalesce(keywords::text,'')) @@ to_tsquery(:keywords)"
+
+            query_parts.append(("AND " if where_count else "WHERE ") + kw_q)
+
             where_count += 1
             terms_used += 1
 
         if expanded_terms['from']:
-            if where_count:
-                # at least one WHERE exists
-                query_parts.append('AND from_year >= :from_year')
-            else:
-                query_parts.append('WHERE from_year >= :from_year')
+
+            query_parts.append(("AND " if where_count else "WHERE ") + ' from_year >= :from_year')
+
             query_params['from_year'] = expanded_terms['from']
             where_count += 1
             terms_used += 1
 
         if expanded_terms['to']:
-            if where_count:
-                # at least one WHERE exists
-                query_parts.append('AND to_year <= :to_year')
-            else:
-                query_parts.append('to_year <= :to_year')
+
+            query_parts.append(("AND " if where_count else "WHERE ") + ' to_year <= :to_year')
+
             query_params['to_year'] = expanded_terms['to']
             where_count += 1
             terms_used += 1
@@ -514,6 +527,8 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             PartitionSearchResult instances.
         """
         query, query_params = self._make_query_from_terms(search_phrase, limit=limit)
+
+        self._parsed_query = (str(query), query_params)
 
         if query is not None:
 

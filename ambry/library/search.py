@@ -142,8 +142,13 @@ class Search(object):
     def get_parsed_query(self):
         """ Returns string with last query parsed. Assuming called after search_datasets."""
         return '{} OR {}'.format(
-            self.dataset_index.get_parsed_query(),
-            self.partition_index.get_parsed_query())
+            self.backend.dataset_index.get_parsed_query()[0],
+            self.backend.partition_index.get_parsed_query()[0])
+
+    def parse_search_terms(self, st):
+        from ambry.library.search_backends.base import SearchTermParser
+
+        return SearchTermParser().parse(st)
 
     def index_identifiers(self, identifiers):
         """ Adds given identifiers to the index. """

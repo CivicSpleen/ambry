@@ -12,6 +12,7 @@ from ambry.library import Library
 from ambry.library.search import Search
 from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend,\
     PostgreSQLSearchBackend
+
 from ambry.orm import Dataset, Partition
 
 
@@ -111,13 +112,39 @@ class SearchTest(TestCase):
         # test
         tick_f.assert_called_once_with('datasets: 1 partitions: 0')
 
+    def test_postgres_query(self):
+        self._my_library.config.services.search = None
+
+        # switch to postgres.
+        self._my_library.database.driver = 'postgres'
+        search = Search(self._my_library)
+        self.assertIsInstance(search.backend, PostgreSQLSearchBackend)
+
+        be = search.backend
+
+        pg = be._get_dataset_index()
+
+        q = pg._make_query_from_terms('source healthindicators.gov diabetes')
+
+
+        print str(q[0])
+        print q[1]
+
 class SearchTermParserTest(TestCase):
+
+
 
 
     def test_basic(self):
         from library.search_backends.base import SearchTermParser
 
+        print SearchTermParser().parse('source healthindicators.gov diabetes')
+
+        return
+
         print SearchTermParser().parse('table2 from 1978 to 1979 in california')
 
         print SearchTermParser().parse('about food from 2012 to 2015')
+
+
 
