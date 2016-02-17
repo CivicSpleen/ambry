@@ -1,9 +1,8 @@
 
-
 from test.proto import TestBase
 
-class Test(TestBase):
 
+class Test(TestBase):
 
     def test_parser_basic(self):
 
@@ -11,12 +10,12 @@ class Test(TestBase):
 
         view = parse_view('CREATE VIEW view1 AS SELECT col1 as c1, col2 as c2 FROM table1 WHERE foo is None and bar is baz;')
 
-        self.assertEquals('view1',view.name)
+        self.assertEquals('view1', view.name)
 
-        self.assertEquals('col1',view.columns[0].name)
-        self.assertEquals('c1',view.columns[0].alias)
-        self.assertEquals('col2',view.columns[1].name)
-        self.assertEquals('c2',view.columns[1].alias)
+        self.assertEquals('col1', view.columns[0].name)
+        self.assertEquals('c1', view.columns[0].alias)
+        self.assertEquals('col2', view.columns[1].name)
+        self.assertEquals('c2', view.columns[1].alias)
 
         select = parse_select('SELECT col1 as c1, col2 as c2 FROM table1;')
 
@@ -31,22 +30,22 @@ class Test(TestBase):
             JOIN table2 AS t2
             JOIN table3 AS t3;''')
 
-        self.assertEquals('t1.col',select.columns[0].name)
-        self.assertEquals('t1_c',select.columns[0].alias)
+        self.assertEquals('t1.col', select.columns[0].name)
+        self.assertEquals('t1_c', select.columns[0].alias)
 
         self.assertEquals('t2.col', select.columns[1].name)
         self.assertEquals('t2_c', select.columns[1].alias)
 
         self.assertEquals('t3.col', select.columns[2].name)
-        self.assertEquals('t3_c',select.columns[2].alias)
+        self.assertEquals('t3_c', select.columns[2].alias)
 
-        self.assertEquals('table1',select.sources[0].name)
+        self.assertEquals('table1', select.sources[0].name)
         self.assertEquals('t1', select.sources[0].alias)
 
-        self.assertEquals('table2',select.joins[0].source.name)
+        self.assertEquals('table2', select.joins[0].source.name)
         self.assertEquals('t2', select.joins[0].source.alias)
 
-        self.assertEquals('table3',select.joins[1].source.name)
+        self.assertEquals('table3', select.joins[1].source.name)
         self.assertEquals('t3', select.joins[1].source.alias)
 
         select = parse_select(
@@ -146,17 +145,15 @@ class Test(TestBase):
         columns = select_column_list.parseString('count(t), col2 as c2')
         print columns
 
-
         select = select_stmt.parseString(
             'SELECT t1.col AS cnt, t2.col AS t2_c, t3.col AS t3_c FROM table1 AS t1')
 
         print(select.columns)
 
         select = select_stmt.parseString(
-             'SELECT count(*) AS cnt, t2.col AS t2_c, t3.col AS t3_c FROM table1 AS t1')
+            'SELECT count(*) AS cnt, t2.col AS t2_c, t3.col AS t3_c FROM table1 AS t1')
 
         print(select.columns)
-
 
     def test_visitor(self):
         import sqlparse
@@ -177,8 +174,7 @@ class Test(TestBase):
                           sorted(rec.materialize))
 
         self.assertEquals(sorted([(u'p00casters006003', (u'id',)), (u'p00casters002003', (u'index',))]),
-                           sorted(rec.indexes))
-
+                          sorted(rec.indexes))
 
         sql = """
 
@@ -196,10 +192,9 @@ SELECT t1.uuid AS t1_uuid, t2.float_a AS t2_float_a, t3.a AS t3_a
 CREATE VIEW view1 AS SELECT col1 as c1, col2 as c2 FROM table1 WHERE foo is None and bar is baz;
 
 """
-
         statements = sqlparse.parse(sqlparse.format(sql, strip_comments=True))
 
-        rec_keys = ['statement','install', 'materialize', 'tables',  'drop', 'indexes', 'joins']
+        rec_keys = ['statement', 'install', 'materialize', 'tables',  'drop', 'indexes', 'joins']
 
         expected = [
             [u'INSTALL p00casters006003', set([u'p00casters006003']), None, None, None, None, None],
@@ -237,15 +232,16 @@ CREATE VIEW view1 AS SELECT col1 as c1, col2 as c2 FROM table1 WHERE foo is None
 
             sum_rec.update(rec=rec)
 
-        expected = {'materialize': set([u'p00casters004003', u'p00casters006003', u'p00casters002003']),
-                   'tables': set([]),
-                   'statement': None,
-                   'statements': None,
-                   'drop': ['DROP VIEW IF EXISTS view1;'],
-                   'indexes': set([(u'p00casters006003', (u'id',)), (u'p00casters002003', (u'index',))]),
-                   'install': set([u'p00casters006003', u'p00casters002003']),
-                   'joins': 0,
-                'views': 0}
+        expected = {
+            'materialize': set([u'p00casters004003', u'p00casters006003', u'p00casters002003']),
+            'tables': set([]),
+            'statement': None,
+            'statements': None,
+            'drop': ['DROP VIEW IF EXISTS view1;'],
+            'indexes': set([(u'p00casters006003', (u'id',)), (u'p00casters002003', (u'index',))]),
+            'install': set([u'p00casters006003', u'p00casters002003']),
+            'joins': 0,
+            'views': 0}
 
         self.assertEqual(expected, sum_rec.__dict__)
 
@@ -292,24 +288,20 @@ SELECT * FROM build.example.com-casters-simple;
 
         w = library.warehouse()
 
-
         rows = list(w.query(sql))
 
         self.assertTrue('Alabama' in rows[0])
         self.assertTrue('Alaska' in rows[1])
 
-
     def test_identifier_replacement(self):
         from ambry.bundle.asql_parser import substitute_vids
-
-        l = self.library()
+        library = self.library()
 
         self.assertEquals('SELECT * FROM p00casters006003',
-                          substitute_vids(l, 'SELECT * FROM build.example.com-casters-simple')[0])
+                          substitute_vids(library, 'SELECT * FROM build.example.com-casters-simple;')[0])
 
         self.assertEquals('SELECT * FROM p00casters006003 LEFT JOIN pERJQxWUVb005001 ON foo = bar',
-                          substitute_vids(l,
+                          substitute_vids(library,
                                           """SELECT * FROM build.example.com-casters-simple
                                              LEFT JOIN build.example.com-generators-demo ON foo = bar
                                           """)[0])
-

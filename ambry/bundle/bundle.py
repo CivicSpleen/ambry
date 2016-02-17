@@ -42,7 +42,7 @@ def _CaptureException(f, *args, **kwargs):
             b.set_error_state()
             b.commit()
         except Exception as e2:
-            b.log("Failed to set bundle error state: {}".format(e))
+            b.log('Failed to set bundle error state: {}'.format(e))
             raise e
 
         if b.capture_exceptions:
@@ -509,8 +509,6 @@ class Bundle(object):
 
         elif not isinstance(sources, (list, tuple)):
             sources = [sources]
-
-
 
         def objectify(source):
             if isinstance(source, basestring):
@@ -1054,7 +1052,7 @@ Caster Code
 
             env_dict = f.execute()
 
-            o =  env_dict[env_key]
+            o = env_dict[env_key]
 
             spec = source.spec
             spec.start_line = 1
@@ -1334,9 +1332,7 @@ Caster Code
                 self.log('Sync: {}'.format(f.record.path))
                 f.record_to_fs()
 
-
         self.commit()
-
 
     def sync_objects_in(self):
         """Synchronize from records to objects"""
@@ -1671,7 +1667,7 @@ Caster Code
                 try:
                     meta = iterable_source.meta
                     if meta:
-                        self.metadata.about.title =  meta['title']
+                        self.metadata.about.title = meta['title']
                         self.metadata.about.summary = meta['summary']
                         self.build_source_files.bundle_meta.objects_to_record()
 
@@ -1779,7 +1775,6 @@ Caster Code
 
             iterable_source, source_pipe = self.source_pipe(source, ps)
 
-
             if not source.is_ingestible:
                 ps.update(message='Not an ingestiable source: {}'.format(source.name),
                           state='skipped', source=source)
@@ -1796,7 +1791,6 @@ Caster Code
 
                 ps.update(
                     message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
-
 
             source.datafile.load_rows(iterable_source,
                                       callback=ingest_progress_f,
@@ -1894,7 +1888,6 @@ Caster Code
             self.dataset.delete_tables_partitions()
             self.commit()
 
-
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
         for t, table_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
@@ -1936,7 +1929,6 @@ Caster Code
 
                 columns = sorted(set([(i, col.dest_header, col.datatype, col.description, col.has_codes)
                                       for source in table_sources for i, col in source_cols(source)]))
-
 
                 initial_count = len(t.columns)
 
@@ -2368,7 +2360,7 @@ Caster Code
         for s in segments:
             assert s.segment is not None
             assert s.type == s.TYPE.SEGMENT
-            assert s.d_vid == self.identity.vid # Be sure it is in our bundle
+            assert s.d_vid == self.identity.vid  # Be sure it is in our bundle
 
             self.wrap_partition(s).local_datafile.remove()
             self.session.delete(s)
@@ -2598,7 +2590,6 @@ Caster Code
 
         self.commit()
         return True
-
 
     def import_tests(self):
         bsf = self.build_source_files.file(File.BSFILE.TEST)

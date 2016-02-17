@@ -12,15 +12,15 @@ class TestProto(unittest.TestCase):
         l = pl.init_library()
 
         self.assertTrue(len(list(l.bundles)) >= 4)
-        self.assertEquals('ingested', l.bundle('ingest.example.com-basic').state)
-        self.assertEquals('finalized', l.bundle('build.example.com-coverage').state)
-        self.assertEquals('finalized', l.bundle('build.example.com-generators').state)
-        self.assertEquals('finalized', l.bundle('build.example.com-casters').state)
+        self.assertEqual('ingested', l.bundle('ingest.example.com-basic').state)
+        self.assertEqual('finalized', l.bundle('build.example.com-coverage').state)
+        self.assertEqual('finalized', l.bundle('build.example.com-generators').state)
+        self.assertEqual('finalized', l.bundle('build.example.com-casters').state)
 
         l.close()
 
         l = pl.init_library(use_proto=False)
-        self.assertEquals(0, len(list(l.bundles)))
+        self.assertEqual(0, len(list(l.bundles)))
 
     def test_basic_sqlite(self):
         self._test_basic(dsn=None)

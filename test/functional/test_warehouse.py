@@ -350,9 +350,11 @@ class BundleWarehouse(TestBase):
 
     def test_bundle_warehouse_install(self):
 
-        l = self.library()
-
-        b = l.bundle('build.example.com-casters')
+        b = self.import_single_bundle('build.example.com/casters')
+        b.ingest()
+        b.source_schema()
+        b.schema()
+        b.build()
 
         wh = b.warehouse('test')
 
@@ -360,17 +362,21 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(0, len(wh.list()))
 
-        self.assertEqual('p00casters006003', wh.install('build.example.com-casters-simple'))
         self.assertEqual('p00casters004003', wh.install('build.example.com-casters-integers'))
         self.assertEqual('p00casters002003', wh.install('build.example.com-casters-simple_stats'))
-        self.assertEqual('pERJQxWUVb005001', wh.materialize('build.example.com-generators-demo'))
+        self.assertEqual('p00casters006003', wh.materialize('build.example.com-casters-simple'))
 
-        self.assertEqual(4, len(wh.list()))
+        self.assertEqual(3, len(wh.list()))
 
     def test_bundle_warehouse_query(self):
         l = self.library()
 
-        b = l.bundle('build.example.com-casters')
+        b = self.import_single_bundle('build.example.com/casters')
+        b.ingest()
+        b.source_schema()
+        b.schema()
+        b.build()
+
         wh = b.warehouse('test')
         wh.clean()
 
@@ -378,7 +384,6 @@ class BundleWarehouse(TestBase):
 
         self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM p00casters004003;')))
         self.assertEqual(6000, sum(1 for row in wh.query('SELECT * FROM p00casters006003;')))
-        self.assertEqual(4000, sum(1 for row in wh.query('SELECT * FROM pERJQxWUVb005001;')))
 
         p = l.partition('p00casters004003')
 

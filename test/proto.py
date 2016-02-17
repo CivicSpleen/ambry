@@ -32,50 +32,18 @@ class ProtoLibrary(object):
     """Manage test libraries. Creates a proto library, with pre-built bundles, that can be
     copied quickly into a test library, providing bundles to test against"""
 
-    def __init__(self, dsn=None, root=None, config_path=None):
+    def __init__(self, config_path=None):
         """
 
-        :param dsn: If specified, the dsn of the test database. If not, defaults to sqlite.
-        :param root:
         :param config_path:
         :return:
         """
-        assert dsn is None, 'Change library database config instead.'
-        assert root is None, 'Change config instead.'
 
         from ambry.run import load_config, update_config, load_accounts
         from ambry.util import parse_url_to_dict, unparse_url_dict
 
-        self._root = root
-
-        if not self._root:
-            self._root = DEFAULT_ROOT
-
-        if dsn and dsn.startswith('post'):
-
-            self.dsn = dsn
-
-            p = parse_url_to_dict(self.dsn)
-            p['path'] = p['path'] + '-proto'
-
-            self.proto_dsn = unparse_url_dict(p)
-
-            self._db_type = 'postgres'
-
-        elif dsn and dsn.startswith('sqlite'):
-
-            self.dsn = dsn
-            p = parse_url_to_dict((self.dsn))
-            p['path'] = p['path'].replace('.db', '') + '-proto.db'
-
-            self.proto_dsn = unparse_url_dict(p)
-
-            self._db_type = 'sqlite'
-
-        else:
-            self.dsn = 'sqlite:///{}/library.db'.format(self.sqlite_dir())
-            self.proto_dsn = 'sqlite:///{}/library.db'.format(self.proto_dir())
-            self._db_type = 'sqlite'
+        self._root = DEFAULT_ROOT
+        # TODO: Update root from config.
 
         ensure_dir_exists(self._root)
 
@@ -90,15 +58,46 @@ class ProtoLibrary(object):
         update_config(self.config, use_environ=False)
 
         assert self.config.loaded[0] == config_path + '/config.yaml'
+        import pdb; pdb.set_trace()
 
-        self.config.library.database = self.dsn
+        # Populate library and proto DSNs
+        if os.environ.get('AMBRY_TEST_DB'):
+            library_dsn = os.environ['AMBRY_TEST_DB']
+        else:
+            # Derive from library.database setting.
+            dsn = self.config.library.database
+            if dsn.startswith('post'):
+                # postgres case.
+                p = parse_url_to_dict(dsn)
+                parsed_library = dict(p, path=p['path'] + '-test1k')
+            elif dsn.startswith('sqlite'):
+                # sqlite case
+                p = parse_url_to_dict(dsn)
+                parsed_library = dict(p, path=p['path'].replace('.db', '') + '-test1k.db')
+            library_dsn = unparse_url_dict(parsed_library)
+
+        if library_dsn.startswith('post'):
+            self._db_type = 'postgres'
+            p = parse_url_to_dict(library_dsn)
+            parsed_proto = dict(p, path=p['path'] + '-proto')
+            proto_dsn = unparse_url_dict(parsed_proto)
+        elif library_dsn.startswith('sqlite'):
+            self._db_type = 'sqlite'
+            p = parse_url_to_dict(library_dsn)
+            parsed_proto = dict(p, path=p['path'].replace('.db', '') + '-proto.db')
+            proto_dsn = unparse_url_dict(parsed_proto)
+        else:
+            raise Exception('Do not know how to process {} database.'.format(library_dsn))
+
+        self.proto_dsn = proto_dsn
+        self.config.library.database = library_dsn
 
     def __str__(self):
         return """
 root:      {}
 dsn:       {}
 proto-dsn: {}
-""".format(self._root, self.dsn, self.proto_dsn)
+""".format(self._root, self.config.library.database, self.proto_dsn)
 
     def _ensure_exists(self, dir):
         """Ensure the full path to a directory exists. """
@@ -276,12 +275,12 @@ proto-dsn: {}
         from sqlalchemy import create_engine
         from sqlalchemy.pool import NullPool
 
-        root_dsn = set_url_part(self.dsn, path='postgres')
+        root_dsn = set_url_part(self.config.library.database, path='postgres')
 
         return create_engine(root_dsn, poolclass=NullPool)
 
     def dispose(self):
-        self.pg_engine(self.dsn).dispose()
+        self.pg_engine(self.config.library.database).dispose()
         self.pg_root_engine.dispose()
 
     @classmethod
@@ -368,8 +367,9 @@ proto-dsn: {}
 
     def create_pg(self, re_create=False, template_name=None):
         from ambry.util import select_from_url
+        import pdb; pdb.set_trace()
 
-        database_name = select_from_url(self.dsn, 'path').strip('/')
+        database_name = select_from_url(self.config.library.database, 'path').strip('/')
 
         if template_name is None:
             template_name = select_from_url(self.proto_dsn, 'path').strip('/')
@@ -377,7 +377,7 @@ proto-dsn: {}
         else:
             load_extensions = True
 
-        username = select_from_url(self.dsn, 'username')
+        username = select_from_url(self.config.library.database, 'username')
 
         if re_create:
             self.drop_pg(database_name)
@@ -395,7 +395,7 @@ proto-dsn: {}
 
         # Create the extensions, if they aren't already installed
         if load_extensions:
-            with self.pg_engine(self.dsn).connect() as conn:
+            with self.pg_engine(self.config.library.database).connect() as conn:
                 conn.execute('CREATE EXTENSION IF NOT EXISTS pg_trgm;')
                 # Prevents error:   operator class "gist_trgm_ops" does not exist for access method "gist"
                 conn.execute('alter extension pg_trgm set schema pg_catalog;')
@@ -436,11 +436,6 @@ class TestBase(unittest.TestCase):
         b.sync_in(force=True)
         return b
 
-    def library(self, dsn=None, use_proto=True):
+    def library(self, use_proto=True):
         """Return a new proto library. """
-        assert dsn is None, 'dsn parameter is deprecated. Change self.config.library.database instead!'
-
-        # IMPLEMENT ME
-        # Check AMBRY_TEST_DB and databases.test-postgres for postgres database DSN
-
         return self._proto.init_library(use_proto=use_proto)

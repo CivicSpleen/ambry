@@ -15,6 +15,9 @@ about:
   time: null
   title: Building with Generators
 contacts:
+  analyst:
+    org: Example Com
+    url: http://example.com
   creator:
     email: eric@civicknowledge.com
     name: Eric Busboom

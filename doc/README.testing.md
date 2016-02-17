@@ -20,44 +20,55 @@ These tests should be broken up into their own directories:
 * test/unit
 * test/regression
 
-The `python setup.py test` invocation will only run the bundle and function tests. There should be another invocation, 
-`python setup.py unitest` to run both the unitests and regression tests. 
+The `python setup.py test` invocation will only run the bundle and functional tests. There should be another invocation,
+`python setup.py unitest` to run both the unitests and regression tests.
 
 ## Test Setup
 
-The `test.test_base.TestBase` base class has methods for setting up a test library, including:
+The `test.proto.TestBase` base class has fields and methods for setting up a test library, including:
 
- * config()
+ * config
  * library()
- * import_bundles()
+ * import_single_bundle()
  
- The `config()` method will create a new `.ambry.yaml` file, based on the users current `.ambry.yaml` file. So, your 
- development environment where you run these tests must have access to your `.ambry.yaml` file. 
+ The `config` field contains config used for all tests based on the users `.ambry/config.yaml` (FIXME: it seems tests never use user's config. Check again.) updated with support/test-config/config.yaml` file.
  
- The user's `.ambry.yaml` file should have a few extra configuration values for testing: 
+ The user's `.ambry/config.yaml` file should have a few extra configuration values for testing:
  
  * filesystem.test: The path to the library root for testing
  * database.test-postgres: A DSN to a postgres database
- * database.test-sqlite: A DSN to a sqlite database. 
+ * database.test-sqlite: A DSN to a sqlite database.
  
- If `database.test-sqlite` isn't specified, it will default to `library.db` in the test root director. 
- 
- The tests will select either the sqlite or the postgres database based on the value of the `AMBRY_TEST_DB` 
- environmental variable. The code actually looks for a database entry named "database.test-$AMBRY_TEST_DB" and if 
- that is not found, will default to `test-sqlite`
- 
- Many of the old tests imported bundles. THe most important of these bundles are still available in the old locations
- but new code should use the new bundles, located in test.bundle_tests. To get to these bundles in functional tests, 
- they should be loaded in the test library, which is most often done in the test class  set up method: 
- 
-```class Test(TestBase):
+ If `database.test-sqlite` isn't specified, it will default to `library.db` in the test root director.
 
-    @classmethod
-    def setUpClass(cls):
-        cls.import_bundles()
+ DSNs listed about can be changed by `AMBRY_TEST_DB` environmental variable which should contain DSN of the db.
+ Examples:
+
+```bash
+$ export AMBRY_TEST_DB="postgresql+psycopg2://ambry:secret@127.0.0.1/ambry_test"
+$ export AMBRY_TEST_DB="sqlite:////tmp/ambry-test.db"
+```
+
+ Some scenarios of the test database usage:
+1. Default case: AMBRY_TEST_DB is empty. Is such case ambry takes dsn from library.database setting and adds test postfix for database name. For example, if library.database = 'postgresql+psycopg2://ambry:secret@127.0.0.1/ambry' then 'postgresql+psycopg2://ambry:secret@127.0.0.1/ambry_test' database will be used for testing.
+2. Case 2: AMBRY_TEST_DB has value - in such case database from environment variable will be used, `library.database` will be ignored.
+ 
+ Test code should use new bundles, located in test.bundle_tests. To get to these bundles in functional tests, inherit your tests from TestBase and call library() method.
+ 
+```python
+class Test(TestBase):
+    def setUp(cls):
+        library = self.library()
 ```
  
-After this call, `self.library().bundles` will be an iterator to access of of the loaded bundles. 
+After this call, `library` will contain loaded bundles. Also there is the way to get library without bundles by calling library() method with `use_proto` parameter equals to True.
+
+```python
+class Test(TestBase):
+    def setUp(cls):
+        library = self.library(use_proto=False)
+```
+
 
 ## Bundle functional tests. 
 
@@ -66,7 +77,6 @@ bundles. See the `ambry/test/bundle_tests/ingest.example.com/stages` bundle as a
 and it is a normal python `uittest` test class, with annotations to mark tests for specific parts of the build process:
 
 ```class Test(BundleTest):
-
 
     @before_run
     def test_before_run(self):

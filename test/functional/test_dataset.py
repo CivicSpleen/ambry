@@ -20,43 +20,46 @@ class Test(TestBase):
         library = self.library(use_proto=False)
         db = library.database
 
-        # Creating and conflicts
-        #
-        db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
-        db.new_dataset(vid=self.dn[1], source='source', dataset='dataset')
-
-        with self.assertRaises(ConflictError):
+        try:
+            # Creating and conflicts
+            #
             db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
+            db.new_dataset(vid=self.dn[1], source='source', dataset='dataset')
 
-        dn = DatasetNumber(100)
+            with self.assertRaises(ConflictError):
+                db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
 
-        # datasets() gets datasets, and latest give id instead of vid
-        #
-        db.new_dataset(vid=str(dn.rev(5)), source='a', dataset='dataset')
-        db.new_dataset(vid=str(dn.rev(1)), source='a', dataset='dataset')
-        db.new_dataset(vid=str(dn.rev(3)), source='a', dataset='dataset')
-        db.new_dataset(vid=str(dn.rev(4)), source='a', dataset='dataset')
+            dn = DatasetNumber(100)
 
-        ds = db.dataset(str(dn.rev(5)))
-        self.assertEqual(str(dn.rev(5)), ds.vid)
+            # datasets() gets datasets, and latest give id instead of vid
+            #
+            db.new_dataset(vid=str(dn.rev(5)), source='a', dataset='dataset')
+            db.new_dataset(vid=str(dn.rev(1)), source='a', dataset='dataset')
+            db.new_dataset(vid=str(dn.rev(3)), source='a', dataset='dataset')
+            db.new_dataset(vid=str(dn.rev(4)), source='a', dataset='dataset')
 
-        ds = db.dataset(str(dn.rev(3)))
-        self.assertEqual(str(dn.rev(3)), ds.vid)
+            ds = db.dataset(str(dn.rev(5)))
+            self.assertEqual(str(dn.rev(5)), ds.vid)
 
-        ds = db.dataset(str(dn.rev(None)))
-        self.assertEqual(str(dn.rev(5)), ds.vid)
+            ds = db.dataset(str(dn.rev(3)))
+            self.assertEqual(str(dn.rev(3)), ds.vid)
 
-        db.new_dataset(vid=str(dn.rev(6)), source='a', dataset='dataset')
+            ds = db.dataset(str(dn.rev(None)))
+            self.assertEqual(str(dn.rev(5)), ds.vid)
 
-        ds = db.dataset(str(dn.rev(None)))
-        self.assertEqual(str(dn.rev(6)), ds.vid)
+            db.new_dataset(vid=str(dn.rev(6)), source='a', dataset='dataset')
 
-        db.close()
+            ds = db.dataset(str(dn.rev(None)))
+            self.assertEqual(str(dn.rev(6)), ds.vid)
+        finally:
+            db.close()
 
     def test_config(self):
 
         db = self.library().database
 
-        db.root_dataset.config.library.config.path = 'foobar'
-
-        self.assertEqual('foobar',  db.root_dataset.config.library.config.path)
+        try:
+            db.root_dataset.config.library.config.path = 'foobar'
+            self.assertEqual('foobar',  db.root_dataset.config.library.config.path)
+        finally:
+            db.close()
