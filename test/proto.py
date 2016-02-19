@@ -58,7 +58,6 @@ class ProtoLibrary(object):
         update_config(self.config, use_environ=False)
 
         assert self.config.loaded[0] == config_path + '/config.yaml'
-        import pdb; pdb.set_trace()
 
         # Populate library and proto DSNs
         if os.environ.get('AMBRY_TEST_DB'):
@@ -367,7 +366,6 @@ proto-dsn: {}
 
     def create_pg(self, re_create=False, template_name=None):
         from ambry.util import select_from_url
-        import pdb; pdb.set_trace()
 
         database_name = select_from_url(self.config.library.database, 'path').strip('/')
 
