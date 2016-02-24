@@ -20,10 +20,7 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__, level=logging.ERROR)
 
-# debug logging
-#
-import logging
-module_logger = get_logger(__name__, level=logging.ERROR, propagate=False)
+
 
 class Warehouse(object):
     """ Provides SQL access to datasets in the library, allowing users to issue SQL queries, either as SQL
@@ -37,9 +34,10 @@ or via SQLAlchemy, to return datasets.
         self._library = library
 
         if not logger:
-            logger = module_logger
-
-        self._logger = logger
+            import logging
+            self._logger = get_logger(__name__, level=logging.ERROR, propagate=False)
+        else:
+            self._logger = logger
 
         if not dsn:
             # Use library database.
@@ -48,7 +46,7 @@ or via SQLAlchemy, to return datasets.
         # Initialize appropriate backend.
         if dsn.startswith('sqlite:'):
             from ambry.mprlib.backends.sqlite import SQLiteBackend
-            logger.debug('Initializing sqlite warehouse.')
+            self._logger.debug('Initializing sqlite warehouse.')
             self._backend = SQLiteBackend(library, dsn)
 
         elif dsn.startswith('postgres'):
@@ -93,19 +91,21 @@ or via SQLAlchemy, to return datasets.
         """Return A Sqlalchemy engine"""
         return create_engine(self._warehouse_dsn)
 
-    def install(self, ref, table_name=None, index_columns=None):
+    def install(self, ref, table_name=None, index_columns=None,logger=None):
         """ Finds partition by reference and installs it to warehouse db.
 
         Args:
             ref (str): id, vid (versioned id), name or vname (versioned name) of the partition.
 
         """
+
+
         try:
             obj_number = ObjectNumber.parse(ref)
             if isinstance(obj_number, TableNumber):
                 table = self._library.table(ref)
                 connection = self._backend._get_connection()
-                return self._backend.install_table(connection, table)
+                return self._backend.install_table(connection, table, logger=logger)
             else:
                 # assume partition
                 raise NotObjectNumberError
@@ -116,9 +116,10 @@ or via SQLAlchemy, to return datasets.
             connection = self._backend._get_connection()
 
             return self._backend.install(
-                connection, partition, table_name=table_name, index_columns=index_columns)
+                connection, partition, table_name=table_name, index_columns=index_columns,
+                logger=logger)
 
-    def materialize(self, ref, table_name=None, index_columns=None):
+    def materialize(self, ref, table_name=None, index_columns=None, logger=None):
         """ Creates materialized table for given partition reference.
 
         Args:
@@ -135,8 +136,9 @@ or via SQLAlchemy, to return datasets.
         partition = self._library.partition(ref)
 
         connection = self._backend._get_connection()
+
         return self._backend.install(connection, partition, table_name=table_name,
-                                     index_columns=index_columns, materialize=True)
+                                     index_columns=index_columns, materialize=True, logger=logger)
 
     def index(self, ref, columns):
         """ Create an index on the columns.
@@ -146,10 +148,19 @@ or via SQLAlchemy, to return datasets.
             columns (list of str): names of the columns needed indexes.
 
         """
+        from ambry.orm.exc import NotFoundError
+
         logger.debug('Creating index for partition.\n    ref: {}, columns: {}'.format(ref, columns))
+
         connection = self._backend._get_connection()
-        partition = self._library.partition(ref)
-        self._backend.index(connection, partition, columns)
+
+        try:
+            table_or_partition = self._library.partition(ref)
+        except NotFoundError:
+            table_or_partition = ref
+
+
+        self._backend.index(connection, table_or_partition, columns)
 
     def parse_sql(self, asql):
         """ Executes all sql statements from asql.
@@ -192,6 +203,7 @@ or via SQLAlchemy, to return datasets.
         rec = process_sql(asql, self._library)
 
         for drop in reversed(rec.drop):
+
             if drop:
                 connection = self._backend._get_connection()
                 cursor = self._backend.query(connection, drop, fetch=False)
@@ -199,21 +211,24 @@ or via SQLAlchemy, to return datasets.
 
         for vid in rec.materialize:
             logger.debug('Materialize {}'.format(vid))
-            self.materialize(vid)
+            self.materialize(vid, logger=logger)
 
         for vid in rec.install:
             logger.debug('Install {}'.format(vid))
-            self.install(vid)
 
-        for vid, columns in rec.indexes:
+            self.install(vid, logger=logger)
+
+        for table_or_vid, columns in rec.indexes:
+
             logger.debug('Index {}'.format(vid))
+
             try:
-                self.index(vid, columns)
+                self.index(table_or_vid, columns)
             except NotFoundError as e:
-                # Not logging as an error becauseits common when views are referenced
+                # Comon when the index table in's a VID, so no partition can be found.
+
                 logger.debug('Failed to index {}; {}'.format(vid, e))
             except Exception as e:
-
                 logger.error('Failed to index {}; {}'.format(vid, e))
 
         for statement in rec.statements:
@@ -226,6 +241,7 @@ or via SQLAlchemy, to return datasets.
                 logger.debug('    Create {}'.format(statement))
                 connection = self._backend._get_connection()
                 cursor = self._backend.query(connection, statement, fetch=False)
+
                 cursor.close()
 
             elif statement.lower().startswith('select'):

@@ -24,7 +24,7 @@ import logging
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 122
+SCHEMA_VERSION = 123
 
 # Note: If you are going to change POSTGRES_SCHEMA_NAME do not forget to change docs:
 #   1. README.rst (search for 'Install pg_trgm extension')
@@ -639,28 +639,41 @@ class Database(object):
     def _copy_dataset_merge(self, ds, source_session, dest_session, table_class, incver, cb=None):
         from sqlalchemy.orm import noload, undefer
 
-        i = [0]
+        i = [0] # ? Why are we doing this?
 
         options = [noload('*')]
         if table_class == File:
             options.append(undefer('contents'))
+
+        objects = []
 
         for o in source_session.query(table_class).filter(table_class.d_vid == ds.vid).options(*options).all():
 
             if incver:
                 o = o.incver()
 
-            dest_session.merge(o)
+            objects.append(o.__dict__)
 
             i[0] += 1
 
-            if i[0] % 1000 == 0:
-                if cb:
-                    cb('Copy dataset', i[0])
-                else:
-                    self.logger.info("Copied {} records".format(i[0]))
+            if i[0] % 20000 == 0:
 
+                dest_session.bulk_insert_mappings(table_class, objects)
                 dest_session.commit()
+
+                if cb:
+                 cb('Copy dataset', i[0])
+                else:
+                    self.logger.info("Copied {} records of table {} for {}".format(i[0], table_class, ds.vid))
+
+                objects = []
+
+        if objects:
+            dest_session.bulk_insert_mappings(table_class, objects)
+
+        dest_session.commit()
+
+        self.logger.info("Copied {} records of table {} for {}".format(i[0], table_class, ds.vid))
 
     def _copy_dataset_configs(self, ds, source_session, dest_session, incver):
         # FIXME: Oh, this is horrible. Sqlalchemy inserts all of the configs as a group, but they are self-referential,
@@ -672,8 +685,11 @@ class Database(object):
 
         configs = source_session.query(Config).filter(Config.d_vid == ds.vid).options(noload('*')).all()
 
-        dag = {c.id: set([c.parent_id]) for c in configs}
+        dag = {c.id: {c.parent_id} for c in configs}
         refs = {c.id: c for c in configs}
+
+        seen = set()
+        objects = []
 
         for e in toposort(dag):
             for ref in e:
@@ -681,7 +697,16 @@ class Database(object):
                     config = refs[ref]
                     if incver:
                         config = config.incver()
-                    dest_session.merge(config)
+
+                    assert config.id not in seen
+
+                    objects.append(config.__dict__)
+
+                    seen.add(config.id)
+
+                    #dest_session.add(config)
+
+        dest_session.bulk_insert_mappings(Config, objects)
 
         dest_session.commit()
 

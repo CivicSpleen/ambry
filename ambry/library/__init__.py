@@ -281,8 +281,6 @@ class Library(object):
         ds = self._db.dataset(identity.vid, exception=False)
 
         if not ds:
-            ds = self._db.dataset(identity.name, exception=False)
-        if not ds:
             ds = self._db.new_dataset(**identity.dict)
 
         b = Bundle(ds, self)
@@ -515,7 +513,7 @@ class Library(object):
         # b.state = Bundle.STATES.INSTALLED
         b.commit()
 
-        # self.search.index_library_datasets(tick)
+        #self.search.index_library_datasets(tick)
 
         self.search.index_bundle(b)
 
@@ -663,6 +661,7 @@ class Library(object):
         def cb(r, total):
             self.logger.info("{}: Downloaded {} bytes".format(ref, total))
 
+        b = None
         try:
             b = self.bundle(ref)
             self.logger.info("{}: Already installed".format(ref))
@@ -670,12 +669,19 @@ class Library(object):
 
         except NotFoundError:
             self.logger.info("{}: Syncing".format(ref))
-            with NamedTemporaryFile() as temp:
-                with remote.checkout(ref) as f:
-                    copy_file_or_flo(f, temp, cb=cb)
-                    temp.flush()
 
-                    self.checkin_bundle(temp.name)
+            db_dir = self.filesystem.downloads('bundles')
+            db_f = os.path.join(db_dir, ref) #FIXME. Could get multiple versions of same file. ie vid and vname
+
+            if not os.path.exists(os.path.join(db_dir, db_f)):
+
+                self.logger.info("Downloading bundle '{}' to '{}".format(ref, db_f))
+                with open(db_f, 'wb') as f_out:
+                    with remote.checkout(ref) as f:
+                        copy_file_or_flo(f, f_out, cb=cb)
+                        f_out.flush()
+
+            self.checkin_bundle(db_f)
 
             b = self.bundle(ref)  # Should exist now.
 
@@ -688,7 +694,8 @@ class Library(object):
             b.commit()
 
         finally:
-            b.progress.close()
+            if b:
+                b.progress.close()
 
         vid = b.identity.vid
 
@@ -728,6 +735,13 @@ class Library(object):
 
         r = None
 
+        if not r: # It is the upstream for the dataset -- where it was checked out from
+                  # This should really only apply to partitions, so they come from the same place as bundle
+            try:
+                r = self._remote(name_or_bundle.dataset.upstream)
+            except (NotFoundError, AttributeError, KeyError):
+                r = None
+
         if not isinstance(name_or_bundle, Bundle): # It is a remote short_name
             try:
                 r = self._remote(text_type(name_or_bundle))
@@ -743,12 +757,6 @@ class Library(object):
         if not r: # Inferred from the metadata
             try:
                 r = self._remote(name_or_bundle.metadata.about.access)
-            except (NotFoundError, AttributeError, KeyError):
-                r = None
-
-        if not r: # It is the upstream for the dataset -- where it was checked out from
-            try:
-                r = self._remote(name_or_bundle.dataset.upstream)
             except (NotFoundError, AttributeError, KeyError):
                 r = None
 

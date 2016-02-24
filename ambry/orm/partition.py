@@ -636,6 +636,7 @@ class Partition(Base):
         local = self._bundle.build_fs
 
         b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+
         remote = self._bundle.library.remote(b)
 
         lock_path = local.getsyspath(self.cache_key + '.lock')
@@ -675,7 +676,7 @@ class Partition(Base):
             raise e
 
         with lock:
-            # FIXME! This won't work with remote API, only FS
+            # FIXME! This won't work with remote ( http) API, only FS ( s3:, file:)
 
             if self.is_local:
                 return self
@@ -691,7 +692,8 @@ class Partition(Base):
                         ps.update_done()
             except ResourceNotFoundError as e:
                 from ambry.orm.exc import NotFoundError
-                raise NotFoundError("Failed to get MPRfile '{}' from {} ".format(self.cache_key, remote.fs))
+                raise NotFoundError("Failed to get MPRfile '{}' from {}: {} "
+                                    .format(self.cache_key, remote.fs, e))
 
 
         return self
@@ -749,16 +751,10 @@ class Partition(Base):
 
         :return: Pandas dataframe
 
-        WARNING: This routine works from the reader iterator, which returns RowProxy objects. RowProxy objects
-        are reused, so if you construct a list directly from the output from this method, the list will have
-        multiple copies of a single RowProxy, which will have as an inner row the last result row. If you will
-        be directly constructing a list, use a getter that extracts the inner row, or which converts the RowProxy
-        to a dict:
 
-            list(s.datafile.select(lambda r: r.stusab == 'CA', lambda r: r.dict ))
         """
 
-        import pandas as pd
+        from ambry.pands import AmbryDataFrame
 
         if predicate:
             def yielder():
@@ -766,10 +762,11 @@ class Partition(Base):
                     if predicate(row):
                         yield row.dict
 
-            return pd.DataFrame(yielder(), columns=self.table.header)
+            return AmbryDataFrame(self, yielder(), columns=self.table.header)
+
 
         else:
-            return pd.DataFrame([row.values() for row in self.reader], columns=self.table.header)
+            return AmbryDataFrame(self, [row.values() for row in self.reader], columns=self.table.header)
 
 
     def geoframe(self, simplify=None, predicate=None, crs = None, epsg = None):

@@ -47,7 +47,7 @@ class SQLiteBackend(DatabaseBackend):
 
         if self._relation_exists(connection, table):
             if logger:
-                logger.info("Skipping '{}'; already installed".format(table))
+                logger.debug("Skipping '{}'; already installed".format(table))
             return
         else:
             if logger:
@@ -121,7 +121,10 @@ class SQLiteBackend(DatabaseBackend):
 
         col_hash = hashlib.md5(col_list).hexdigest()
 
-        table_name = partition.vid
+        try:
+            table_name = partition.vid
+        except AttributeError:
+            table_name = partition # Its really a table name
 
         query = query_tmpl.format(
             index_name='{}_{}_i'.format(table_name, col_hash), table_name=table_name,

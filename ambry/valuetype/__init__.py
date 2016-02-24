@@ -9,6 +9,35 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from six import text_type
 from datetime import date
 
+"""
+
+Geo
+      FIPS codes
+      Census geoids
+      Tiger geoids
+      ACS geoids
+
+Time
+    Date
+    Time
+    Datetime
+    Duration
+    Period
+
+Error
+    SE
+    RSE
+    u95ci
+    l95ci
+    s95ci (symmetric)
+
+Format. Type dependent. Regex or Date / Time code
+
+Names versus codes
+
+
+"""
+
 def import_valuetype(name):
     import importlib
     full_qual = 'ambry.valuetype.' + name
@@ -88,8 +117,7 @@ class DateValue(date, ValueType):
             o = super(DateValue, cls).__new__(cls, 1900, 1, 1)
         return o
 
-class RegEx(StrValue):
-    pass
+
 
 from decorator import decorator
 

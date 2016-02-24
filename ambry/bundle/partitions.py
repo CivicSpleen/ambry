@@ -244,4 +244,22 @@ class Partitions(object):
                     ins.insert(d)
         return p
 
+    def _repr_html_(self):
+        from tabulate import tabulate
+        from ambry.util import drop_empty
+
+        def record_gen():
+            for i, p in enumerate(self):
+                if i == 0:
+                    yield ['vid','vname','table','time','space','grain', 'description','sub-desc']
+                yield [
+                    p.vid, p.vname, p.table.name, p.time, p.space, p.grain, p.description,p.display.sub_description
+                ]
+
+        records = list(record_gen())
+
+        records = drop_empty(records)
+
+        return "<h2>Partitions in {} </h2>".format(self.bundle.identity.name) \
+               + tabulate(records[1:], headers=records[0], tablefmt="html")
 

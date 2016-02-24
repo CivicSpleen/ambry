@@ -32,7 +32,10 @@ class Geoid(ValueType):
         if isinstance(v, Geoid):
             self.geoid = v
         else:
-            self.geoid = self.parser(v)
+            try:
+                self.geoid = self.parser(v)
+            except ValueError:
+                self.geoid = self.parser('invalid')
 
     @classmethod
     def parse(cls,  v):

@@ -5,6 +5,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+# Deprecated, use exc instead.
+
 
 class RequirementError(ImportError):
 
@@ -126,3 +128,4 @@ class IngestionError(PhaseError):
 class TestError(PhaseError):
 
     """Error or failure in built in tests"""
+

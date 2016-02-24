@@ -355,7 +355,7 @@ class Dataset(Base):
 
         if ref:
 
-            for p in self.partitions:
+            for p in self.partitions: # This is slow for large datasets, like Census years.
                 if (text_type(ref) == text_type(p.name) or text_type(ref) == text_type(p.id) or
                             text_type(ref) == text_type(p.vid)):
                     return p

@@ -317,11 +317,12 @@ select_stmt << (
 #
 materialized_kw = Keyword('materialized', caseless=True)
 view_token = Keyword('view', caseless=True)
+table_token = Keyword('table', caseless=True) # Now, it is is also a table statement, not just a view statement
 _view_stmt = Forward()
 _view_stmt << (
     create_kw
     + Optional(materialized_kw)
-    + view_token
+    + (view_token | table_token)
     + Combine(ident).setResultsName('name')
     + as_kw
     + select_stmt
@@ -334,7 +335,8 @@ index_source = delimitedList(source_ident, '.', combine=True)
 index_kw = Keyword('index', caseless=True)
 _index_stmt = Forward()
 _index_stmt << (
-    index_kw
+    Optional(create_kw)
+    + index_kw
     + index_source.setResultsName('source')
     + '(' + column_name_list.setResultsName('columns') + ')')
 
@@ -495,9 +497,9 @@ def find_indexable_materializable(sql, library):
 
     derefed, tables, partitions = substitute_vids(library, sql)
 
-    if derefed.lower().startswith('create index'):
+    if derefed.lower().startswith('create index') or derefed.lower().startswith('index'):
         parsed = parse_index(derefed)
-        return FIMRecord(statement=derefed, index=[(parsed.source, tuple(parsed.columns))])
+        return FIMRecord(statement=derefed, indexes=[(parsed.source, tuple(parsed.columns))])
 
     elif derefed.lower().startswith('materialize'):
         _, vid = derefed.split()
@@ -510,6 +512,13 @@ def find_indexable_materializable(sql, library):
     elif derefed.lower().startswith('select'):
         rec = FIMRecord(statement=derefed)
         parsed = parse_select(derefed)
+
+    elif derefed.lower().startswith('drop'):
+        return FIMRecord(statement=derefed, drop=derefed)
+
+    elif derefed.lower().startswith('create table'):
+        parsed = parse_view(derefed)
+        rec = FIMRecord(statement=derefed, drop='DROP TABLE IF EXISTS {};'.format(parsed.name), views=1)
 
     elif derefed.lower().startswith('create view'):
         parsed = parse_view(derefed)

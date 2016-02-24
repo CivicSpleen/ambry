@@ -1008,18 +1008,27 @@ Caster Code
 
         elif source.reftype == 'sql':
 
-            if ':' in source.ref:
-                # The ref specifies a table/view to call
-                sql_file, table = source.ref.split(':', 1)
+            if source.ref.strip().lower().startswith('select'):
+                # Inline SQL
+                sql_text = source.ref.strip().strip(';')+';'
+                table = None
+                warehouse_name = source.vid
             else:
-                # Just use the first select in the sql file.
-                sql_file, table = source.ref, None
+                # References a SQL file
+                if ':' in source.ref:
+                    # The ref specifies a table/view to call
+                    sql_file, table = source.ref.split(':', 1)
+                else:
+                    # Just use the first select in the sql file.
+                    sql_file, table = source.ref, None
 
-            w = self.warehouse(os.path.splitext(sql_file)[0])
+                f = self.build_source_files.file_by_path(sql_file)
+                sql_text = f.unpacked_contents
+                warehouse_name = os.path.splitext(sql_file)[0]
 
-            f = self.build_source_files.file_by_path(sql_file)
+            w = self.warehouse(warehouse_name)
 
-            cursor = w.query(f.unpacked_contents, logger=self.logger)
+            cursor = w.query(sql_text, logger=self.logger)
 
             if table:
                 # If the table as secified, select all from it
@@ -1093,6 +1102,7 @@ Caster Code
                         source=source,
                         state='downloading')
             try:
+
                 s = get_source(
                     source.spec, self.library.download_cache,
                     account_accessor=self.library.account_accessor, callback=progress)
@@ -1937,6 +1947,7 @@ Caster Code
                     kwds = dict(
                         name=name,
                         datatype=datatype,
+                        description=desc,
                         update_existing=True
                     )
 
@@ -2694,6 +2705,7 @@ Caster Code
 
     def package(self, rebuild=True, partition_location='remote', incver=False,
                 source_only=False, variation=None):
+
         from ambry.orm import Database, Partition, Config
 
         identity = self.identity

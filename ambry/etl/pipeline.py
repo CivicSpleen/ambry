@@ -402,6 +402,8 @@ class PartitionSourcePipe(Pipe):
         self._source = source
         self._partition = partition
 
+        self._partition.localize()
+
         # file_name is for the pipeline logger, to generate a file
         self.file_name = self._source.name
 

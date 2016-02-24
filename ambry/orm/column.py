@@ -16,7 +16,7 @@ import six
 import sqlalchemy
 
 from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, Boolean, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Integer, Float, Boolean, UniqueConstraint
 from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 
@@ -38,56 +38,47 @@ class Column(Base):
     _parent_col = 'c_t_vid'
 
     vid = SAColumn('c_vid', String(18), primary_key=True)
-    id = SAColumn('c_id', String(15))
+    id = SAColumn('c_id', String(15)) # Probably not necessary
+
     sequence_id = SAColumn('c_sequence_id', Integer)
     is_primary_key = SAColumn('c_is_primary_key', Boolean, default=False)
+
     t_vid = SAColumn('c_t_vid', String(15), ForeignKey('tables.t_vid'), nullable=False, index=True)
     d_vid = SAColumn('c_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     t_id = SAColumn('c_t_id', String(12))
-    name = SAColumn('c_name', Text)
-    fqname = SAColumn('c_fqname', Text)  # Name with the vid prefix
+
+    name = SAColumn('c_name', Text, index=True)
     altname = SAColumn('c_altname', Text)
     datatype = SAColumn('c_datatype', Text)
     valuetype = SAColumn('c_valuetype', Text)
-    start = SAColumn('c_start', Integer)
-    size = SAColumn('c_size', Integer)
-    width = SAColumn('c_width', Integer)
-    sql = SAColumn('c_sql', Text)
+    start = SAColumn('c_start', Integer, doc='For fixed width files, the starting position of the column')
+    size = SAColumn('c_size', Integer, doc='For fixed width files, the ending position of the column')
+    width = SAColumn('c_width', Integer, doc='For fixed width files, the width of the column')
+    default = SAColumn('c_default', Text)
+    illegal_value = SAColumn('c_illegal_value', Text)  # A special value meaning N/A or nan, etc.
+
     summary = SAColumn('c_summary', Text)
     description = SAColumn('c_description', Text)
     keywords = SAColumn('c_keywords', Text)
 
-    units = SAColumn('c_units', Text)
-    universe = SAColumn('c_universe', Text)
     lom = SAColumn('c_lom', String(1),
                    doc='Level of Measurement: n,o,i,r for Nominal, Ordinal, Interval, Ratio')
-
-    # Type Codes, major / minor
-    # err/se Standard Error
-    # err/rse Relative Standard error
-    # err/{95,90}{u,l,s}{r,a} {90,95}% confidence interval, {upper,lower, symmetric}, {absolute, relative} value
-    #
-    # major_type = SAColumn('c_major_type', String(4), doc='Major Type Code, e=Error')
-    # minor_type = SAColumn('c_minor_type', String(4), doc='')
-    # group = SAColumn('c_parent', Text, doc='Name of parent column, for groups or related columns ')
+    role = SAColumn('c_role', String(1),
+                   doc='Role: key, dimension, measure, error, name')
+    scale = SAColumn('c_scale', Float, doc='Number of measure units per natural units. Ie, if 1 == 1000 people, scale = 1000')
+    units = SAColumn('c_units', Text)
+    universe = SAColumn('c_universe', Text)
 
     derivedfrom = SAColumn('c_derivedfrom', Text)
+    numerator = SAColumn('c_numerator', String(20))
+    denominator = SAColumn('c_denominator', String(20))
 
     # New column value casters and generators
     _transform = SAColumn('c_transform', Text)
 
-    # ids of columns used for computing ratios, rates and densities
-    numerator = SAColumn('c_numerator', String(20))
-    denominator = SAColumn('c_denominator', String(20))
-
-    indexes = SAColumn('t_indexes', MutationList.as_mutable(JSONEncodedObj))
-    uindexes = SAColumn('t_uindexes', MutationList.as_mutable(JSONEncodedObj))
-
-    default = SAColumn('c_default', Text)
-    illegal_value = SAColumn('c_illegal_value', Text)
-
     data = SAColumn('c_data', MutationDict.as_mutable(JSONEncodedObj))
 
+    # This column should really be called 'value labels'
     codes = relationship(Code, backref='column', order_by='asc(Code.key)',
                          cascade='save-update, delete, delete-orphan')
 

@@ -56,7 +56,7 @@ class Config(Base):
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     def __repr__(self):
-        return u('<config: {},{},{} = {}>').format(self.d_vid, self.group, self.key, self.value)
+        return u('<config: {} {},{},{} = {}>').format(self.id, self.d_vid, self.group, self.key, self.value)
 
     @property
     def dotted_key(self):

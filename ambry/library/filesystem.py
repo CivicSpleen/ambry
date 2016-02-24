@@ -32,7 +32,6 @@ class LibraryFilesystem(object):
             args = [e.strip() for e in args]
             p = join(p, *args)
 
-
         if not isdir(p) and mkdir:
             makedirs(p)
 

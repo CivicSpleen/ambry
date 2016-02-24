@@ -73,8 +73,7 @@ cp -r /vagrant/service/* /etc/sv
 mkdir -p /var/log/ambry/notebook
 mkdir -p /var/log/ambry/ambryui
 
-
-adduser log --disabled-password
+adduser log --system --disabled-password
 
 chown log /var/log/ambry/ambryui
 chown log /var/log/ambry/notebook

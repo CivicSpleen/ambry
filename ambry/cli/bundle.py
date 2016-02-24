@@ -783,6 +783,7 @@ def bundle_duplicate(args, l, rc):
 
     prt('Building bundle package')
     package = orig_b.package(rebuild=True, source_only=True, incver=True)
+
     prt('Wrote package to {}'.format(package.path))
     b = l.checkin_bundle(package.path)
     prt('Checked in: {}'.format(b.identity.fqname))
@@ -1432,6 +1433,7 @@ def bundle_new(args, l, rc):
     print(b.identity.fqname)
 
 def bundle_import(args, l, rc):
+    from ambry.identity import Identity
 
     if args.source:
         source_dir = args.source
@@ -1453,7 +1455,8 @@ def bundle_import(args, l, rc):
         if not config:
             fatal("Failed to get a valid bundle configuration from '{}'".format(source_dir))
 
-        bid = config['identity']['id']
+        # Need to construct an Identity b/c the config data only has the id, not the vid.
+        bid = Identity.from_dict(config['identity']).vid
 
         try:
             b = l.bundle(bid, True)
