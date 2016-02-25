@@ -549,7 +549,8 @@ class Partition(Base):
 
     @property
     def datafile(self):
-        from ambry.orm.exc import NotFoundError
+        from ambry.exc import NotFoundError
+
 
         if self.is_local:
             # Use the local version, if it exists
@@ -564,6 +565,8 @@ class Partition(Base):
                 # If the remote doesnt exist, return the local, so the caller can call  exists() on it,
                 # get its path, etc.
                 return self.local_datafile
+
+
 
     @property
     def local_datafile(self):
@@ -583,7 +586,8 @@ class Partition(Base):
     def remote_datafile(self):
 
         from fs.errors import ResourceNotFoundError
-        from ambry.orm.exc import NotFoundError
+        from ambry.exc import AccessError, NotFoundError
+        from boto.exception import S3ResponseError
 
         try:
 
@@ -608,6 +612,8 @@ class Partition(Base):
         except ResourceNotFoundError as e:
             raise NotFoundError('Could not locate data file for partition {} (remote): {}'
                                 .format(self.identity.fqname, e))
+        except S3ResponseError as e:
+            raise AccessError("Can't access MPR file for {} in remote {}".format(self.cache_key, remote.fs))
 
         return datafile
 

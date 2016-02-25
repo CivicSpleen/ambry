@@ -234,18 +234,23 @@ class Remote(Base):
             def cb_one_arg(n):
                 cb('Uploading package', n)
         else:
-            cb_one_arg = None
+            def cb_one_arg(n):
+                logger.info('Uploading package {} bytes'.format(n))
 
         with open(package.path) as f:
             remote.makedir(os.path.dirname(db_ck), recursive=True, allow_recreate=True)
             e = remote.setcontents_async(db_ck, f, progress_callback=cb_one_arg)
             e.wait()
 
+
         if package.library:
             for p in package.session.query(Partition).filter(Partition.type == Partition.TYPE.UNION).all():
+
                 self._put_partition_fs(remote, p, package.library, force = force, cb=cb)
 
+
         self._put_metadata(remote, ds)
+
 
         try:
             return remote, remote.getpathurl(db_ck)
@@ -256,6 +261,7 @@ class Remote(Base):
             return remote, remote.getsyspath(db_ck)
         except NoSysPathError:
             pass
+
 
         return remote, None
 

@@ -2768,8 +2768,9 @@ Caster Code
 
         b = Bundle(ds, self.library)
         bfs = b.build_source_files.file(File.BSFILE.META)
-
+        bfs.update_identity()
         b.clear_file_systems()
+        b.commit()
 
         db.session.query(Partition).update({'_location': partition_location})
         db.session.commit()
@@ -2786,7 +2787,7 @@ Caster Code
         package = self.package(source_only=source_only)
 
         if not cb:
-            @call_interval(10)
+            #@call_interval(10)
             def cb(message, bytes):
                 self.log("{}; {} bytes".format(message, bytes))
 

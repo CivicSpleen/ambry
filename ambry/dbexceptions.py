@@ -125,6 +125,10 @@ class IngestionError(PhaseError):
     """General error while ingesting sources."""
 
 
+class AccessError(PhaseError):
+
+    """Could not access a remote resource"""
+
 class TestError(PhaseError):
 
     """Error or failure in built in tests"""

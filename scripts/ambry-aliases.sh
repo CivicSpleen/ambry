@@ -43,3 +43,48 @@ ambry_switch() {
         echo Error: No database for reference \'$1\'
     fi
 }
+
+set_bambry_prompt() {
+
+    local BLUE="\[\033[0;34m\]"
+    local DARK_BLUE="\[\033[1;34m\]"
+    local RED="\[\033[0;31m\]"
+    local DARK_RED="\[\033[1;31m\]"
+    local BLACK="\[\033[0;30m\]"
+    local WHITE="\[\033[1;37m\]"
+    local YELLOW="\[\033[1;33m\]"
+    local NO_COLOR="\[\033[0m\]"
+
+    case "$1" in
+        red)
+          COLOR=$RED
+          ;;
+        darkred)
+          COLOR=$DARK_RED
+          ;;
+        blue)
+          COLOR=$BLUE
+          ;;
+        darkblue)
+          COLOR=$DARK_BLUE
+          ;;
+        black)
+          COLOR=$BLACK
+          ;;
+        yellow)
+          COLOR=$YELLOW
+          ;;
+        white)
+          COLOR=$WHITE
+          ;;
+        *)
+          COLOR=$DARK_BLUE
+          ;;
+    esac
+
+    local bid=$(bambry info -w -q)
+
+    PS1="$COLOR$bid$NO_COLOR/$COLOR\W$NO_COLOR $: "
+
+}
+

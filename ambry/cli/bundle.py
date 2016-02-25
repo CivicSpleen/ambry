@@ -769,7 +769,7 @@ def check_built(b):
     """Exit if the bundle is built or finalized"""
     if b.is_finalized:
         fatal("Can't perform operation; state = '{}'. "
-              "Call `bambry clean` explicitly or build with -f option".format(b.state))
+              "Call `bambry clean -f` explicitly or build with -f option".format(b.state))
 
 def bundle_package(args, l, rc):
     b = using_bundle(args, l)
