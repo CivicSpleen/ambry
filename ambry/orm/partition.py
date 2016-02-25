@@ -613,7 +613,9 @@ class Partition(Base):
             raise NotFoundError('Could not locate data file for partition {} (remote): {}'
                                 .format(self.identity.fqname, e))
         except S3ResponseError as e:
-            raise AccessError("Can't access MPR file for {} in remote {}".format(self.cache_key, remote.fs))
+            # HACK. It looks like we get the response error with an access problem when
+            # we have access to S3, but the file doesn't exist.
+            raise NotFoundError("Can't access MPR file for {} in remote {}".format(self.cache_key, remote.fs))
 
         return datafile
 

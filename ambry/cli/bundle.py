@@ -662,8 +662,6 @@ def bundle_info(args, l, rc):
     inf(0, 'VID', b.identity.vid)
     inf(0, 'VName', b.identity.vname)
 
-    if 'remote_name' in b.dataset.data:
-        inf(0, 'Remote', b.dataset.data['remote_name'])
 
     inf(1, 'Dataset State', b.dstate)
     inf(1, 'Build State', (b.buildstate.state.current if b.buildstate.state.current else '') +
