@@ -735,10 +735,12 @@ class Library(object):
 
         r = None
 
-        if not r: # It is the upstream for the dataset -- where it was checked out from
-                  # This should really only apply to partitions, so they come from the same place as bundle
+        if not r:
+            # It is the upstream for the dataset -- where it was checked out from
+            # This should really only apply to partitions, so they come from the same place as bundle
             try:
-                r = self._remote(name_or_bundle.dataset.upstream)
+                if name_or_bundle.dstate != Bundle.STATES.BUILDING:
+                    r = self._remote(name_or_bundle.dataset.upstream)
             except (NotFoundError, AttributeError, KeyError):
                 r = None
 
