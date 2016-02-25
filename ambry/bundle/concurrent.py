@@ -146,7 +146,8 @@ def init_library(database_dsn, accounts_password, limited_run = False):
     #signal.signal(signal.SIGTERM, sigterm_handler)
 
     os.environ['AMBRY_DB'] = database_dsn
-    os.environ['AMBRY_PASSWORD'] = accounts_password
+    if accounts_password:
+        os.environ['AMBRY_PASSWORD'] = accounts_password
     os.environ['AMBRY_LIMITED_RUN'] = '1' if limited_run else '0'
 
 
