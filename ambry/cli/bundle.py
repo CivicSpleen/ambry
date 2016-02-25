@@ -685,6 +685,8 @@ def bundle_info(args, l, rc):
 
     inf(0, 'Build  FS', str(b.build_fs))
     inf(0, 'Source FS', str(b.source_fs))
+    if b.dataset.upstream:
+        inf(0, 'Upstream', str(b.dataset.upstream))
 
     print(tabulate(join(info[0]), tablefmt='plain'))
 
