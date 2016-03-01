@@ -135,11 +135,11 @@ class Library(object):
 
         return LibraryContext(self.ctor_args)
 
-    def sync_config(self):
+    def sync_config(self, force=False):
         """Sync the file config into the library proxy data in the root dataset """
         from ambry.library.config import LibraryConfigSyncProxy
         lcsp = LibraryConfigSyncProxy(self)
-        lcsp.sync()
+        lcsp.sync(force=force)
 
     def init_debug(self):
         """Initialize debugging features, such as a handler for USR2 to print a trace"""
@@ -411,6 +411,10 @@ class Library(object):
     def remove(self, bundle):
         """ Removes a bundle from the library and deletes the configuration for
         it from the library database."""
+        from six import string_types
+
+        if isinstance(bundle, string_types):
+            bundle = self.bundle(bundle)
 
         self.database.remove_dataset(bundle.dataset)
 
@@ -926,6 +930,11 @@ class Library(object):
         self.commit()
 
     def delete_account(self, a):
+        from six import string_types
+
+        if isinstance(a, string_types):
+            a = self.account(a)
+
         self.database.session.delete(a)
         self.commit()
 

@@ -42,7 +42,7 @@ class DatasetSearchResult(object):
                 p = self.bundle.partition_by_vid(p_result.vid)
                 p.score = p_result.score
                 yield p
-            except NotFoundError:
+            except (NotFoundError, AttributeError):
                 continue
 
     @property
@@ -61,7 +61,6 @@ class IdentifierSearchResult(object):
         self.vid = vid
         self.type = type
         self.name = name
-
 
 class PartitionSearchResult(object):
     """ Search result of the partition search index. """

@@ -1836,6 +1836,12 @@ class WriteToPartition(Pipe, PartitionWriter):
 
     def new_partition(self, pname, type_, **kwargs):
 
+        if 'title' not in kwargs:
+            kwargs['title'] = self.source.title
+
+        if 'description' not in kwargs:
+            kwargs['description'] = self.source.description
+
 
         return self.bundle.partitions.new_partition(pname, type=type_, **kwargs)
 

@@ -139,8 +139,8 @@ class Account(Base):
         self.encrypted_password = self.sym_encrypt(self.secret_password, v)
 
     def encrypt_password(self, v):
-
         from passlib.hash import pbkdf2_sha512
+        assert v is not None
         self.encrypted_password = pbkdf2_sha512.encrypt(v, rounds=50000, salt_size=16)
 
     def test(self, v):

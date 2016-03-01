@@ -82,9 +82,7 @@ set_bambry_prompt() {
           ;;
     esac
 
-    local bid=$(bambry info -w -q)
-
-    PS1="$COLOR$bid$NO_COLOR/$COLOR\W$NO_COLOR $: "
+    PS1="$COLOR$(bambry info -w -q)$NO_COLOR/$COLOR\W$NO_COLOR $ "
 
 }
 

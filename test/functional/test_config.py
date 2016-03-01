@@ -6,11 +6,11 @@ from ambry.dbexceptions import ConfigurationError
 from ambry.library import Library
 from ambry.library.filesystem import LibraryFilesystem
 from ambry.run import load, CONFIG_FILE
-
 from test.proto import TestBase
+import unittest
 
 
-class Test(TestBase):
+class TestConfigParsing(TestBase):
 
     def test_run_config_filesystem(self):
         self.assertEqual('{root}/downloads', self.config.filesystem.downloads)
@@ -156,6 +156,68 @@ library:
 
 from test.proto import TestBase as TestBaseProto
 
+
+class TestConfigFiles(unittest.TestCase):
+
+
+    def _test_config_dirs(self, files_dir):
+        import test
+        from os.path import dirname, join
+        import ambry.run
+
+        test_config_dir = join(dirname(test.__file__), 'test_config', files_dir)
+
+        config = ambry.run.load(test_config_dir, load_user=False)
+
+        print config.dump()
+
+        self.assertEqual(1, sum(1 for v in config.accounts.values() if isinstance(v,dict) and 'service' in v))
+
+        self.assertEqual(5, sum(1 for v in config.remotes.values() if 'url' in v))
+
+        for r in ('config1', 'config2', 'remotes1', 'remotes2', 'remotes3'):
+            self.assertIn(r, config.remotes)
+
+        self.assertEqual('34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW', config.remotes.config1.secret)
+        self.assertEqual('34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW', config.remotes.remotes1.secret)
+
+        # for r in config.flatten():
+        #    print r
+
+    def test_multiple_files(self):
+        import test
+        from os.path import dirname, join
+        import ambry.run
+
+        test_config_dir =  join(dirname(test.__file__), 'test_config','separate_files')
+
+        self.assertEquals(join(test_config_dir,ambry.run.ACCOUNTS_FILE),
+                          ambry.run.find_config_file(ambry.run.ACCOUNTS_FILE, test_config_dir))
+
+        self._test_config_dirs('separate_files')
+
+        self._test_config_dirs('single_file')
+
+    def test_remotes_accounts(self):
+        import test
+        from os.path import dirname, join, exists
+        from os import makedirs
+        import ambry.run
+        from ambry.library import Library
+
+        test_config_dir = join(dirname(test.__file__), 'test_config', 'separate_files')
+
+        config = ambry.run.load(test_config_dir, load_user=False)
+
+        if not exists(config.library.filesystem_root):
+            makedirs(config.library.filesystem_root)
+
+        l = Library(config)
+        l.sync_config(force=True)
+
+        for r in l.remotes:
+            print r.short_name, r.access, r.secret
+
 class MetadataTest(TestBaseProto):
 
     def test_dump_metadata(self):
@@ -185,4 +247,5 @@ class MetadataTest(TestBaseProto):
 
         self.assertEqual(b.metadata.about.processed,
                             b.build_source_files.bundle_meta.get_object().about.processed)
+
 

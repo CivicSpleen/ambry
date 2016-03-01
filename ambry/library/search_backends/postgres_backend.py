@@ -389,8 +389,6 @@ class PartitionPostgreSQLIndex(BasePartitionIndex,PostgresExecMixin):
             .format(terms, query_parts, query_params)
         logger.debug(deb_msg)
 
-        print str(text('\n'.join(query_parts)))
-
         return text('\n'.join(query_parts)), query_params
 
     def search(self, search_phrase, limit=None):

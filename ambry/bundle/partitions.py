@@ -173,6 +173,8 @@ class Partitions(object):
             kwargs.update((k, str(v)) for k, v in iteritems(name.dict)
                           if k in name_parts)
 
+        assert 'table' in kwargs
+
         p = self.bundle.dataset.new_partition(data=data, **kwargs)
 
         # These are called from before_insert and before_update,

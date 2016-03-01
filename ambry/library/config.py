@@ -49,8 +49,9 @@ class LibraryConfigSyncProxy(object):
         node = self.database.root_dataset.config.library.config['config_node']
 
         if force or change_time > load_time:
+            self.library.logger.info('Reloading config files')
             self.sync_accounts(self.config.accounts)
-            self.sync_remotes(self.config.library.remotes)
+            self.sync_remotes(self.config.remotes)
 
             if self.config.get('services'):
                 self.sync_services(self.config.services)
@@ -71,16 +72,11 @@ class LibraryConfigSyncProxy(object):
         self.commit()
 
     def sync_remotes(self, remotes, cb=None):
-        from ambry.orm.exc import NotFoundError
-        from ambry.orm import Remote
-
-        root = self.database.root_dataset
-
-        rc = root.config.library.remotes
-
-        s = self.library.database.session
 
         for name, r in remotes.items():
+
+            if name == 'loaded':
+                continue
 
             if not isinstance(r, dict):
                 r = dict(url=r)

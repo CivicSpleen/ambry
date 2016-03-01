@@ -218,18 +218,6 @@ or via SQLAlchemy, to return datasets.
 
             self.install(vid, logger=logger)
 
-        for table_or_vid, columns in rec.indexes:
-
-            logger.debug('Index {}'.format(vid))
-
-            try:
-                self.index(table_or_vid, columns)
-            except NotFoundError as e:
-                # Comon when the index table in's a VID, so no partition can be found.
-
-                logger.debug('Failed to index {}; {}'.format(vid, e))
-            except Exception as e:
-                logger.error('Failed to index {}; {}'.format(vid, e))
 
         for statement in rec.statements:
 
@@ -248,6 +236,19 @@ or via SQLAlchemy, to return datasets.
                 logger.debug('Run query {}'.format(statement))
                 connection = self._backend._get_connection()
                 return self._backend.query(connection, statement, fetch=False)
+
+        for table_or_vid, columns in rec.indexes:
+
+            logger.debug('Index {}'.format(table_or_vid))
+
+            try:
+                self.index(table_or_vid, columns)
+            except NotFoundError as e:
+                # Comon when the index table in's a VID, so no partition can be found.
+
+                logger.debug('Failed to index {}; {}'.format(vid, e))
+            except Exception as e:
+                logger.error('Failed to index {}; {}'.format(vid, e))
 
         # A fake cursor that can be closed and iterated
         class closable_iterable(object):

@@ -16,6 +16,12 @@ from ambry.util import get_logger
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 
+
+class RemoteAccessError(Exception):
+
+    """Failed to access a remote"""
+
+
 class Remote(Base):
 
     __tablename__ = 'remote'
@@ -30,26 +36,19 @@ class Remote(Base):
 
     d_vid = SAColumn('rm_d_vid', String(20), ForeignKey('datasets.d_vid'),  index=True)
 
-    docker_url = SAColumn('rm_docker_url', Text)
-    docker_tls_cert_path = SAColumn('rm_docker_cert_path', Text)
-    docker_tls_ca_cert = SAColumn('rm_docker_ca_cert', Text)
-    docker_tls_cert = SAColumn('rm_docker_cert', Text)
-    docker_tls_key = SAColumn('rm_docker_key', Text)
+    access = SAColumn('rm_access', Text, doc='Access key or username')
+    secret = SAColumn('rm_secret', Text, doc='Secret key or password')
 
+    # These are deprecated. They are properties of a host, not a remote
+    docker_url = SAColumn('rm_docker_url', Text)
+
+    # These are deprecated, and should be removed when docker support is changed
     db_name = SAColumn('rm_db_name', Text)
     vol_name = SAColumn('rm_vol_name', Text)
-    ui_name = SAColumn('rm_ui_name', Text)
-
     db_dsn = SAColumn('rm_db_dsn', Text)
-    jwt_secret = SAColumn('rm_api_token', Text, doc='Encryption secret for JWT')
 
-    account_password = SAColumn('rm_account_password', Text,
-                                doc='Password for encryption secrets in the database')
-
+    # Base virtual host name, applied to the docker host.
     virtual_host = SAColumn('rm_virtual_host', Text, doc='Virtual host name, for web proxy')
-
-    comment = SAColumn('ac_comment', Text)  # Access token or username
-    message = SAColumn('rm_message', Text)
 
     data = SAColumn('rm_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -126,6 +125,31 @@ class Remote(Base):
     def api_client(self):
         return self._api_client()
 
+    def update(self):
+        """Cache the list into the data section of the record"""
+
+        from ambry.orm.exc import NotFoundError
+        from requests.exceptions import ConnectionError, HTTPError
+        from boto.exception import S3ResponseError
+
+        d = {}
+
+        try:
+            for k, v in self.list(full=True):
+                if not v:
+                    continue
+
+                d[v['vid']] = {
+                    'vid': v['vid'],
+                    'vname': v.get('vname'),
+                    'id': v.get('id'),
+                    'name': v.get('name')
+                }
+
+            self.data['list'] = d
+        except (NotFoundError, ConnectionError, S3ResponseError, HTTPError) as e:
+            raise RemoteAccessError("Failed to update {}: {}".format(self.short_name, e))
+
     def list(self, full=False):
         """List all of the bundles in the remote"""
 
@@ -140,7 +164,7 @@ class Remote(Base):
         from os.path import join
         from json import loads
 
-        remote = self._fs_remote(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url)
 
         try:
             for e in remote.listdir('_meta/vname'):
@@ -181,7 +205,7 @@ class Remote(Base):
         from ambry.orm.exc import NotFoundError
         import json
 
-        remote = self._fs_remote(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url)
 
         path_parts = ['vname', 'vid', 'name', 'id']
 
@@ -224,7 +248,7 @@ class Remote(Base):
         from ambry.orm import Partition
         assert self.account_accessor
 
-        remote = self._fs_remote(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url)
 
         ds = package.package_dataset
 
@@ -247,7 +271,6 @@ class Remote(Base):
             for p in package.session.query(Partition).filter(Partition.type == Partition.TYPE.UNION).all():
 
                 self._put_partition_fs(remote, p, package.library, force = force, cb=cb)
-
 
         self._put_metadata(remote, ds)
 
@@ -345,7 +368,7 @@ class Remote(Base):
         raise NotImplementedError()
 
     def _checkout_fs(self, ref, cb=None):
-        remote = self._fs_remote(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url)
 
         d = self._find_fs(ref)
 
@@ -367,7 +390,7 @@ class Remote(Base):
         from fs.errors import ResourceNotFoundError
         from os.path import join
 
-        remote = self._fs_remote(self.url, self.account_accessor)
+        remote = self._fs_remote(self.url)
 
         def safe_remove(path):
             try:
@@ -409,14 +432,14 @@ class Remote(Base):
 
         c.library.remove(ref)
 
-    def _fs_remote(self, url, account_acessor):
+    def _fs_remote(self, url):
 
         from ambry.util import parse_url_to_dict
 
         d = parse_url_to_dict(url)
 
         if d['scheme'] == 's3':
-            return self.s3(url, account_acessor)
+            return self.s3(url, access=self.access, secret=self.secret)
         else:
             from fs.opener import fsopendir
             return fsopendir(url)
@@ -424,15 +447,15 @@ class Remote(Base):
     @property
     def fs(self):
         """Return a pyfs object"""
-        return self._fs_remote(self.url, self.account_accessor)
+        return self._fs_remote(self.url)
 
-    def s3(self, url, account_acessor):
+    def s3(self, url, account_acessor=None, access=None, secret=None):
         """Setup an S3 pyfs, with account credentials, fixing an ssl matching problem"""
         from fs.s3fs import S3FS
         from ambry.util import parse_url_to_dict
         import ssl
 
-        assert self.account_accessor
+
 
         _old_match_hostname = ssl.match_hostname
 
@@ -446,17 +469,26 @@ class Remote(Base):
 
         pd = parse_url_to_dict(url)
 
-        account = account_acessor(pd['hostname'])
+        if account_acessor:
+            account = account_acessor(pd['hostname'])
 
-        assert account['account_id'] == pd['hostname']
+            assert account['account_id'] == pd['hostname']
+            aws_access_key = account['access_key'],
+            aws_secret_key = account['secret']
+        else:
+            aws_access_key = access
+            aws_secret_key = secret
 
-        logger.debug("Creating s3 access = {} secret = {} ".format(account['access_key'], account['secret']))
+        assert access, url
+        assert secret, url
+
+        logger.debug("Creating s3 access = {} secret = {} ".format(aws_access_key, aws_secret_key))
 
         s3 = S3FS(
             bucket=pd['netloc'],
             prefix=pd['path'],
-            aws_access_key=account['access_key'],
-            aws_secret_key=account['secret'],
+            aws_access_key=aws_access_key,
+            aws_secret_key=aws_secret_key,
 
         )
 

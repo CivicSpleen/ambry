@@ -13,7 +13,7 @@ Example:
 """
 
 from pyparsing import Word, delimitedList, Optional, Combine, Group, alphas, alphanums,\
-    Forward, restOfLine, Keyword, OneOrMore, ZeroOrMore, Suppress
+    Forward, restOfLine, Keyword, OneOrMore, ZeroOrMore, Suppress, quotedString
 
 # Public interface
 #
@@ -204,6 +204,7 @@ on_kw = Keyword('on', caseless=True)
 insert_kw = Keyword('insert', caseless=True)
 into_kw = Keyword('into', caseless=True)
 
+
 # define sql reserved words
 reserved_words = (
     update_kw | volatile_kw | create_kw | table_kw
@@ -221,9 +222,13 @@ function = (
 column_name = delimitedList(ident, '.', combine=True)
 column_name_list = Group(delimitedList(column_name))
 
+# To make it simple, enclode all expressions in parens.
+expression = "(" + OneOrMore( Word(alphanums + '_-.') | Word('-+*')) + ")"
+
 # column from the select statement with `as` keyword support.
+# the quoted string handles cases like : SELECT 'CA' AS state
 select_column = (
-    delimitedList(ident, '.', combine=True).setResultsName('parsed_name')
+    ( delimitedList(ident, '.', combine=True).setResultsName('parsed_name') | quotedString | expression )
     + Optional(as_kw.suppress() + delimitedList(ident, '.', combine=True)).setResultsName('parsed_alias')
 ).setParseAction(_flat_alias)
 
@@ -232,7 +237,7 @@ select_column = (
 # print(column.name, column.alias)
 # (col1, c1)
 
-select_column_list = OneOrMore(Group((function | select_column) + Optional(comma_token)))
+select_column_list = OneOrMore(Group((function | select_column ) + Optional(comma_token)))
 
 # Examples:
 # columns = select_column_list.parseString('col1 as c1, col2 as c2')

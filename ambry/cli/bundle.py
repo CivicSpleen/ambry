@@ -980,25 +980,25 @@ def bundle_schema(args, l, rc):
     if args.source_clean:
         b.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
         b.dataset.source_tables[:] = []
-        prt("Cleaned source schema")
+        b.log("Cleaned source schema")
         b.commit()
 
     if args.dest_clean:
         b.build_source_files.file(File.BSFILE.SCHEMA).remove()
         b.clean_tables()
         b.commit()
-        prt("Cleaned destination schema")
+        b.log("Cleaned destination schema")
         b.commit()
 
     if args.source or args.source_clean:
         b.source_schema(sources=sources, tables=args.table)
         b.build_source_files.sourceschema.objects_to_record()
-        prt("Created source schema")
+        b.log("Created source schema")
 
     if args.dest or args.dest_clean:
         b.schema(tables=args.table, clean=args.source_clean, use_pipeline=args.build)
         b.build_source_files.schema.objects_to_record()
-        prt("Created destination schema")
+        b.log("Created destination schema")
 
     if (args.source or args.source_clean) and args.sync_out:
         bsf = b.build_source_files.file(File.BSFILE.SOURCESCHEMA)
@@ -1163,7 +1163,7 @@ def bundle_dump(args, l, rc):
     b = l.bundle(ref, True)
 
     if not args.table == 'files':
-        # So we can cat output to other tools
+        # Suppress on dumping files so the files can be cat'ed to other tools.
         prt('Dumping {} for {}\n'.format(args.table, b.identity.fqname))
 
     def trunc(v, l):
@@ -1192,9 +1192,19 @@ def bundle_dump(args, l, rc):
             records = None
             try:
                 f = b.build_source_files.file_by_path(args.ref)
-                print f.unpacked_contents
+                if args.ref.endswith('.yaml'):
+                    import yaml
+                    prt_no_format(yaml.safe_dump(f.unpacked_contents, default_flow_style=False, indent=4,
+                                                 encoding='utf-8', width=79))
+                elif args.ref.endswith('.ipynb') or args.ref.endswith('.json'):
+                    import json
+                    prt_no_format(json.dumps(f.unpacked_contents, indent=4))
+                else:
+                    prt_no_format(f.unpacked_contents)
             except (NotFoundError, AttributeError):
                 fatal("Did not find file for path '{}' ".format(args.ref))
+
+
 
         else:
             records = []

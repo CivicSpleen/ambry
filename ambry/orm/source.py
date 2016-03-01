@@ -134,6 +134,10 @@ class DataSourceBase(object):
         return self._source_table
 
     @property
+    def source_table_exists(self):
+        return bool(self._source_table)
+
+    @property
     def resolved_dest_table_name(self):
 
         return self.dest_table_name if self.dest_table_name else (
@@ -269,6 +273,8 @@ class DataSourceBase(object):
         from ambry_sources.intuit import TypeIntuiter
 
         st = self.source_table
+
+        print '!!!!', st
 
         if self.reftype == 'partition':
             for c in self.partition.table.columns:

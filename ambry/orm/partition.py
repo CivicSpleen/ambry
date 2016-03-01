@@ -163,6 +163,13 @@ class Partition(Base):
     segment = SAColumn('p_segment', Integer,
                        doc='Part of a larger partition. segment_id is usually also a source ds_id')
     epsg = SAColumn('p_epsg', Integer, doc='EPSG SRID for the reference system of a geographic dataset. ')
+
+    # The partition could hold data that is considered a dimension -- if multiple datasets
+    # were joined, that dimension would be a dimension column, but it only has a single
+    # value in each partition.
+    # That could be part of the name, or it could be declared in a table, with a single value for all of the
+    # rows in a partition.
+
     min_id = SAColumn('p_min_id', BigIntegerType)
     max_id = SAColumn('p_max_id', BigIntegerType)
     count = SAColumn('p_count', Integer)

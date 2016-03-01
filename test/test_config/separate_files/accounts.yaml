@@ -1,0 +1,31 @@
+accounts:
+
+    password: bingo
+
+    ambry:
+        name: Bob Bobson
+        org: Civic Knowledge
+        email: bobson@civicknowledge.com
+        url: http://civicknowledge.com
+
+    ckan:
+        service: ckan
+        host: http://unwqzizk25fe.example.com
+        organization: foocom
+        apikey: 49caxtegp3in
+
+    config1.library.example.com:
+        service: s3
+        user: test
+        access: KJKJHGKKJWEHFW34765JH
+        secret: 34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW
+
+    config2.library.example.com:
+        service: s3
+        access: KJKJHGKKJWEHFW34765JH
+        secret: 34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW
+
+    remotes1.library.example.com:
+        service: s3
+        access: KJKJHGKKJWEHFW34765JH
+        secret: 34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW

@@ -695,7 +695,10 @@ class NotebookFile(StringSourceFile):
 
         script, resources = export_script(notebook)
 
+
         env_dict = {}
+
+
 
         exec (compile(script.replace('# coding: utf-8', ''), 'script', 'exec'), env_dict)
 

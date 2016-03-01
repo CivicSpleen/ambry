@@ -1003,6 +1003,8 @@ Caster Code
 
         s = None
 
+        source.reftype = source.reftype.strip()
+
         if source.reftype == 'partition':
             sp = PartitionSourcePipe(self, source, source.partition)
 
@@ -1013,6 +1015,9 @@ Caster Code
                 sql_text = source.ref.strip().strip(';')+';'
                 table = None
                 warehouse_name = source.vid
+
+
+
             else:
                 # References a SQL file
                 if ':' in source.ref:
@@ -1547,7 +1552,7 @@ Caster Code
         """"Clean ingested files"""
         for s in self.sources:
             df = s.datafile
-            if df.exists:
+            if df.exists and not s.is_partition:
                 df.remove()
                 s.state = s.STATES.NEW
 
@@ -1864,8 +1869,8 @@ Caster Code
 
         for source in sources:
             source.update_table()
-            self.log('Creating source schema for: {}; {} columns'
-                     .format(source.name, len(source.source_table.columns)))
+            self.log("Creating source schema for '{}': Table {},  {} columns"
+                     .format(source.name, source.source_table.name, len(source.source_table.columns)))
 
         self.commit()
 
@@ -1931,7 +1936,7 @@ Caster Code
                 # sources. The duplicates are properly handled when we add the columns in add_column()
 
                 def source_cols(source):
-                    if source.is_partition:
+                    if source.is_partition and not source.source_table_exists:
                         return enumerate(source.partition.table.columns)
 
                     else:
@@ -1950,6 +1955,7 @@ Caster Code
                         description=desc,
                         update_existing=True
                     )
+
 
                     try:
                         extant = t.column(name)
@@ -2329,12 +2335,14 @@ Caster Code
             seg = list(segments)[0]
             # If there is only one segment, just move it over
             ps.update('Coalescing single partition {} '.format(seg.identity.name), partition=seg)
+
             with self.wrap_partition(seg).local_datafile.open() as f:
                 parent.local_datafile.set_contents(f)
                 parent.epsg = seg.epsg
                 parent.title = seg.title
                 parent.description = seg.description
                 parent.notes = parent.notes
+                parent.segment = None
 
         else:
 

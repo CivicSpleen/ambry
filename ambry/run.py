@@ -22,12 +22,29 @@ def get_runconfig(path=None, root=None, db=None):
     return load(path, root=root, db=db)
 
 
-def load(path=None, root=None, db=None):
-    "Like get_runconfig, but isn't cached"
+def load(path=None, root=None, db=None, load_user=True):
+    "Load all of the config files. "
 
-    config = load_config(path)
+    config = load_config(path, load_user=load_user)
 
-    config.update(load_accounts())
+    remotes = load_remotes(path, load_user=load_user)
+
+    # The external file overwrites the main config
+    if remotes:
+        if not 'remotes' in config:
+            config.remotes = AttrDict()
+
+        for k, v in remotes.remotes.items():
+            config.remotes[k] = v
+
+    accounts = load_accounts(path, load_user=load_user)
+
+    # The external file overwrites the main config
+    if accounts:
+        if not 'accounts' in config:
+            config.accounts = AttrDict()
+        for k, v in accounts.accounts.items():
+            config.accounts[k] = v
 
     update_config(config)
 
@@ -53,7 +70,7 @@ ROOT_DIR = '/etc/ambry'
 USER_DIR = '.ambry'
 CONFIG_FILE = 'config.yaml'
 ACCOUNTS_FILE = 'accounts.yaml'
-REMOTES_FILE = 'accounts.yaml'
+REMOTES_FILE = 'remotes.yaml'
 DOCKER_FILE = 'docker.yaml'
 
 filesystem_defaults = {
@@ -69,7 +86,7 @@ filesystem_defaults = {
 }
 
 
-def find_config_file(file_name, extra_path=None):
+def find_config_file(file_name, extra_path=None, load_user=True):
     """
     Find a configuration file in one of these directories, tried in this order:
 
@@ -79,6 +96,9 @@ def find_config_file(file_name, extra_path=None):
     - ~/ambry
     - /etc/ambry
 
+    :param file_name:
+    :param extra_path:
+    :param load_user:
     :param path:
     :return:
     """
@@ -94,45 +114,78 @@ def find_config_file(file_name, extra_path=None):
     if os.getenv(ENVAR.VIRT):
         paths.append(os.path.join(os.getenv(ENVAR.VIRT), USER_DIR))
 
-    paths += [
-        os.path.expanduser('~/' + USER_DIR),
-        ROOT_DIR
-    ]
+    if load_user:
+        paths.append(os.path.expanduser('~/' + USER_DIR))
+
+    paths.append(ROOT_DIR)
 
     for path in paths:
         if os.path.isdir(path) and os.path.exists(os.path.join(path, file_name)):
-            return os.path.join(path, file_name)
+            f = os.path.join(path, file_name)
+            return f
 
     raise ConfigurationError(
         "Failed to find configuration file '{}'. Looked for : {} ".format(file_name, paths))
 
 
-def load_accounts():
+def load_accounts(extra_path=None, load_user=True):
     """Load the yaml account files
+
+    :param load_user:
+    :return: An `AttrDict`
+    """
+
+    from os.path import getmtime
+
+
+    try:
+        accts_file = find_config_file(ACCOUNTS_FILE, extra_path=extra_path, load_user=load_user)
+    except ConfigurationError:
+        accts_file = None
+
+    if accts_file is not None and os.path.exists(accts_file):
+        config = AttrDict()
+        config.update_yaml(accts_file)
+
+        if not 'accounts' in config:
+            config.remotes = AttrDict()
+
+        config.accounts.loaded = [accts_file, getmtime(accts_file)]
+        return config
+    else:
+        return None
+
+
+def load_remotes(extra_path=None, load_user=True):
+    """Load the YAML remotes file, which sort of combines the Accounts file with part of the
+    remotes sections from the main config
 
     :return: An `AttrDict`
     """
 
     from os.path import getmtime
 
-    config = AttrDict()
-
     try:
-        accts_file = find_config_file(ACCOUNTS_FILE)
+        remotes_file = find_config_file(REMOTES_FILE, extra_path=extra_path, load_user=load_user)
     except ConfigurationError:
-        accts_file = None
+        remotes_file = None
 
-    if accts_file is not None and os.path.exists(accts_file):
-        config.update_yaml(accts_file)
-        config.accounts.loaded = [accts_file, getmtime(accts_file)]
+
+    if remotes_file is not None and os.path.exists(remotes_file):
+        config = AttrDict()
+        config.update_yaml(remotes_file)
+
+        if not 'remotes' in config:
+            config.remotes = AttrDict()
+
+        config.remotes.loaded = [remotes_file, getmtime(remotes_file)]
+
+        return config
     else:
-        config.accounts = AttrDict()
-        config.accounts.loaded = [None, 0]
-
-    return config
+        return None
 
 
-def load_config(path=None):
+def load_config(path=None, load_user=True):
     """
     Load configuration information from a config directory. Tries directories in this order:
 
@@ -153,7 +206,7 @@ def load_config(path=None):
     if not path:
         path = ROOT_DIR
 
-    config_file = find_config_file(CONFIG_FILE, extra_path=path)
+    config_file = find_config_file(CONFIG_FILE, extra_path=path, load_user=load_user)
 
     if os.path.exists(config_file):
 
@@ -177,11 +230,8 @@ def update_config(config, use_environ=True):
 
     :param config: An `attrDict` of configuration information.
     """
+    from ambry.util import select_from_url
 
-    try:
-        _ = config.accounts
-    except KeyError:
-        config.accounts = AttrDict()
 
     try:
         _ = config.library
@@ -194,9 +244,21 @@ def update_config(config, use_environ=True):
         config.filesystem = AttrDict()
 
     try:
+        _ = config.accounts
+    except KeyError:
+        config.accounts = AttrDict()
+        config.accounts.loaded = [None, 0]
+
+    try:
         _ = config.accounts.password
     except KeyError:
         config.accounts.password = None
+
+    try:
+        _ = config.remotes
+    except KeyError:
+        config.remotes = AttrDict()  # Default empty
+        config.remotes.loaded = [None, 0]
 
     if use_environ:
         if os.getenv(ENVAR.DB):
@@ -208,10 +270,33 @@ def update_config(config, use_environ=True):
         if os.getenv(ENVAR.PASSWORD):
             config.accounts.password = os.getenv(ENVAR.PASSWORD)
 
+    # Move any remotes that were configured under the library to the remotes section
+
     try:
-        _ = config.library.remotes
+        for k, v in config.library.remotes.items():
+            config.remotes[k] = {
+                'url': v
+            }
+
+        del config.library['remotes']
+
+    except KeyError as e:
+        pass
+
+    # Then move any of the account entries that are linked to remotes into the remotes.
+
+    try:
+        for k, v in config.remotes.items():
+            if 'url' in v:
+                host = select_from_url(v['url'], 'netloc')
+                if host in config.accounts:
+                    config.remotes[k].update(config.accounts[host])
+                    del config.accounts[host]
+
     except KeyError:
-        config.library.remotes = AttrDict()  # Default empty
+        pass
+
+
 
     # Set a default for the library database
     try:
@@ -237,7 +322,8 @@ def update_config(config, use_environ=True):
         if k not in config.filesystem:
             config.filesystem[k] = v
 
-    config.modtime = config.loaded[1]
+
+    config.modtime = max(config.loaded[1], config.remotes.loaded[1], config.accounts.loaded[1])
 
 
 def normalize_dsn_or_dict(d):

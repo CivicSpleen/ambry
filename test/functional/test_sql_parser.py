@@ -155,6 +155,18 @@ class Test(TestBase):
 
         print(select.columns)
 
+    def test_parse_expression(self):
+        from pyparsing import Word, delimitedList, Optional, Combine, Group, alphas, alphanums, \
+            Forward, restOfLine, Keyword, OneOrMore, ZeroOrMore, Suppress
+        from ambry.bundle.asql_parser import select_column, select_stmt, function, select_column_list
+
+        column = select_column.parseString('(a+b) as c1')
+        print column
+
+        column = select_column.parseString('(a+100) as c1')
+        print column
+
+
     def test_visitor(self):
         import sqlparse
         from ambry.bundle.asql_parser import find_indexable_materializable, FIMRecord
