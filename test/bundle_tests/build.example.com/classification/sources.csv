@@ -1,0 +1,2 @@
+"name","dest_table_name","ref"
+"classify","classify","file:///Users/eric/proj/virt/ambry-develop/ambry/test/bundle_tests/build.example.com/classification/data/classifications.csv"

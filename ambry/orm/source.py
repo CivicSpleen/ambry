@@ -274,8 +274,6 @@ class DataSourceBase(object):
 
         st = self.source_table
 
-        print '!!!!', st
-
         if self.reftype == 'partition':
             for c in self.partition.table.columns:
                 st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name, datatype=c.datatype)

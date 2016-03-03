@@ -102,3 +102,25 @@ class Test(TestBase):
 
         self.assertEqual([2, 2.0, 4.0, 16.0, 1, None, 'exception', 'ONE', 'TXo', 1, 'Alabama'],
                          ccp.process_body([1.0, 1.0, 1.0, 1, 'exception', 'one', 'two']))
+
+    def test_classification(self):
+
+        b = self.import_single_bundle('build.example.com/classification')
+
+        b.sync_in()
+
+        s = b.source('classify')
+
+        pl = b.pipeline(s)
+
+        print b.build_caster_code(s, s.headers, pipe=pl)
+
+    def test_raceeth(self):
+
+        from ambry.valuetype import RaceEthHCI, RaceEthReidVT
+
+
+
+
+
+

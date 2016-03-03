@@ -8,6 +8,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 import ast
 import meta
 
+
 def file_loc():
     """Return file and line number"""
     import sys
@@ -15,8 +16,8 @@ def file_loc():
     try:
         raise Exception
     except:
-        file_ =  '.../'+'/'.join((inspect.currentframe().f_code.co_filename.split('/'))[-3:])
-        line_  = sys.exc_info()[2].tb_frame.f_back.f_lineno
+        file_ = '.../' + '/'.join((inspect.currentframe().f_code.co_filename.split('/'))[-3:])
+        line_ = sys.exc_info()[2].tb_frame.f_back.f_lineno
         return "{}:{}".format(file_, line_)
 
 
@@ -32,10 +33,11 @@ col_code_def = 'lambda {}:'.format(','.join(all_args))
 code_def = 'lambda {}:'.format(','.join(const_args))
 
 file_header = """
+from ambry.valuetype import MaybeFail
 
 """
 
-column_template="""
+column_template = """
 def {f_name}(v, i_s, i_d, header_s, header_d, row, row_n, errors, scratch, accumulator, pipe, bundle, source):
 
     # funcs created by transform generators must be called with kwargs
@@ -70,7 +72,6 @@ def column_processor_code():
 
 
 def make_env(bundle, base_env):
-
     def _ff(code):
         try:
             return base_env.get(code, None)
@@ -95,14 +96,14 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
     out = [file_header]
 
-    for  i, segments in enumerate(dest_table.transforms):
+    for i, segments in enumerate(dest_table.transforms):
 
         seg_funcs = []
 
         for col_num, (segment, column) in enumerate(zip(segments, dest_table.columns), 1):
 
             if not segment:
-                seg_funcs.append('row[{}], # {}'.format(col_num-1, column.name))
+                seg_funcs.append('row[{}], # {}'.format(col_num - 1, column.name))
                 continue
 
             assert column
@@ -110,7 +111,7 @@ def make_row_processors(bundle, source_headers, dest_table, env):
             col_name = column.name
             preamble, try_lines, exception = make_stack(env, i, segment)
 
-            assert col_num == column.sequence_id, (dest_table.name, col_num , column.sequence_id)
+            assert col_num == column.sequence_id, (dest_table.name, col_num, column.sequence_id)
 
             try:
                 i_s = source_headers.index(column.name)
@@ -120,7 +121,7 @@ def make_row_processors(bundle, source_headers, dest_table, env):
             except ValueError as e:
                 i_s = 'None'
                 header_s = None
-                v = 'None'
+                v = 'None' if col_num > 1 else 'row_n'
 
             f_name = "{table_name}_{column_name}_{stage}".format(
                 table_name=dest_table.name,
@@ -128,7 +129,7 @@ def make_row_processors(bundle, source_headers, dest_table, env):
                 stage=i
             )
 
-            i_d = column.sequence_id-1
+            i_d = column.sequence_id - 1
 
             header_d = column.name
 
@@ -142,15 +143,16 @@ def make_row_processors(bundle, source_headers, dest_table, env):
                 header_s=header_s,
                 header_d=header_d,
                 v=v,
-                exception=indent + (exception if exception else 'raise'),
-                stack='\n'.join(indent+l for l in try_lines)
+                exception=indent + (exception if exception else \
+                'raise ValueError("Failed to cast column \'{}\', in function {}, value \'{}\': {}".format(header_d,"'+f_name+'", v, exc) ) '),
+                stack='\n'.join(indent + l for l in try_lines)
             )
 
             seg_funcs.append(f_name
-                    +('({v}, {i_s}, {i_d}, {header_s}, \'{header_d}\', '
-                      'row, row_n, errors, scratch, accumulator, pipe, bundle, source)')
-                    .format(v=v, i_s=i_s, i_d=i_d, header_s="'"+header_s+"'" if header_s else 'None',
-                            header_d=header_d))
+                             + ('({v}, {i_s}, {i_d}, {header_s}, \'{header_d}\', '
+                                'row, row_n, errors, scratch, accumulator, pipe, bundle, source)')
+                             .format(v=v, i_s=i_s, i_d=i_d, header_s="'" + header_s + "'" if header_s else 'None',
+                                     header_d=header_d))
 
             out.append('\n'.join(preamble))
 
@@ -159,12 +161,12 @@ def make_row_processors(bundle, source_headers, dest_table, env):
         source_headers = dest_headers
 
         out.append(row_template.format(
-            table = dest_table.name,
-            stage = i,
-            stack = '\n'.join(indent+l+',' for l in seg_funcs)
+            table=dest_table.name,
+            stage=i,
+            stack='\n'.join(indent + l + ',' for l in seg_funcs)
         ))
 
-        row_processors.append('row_{table}_{stage}'.format(stage=i, table = dest_table.name))
+        row_processors.append('row_{table}_{stage}'.format(stage=i, table=dest_table.name))
 
     out.append('row_processors = [{}]'.format(','.join(row_processors)))
 
@@ -182,7 +184,6 @@ def calling_code(f, f_name=None, raise_for_missing=True):
     else:
         args = inspect.getargspec(f).args
 
-
     if len(args) > 1 and args[0] == 'self':
         args = args[1:]
 
@@ -192,7 +193,7 @@ def calling_code(f, f_name=None, raise_for_missing=True):
                 raise ConfigurationError('Caster code {} has unknown argument '
                                          'name: \'{}\'. Must be one of: {} '.format(f, a, ','.join(all_args)))
 
-    arg_map = {e:e for e in var_args}
+    arg_map = {e: e for e in var_args}
 
     args = [arg_map.get(a, a) for a in args]
 
@@ -202,7 +203,7 @@ def calling_code(f, f_name=None, raise_for_missing=True):
 def make_stack(env, stage, segment):
     import string
     import random
-    from ambry.util import qualified_name
+    from ambry.util import qualified_name, qualified_name_import
     from ambry.valuetype import ValueType
 
     column = segment['column']
@@ -210,37 +211,51 @@ def make_stack(env, stage, segment):
     def make_line(column, t):
         preamble = []
 
+        maybe = 'maybe_none' # Code to wrap caster to handle none and exceptions.
+
         if isinstance(t, type) and issubclass(t, ValueType):  # A valuetype class, from the datatype column.
-            tn = qualified_name(t)
+
+            if column.valuetype and '?' in column.valuetype:
+                maybe = "maybe_fail"
+
             try:
-                line = "v = {} if v is not None else None # {}".format(calling_code(t, tn), file_loc())
+                cc = calling_code(t, t.__name__);
+                fl = file_loc()
             except TypeError:
-                # Usually, trying to get args from a method implemented in C. Just assume that it is a
-                # one-arg initializer
-                line = "v = {}(v) if v is not None else None # {}".format(tn, file_loc())
-            preamble.append('import ambry.valuetype')
+                cc = "{}(v)".format(t.__name__);
+                fl = file_loc()
+
+            preamble.append(qualified_name_import(t))
 
         elif isinstance(t, type):  # A python type, from the datatype columns.
-            line = "v = parse_{}(v, header_d) # {}".format(t.__name__, file_loc())
+            raise NotImplementedError('All types myst be ValueTypes now')
 
-        elif callable(env.get(t)):
-            line = 'v = {} # {}'.format(calling_code(env.get(t), t), file_loc())
+        elif callable(env.get(t)):  # Transform function
+            cc = calling_code(env.get(t), t);
+            fl = file_loc()
 
-        else:
+        else: # A transform generator, or python code.
 
             rnd = (''.join(random.choice(string.ascii_lowercase) for _ in range(6)))
 
             name = 'tg_{}_{}_{}'.format(column.name, stage, rnd)
             try:
-                a, b, loc = rewrite_tg(env, name, t)
+                a, b, fl = rewrite_tg(env, name, t)
             except CodeGenError as e:
                 raise CodeGenError("Failed to re-write pipe code '{}' in column '{}.{}': {} "
-                                    .format(t, column.table.name, column.name, e ))
+                                   .format(t, column.table.name, column.name, e))
 
-            line = 'v = {} # {}'.format(a, loc)
+            cc = str(a)
 
             if b:
-                preamble.append("{} = {} # {}".format(name, b, loc))
+                preamble.append("{} = {} # {}".format(name, b, fl))
+
+        if maybe == 'maybe_fail':
+            cc = "MaybeFail(lambda v: {}, v)".format(cc)
+        elif maybe == 'maybe_none':
+            cc = "v if v is not None else None".format(cc)
+
+        line = "v = {} # {}".format(cc, fl)
 
         return line, preamble
 
@@ -248,7 +263,7 @@ def make_stack(env, stage, segment):
 
     try_lines = []
 
-    for t in [segment['init'], segment['datatype'] ] + segment['transforms']:
+    for t in [segment['init'], segment['datatype']] + segment['transforms']:
 
         if not t:
             continue
@@ -279,9 +294,9 @@ def mk_kwd_args(fn, fn_name=None):
     if len(fn_args) > 1 and fn_args[0] == 'self':
         args = fn_args[1:]
 
-    kwargs = dict( (a,a) for a in all_args if a in args)
+    kwargs = dict((a, a) for a in all_args if a in args)
 
-    return "{}({})".format(fn_name, ','.join( a+'='+v for a,v in kwargs.items() ))
+    return "{}({})".format(fn_name, ','.join(a + '=' + v for a, v in kwargs.items()))
 
 
 class ReplaceTG(ast.NodeTransformer):
@@ -313,21 +328,21 @@ class ReplaceTG(ast.NodeTransformer):
         use_kw_args = True
 
         fn = self.env.get(node.func.id)
-        self.loc = file_loc() # Not a builtin, not a type, not a transform generator
+        self.loc = file_loc()  # Not a builtin, not a type, not a transform generator
 
         # In this case, the code line is a type that has a parse function, so rename it.
         if not fn:
-            t_fn_name = 'parse_'+fn_name
+            t_fn_name = 'parse_' + fn_name
             t_fn = self.env.get(t_fn_name)
             if t_fn:
-                self.loc = file_loc() # The function is a type
+                self.loc = file_loc()  # The function is a type
                 fn, fn_name = t_fn, t_fn_name
 
         # Ok, maybe it is a builtin
         if not fn:
             o = eval(fn_name)
             if isinstance(o, types.BuiltinFunctionType):
-                self.loc = file_loc() # The function is a builtin
+                self.loc = file_loc()  # The function is a builtin
                 fn = o
                 fn_args = ['v']
                 use_kw_args = False
@@ -340,8 +355,8 @@ class ReplaceTG(ast.NodeTransformer):
 
         # Create a dict of the arguments that have been specified
         used_args = dict(tuple(zip(fn_args, node.args))
-                        +tuple( (kw.arg, kw.value) for kw in node.keywords)
-        )
+                         + tuple((kw.arg, kw.value) for kw in node.keywords)
+                         )
 
         # Add in the arguments that were not, but only for args that are specified to be
         # part of the local environment
@@ -360,14 +375,14 @@ class ReplaceTG(ast.NodeTransformer):
         tg_ast = ast.copy_location(
             ast.Call(
                 func=ast.Name(id=fn_name, ctx=ast.Load()),
-                args=[e.value for e in keywords] if not use_kw_args else [], # For builtins, which only take one arg
+                args=[e.value for e in keywords] if not use_kw_args else [],  # For builtins, which only take one arg
                 keywords=keywords if use_kw_args else [],
                 starargs=[],
                 kwargs=[]
             ), node)
 
         if is_transform_generator(fn):
-            self.loc = file_loc() # The function is a transform generator.
+            self.loc = file_loc()  # The function is a transform generator.
             self.trans_gen = tg_ast
             replace_node = ast.copy_location(
                 ast.Call(
@@ -404,9 +419,9 @@ def rewrite_tg(env, tg_name, code):
     tree = visitor.visit(ast.parse(code))
 
     if visitor.loc:
-        loc = ' #'+visitor.loc
+        loc = ' #' + visitor.loc
     else:
-        loc = file_loc() # The AST visitor didn't match a call node
+        loc = file_loc()  # The AST visitor didn't match a call node
 
     if visitor.trans_gen:
         tg = meta.dump_python_source(visitor.trans_gen).strip()

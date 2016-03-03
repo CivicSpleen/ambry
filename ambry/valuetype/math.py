@@ -1,4 +1,4 @@
-"""Math functions available for use in derivedfrom columns
+"""Math functions available for use in transforms
 
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of

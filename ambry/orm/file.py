@@ -24,7 +24,7 @@ class File(Base, DictableMixin):
     MAJOR_TYPE = Constant()
     MAJOR_TYPE.BUILDSOURCE = 'bs'
 
-    BSFILE = Constant
+    BSFILE = Constant()
     BSFILE.BUILD = 'build_bundle'
     BSFILE.LIB = 'lib'
     BSFILE.TEST = 'test'
@@ -40,7 +40,7 @@ class File(Base, DictableMixin):
     # objects are always cleared before loading file values. With O, file values are never loaded, but objects
     # are written to files. With MERGE, Files are loaded to objects at the start of prepare, and  objects are
     # written back at the end, with no clearing.
-    PREFERENCE = Constant
+    PREFERENCE = Constant()
     PREFERENCE.FILE = 'F'
     PREFERENCE.OBJECT = 'O'
     PREFERENCE.MERGE = 'M'

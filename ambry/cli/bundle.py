@@ -1470,6 +1470,7 @@ def bundle_import(args, l, rc):
 
         try:
             b = l.bundle(bid, True)
+
         except NotFoundError:
             b = l.new_from_bundle_config(config)
 

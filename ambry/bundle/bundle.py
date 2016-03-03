@@ -1003,7 +1003,7 @@ Caster Code
 
         s = None
 
-        source.reftype = source.reftype.strip()
+        source.reftype = source.reftype.strip() if source.reftype else None
 
         if source.reftype == 'partition':
             sp = PartitionSourcePipe(self, source, source.partition)
@@ -1015,8 +1015,6 @@ Caster Code
                 sql_text = source.ref.strip().strip(';')+';'
                 table = None
                 warehouse_name = source.vid
-
-
 
             else:
                 # References a SQL file
@@ -1935,6 +1933,8 @@ Caster Code
                 # that may have duplicates, but which is generally in the order the headers appear in the
                 # sources. The duplicates are properly handled when we add the columns in add_column()
 
+                self.commit()
+
                 def source_cols(source):
                     if source.is_partition and not source.source_table_exists:
                         return enumerate(source.partition.table.columns)
@@ -2399,10 +2399,12 @@ Caster Code
         from ambry.valuetype.types import parse_date, parse_time, parse_datetime
         import ambry.valuetype.types
         import ambry.valuetype.math
-        import ambry.valuetype.string
         import ambry.valuetype.number
         import ambry.valuetype.exceptions
         import ambry.valuetype.test
+        import ambry.valuetype.string
+        import ambry.valuetype
+
 
         def set_from(f, frm):
             try:
@@ -2420,7 +2422,7 @@ Caster Code
             parse_time=parse_time,
             parse_datetime=parse_datetime,
             partial=partial,
-            bundle=self,
+            bundle=self
         )
 
         test_env.update(kwargs)
@@ -2433,6 +2435,9 @@ Caster Code
         test_env.update(ambry.valuetype.types.__dict__)
         test_env.update(ambry.valuetype.exceptions.__dict__)
         test_env.update(ambry.valuetype.test.__dict__)
+        test_env.update(ambry.valuetype.__dict__)
+
+
 
         localvars = {}
 
@@ -2494,7 +2499,6 @@ Caster Code
         env_dict['source'] = source
         env_dict['pipe'] = pipe
 
-        assert not pipe or (pipe.source is source and pipe.bundle is self)
 
         exec (compile(code, abs_path, 'exec'), env_dict)
 

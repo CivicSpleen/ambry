@@ -274,8 +274,8 @@ class Table(Base, DictableMixin):
     def __str__(self):
         from tabulate import tabulate
 
-        headers = 'Seq Vid Name Datatype '.split()
-        rows = [(c.sequence_id, c.vid, c.name, c.datatype) for c in self.columns]
+        headers = 'Seq Vid Name Datatype ValueType'.split()
+        rows = [(c.sequence_id, c.vid, c.name, c.datatype, c.valuetype) for c in self.columns]
 
         return ('Dest Table: {}\n'.format(self.name)) + tabulate(rows, headers)
 

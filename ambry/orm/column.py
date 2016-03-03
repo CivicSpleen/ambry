@@ -47,6 +47,7 @@ class Column(Base):
     d_vid = SAColumn('c_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     t_id = SAColumn('c_t_id', String(12))
 
+    #source_name = SAColumn('c_source_name', Text, index=True)
     name = SAColumn('c_name', Text, index=True)
     altname = SAColumn('c_altname', Text)
     datatype = SAColumn('c_datatype', Text)
@@ -182,29 +183,30 @@ class Column(Base):
     @property
     def valuetype_class(self):
         """Return the valuetype class, if one is defined, or a built-in type if it isn't"""
-        from ambry.valuetype import import_valuetype
 
-        assert self.datatype, 'No datatype value for column {}.{}'.format(self.table.name, self.name)
+        from ambry.valuetype import resolve_value_type
 
-        try:
-            return import_valuetype(self.datatype)
-        except AttributeError as e:
-            try:
-                return self.types[self.datatype][1]
-            except KeyError:
-                raise KeyError('Failed to find type {} in column {}.{}'
-                               .format(self.datatype, self.table.name, self.name))
+        if self.valuetype:
+            return resolve_value_type(self.valuetype)
+
+        else:
+            return resolve_value_type(self.datatype)
 
     @property
     def python_type(self):
         """Return the python type for the row, possibly getting it from a valuetype reference """
 
-        from ambry.valuetype import python_type as vl_pt
+        from ambry.valuetype import resolve_value_type
 
-        try:
+        if self.valuetype:
+            return resolve_value_type(self.valuetype)._pythontype
+
+        elif self.datatype:
             return self.types[self.datatype][1]
-        except KeyError:
-            return vl_pt(self.datatype)
+
+        else:
+            from ambry.exc import ConfigurationError
+            raise ConfigurationError("Can't get python_type: neither datatype of valuetype is defined")
 
     def python_cast(self, v):
         """Cast a value to the type of the column.
@@ -422,13 +424,16 @@ class Column(Base):
 
         segments = self._expand_transform(self.transform)
 
-        if not segments:
-            return [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
+        if segments:
 
-        segments[0]['datatype'] = self.valuetype_class
+            segments[0]['datatype'] = self.valuetype_class
 
-        for s in segments:
-            s['column'] = self
+            for s in segments:
+                s['column'] = self
+
+        else:
+
+            segments = [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
 
         return segments
 
@@ -543,6 +548,8 @@ class Column(Base):
     def before_update(mapper, conn, target):
         """Set the column id number based on the table number and the sequence
         id for the column."""
+
+        assert target.datatype or target.valuetype
 
         target.name = Column.mangle_name(target.name)
 

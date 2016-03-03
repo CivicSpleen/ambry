@@ -1029,6 +1029,14 @@ def qualified_name(cls):
         return cls.__name__
     return module + '.' + cls.__name__
 
+def qualified_name_import(cls):
+    """Full name of a class, including the module. Like qualified_class_name, but when you already have a class """
+
+    parts = qualified_name(cls).split('.')
+
+    return "from {} import {}".format('.'.join(parts[:-1]), parts[-1])
+
+
 
 class _Getch:
     """Gets a single character from standard input.  Does not echo to the

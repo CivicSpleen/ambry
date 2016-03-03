@@ -62,7 +62,7 @@ def caster_vrep(v, row, errors, pipe):
 
 
 def cst_double(v, row, header_d, bundle, source):
-    return v*2 if v is not None else None
+    return v*2 if (v) else None
 
 
 def cst_exception(v, i_d, header_d, row, errors, pipe, exception):

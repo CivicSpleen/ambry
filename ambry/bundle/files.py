@@ -991,12 +991,25 @@ class SchemaFile(RowBuildSourceFile):
 
             if not row.get('column', False):
                 raise ConfigurationError('Row error: no column on line {}'.format(line_no))
+
             if not row.get('table', False):
                 raise ConfigurationError('Row error: no table on line {}'.format(line_no))
-            if not row.get('datatype', False):
+
+            if not row.get('datatype', False) and not row.get('valuetype', False):
                 raise ConfigurationError('Row error: no type on line {}'.format(line_no))
 
-            row['datatype'] = old_types_map.get(row['datatype'].lower(), row['datatype'])
+            value_type = row.get('valuetype', '').strip()
+            data_type = row.get('datatype', '').strip()
+
+            if value_type and not data_type:
+                from ambry.valuetype import resolve_value_type
+                vt_class = resolve_value_type(row['valuetype'])
+                data_type = vt_class.python_type().__name__
+
+            elif data_type and not value_type:
+                value_type = data_type
+
+            data_type = old_types_map.get(data_type.lower(), data_type)
 
             table_name = row['table']
 
@@ -1023,7 +1036,8 @@ class SchemaFile(RowBuildSourceFile):
                 row['column'],
                 fk_vid=row['is_fk'] if row.get('is_fk', False) else None,
                 description=(row.get('description', '') or '').strip(),
-                datatype=row['datatype'].strip().lower() if '.' not in row['datatype'] else row['datatype'],
+                datatype=data_type,
+                valuetype=value_type,
                 proto_vid=row.get('proto_vid'),
                 size=_clean_int(row.get('size', None)),
                 width=_clean_int(row.get('width', None)),
