@@ -6,6 +6,14 @@ Functions for handling exceptions
 
 import textwrap
 
+
+def clear_error(v):
+    from ambry.valuetype import FailedValue
+
+    if isinstance(v, FailedValue):
+        return None
+    return v
+
 class CastingError(TypeError):
 
     def __init__(self, type_target, field_header, value, message, *args, **kwargs):

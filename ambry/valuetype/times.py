@@ -10,7 +10,7 @@ from core import *
 
 from datetime import date, time, datetime
 
-def cast_date(v, header_d):
+def cast_date(v, header_d, clear_errors):
     if v is None or v == '':
         return None
     elif isinstance(v, date):
@@ -21,7 +21,7 @@ def cast_date(v, header_d):
     raise ValueError("cast_date: value '{}' for column '{}'  is not a date, and full casting is not implemented yet"
                      .format(v,header_d))
 
-def cast_datetime(v, header_d):
+def cast_datetime(v, header_d, clear_errors):
     if v is None or v == '':
         return None
     elif isinstance(v, datetime):
@@ -32,7 +32,8 @@ def cast_datetime(v, header_d):
     raise ValueError("cast_datetime: value '{}' for column '{}'  is not a datetime, and full casting is not implemented yet"
                      .format(v,header_d))
 
-def cast_time(v, header_d):
+def cast_time(v, header_d, clear_errors):
+
     if v is None or v == '':
         return None
     elif isinstance(v, time):
@@ -63,18 +64,18 @@ class DateTimeVT(DateTimeValue):
 
 
 
-class DurationVT(ValueType):
+class DurationVT(StrValue):
     role = ROLE.DIMENSION
     vt_code = 'd/duration'
 
 
 
-class DurationYearRangeVT(ValueType):
+class DurationYearRangeVT(StrValue):
     role = ROLE.DIMENSION
     vt_code = 'd/duration/yrange'
 
 
-class DurationIsoVT(ValueType):
+class DurationIsoVT(StrValue):
     role = ROLE.DIMENSION
     vt_code = 'd/duration/iso'
 

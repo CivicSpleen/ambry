@@ -1,10 +1,10 @@
 "table","valuetype","column","parent","transform","description"
 "classify","int","int",,"xform1|xform2",
 "classify","str","str",,"!excpt",
-"classify","float","float",,"xform3",
+"classify","float?","float",,"xform3",
 "classify","d/int?","d_int",,,
 "classify","d/str","d_str",,"^intl|!excpt",
-"classify","d/float","d_float",,,
+"classify","d/float","d_float",,"clear_error",
 "classify","k","k",,,
 "classify","i","i",,,
 "classify","d","d",,,

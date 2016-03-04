@@ -40,6 +40,13 @@ def cast_int(v, header_d, clear_errors):
 
 def cast_float(v, header_d, clear_errors):
 
+
+    if isinstance(v, FailedValue):
+        if clear_errors:
+            return None
+        else:
+            raise ValueError("Failed to cast '{}'  to float for column {}".format(v, header_d))
+
     if v != 0 and not bool(v):
         return None
     else:
@@ -49,6 +56,12 @@ def cast_float(v, header_d, clear_errors):
             raise ValueError("Failed to cast '{}' ( {} )  to float for column {}".format(v,type(v),header_d))
 
 def cast_str(v, header_d, clear_errors):
+
+    if isinstance(v, FailedValue):
+        if clear_errors:
+            return None
+        else:
+            raise ValueError("Failed to cast '{}'  to str for column {}".format(v, header_d))
 
     if v != 0 and not bool(v):
         return None
@@ -60,6 +73,12 @@ def cast_str(v, header_d, clear_errors):
 
 def cast_unicode(v, header_d, clear_errors):
 
+    if isinstance(v, FailedValue):
+        if clear_errors:
+            return None
+        else:
+            raise ValueError("Failed to cast '{}'  to unicode for column {}".format(v, header_d))
+
     if v != 0 and not bool(v):
         return None
     else:
@@ -68,11 +87,9 @@ def cast_unicode(v, header_d, clear_errors):
         except Exception as e:
             raise ValueError("Failed to cast '{}' ( {} )  to unicode for column {}".format(v,type(v),header_d))
 
-
 class ValueType(object):
 
     _pythontype = text_type
-
 
     @classmethod
     def python_type(self):
@@ -106,19 +123,19 @@ class StrValue(str, ValueType):
     _pythontype = str
 
     def __new__(cls, v):
-        if v is None or (isinstance(v, string_types) and v.strip() == ''):
-            return None
-
-        return str.__new__(cls,v)
+        try:
+            return str.__new__(cls, v)
+        except:
+            return FailedValue(v)
 
 class TextValue(text_type, ValueType):
     _pythontype = text_type
 
     def __new__(cls, v):
-        if v is None or (isinstance(v, string_types) and v.strip() == ''):
-            return None
-
-        return text_type.__new__(cls, v)
+        try:
+            return text_type.__new__(cls, v)
+        except:
+            return FailedValue(v)
 
 class IntValue(int, ValueType):
     _pythontype = int
@@ -129,22 +146,15 @@ class IntValue(int, ValueType):
         except:
             return FailedValue(v)
 
-
-
 class FloatValue(float, ValueType):
     _pythontype = float
 
     def __new__(cls, v):
 
-        if v is None or ( isinstance(v, string_types) and v.strip() == ''):
-            return None
-
-        return float.__new__(cls, v)
-
-    @classmethod
-    def parse(cls, v):
-        return float(v)
-
+        try:
+            return float.__new__(cls, v)
+        except:
+            return FailedValue(v)
 
 class DateValue(date, ValueType):
     _pythontype = date
@@ -172,7 +182,10 @@ class TimeValue(time, ValueType):
             return None
 
         d = parser.parse(v)
+
         return super(TimeValue, cls).__new__(cls, d.hour, d.minute, d.second)
+
+
 
 
 class DateTimeValue(datetime, ValueType):

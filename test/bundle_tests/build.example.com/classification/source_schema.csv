@@ -10,3 +10,9 @@ classify,8,i,i,int,,False,,,,,i
 classify,9,d,d,int,,False,,,,,d
 classify,10,d_n,d_n,int,,False,,,,,d_N
 classify,11,d_c,d_c,int,,False,,,,,d_C
+classifydt,1,d_dt,d_dt,time,,False,,,,,d_dt
+classifydt,2,d_dt_date,d_dt_date,date,,False,,,,,d_dt_date
+classifydt,3,d_dt_datetime,d_dt_datetime,datetime,,False,,,,,d_dt_datetime
+classifydt,4,d_duration,d_duration,unknown,,False,,,,,d_duration
+classifydt,5,d_duration_yrange,d_duration_yrange,unknown,,False,,,,,d_duration_yrange
+classifydt,6,d_duration_iso,d_duration_iso,unknown,,False,,,,,d_duration_iso
