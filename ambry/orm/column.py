@@ -418,42 +418,6 @@ class Column(Base):
             'column': column
         }
 
-    @property
-    def expanded_transform(self):
-        """Expands the transform string into segments """
-
-        segments = self._expand_transform(self.transform)
-
-        if segments:
-
-            segments[0]['datatype'] = self.valuetype_class
-
-            for s in segments:
-                s['column'] = self
-
-        else:
-
-            segments = [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
-
-        return segments
-
-    @staticmethod
-    def clean_transform(transform):
-
-        segments = Column._expand_transform(transform)
-
-        def pipeify_seg(seg):
-
-            o = []
-
-            seg['init'] and o.append('^' + seg['init'])
-            o += seg['transforms']
-            seg['exception'] and o.append('!' + seg['exception'])
-
-            return '|'.join(o)
-
-        return '||'.join(pipeify_seg(seg) for seg in segments)
-
     @staticmethod
     def _expand_transform(transform):
         from ambry.dbexceptions import ConfigurationError
@@ -491,6 +455,47 @@ class Column(Base):
             segments.append(d)
 
         return segments
+
+    @property
+    def expanded_transform(self):
+        """Expands the transform string into segments """
+
+        segments = self._expand_transform(self.transform)
+
+        if segments:
+
+            segments[0]['datatype'] = self.valuetype_class
+
+            for s in segments:
+                s['column'] = self
+
+        else:
+
+            segments = [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
+
+        # If we want to add the find datatype cast to a transform.
+        #segments.append(self.make_xform_seg(transforms=["cast_"+self.datatype], column=self))
+
+        return segments
+
+    @staticmethod
+    def clean_transform(transform):
+
+        segments = Column._expand_transform(transform)
+
+        def pipeify_seg(seg):
+
+            o = []
+
+            seg['init'] and o.append('^' + seg['init'])
+            o += seg['transforms']
+            seg['exception'] and o.append('!' + seg['exception'])
+
+            return '|'.join(o)
+
+        return '||'.join(pipeify_seg(seg) for seg in segments)
+
+
 
     @property
     def row(self):

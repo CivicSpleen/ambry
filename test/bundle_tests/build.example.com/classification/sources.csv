@@ -1,2 +1,2 @@
-"name","dest_table_name","ref"
-"classify","classify","file:///Users/eric/proj/virt/ambry-develop/ambry/test/bundle_tests/build.example.com/classification/data/classifications.csv"
+name,dest_table_name,start_line,end_line,header_lines,ref,state
+classify,classify,1,73,0,file://data/classifications.csv,ingest_done

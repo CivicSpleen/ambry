@@ -1094,6 +1094,7 @@ Caster Code
 
         elif source.is_downloadable:
 
+
             @call_interval(5)
             def progress(read_len, total_len):
                 if ps:
@@ -1108,7 +1109,8 @@ Caster Code
 
                 s = get_source(
                     source.spec, self.library.download_cache,
-                    account_accessor=self.library.account_accessor, callback=progress)
+                    account_accessor=self.library.account_accessor, cwd=self.source_fs.getsyspath('/'),
+                    callback=progress)
 
             except MissingCredentials as exc:
                 from ambry.dbexceptions import ConfigurationError
@@ -1810,6 +1812,10 @@ Caster Code
                                       limit=500 if self.limited_run else None,
                                       intuit_type=True, run_stats=False)
 
+            if source.datafile.meta['warnings']:
+                for w in source.datafile.meta['warnings']:
+                    self.error("Ingestion error: {}".format(w))
+
             ps.update(message='Ingested to {}'.format(source.datafile.syspath))
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
@@ -2498,7 +2504,6 @@ Caster Code
         env_dict['bundle'] = self
         env_dict['source'] = source
         env_dict['pipe'] = pipe
-
 
         exec (compile(code, abs_path, 'exec'), env_dict)
 

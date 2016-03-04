@@ -7,6 +7,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from six import text_type
+from six import string_types
 from datetime import date, time, datetime
 from decorator import decorator
 from ambry.util import Constant
@@ -21,30 +22,57 @@ def valuetype(func, *args, **kw):
     return func(*args, **kw)
 
 
-# ValueType second-level subclasses, StrValue, IntValue, etc, are described from fundamental types so they
-# can be inserted directly into the database.
+def cast_int(v, header_d, clear_errors):
 
-def MaybeFail(value_class, v):
-    """Try to parse v with the value_class, and return a FailedValue on failures, or None if the
-    input is none"""
+    if isinstance(v, FailedValue):
+        if clear_errors:
+            return None
+        else:
+            raise ValueError("Failed to cast '{}'  to int for column {}".format(v, header_d))
 
-    if v is None:
+    if v != 0 and not bool(v):
         return None
+    else:
+        try:
+            return int(v)
+        except Exception as e:
+            raise ValueError("Failed to cast '{}' ( {} ) to int for column {}".format(v,type(v),header_d))
 
-    try:
-        return value_class(v)
-    except ValueError as e:
-        return FailedValue(value_class, v, e)
+def cast_float(v, header_d, clear_errors):
+
+    if v != 0 and not bool(v):
+        return None
+    else:
+        try:
+            return float(v)
+        except Exception as e:
+            raise ValueError("Failed to cast '{}' ( {} )  to float for column {}".format(v,type(v),header_d))
+
+def cast_str(v, header_d, clear_errors):
+
+    if v != 0 and not bool(v):
+        return None
+    else:
+        try:
+            return str(v)
+        except Exception as e:
+            raise ValueError("Failed to cast '{}' ( {} )  to str for column {}".format(v,type(v),header_d))
+
+def cast_unicode(v, header_d, clear_errors):
+
+    if v != 0 and not bool(v):
+        return None
+    else:
+        try:
+            return unicode(v)
+        except Exception as e:
+            raise ValueError("Failed to cast '{}' ( {} )  to unicode for column {}".format(v,type(v),header_d))
 
 
 class ValueType(object):
 
-    _pythontype = str
-    failed_value = None
+    _pythontype = text_type
 
-    def __new__(cls, v):
-        o = cls._pythontype.__new__(cls, cls.parse(v))
-        return o
 
     @classmethod
     def python_type(self):
@@ -56,58 +84,66 @@ class ValueType(object):
         of this type. -1 indicates a strong non-match, 1 indicates a strong match, and 0 indicates uncertainty. """
         raise NotImplementedError()
 
-    @classmethod
-    def new(cls, v):
-        """Return a new instance of the class, raising an Exception on parse failures"""
-        return v
-
-    @classmethod
-    def new_or_none(cls, v):
-        """Return a new instance of the class, returning a non on parse failures."""
-        try:
-            return v
-        except Exception as e:
-            return FailedValue(cls, v, e)
-
-class FailedValue(object):
-    """Represents a value that could not be parsed by the original type class"""
-
-    def __init__(self, type_class, failed_value, exc):
-        self.type_class = type_class
-        self.failed_value = failed_value
-        self.exc = exc
-
-    def __nonzero__(self):
-        return False
-
-    def __int__(self):
+    @property
+    def failed_value(self):
         return None
 
-    def __float__(self):
-        return float('nan')
+class FailedValue(str, ValueType):
+    """When ValueTypes fail to convert, the __new__ returns an object of this type,
+    which resolves as a string containing the value that failed """
 
-    def __str__(self):
-        return ''
+    _pythontype = str
 
-    def __unicode__(self):
-        return ''
+    def __new__(cls, v):
+        o = str.__new__(cls,v)
+        return o
 
-
+    @property
+    def failed_value(self):
+        return str(self)
 
 class StrValue(str, ValueType):
     _pythontype = str
 
+    def __new__(cls, v):
+        if v is None or (isinstance(v, string_types) and v.strip() == ''):
+            return None
+
+        return str.__new__(cls,v)
 
 class TextValue(text_type, ValueType):
     _pythontype = text_type
 
+    def __new__(cls, v):
+        if v is None or (isinstance(v, string_types) and v.strip() == ''):
+            return None
+
+        return text_type.__new__(cls, v)
 
 class IntValue(int, ValueType):
     _pythontype = int
 
+    def __new__(cls, v):
+        try:
+            return int.__new__(cls, v)
+        except:
+            return FailedValue(v)
+
+
 
 class FloatValue(float, ValueType):
     _pythontype = float
+
+    def __new__(cls, v):
+
+        if v is None or ( isinstance(v, string_types) and v.strip() == ''):
+            return None
+
+        return float.__new__(cls, v)
+
+    @classmethod
+    def parse(cls, v):
+        return float(v)
 
 
 class DateValue(date, ValueType):
@@ -115,6 +151,10 @@ class DateValue(date, ValueType):
 
     def __new__(cls, v):
         from dateutil import parser
+
+        if v is None or (isinstance(v, string_types) and v.strip() == ''):
+            return None
+
         if isinstance(v, (datetime, date)):
             d = v
         else:
@@ -127,6 +167,10 @@ class TimeValue(time, ValueType):
 
     def __new__(cls, v):
         from dateutil import parser
+
+        if v is None or (isinstance(v, string_types) and v.strip() == ''):
+            return None
+
         d = parser.parse(v)
         return super(TimeValue, cls).__new__(cls, d.hour, d.minute, d.second)
 
@@ -136,6 +180,9 @@ class DateTimeValue(datetime, ValueType):
 
     def __new__(cls, v):
         from dateutil import parser
+
+        if v is None or (isinstance(v, string_types) and v.strip() == ''):
+            return None
 
         d = parser.parse(v)
         return super(DateTimeValue, cls).__new__(cls, d.year, d.month, d.day, d.hour, d.minute, d.second)

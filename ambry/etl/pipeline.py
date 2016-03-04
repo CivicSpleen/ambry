@@ -1384,7 +1384,6 @@ class CastColumns(Pipe):
     def process_body(self, row):
         from ambry.valuetype.exceptions import CastingError
 
-        self.row_n += 1
         scratch = {}
         errors = {}
 

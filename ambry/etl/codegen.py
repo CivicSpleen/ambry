@@ -32,20 +32,18 @@ col_code_def = 'lambda {}:'.format(','.join(all_args))
 # that are the same for every column
 code_def = 'lambda {}:'.format(','.join(const_args))
 
+col_args_t="""col_args = dict(v=v, i_s=i_s, i_d=i_d, header_s=header_s, header_d=header_d,
+              scratch=scratch, errors=errors, accumulator = accumulator,
+              row=row, row_n=row_n)"""
+
 file_header = """
-from ambry.valuetype import MaybeFail
 
 """
 
 column_template = """
 def {f_name}(v, i_s, i_d, header_s, header_d, row, row_n, errors, scratch, accumulator, pipe, bundle, source):
 
-    # funcs created by transform generators must be called with kwargs
-    # because their signatures aren't known when the code is generated.
-    # FIXME: col_args is only needed for transform generators, but is included everywhere.
-    col_args = dict(v=v, i_s=i_s, i_d=i_d, header_s=header_s, header_d=header_d,
-                    scratch=scratch, errors=errors, accumulator = accumulator,
-                    row=row, row_n=row_n)
+    {col_args}
 
     try:
 {stack}
@@ -67,7 +65,7 @@ def row_{table}_{stage}(row, row_n, errors, scratch, accumulator, pipe, bundle, 
 """
 
 
-def column_processor_code():
+class CodeGenError(Exception):
     pass
 
 
@@ -96,14 +94,17 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
     out = [file_header]
 
-    for i, segments in enumerate(dest_table.transforms):
+    transforms = list(dest_table.transforms)
+    column_names = []
+    column_types = []
+    for i, segments in enumerate(transforms):
 
         seg_funcs = []
 
         for col_num, (segment, column) in enumerate(zip(segments, dest_table.columns), 1):
 
             if not segment:
-                seg_funcs.append('row[{}], # {}'.format(col_num - 1, column.name))
+                seg_funcs.append('row[{}]'.format(col_num - 1))
                 continue
 
             assert column
@@ -113,21 +114,31 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
             assert col_num == column.sequence_id, (dest_table.name, col_num, column.sequence_id)
 
-            try:
-                i_s = source_headers.index(column.name)
-                header_s = column.name
-                v = 'row[{}]'.format(i_s)
-
-            except ValueError as e:
-                i_s = 'None'
-                header_s = None
-                v = 'None' if col_num > 1 else 'row_n'
+            column_names.append(col_name)
+            column_types.append(column.datatype)
 
             f_name = "{table_name}_{column_name}_{stage}".format(
                 table_name=dest_table.name,
                 column_name=col_name,
                 stage=i
             )
+
+            exception = (exception if exception else
+                                  ('raise ValueError("Failed to cast column \'{}\', in '
+                                   'function {}, value \'{}\': {}".format(header_d,"') + f_name + '", v, exc) ) ')
+
+            try:
+                i_s = source_headers.index(column.name)
+                header_s = column.name
+                v = 'row[{}]'.format(i_s)
+
+
+            except ValueError as e:
+
+                i_s = 'None'
+                header_s = None
+                v = 'None' if col_num > 1 else 'row_n' # Give the id column the row number
+
 
             i_d = column.sequence_id - 1
 
@@ -143,9 +154,9 @@ def make_row_processors(bundle, source_headers, dest_table, env):
                 header_s=header_s,
                 header_d=header_d,
                 v=v,
-                exception=indent + (exception if exception else \
-                'raise ValueError("Failed to cast column \'{}\', in function {}, value \'{}\': {}".format(header_d,"'+f_name+'", v, exc) ) '),
-                stack='\n'.join(indent + l for l in try_lines)
+                exception=indent + exception,
+                stack='\n'.join(indent + l for l in try_lines),
+                col_args = '# col_args not implemented yet'
             )
 
             seg_funcs.append(f_name
@@ -160,13 +171,31 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
         source_headers = dest_headers
 
+        stack = '\n'.join("{}{}, # {}".format(indent,l,cn)
+                          for l,cn, dt in zip(seg_funcs, column_names, column_types))
+
         out.append(row_template.format(
             table=dest_table.name,
             stage=i,
-            stack='\n'.join(indent + l + ',' for l in seg_funcs)
+            stack=stack
         ))
 
         row_processors.append('row_{table}_{stage}'.format(stage=i, table=dest_table.name))
+
+    # Add the final datatype cast, which is done seperately to avoid an unecessary function call.
+
+    stack = '\n'.join("{}cast_{}(row[{}], '{}', {}), # {}"
+                      .format(indent, c.datatype, i, c.name,
+                              "True" if c.valuetype and c.valuetype.endswith('?') else "False", c.name)
+                      for i, c in enumerate(dest_table.columns) )
+
+    out.append(row_template.format(
+        table=dest_table.name,
+        stage=len(transforms),
+        stack=stack
+    ))
+
+    row_processors.append('row_{table}_{stage}'.format(stage=len(transforms), table=dest_table.name))
 
     out.append('row_processors = [{}]'.format(','.join(row_processors)))
 
@@ -201,6 +230,9 @@ def calling_code(f, f_name=None, raise_for_missing=True):
 
 
 def make_stack(env, stage, segment):
+    """For each transform segment, create the code in the try/except block with the
+    assignements for pipes in the segment """
+
     import string
     import random
     from ambry.util import qualified_name, qualified_name_import
@@ -211,28 +243,22 @@ def make_stack(env, stage, segment):
     def make_line(column, t):
         preamble = []
 
-        maybe = 'maybe_none' # Code to wrap caster to handle none and exceptions.
+        line_t = "v = {} # {}"
 
         if isinstance(t, type) and issubclass(t, ValueType):  # A valuetype class, from the datatype column.
 
-            if column.valuetype and '?' in column.valuetype:
-                maybe = "maybe_fail"
-
             try:
-                cc = calling_code(t, t.__name__);
-                fl = file_loc()
+                cc, fl = calling_code(t, t.__name__), file_loc()
             except TypeError:
-                cc = "{}(v)".format(t.__name__);
-                fl = file_loc()
+                cc, fl = "{}(v)".format(t.__name__), file_loc()
 
             preamble.append(qualified_name_import(t))
 
         elif isinstance(t, type):  # A python type, from the datatype columns.
-            raise NotImplementedError('All types myst be ValueTypes now')
+            cc, fl= "parse_{}(v, header_d)".format(t.__name__), file_loc()
 
         elif callable(env.get(t)):  # Transform function
-            cc = calling_code(env.get(t), t);
-            fl = file_loc()
+            cc, fl = calling_code(env.get(t), t), file_loc()
 
         else: # A transform generator, or python code.
 
@@ -250,12 +276,7 @@ def make_stack(env, stage, segment):
             if b:
                 preamble.append("{} = {} # {}".format(name, b, fl))
 
-        if maybe == 'maybe_fail':
-            cc = "MaybeFail(lambda v: {}, v)".format(cc)
-        elif maybe == 'maybe_none':
-            cc = "v if v is not None else None".format(cc)
-
-        line = "v = {} # {}".format(cc, fl)
+        line = line_t.format(cc, fl)
 
         return line, preamble
 
@@ -278,10 +299,6 @@ def make_stack(env, stage, segment):
         exception, col_preamble = make_line(column, segment['exception'])
 
     return preamble, try_lines, exception
-
-
-class CodeGenError(Exception):
-    pass
 
 
 def mk_kwd_args(fn, fn_name=None):

@@ -13,40 +13,31 @@ class KeyVT(IntValue):
     role = ROLE.DIMENSION
     vt_code = 'k'
 
-    def __init__(self, v):
-        pass
-
 
 class IdentifierVT(IntValue):
     role = ROLE.DIMENSION
     vt_code = 'i'
 
-    def __init__(self, v):
-        pass
 
 
-class DimensionVT(ValueType):
+class DimensionVT(TextValue):
     role = ROLE.DIMENSION
     vt_code = 'd'
 
-    def __init__(self, v):
-        pass
+
 
 
 class NominalVT(IntValue):
     role = ROLE.DIMENSION
     vt_code = 'd/N'
 
-    def __init__(self, v):
-        pass
+
 
 
 class CategoricalVT(TextValue):
     role = ROLE.DIMENSION
     vt_code = 'd/C'
 
-    def __init__(self, v):
-        pass
 
 
 class RaceEthVT(ValueType):
@@ -73,10 +64,8 @@ class RaceEthHCI(TextValue):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/hci'
 
-    hci_map = {e[3].lower(): e for e in RaceEthVT.re_codes}
+    hci_map = {e[3].lower() if e[3] else None: e for e in RaceEthVT.re_codes}
 
-    def __init__(self, v):
-        pass
 
     @property
     def civick(self):
@@ -87,64 +76,43 @@ class RaceEthCen00VT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/cen00'
 
-    def __init__(self, v):
-        pass
 
 
 class RaceEthCen10VT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/cen10'
 
-    def __init__(self, v):
-        pass
-
 
 class RaceEthOmbVT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/omb'
 
-    def __init__(self, v):
-        pass
 
 
 class RaceEthReidVT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/reid'
 
-    def __init__(self, v):
-        pass
 
 
 class RaceEthNameVT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/name'
 
-    def __init__(self, v):
-        pass
-
 
 class AgeVT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/age'
-
-    def __init__(self, v):
-        pass
 
 
 class AgeYearsVT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/age/years'
 
-    def __init__(self, v):
-        pass
-
 
 class AgeRangeVT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/age/range'
-
-    def __init__(self, v):
-        pass
 
 
 dimension_value_types = {

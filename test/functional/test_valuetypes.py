@@ -114,6 +114,7 @@ class Test(TestBase):
         pl = b.pipeline(s)
 
         print b.build_caster_code(s, s.headers, pipe=pl)
+        print b.build_fs
 
     def test_raceeth(self):
 
