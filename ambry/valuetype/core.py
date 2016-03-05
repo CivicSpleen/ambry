@@ -119,6 +119,12 @@ class FailedValue(str, ValueType):
     def failed_value(self):
         return str(self)
 
+    def __bool__(self):
+        return False
+
+    def __nonzero__(self):
+        return False
+
 class StrValue(str, ValueType):
     _pythontype = str
 
@@ -155,6 +161,8 @@ class FloatValue(float, ValueType):
             return float.__new__(cls, v)
         except:
             return FailedValue(v)
+
+
 
 class DateValue(date, ValueType):
     _pythontype = date

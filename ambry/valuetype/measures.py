@@ -9,7 +9,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from core import *
 
 
-class MeasureVT(ValueType):
+class MeasureVT(FloatValue):
     role = ROLE.MEASURE
     vt_code = 'm'
 
@@ -17,7 +17,7 @@ class MeasureVT(ValueType):
         pass
 
 
-class CountVT(ValueType):
+class CountVT(IntValue):
     role = ROLE.MEASURE
     vt_code = 'm/count'
 
@@ -25,23 +25,39 @@ class CountVT(ValueType):
         pass
 
 
-class ProportionVT(ValueType):
+class ProportionVT(FloatValue):
     role = ROLE.MEASURE
     vt_code = 'm/pro'
 
     def __init__(self,v):
         pass
 
+    @property
+    def percent(self):
+        return FloatValue(self*100)
 
-class PercentageVT(ValueType):
+
+class PercentageVT(FloatValue):
     role = ROLE.MEASURE
     vt_code = 'm/pct'
+
+    def __new__(cls, v):
+
+        if '%' in  v:
+            v = v.strip('%')
+
+        return FloatValue.__new__(cls, v)
+
 
     def __init__(self,v):
         pass
 
+    @property
+    def rate(self):
+        return FloatValue(self / 100.0)
 
-class IntervalVT(ValueType):
+
+class IntervalVT(FloatValue):
     role = ROLE.MEASURE
     vt_code = 'm/I'
 
@@ -49,7 +65,7 @@ class IntervalVT(ValueType):
         pass
 
 
-class RatiometricVT(ValueType):
+class RatiometricVT(FloatValue):
     role = ROLE.MEASURE
     vt_code = 'm/R'
 

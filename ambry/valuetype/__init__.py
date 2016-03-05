@@ -39,18 +39,31 @@ value_types = {
     "m/pct": PercentageVT,
     "m/I": IntervalVT,
     "m/R": RatiometricVT,
-    "e": ErrorVT,
-    "e/m": MarginOfErrorVT,
-    "e/ci": ConfidenceIntervalVT,
-    "e/se": StandardErrorVT,
-    "e/rse": RelativeStandardErrorVT,
+
 }
 
 value_types.update(geo_value_types)
 value_types.update(times_value_types)
 value_types.update(dimension_value_types)
-
+value_types.update(error_value_types)
 
 def resolve_value_type(vt_code):
 
-    return value_types[vt_code.strip('?')]
+    vt_code = vt_code.strip('?')
+
+    try:
+        return value_types[vt_code]
+    except KeyError:
+
+        parts = vt_code.split('/')
+        args = []
+        while len(parts):
+            args.append(parts.pop())
+
+            try:
+                o = value_types['/'.join(parts)]
+                # Return a dynamic subclass that has the extra parameters built in
+                return type(vt_code.replace('/','_'), (o,),{'vt_code':vt_code})
+            except KeyError:
+                pass
+

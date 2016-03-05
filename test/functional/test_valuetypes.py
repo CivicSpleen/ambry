@@ -120,8 +120,71 @@ class Test(TestBase):
 
         from ambry.valuetype import RaceEthHCI, RaceEthReidVT
 
+    def test_time(self):
+
+        from ambry.valuetype import IntervalYearVT, IntervalYearRangeVT, IntervalIsoVT
+        from ambry.valuetype import DateValue, TimeValue
+
+        self.assertEqual(2000, IntervalYearVT('2000'))
+
+        self.assertFalse(bool(IntervalYearVT('2000-2001')))
+
+        self.assertEqual('2000/2001', str(IntervalYearRangeVT('2000-2001')))
+        self.assertEqual(2000, IntervalYearRangeVT('2000-2001').start)
+        self.assertEqual(2001, IntervalYearRangeVT('2000-2001').end)
+
+        self.assertEqual('2000/2001', str(IntervalYearRangeVT('2000','2001')))
+
+        self.assertEqual('1981-04-05/1981-03-06',str(IntervalIsoVT('P1M/1981-04-05')))
+
+        self.assertEquals(4, DateValue('1981-04-05').month)
+
+        self.assertEquals(34,TimeValue('12:34').minute)
+
+    def test_geo(self):
+
+        from ambry.valuetype import GeoCensusVT, GeoAcsVT, GeoGvidVT
+        from geoid import acs, civick
+
+        # Check the ACS Geoid directly
+        self.assertEqual('California', acs.State(6).geo_name)
+        self.assertEqual('San Diego County, California', acs.County(6,73).geo_name)
+        self.assertEqual('place in California', acs.Place(6,2980).geo_name)
+
+        # THen check via parsing through the GeoAcsVT
+        self.assertEqual('California', GeoAcsVT(str(acs.State(6))).geo_name)
+        self.assertEqual('San Diego County, California', GeoAcsVT(str(acs.County(6, 73))).geo_name)
+        self.assertEqual('place in California', GeoAcsVT(str(acs.Place(6, 2980))).geo_name)
 
 
+    def test_measures(self):
+
+        from ambry.valuetype import resolve_value_type, StandardErrorVT
 
 
+        print resolve_value_type('e/ci')
+
+        t = resolve_value_type('e/ci/u/95')
+        v = t(12.34)
+        print v
+        print v.vt_code
+
+        t = resolve_value_type('e/m/90')
+
+        v = t(12.34)
+        print v
+        print v.vt_code
+
+        print StandardErrorVT.__doc__
+
+        v = resolve_value_type('e/se')(10)
+        print v
+        print v.m90 * 1
+        print v.m95 * 1
+        print v.m99 * 1
+
+
+        print v.m90.se
+        print v.m95.se
+        print v.m99.se
 
