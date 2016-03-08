@@ -9,7 +9,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from six import text_type
 from datetime import date, time, datetime
 
-from ambry.util import Constant
+from ambry.util import Constant, memoize
 
 from core import *
 from times import *
@@ -39,6 +39,7 @@ value_types.update(dimension_value_types)
 value_types.update(error_value_types)
 value_types.update(measure_value_types)
 
+@memoize
 def resolve_value_type(vt_code):
 
     if six.PY2 and isinstance(vt_code, unicode):
@@ -58,9 +59,13 @@ def resolve_value_type(vt_code):
             args.append(parts.pop())
 
             try:
-                o = value_types['/'.join(parts)]
+                base_vt_code = '/'.join(parts)
+                o = value_types[base_vt_code]
                 # Return a dynamic subclass that has the extra parameters built in
-                return type(vt_code.replace('/','_'), (o,),{'vt_code':vt_code})
+                cls =  o.subclass(vt_code, '/'.join(args))
+                globals()[cls.__name__] = cls
+                return cls
+
             except KeyError:
                 pass
 

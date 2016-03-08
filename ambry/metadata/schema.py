@@ -27,6 +27,13 @@ class About(DictGroup):
     footnote = ScalarTerm(store_none=False)  # A footnote entry
     processed = ScalarTerm(store_none=False)  # A statement about how the data were processed.
 
+class Documentation(DictGroup):
+    caveats = ScalarTerm() # Problems or issues with the dataset
+    processing = ScalarTerm() # Notes about how the dataset was processed
+    footnote = ScalarTerm() # Footnote to display regarding the data
+    source = ScalarTerm() # Information about the source
+    population = ScalarTerm() # About the population coverage of the dataset
+    methodology = ScalarTerm() # How the data was produced by the source.
 
 class Identity(DictGroup):
     """ """
@@ -131,6 +138,7 @@ class Top(StructuredPropertyTree):
     identity = Identity()
     dependencies = Dependencies()
     requirements = Requirements()
+    documentation = Documentation()
     external_documentation = ExtDoc()
     build = Build()
     pipelines = Pipeline()

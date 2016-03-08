@@ -95,6 +95,20 @@ class GeoCensusVT(Geoid):
     vt_code = 'd/geo/census'
     parser = geoid.census.CensusGeoid.parse
 
+    @classmethod
+    def subclass(cls, vt_code, vt_args):
+        """Return a dynamic subclass that has the extra parameters built in"""
+        from geoid import get_class
+        import geoid.census
+
+        parser = get_class(geoid.census, vt_args.strip('/')).parse
+
+        cls = type(vt_code.replace('/', '_'), (cls,), {'vt_code': vt_code, 'parser': parser})
+        globals()[cls.__name__] = cls
+        assert cls.parser
+
+        return cls
+
 class GeoGvidVT(Geoid):
     role = ROLE.DIMENSION
     vt_code = 'd/geo/gvid'

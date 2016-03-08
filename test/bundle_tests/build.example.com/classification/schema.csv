@@ -3,7 +3,7 @@
 "classify","str","str",,,
 "classify","float?","float",,"xform3",
 "classify","d/int?","d_int",,,
-"classify","d/str?","d_str",,"^intl|!excpt",
+"classify","d/str","d_str",,"^intl|!excpt",
 "classify","d/float","d_float",,"clear_error",
 "classify","k","k",,,
 "classify","i","i",,,

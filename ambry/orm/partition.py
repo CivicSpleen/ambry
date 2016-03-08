@@ -52,6 +52,8 @@ class PartitionDisplay(object):
         if not desc_used:
             self.description = self._p.description.strip('.') + '.' if self._p.description else ''
 
+
+
         self.notes = self._p.notes
 
     @property

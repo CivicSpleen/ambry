@@ -105,6 +105,11 @@ class ValueType(object):
     def failed_value(self):
         return None
 
+    @classmethod
+    def subclass(cls, vt_code):
+        """Return a dynamic subclass that has the extra parameters built in"""
+        return type(vt_code.replace('/', '_'), (cls,), {'vt_code': vt_code})
+
 
 class _NoneValue(object):
     """Represent None as a ValueType"""

@@ -166,8 +166,15 @@ class Test(TestBase):
         self.assertEqual('San Diego County, California', GeoAcsVT(str(acs.County(6, 73))).geo_name)
         self.assertEqual('place in California', GeoAcsVT(str(acs.Place(6, 2980))).geo_name)
 
-        print GeoGvidVT('0O0601').state_name
-        print resolve_value_type('d/geo/gvid')('0O0601').acs.geo_name
+        self.assertEqual('California', GeoGvidVT('0O0601').state_name)
+        self.assertEqual('Alameda County, California',  resolve_value_type('d/geo/gvid')('0O0601').acs.geo_name)
+
+        # Check that adding a parameter to the vt code will select a new parser.
+        cls = resolve_value_type('d/geo/census/tract')
+
+        self.assertEqual(402600, cls.parser('06001402600').tract)
+
+        self.assertEqual(402600, cls('06001402600').tract)
 
     def test_measures_errors(self):
 
