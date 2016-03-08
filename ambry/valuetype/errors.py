@@ -26,7 +26,7 @@ class MarginOfErrorVT(FloatValue):
     def se(self):
 
         if '/90' in self.vt_code:
-            return self / 1.65
+            return self / 1.645
         elif '/95' in self.vt_code:
             return self / 1.96
         elif '/99' in self.vt_code:
@@ -36,7 +36,7 @@ class MarginOfErrorVT(FloatValue):
 
     @property
     def m90(self):
-        return self.se * 1.65
+        return self.se * 1.645
 
     @property
     def m95(self):
@@ -80,7 +80,7 @@ class MarginOfErrorVT(FloatValue):
         return self.se / denom
 
 
-class ConfidenceIntervalHalfVT(ValueType):
+class ConfidenceIntervalHalfVT(FloatValue):
     """An upper or lower half of a confidence interval"""
     role = ROLE.ERROR
     vt_code = 'e/ci'

@@ -198,7 +198,6 @@ def make_parser(cmd=None, parser=None):
     command_p.set_defaults(subcommand='duplicate')
     command_p.add_argument('-s', '--new-source-dir', default=False, action='store_true',
                            help='Assign a new source directory. Otherwise, use the current source directory')
-    command_p.add_argument('-v', '--variation', help='Create a new packages, as a variation of this one')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Clean Command

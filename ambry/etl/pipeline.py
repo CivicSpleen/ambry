@@ -1355,8 +1355,8 @@ class CastColumns(Pipe):
         self.row_processors = []
         self.orig_headers = None
         self.new_headers = None
-        self.row_proxy_1 = None
-        self.row_proxy_2 = None
+        self.row_proxy_1 = None # Row proxy with  source headers
+        self.row_proxy_2 = None # Row proxy with dest headers
 
         self.accumulator = {}
 
@@ -1387,12 +1387,15 @@ class CastColumns(Pipe):
         scratch = {}
         errors = {}
 
+        # Start off the first processing with the source's source headers.
         rp = self.row_proxy_1
 
         try:
             for proc in self.row_processors:
                 row = proc(rp.set_row(row), self.row_n, errors, scratch, self.accumulator,
                            self, self.bundle, self.source)
+
+                # After the first round, the row has the destinatino headers.
                 rp = self.row_proxy_2
         except CastingError as e:
             raise PipelineError(self, "Failed to cast column in table {}, row {}: {}"

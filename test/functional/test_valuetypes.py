@@ -120,6 +120,16 @@ class Test(TestBase):
 
         from ambry.valuetype import RaceEthHCI, RaceEthReidVT
 
+    def test_text(self):
+
+        from ambry.valuetype import TextValue, cast_str, NoneValue
+
+        x = cast_str(TextValue(None), 'foobar', True)
+        self.assertEqual('', x)
+
+        print cast_str(TextValue(None), 'foobar', False)
+
+
     def test_time(self):
 
         from ambry.valuetype import IntervalYearVT, IntervalYearRangeVT, IntervalIsoVT
@@ -143,7 +153,7 @@ class Test(TestBase):
 
     def test_geo(self):
 
-        from ambry.valuetype import GeoCensusVT, GeoAcsVT, GeoGvidVT
+        from ambry.valuetype import GeoCensusVT, GeoAcsVT, GeoGvidVT, resolve_value_type
         from geoid import acs, civick
 
         # Check the ACS Geoid directly
@@ -156,35 +166,41 @@ class Test(TestBase):
         self.assertEqual('San Diego County, California', GeoAcsVT(str(acs.County(6, 73))).geo_name)
         self.assertEqual('place in California', GeoAcsVT(str(acs.Place(6, 2980))).geo_name)
 
+        print GeoGvidVT('0O0601').state_name
+        print resolve_value_type('d/geo/gvid')('0O0601').acs.geo_name
 
-    def test_measures(self):
+    def test_measures_errors(self):
 
-        from ambry.valuetype import resolve_value_type, StandardErrorVT
+        import ambry.valuetype as vt
+        from ambry.valuetype import resolve_value_type
 
+        self.assertEqual('A standard error', vt.StandardErrorVT.__doc__)
 
-        print resolve_value_type('e/ci')
+        self.assertEqual( vt.ConfidenceIntervalHalfVT, resolve_value_type('e/ci'))
 
+        # Test on-the-fly classes. The class is returned for e/ci, but it created a new class
+        # and the vt_code is set to e/ci/u/95
         t = resolve_value_type('e/ci/u/95')
-        v = t(12.34)
-        print v
-        print v.vt_code
+        self.assertEqual(vt.ConfidenceIntervalHalfVT, resolve_value_type('e/ci'))
+        self.assertEquals(12.34, float(t(12.34)))
+        self.assertEqual('e/ci/u/95', t(12.34).vt_code)
 
         t = resolve_value_type('e/m/90')
+        self.assertEquals(12.34, float(t(12.34)))
+        self.assertEqual('e/m/90', t(12.34).vt_code)
 
-        v = t(12.34)
-        print v
-        print v.vt_code
+        self.assertAlmostEqual(10.0, resolve_value_type('e/m/90')(16.45).se)
+        self.assertAlmostEqual(10.0, resolve_value_type('e/m/95')(19.6).se)
+        self.assertAlmostEqual(10.0, resolve_value_type('e/m/99')(25.75).se)
 
-        print StandardErrorVT.__doc__
-
+        # Convert to various margins.
         v = resolve_value_type('e/se')(10)
-        print v
-        print v.m90 * 1
-        print v.m95 * 1
-        print v.m99 * 1
+        self.assertEqual(10, int(v))
+        self.assertEqual(16.45, v.m90 * 1)
+        self.assertEqual(19.6, v.m95 * 1)
+        self.assertEqual(25.75, v.m99 * 1)
 
-
-        print v.m90.se
-        print v.m95.se
-        print v.m99.se
-
+        # Convert to margins and back to se
+        self.assertAlmostEqual(10.0, v.m90.se)
+        self.assertAlmostEqual(10.0, v.m95.se)
+        self.assertAlmostEqual(10.0, v.m95.se)

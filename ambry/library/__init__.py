@@ -35,8 +35,8 @@ from .filesystem import LibraryFilesystem
 
 logger = get_logger(__name__)
 # debug logging
-# import logging
-# logger = get_logger(__name__, level=logging.DEBUG)
+import logging
+#logger = get_logger(__name__, level=logging.DEBUG)
 global_library = None
 
 

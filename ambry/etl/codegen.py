@@ -298,6 +298,8 @@ def make_stack(env, stage, segment):
     if segment['exception']:
         exception, col_preamble = make_line(column, segment['exception'])
 
+    assert len(try_lines) > 0, column.name
+
     return preamble, try_lines, exception
 
 

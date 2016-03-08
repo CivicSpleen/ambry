@@ -36,7 +36,7 @@ def cast_int(v, header_d, clear_errors):
         try:
             return int(v)
         except Exception as e:
-            raise ValueError("Failed to cast '{}' ( {} ) to int for column {}".format(v,type(v),header_d))
+            raise ValueError("Failed to cast '{}' ( {} ) to int for column {}: {}".format(v,type(v),header_d,e))
 
 def cast_float(v, header_d, clear_errors):
 
@@ -53,7 +53,7 @@ def cast_float(v, header_d, clear_errors):
         try:
             return float(v)
         except Exception as e:
-            raise ValueError("Failed to cast '{}' ( {} )  to float for column {}".format(v,type(v),header_d))
+            raise ValueError("Failed to cast '{}' ( {} )  to float for column {}: {}".format(v,type(v),header_d,e))
 
 def cast_str(v, header_d, clear_errors):
 
@@ -61,7 +61,7 @@ def cast_str(v, header_d, clear_errors):
         if clear_errors:
             return None
         else:
-            raise ValueError("Failed to cast '{}'  to str for column {}".format(v, header_d))
+            raise ValueError("Uncleared errors on value '{}' for column {}: {}".format(v, header_d, str(v.exc)))
 
     if v != 0 and not bool(v):
         return None
@@ -69,7 +69,7 @@ def cast_str(v, header_d, clear_errors):
         try:
             return str(v)
         except Exception as e:
-            raise ValueError("Failed to cast '{}' ( {} )  to str for column {}".format(v,type(v),header_d))
+            raise ValueError("Failed to cast '{}' ( {} )  to str for column {}: {}".format(v,type(v),header_d,e))
 
 def cast_unicode(v, header_d, clear_errors):
 
@@ -85,7 +85,7 @@ def cast_unicode(v, header_d, clear_errors):
         try:
             return unicode(v)
         except Exception as e:
-            raise ValueError("Failed to cast '{}' ( {} )  to unicode for column {}".format(v,type(v),header_d))
+            raise ValueError("Failed to cast '{}' ( {} )  to unicode for column {}: {}".format(v,type(v),header_d,e))
 
 class ValueType(object):
 
@@ -105,15 +105,34 @@ class ValueType(object):
     def failed_value(self):
         return None
 
+
+class _NoneValue(object):
+    """Represent None as a ValueType"""
+
+    def __bool__(self):
+        return False
+
+    def __nonzero__(self):
+        return False
+
+    def __len__(self):
+        return False
+
+NoneValue = _NoneValue()
+
 class FailedValue(str, ValueType):
     """When ValueTypes fail to convert, the __new__ returns an object of this type,
     which resolves as a string containing the value that failed """
 
     _pythontype = str
 
-    def __new__(cls, v):
-        o = str.__new__(cls,v)
+    def __new__(cls, *args, **kwargs):
+        o = str.__new__(cls,args[0])
         return o
+
+    def __init__(self, v, exc=None):
+        self.exc = exc
+
 
     @property
     def failed_value(self):
@@ -122,26 +141,36 @@ class FailedValue(str, ValueType):
     def __bool__(self):
         return False
 
-    def __nonzero__(self):
-        return False
+    __nonzero__ = __bool__
+
+    def __getattr__(self, item):
+        return self
 
 class StrValue(str, ValueType):
     _pythontype = str
 
     def __new__(cls, v):
+
+        if v is None:
+            return NoneValue
+
         try:
             return str.__new__(cls, v)
-        except:
-            return FailedValue(v)
+        except Exception as e:
+            return FailedValue(v, e)
 
 class TextValue(text_type, ValueType):
     _pythontype = text_type
 
     def __new__(cls, v):
+
+        if v is None:
+            return NoneValue
+
         try:
             return text_type.__new__(cls, v)
-        except:
-            return FailedValue(v)
+        except Exception as e:
+            return FailedValue(v, e)
 
 class IntValue(int, ValueType):
     _pythontype = int
@@ -149,8 +178,8 @@ class IntValue(int, ValueType):
     def __new__(cls, v):
         try:
             return int.__new__(cls, v)
-        except:
-            return FailedValue(v)
+        except Exception as e:
+            return FailedValue(v, e)
 
 class FloatValue(float, ValueType):
     _pythontype = float
@@ -159,8 +188,8 @@ class FloatValue(float, ValueType):
 
         try:
             return float.__new__(cls, v)
-        except:
-            return FailedValue(v)
+        except Exception as e:
+            return FailedValue(v, e)
 
 
 

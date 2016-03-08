@@ -30,15 +30,6 @@ value_types = {
     "d": DimensionVT,
     "d/N": NominalVT,
     "d/C": CategoricalVT,
-    "m/int": IntValue,
-    "m/str": TextValue,
-    "m/float": FloatValue,
-    "m": MeasureVT,
-    "m/count": CountVT,
-    "m/pro": ProportionVT,
-    "m/pct": PercentageVT,
-    "m/I": IntervalVT,
-    "m/R": RatiometricVT,
 
 }
 
@@ -46,13 +37,19 @@ value_types.update(geo_value_types)
 value_types.update(times_value_types)
 value_types.update(dimension_value_types)
 value_types.update(error_value_types)
+value_types.update(measure_value_types)
 
 def resolve_value_type(vt_code):
+
+    if six.PY2 and isinstance(vt_code, unicode):
+        vt_code = str(vt_code)
 
     vt_code = vt_code.strip('?')
 
     try:
-        return value_types[vt_code]
+        o = value_types[vt_code]
+        o.vt_code = vt_code
+        return o
     except KeyError:
 
         parts = vt_code.split('/')

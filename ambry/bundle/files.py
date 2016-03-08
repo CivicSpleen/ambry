@@ -998,8 +998,8 @@ class SchemaFile(RowBuildSourceFile):
             if not row.get('datatype', False) and not row.get('valuetype', False):
                 raise ConfigurationError('Row error: no type on line {}'.format(line_no))
 
-            value_type = row.get('valuetype', '').strip()
-            data_type = row.get('datatype', '').strip()
+            value_type = row.get('valuetype', '').strip() if row.get('valuetype', False) else None
+            data_type = row.get('datatype', '').strip() if row.get('datatype', False) else None
 
             if value_type and not data_type:
                 from ambry.valuetype import resolve_value_type

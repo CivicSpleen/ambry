@@ -42,8 +42,8 @@ class Geoid(StrValue):
             o = StrValue.__new__(cls, *args, **kwargs)
             o.geoid = cls.parser(args[0])
             return o
-        except ValueError:
-            return FailedValue(args[0])
+        except ValueError as e:
+            return FailedValue(args[0], e)
 
 
     def __init__(self, v):
@@ -98,7 +98,7 @@ class GeoCensusVT(Geoid):
 class GeoGvidVT(Geoid):
     role = ROLE.DIMENSION
     vt_code = 'd/geo/gvid'
-    parser = geoid.census.CensusGeoid.parse
+    parser = geoid.civick.GVid.parse
 
 
 class GeoNameVT(ValueType):

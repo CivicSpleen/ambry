@@ -34,7 +34,7 @@ class ProportionVT(FloatValue):
 
     @property
     def percent(self):
-        return FloatValue(self*100)
+        return PercentageVT(self*100)
 
 
 class PercentageVT(FloatValue):
@@ -54,7 +54,7 @@ class PercentageVT(FloatValue):
 
     @property
     def rate(self):
-        return FloatValue(self / 100.0)
+        return ProportionVT(self / 100.0)
 
 
 class IntervalVT(FloatValue):
@@ -72,3 +72,14 @@ class RatiometricVT(FloatValue):
     def __init__(self,v):
         pass
 
+measure_value_types = {
+    "m/int": IntValue,
+    "m/str": TextValue,
+    "m/float": FloatValue,
+    "m": MeasureVT,
+    "m/count": CountVT,
+    "m/pro": ProportionVT,
+    "m/pct": PercentageVT,
+    "m/I": IntervalVT,
+    "m/R": RatiometricVT,
+}

@@ -155,14 +155,9 @@ def root_list(args, l, rc):
         elif not args.partitions:
             records.append(b.field_row(header))
         else:
+            raise NotImplemented()
             for p in b.partitions:
                 records.append
-
-
-
-    idx = header.index(args.sort) if args.sort else 1
-    records = sorted(records, key=lambda r: r[idx])
-
 
     if args.term:
 
@@ -173,6 +168,15 @@ def root_list(args, l, rc):
                 matched_records.append(r)
 
         records = matched_records
+
+    if args.sort:
+        idx = header.index(args.sort)
+    elif len(records) >= 1 and len(records[0]) > 1:
+        idx = 1
+    else:
+        idx = 0
+
+    records = sorted(records, key=lambda r: r[idx])
 
     if args.tab:
         for row in records:
