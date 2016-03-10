@@ -323,6 +323,10 @@ class BuildSourceFile(object):
 
         return sio.getvalue()
 
+    def get_string_io(self):
+        from cStringIO import StringIO
+        return StringIO(self.getcontent())
+
     def list_files(self):
         """Return a list of the file name for this file type. Usuall, this will be just one,
         ( multiplicity == '1' ) but may be more when multiplicity = 'n' )"""
@@ -448,11 +452,8 @@ class DictBuildSourceFile(BuildSourceFile):
         fr.synced_fs = self.fs_modtime
         fr.modified = self.fs_modtime
 
-
-
     def set_dict(self, d):
         self.record.update_contents(msgpack.packb(d), 'application/msgpack')
-
 
     def record_to_fh(self, f):
         """Write the record, in filesystem format, to a file handle or file object"""
@@ -581,7 +582,6 @@ class MetadataFile(DictBuildSourceFile):
 
         self.set_object(o)
 
-
     def record_to_fh(self, f):
 
         fr = self.record
@@ -621,7 +621,6 @@ class MetadataFile(DictBuildSourceFile):
         d['names'] = self._dataset.identity.names_dict
 
         fr.update_contents(msgpack.packb(d), 'application/msgpack')
-
 
     def get_object(self):
         """Return contents in object form, an AttrDict"""
@@ -1321,7 +1320,6 @@ class BuildSourceFileAccessor(object):
         s = self._dataset._database.session
 
         return s.query(File).filter(File.d_vid == self._dataset.vid).filter(File.id == id).one()
-
 
     def record_to_objects(self, preference=None):
         """Create objects from files, or merge the files into the objects. """

@@ -145,6 +145,7 @@ def get_commands(extra_commands=[]):
 
 def main(argsv=None, ext_logger=None):
     from ..dbexceptions import ConfigurationError
+    from ambry.valuetype.exceptions import TooManyCastingErrors
 
     global global_logger
     # For failures in importing CLI modules. Re-set later.
@@ -205,3 +206,5 @@ def main(argsv=None, ext_logger=None):
             if args.exceptions:
                 raise
             fatal('{}: {}'.format(str(e.__class__.__name__), str(e)))
+        except TooManyCastingErrors:
+            fatal("Casting errors")

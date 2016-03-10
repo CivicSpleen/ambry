@@ -13,73 +13,118 @@ class MeasureVT(FloatValue):
     role = ROLE.MEASURE
     vt_code = 'm'
 
-    def __init__(self,v):
-        pass
+
+
+class ZScoreVT(FloatValue):
+    """A Z score"""
+    desc = 'Z Score'
+    role = ROLE.MEASURE
+    vt_code = 'm/z'
+
+class ArealDensityVT(FloatValue):
+    """A general areal density"""
+    role = ROLE.MEASURE
+    desc = 'Areal Density'
+    vt_code = 'm/den'
 
 
 class CountVT(IntValue):
     role = ROLE.MEASURE
     vt_code = 'm/count'
-
+    desc = 'Count'
     def __init__(self,v):
         pass
 
+class RatioVT(FloatValue):
+    """A general ratio, with values that may exceed 1"""
+    role = ROLE.MEASURE
+    vt_code = 'm/ratio'
+    desc = 'Ratio'
 
-class ProportionVT(FloatValue):
+class ProportionVT(RatioVT):
+    """A general ratio of two other values, from 0 to 1"""
     role = ROLE.MEASURE
     vt_code = 'm/pro'
+    desc = 'Proportion'
 
-    def __init__(self,v):
-        pass
+    def __new__(cls, v):
+
+        o = RatioVT.__new__(cls, v)
+
+        if bool(o) and float(o) > 1:
+            return FailedValue(v, ValueError("Proportion values must be less than 1"))
+
+        return o
+
+    @property
+    def rate(self):
+        return self
 
     @property
     def percent(self):
         return PercentageVT(self*100)
 
+class RateVT(ProportionVT):
+    """A general ratio of two other values, from 0 to 1"""
+    role = ROLE.MEASURE
+    vt_code = 'm/rate'
+    desc = 'Rate, 0->1'
 
 class PercentageVT(FloatValue):
+    """Percentage, expressed as 0 to 100. """
     role = ROLE.MEASURE
     vt_code = 'm/pct'
+    desc = 'Percentage 0->100'
 
     def __new__(cls, v):
 
-        if '%' in  v:
+        if isinstance(v, text_type) and '%' in v:
             v = v.strip('%')
 
         return FloatValue.__new__(cls, v)
 
-
-    def __init__(self,v):
+    def init(self):
         pass
 
     @property
     def rate(self):
         return ProportionVT(self / 100.0)
 
+    @property
+    def percent(self):
+        return self
 
-class IntervalVT(FloatValue):
+class PercentileVT(FloatValue):
+    """Percentile ranking, 0 to 100 """
     role = ROLE.MEASURE
-    vt_code = 'm/I'
+    vt_code = 'm/pctl'
+    desc = 'Percentile Rank'
 
-    def __init__(self,v):
-        pass
+    def __new__(cls, v):
+
+        if isinstance(v,text_type) and '%' in v:
+            v = v.strip('%')
+
+        return FloatValue.__new__(cls, v)
 
 
-class RatiometricVT(FloatValue):
-    role = ROLE.MEASURE
-    vt_code = 'm/R'
+    @property
+    def rate(self):
+        return ProportionVT(self / 100.0)
 
-    def __init__(self,v):
-        pass
+
 
 measure_value_types = {
     "m/int": IntValue,
     "m/str": TextValue,
     "m/float": FloatValue,
     "m": MeasureVT,
+    "m/z": ZScoreVT,
+    "m/den": ArealDensityVT,
     "m/count": CountVT,
+    "m/ratio": RatioVT,
+    "m/rate": RateVT,
     "m/pro": ProportionVT,
     "m/pct": PercentageVT,
-    "m/I": IntervalVT,
-    "m/R": RatiometricVT,
+    "m/pctl": PercentileVT
 }

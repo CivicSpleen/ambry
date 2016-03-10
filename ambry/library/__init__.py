@@ -720,16 +720,22 @@ class Library(object):
         from ambry.orm import Remote
         from sqlalchemy import or_
         from ambry.orm.exc import NotFoundError
-        from sqlalchemy.orm.exc import NoResultFound
+        from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
         if not name.strip():
             raise NotFoundError("Empty remote name")
 
         try:
-            r =  (self.database.session.query(Remote)
-                .filter(or_(Remote.url == name, Remote.short_name == name)).one())
+            r = self.database.session.query(Remote).filter(Remote.short_name == name).one()
+
+            if not r:
+                r = self.database.session.query(Remote).filter(Remote.url == name).one()
+
         except NoResultFound as e:
             raise NotFoundError(str(e))
+        except MultipleResultsFound as e:
+            self.logger.error("Got multiple results for search for remote '{}': {}".format(name, e))
+            return None
 
         return r
 

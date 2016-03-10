@@ -5,7 +5,7 @@ Functions for handling exceptions
 """
 
 import textwrap
-
+from ambry.dbexceptions import BuildError
 
 def clear_error(v):
     from ambry.valuetype import FailedValue
@@ -27,6 +27,9 @@ class CastingError(TypeError):
 
         # Call the base class constructor with the parameters it needs
         Exception.__init__(self, textwrap.fill(message, 120), *args, **kwargs)
+
+class TooManyCastingErrors(BuildError):
+    pass
 
 
 def try_except( try_f, except_f):

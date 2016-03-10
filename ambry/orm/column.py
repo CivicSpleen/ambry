@@ -193,6 +193,14 @@ class Column(Base):
             return resolve_value_type(self.datatype)
 
     @property
+    def valuetype_description(self):
+        """Return the valuetype class, if one is defined, or a built-in type if it isn't"""
+
+        from ambry.valuetype import resolve_value_type
+
+        return self.valuetype_class.desc
+
+    @property
     def python_type(self):
         """Return the python type for the row, possibly getting it from a valuetype reference """
 
@@ -207,6 +215,32 @@ class Column(Base):
         else:
             from ambry.exc import ConfigurationError
             raise ConfigurationError("Can't get python_type: neither datatype of valuetype is defined")
+
+    @property
+    def role(self):
+        from ambry.valuetype.core import role_descriptions, ROLE
+        role = self.valuetype_class.role
+
+        if role == ROLE.UNKNOWN:
+            vt_code = self.valuetype_class.vt_code
+
+            if len(vt_code) == 1 or vt_code[1] == '/':
+                return vt_code[0]
+            else:
+                return ''
+
+        return role
+
+
+
+    @property
+    def role_description(self):
+        from ambry.valuetype.core import role_descriptions
+        return  role_descriptions.get(self.role,'')
+
+    @property
+    def has_nulls(self):
+        return self.valuetype.endswith('?')
 
     def python_cast(self, v):
         """Cast a value to the type of the column.

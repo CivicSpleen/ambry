@@ -184,7 +184,7 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
     # Add the final datatype cast, which is done seperately to avoid an unecessary function call.
 
-    stack = '\n'.join("{}cast_{}(row[{}], '{}', {}), # {}"
+    stack = '\n'.join("{}cast_{}(row[{}], '{}', {}, errors), # {}"
                       .format(indent, c.datatype, i, c.name,
                               "True" if c.valuetype and c.valuetype.endswith('?') else "False", c.name)
                       for i, c in enumerate(dest_table.columns) )
@@ -208,7 +208,10 @@ def calling_code(f, f_name=None, raise_for_missing=True):
     from ambry.dbexceptions import ConfigurationError
 
     if inspect.isclass(f):
-        args = inspect.getargspec(f.__init__).args
+        try:
+            args = inspect.getargspec(f.__init__).args
+        except TypeError as e:
+            raise TypeError("Failed to inspect {}: {}".format(f, e))
 
     else:
         args = inspect.getargspec(f).args

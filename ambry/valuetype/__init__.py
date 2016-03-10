@@ -25,11 +25,9 @@ value_types = {
     "d/int": IntValue,
     "d/str": TextValue,
     "d/float": FloatValue,
-    "k": KeyVT,
-    "i": IdentifierVT,
+    "key": KeyVT,
+    "id": IdentifierVT,
     "d": DimensionVT,
-    "d/N": NominalVT,
-    "d/C": CategoricalVT,
 
 }
 
@@ -41,6 +39,7 @@ value_types.update(measure_value_types)
 
 @memoize
 def resolve_value_type(vt_code):
+    import sys
 
     if six.PY2 and isinstance(vt_code, unicode):
         vt_code = str(vt_code)
@@ -62,8 +61,18 @@ def resolve_value_type(vt_code):
                 base_vt_code = '/'.join(parts)
                 o = value_types[base_vt_code]
                 # Return a dynamic subclass that has the extra parameters built in
-                cls =  o.subclass(vt_code, '/'.join(args))
+                cls = o.subclass(vt_code, '/'.join(args))
+
+                # Stuff the class into the current module
                 globals()[cls.__name__] = cls
+
+                # And also in the same module as the base class
+                setattr(sys.modules[o.__module__], cls.__name__, cls)
+
+                # FIXME. Shouldn't need this, but codegen.py seems to try to import
+                # from the wrong module.
+                setattr(sys.modules['ambry.valuetype.core'], cls.__name__, cls)
+
                 return cls
 
             except KeyError:

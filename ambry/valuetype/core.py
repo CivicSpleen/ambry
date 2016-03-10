@@ -11,24 +11,51 @@ from six import string_types
 from datetime import date, time, datetime
 from decorator import decorator
 from ambry.util import Constant
+from ambry.valuetype.exceptions import TooManyCastingErrors
 
 ROLE = Constant()
 ROLE.DIMENSION = 'd'
+ROLE.CATEGORY = 'c'
 ROLE.MEASURE = 'm'
 ROLE.ERROR = 'e'
+ROLE.KEY = 'k'
+ROLE.IDENTIFIER = 'i'
+ROLE.UNKNOWN = 'u'
+
+
+role_descriptions = {
+    ROLE.DIMENSION: 'dimension',
+    ROLE.CATEGORY: 'category',
+    ROLE.MEASURE: 'measure',
+    ROLE.ERROR: 'error',
+    ROLE.KEY: 'key',
+    ROLE.IDENTIFIER: 'identifier',
+    ROLE.UNKNOWN: 'unknown'
+}
+
+LOM = Constant()
+LOM.UNKNOWN = 'u'
+LOM.NOMINAL = 'n'
+LOM.ORDINAL = 'o'
+LOM.INTERVAL = 'i'
+LOM.RATIO = 'r'
 
 @decorator
 def valuetype(func, *args, **kw):
     return func(*args, **kw)
 
+def count_errors(errors):
+    if sum(len(e) for e in errors.values()) > 50 :
+        raise TooManyCastingErrors("Too many casting errors")
 
-def cast_int(v, header_d, clear_errors):
+def cast_int(v, header_d, clear_errors, errors):
 
     if isinstance(v, FailedValue):
         if clear_errors:
             return None
         else:
-            raise ValueError("Failed to cast '{}'  to int for column {}".format(v, header_d))
+            errors[header_d].add(u"Failed to cast '{}' ({}) to int in '{}': {}".format(v,type(v), header_d, v.exc))
+            count_errors(errors)
 
     if v != 0 and not bool(v):
         return None
@@ -36,16 +63,17 @@ def cast_int(v, header_d, clear_errors):
         try:
             return int(v)
         except Exception as e:
-            raise ValueError("Failed to cast '{}' ( {} ) to int for column {}: {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} ) to int in '{}': {}".format(v,type(v),header_d,e))
+            count_errors(errors)
 
-def cast_float(v, header_d, clear_errors):
-
+def cast_float(v, header_d, clear_errors, errors):
 
     if isinstance(v, FailedValue):
         if clear_errors:
             return None
         else:
-            raise ValueError("Failed to cast '{}'  to float for column {}".format(v, header_d))
+            errors[header_d].add(u"Failed to cast '{}' ({}) to float in '{}': {}".format(v,type(v), header_d, v.exc))
+            count_errors(errors)
 
     if v != 0 and not bool(v):
         return None
@@ -53,15 +81,17 @@ def cast_float(v, header_d, clear_errors):
         try:
             return float(v)
         except Exception as e:
-            raise ValueError("Failed to cast '{}' ( {} )  to float for column {}: {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} )  to float in '{}': {}".format(v,type(v),header_d,e))
+            count_errors(errors)
 
-def cast_str(v, header_d, clear_errors):
+def cast_str(v, header_d, clear_errors, errors):
 
     if isinstance(v, FailedValue):
         if clear_errors:
             return None
         else:
-            raise ValueError("Uncleared errors on value '{}' for column {}: {}".format(v, header_d, str(v.exc)))
+            errors[header_d].add(u"Uncleared errors on value '{}' in '{}': {}".format(v, header_d, str(v.exc)))
+            count_errors(errors)
 
     if v != 0 and not bool(v):
         return None
@@ -69,15 +99,17 @@ def cast_str(v, header_d, clear_errors):
         try:
             return str(v)
         except Exception as e:
-            raise ValueError("Failed to cast '{}' ( {} )  to str for column {}: {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} )  to str in '{}': {}".format(v,type(v),header_d,e))
+            count_errors(errors)
 
-def cast_unicode(v, header_d, clear_errors):
+def cast_unicode(v, header_d, clear_errors, errors):
 
     if isinstance(v, FailedValue):
         if clear_errors:
             return None
         else:
-            raise ValueError("Failed to cast '{}'  to unicode for column {}".format(v, header_d))
+            errors[header_d].add(u"Failed to cast '{}' ({}) to unicode in '{}': {}".format(v,type(v), header_d, v.exc))
+            count_errors(errors)
 
     if v != 0 and not bool(v):
         return None
@@ -85,31 +117,41 @@ def cast_unicode(v, header_d, clear_errors):
         try:
             return unicode(v)
         except Exception as e:
-            raise ValueError("Failed to cast '{}' ( {} )  to unicode for column {}: {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} )  to unicode in '{}': {}".format(v,type(v),header_d,e))
+            count_errors(errors)
 
 class ValueType(object):
-
+    role = ROLE.UNKNOWN
+    low = LOM.UNKNOWN
     _pythontype = text_type
+    desc = ''
 
     @classmethod
     def python_type(self):
         return self._pythontype
-
-    @classmethod
-    def intuit_name(self, name):
-        """Return a numeric value in the range [-1,1), indicating the likelihood that the name is for a variable of
-        of this type. -1 indicates a strong non-match, 1 indicates a strong match, and 0 indicates uncertainty. """
-        raise NotImplementedError()
 
     @property
     def failed_value(self):
         return None
 
     @classmethod
-    def subclass(cls, vt_code):
-        """Return a dynamic subclass that has the extra parameters built in"""
-        return type(vt_code.replace('/', '_'), (cls,), {'vt_code': vt_code})
+    def description(cls):
+        if cls.desc:
+            return cls.desc
+        elif cls.__doc__:
+            return cls.desc
+        else:
+            return cls.vt
 
+    @classmethod
+    def subclass(cls, vt_code, vt_args):
+        """
+        Return a dynamic subclass that has the extra parameters built in
+        :param vt_code: The full VT code, privided to resolve_type
+        :param vt_args: The portion of the VT code to the right of the part that matched a ValueType
+        :return:
+        """
+        return type(vt_code.replace('/', '_'), (cls,), {'vt_code': vt_code, 'vt_args': vt_args})
 
 class _NoneValue(object):
     """Represent None as a ValueType"""
@@ -153,6 +195,9 @@ class FailedValue(str, ValueType):
 
 class StrValue(str, ValueType):
     _pythontype = str
+    desc = 'Character String'
+    vt_code = 'str'
+    lom = LOM.NOMINAL
 
     def __new__(cls, v):
 
@@ -166,6 +211,9 @@ class StrValue(str, ValueType):
 
 class TextValue(text_type, ValueType):
     _pythontype = text_type
+    desc = 'Text String'
+    vt_code = 'unicode'
+    low = LOM.NOMINAL
 
     def __new__(cls, v):
 
@@ -179,6 +227,8 @@ class TextValue(text_type, ValueType):
 
 class IntValue(int, ValueType):
     _pythontype = int
+    desc = 'Integer'
+    vt_code = 'int'
 
     def __new__(cls, v):
         try:
@@ -188,6 +238,8 @@ class IntValue(int, ValueType):
 
 class FloatValue(float, ValueType):
     _pythontype = float
+    desc = 'General Floating Point'
+    vt_code = 'float'
 
     def __new__(cls, v):
 
@@ -196,10 +248,11 @@ class FloatValue(float, ValueType):
         except Exception as e:
             return FailedValue(v, e)
 
-
-
 class DateValue(date, ValueType):
     _pythontype = date
+    desc = 'Date'
+    vt_code = 'date'
+    low = LOM.ORDINAL
 
     def __new__(cls, v):
         from dateutil import parser
@@ -216,6 +269,8 @@ class DateValue(date, ValueType):
 
 class TimeValue(time, ValueType):
     _pythontype = time
+    desc = 'time'
+    low = LOM.ORDINAL
 
     def __new__(cls, v):
         from dateutil import parser
@@ -227,11 +282,11 @@ class TimeValue(time, ValueType):
 
         return super(TimeValue, cls).__new__(cls, d.hour, d.minute, d.second)
 
-
-
-
 class DateTimeValue(datetime, ValueType):
     _pythontype = datetime
+    desc = 'Date/Time'
+    vt_code = 'datetime'
+    low = LOM.ORDINAL
 
     def __new__(cls, v):
         from dateutil import parser

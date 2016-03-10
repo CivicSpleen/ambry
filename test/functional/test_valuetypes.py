@@ -129,7 +129,6 @@ class Test(TestBase):
 
         print cast_str(TextValue(None), 'foobar', False)
 
-
     def test_time(self):
 
         from ambry.valuetype import IntervalYearVT, IntervalYearRangeVT, IntervalIsoVT
@@ -153,7 +152,7 @@ class Test(TestBase):
 
     def test_geo(self):
 
-        from ambry.valuetype import GeoCensusVT, GeoAcsVT, GeoGvidVT, resolve_value_type
+        from ambry.valuetype import GeoCensusVT, GeoAcsVT, GeoGvidVT, resolve_value_type, cast_unicode
         from geoid import acs, civick
 
         # Check the ACS Geoid directly
@@ -175,6 +174,10 @@ class Test(TestBase):
         self.assertEqual(402600, cls.parser('06001402600').tract)
 
         self.assertEqual(402600, cls('06001402600').tract)
+
+        self.assertEquals('4026.00', cls('06001402600').dotted)
+
+        print cast_unicode(cls('06001400200').dotted, 'tract', False, {})
 
     def test_measures_errors(self):
 
@@ -211,3 +214,7 @@ class Test(TestBase):
         self.assertAlmostEqual(10.0, v.m90.se)
         self.assertAlmostEqual(10.0, v.m95.se)
         self.assertAlmostEqual(10.0, v.m95.se)
+
+        print vt.RateVT(0)
+        print vt.RateVT(None)
+

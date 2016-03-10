@@ -356,7 +356,20 @@ class Bundle(object):
         # Return the documentation as a scalar term, which has .text() and .html methods to do
         # metadata substitution using Jinja
 
-        return self.metadata.scalar_term(self.build_source_files.documentation.record_content)
+        s = ''
+
+        rc = self.build_source_files.documentation.record_content
+
+        if rc:
+            s += rc
+
+        for k, v in  self.metadata.documentation.items():
+            if  v:
+                s += '\n### {}\n{}'.format(k.title(), v)
+
+
+
+        return self.metadata.scalar_term(s)
 
     @property
     def progress(self):
@@ -2901,6 +2914,7 @@ Caster Code
 
     def checkin(self, no_partitions=False, remote_name=None, source_only=False, force=False, cb=None):
         from ambry.bundle.process import call_interval
+        from requests.exceptions import HTTPError
 
         package = self.package(source_only=source_only)
 
@@ -2916,7 +2930,12 @@ Caster Code
 
         remote.account_accessor = self.library.account_accessor
 
-        remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)
+        try:
+            remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)
+        except HTTPError as e:
+            self.error("HTTP Error: {}".format(e))
+
+            return None, None
 
         self.dataset.upstream = remote.url
 

@@ -11,29 +11,21 @@ import re
 
 
 class KeyVT(IntValue):
-    role = ROLE.DIMENSION
+    role = ROLE.KEY
     vt_code = 'k'
 
 class IdentifierVT(IntValue):
-    role = ROLE.DIMENSION
+    role = ROLE.IDENTIFIER
     vt_code = 'i'
 
 class DimensionVT(TextValue):
     role = ROLE.DIMENSION
     vt_code = 'd'
 
-
-class NominalVT(IntValue):
-    role = ROLE.DIMENSION
-    vt_code = 'd/N'
-
-class CategoricalVT(TextValue):
-    role = ROLE.DIMENSION
-    vt_code = 'd/C'
-
-class RaceEthVT(ValueType):
+class RaceEthVT(IntValue):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth'
+    low = LOM.NOMINAL
 
     # Civick Numeric, Civick, Census, HCI, Description
     re_codes = [
@@ -51,10 +43,10 @@ class RaceEthVT(ValueType):
     def __init__(self, v):
         pass
 
-
-class RaceEthHCI(TextValue):
+class RaceEthCodeHCI(IntValue):
     role = ROLE.DIMENSION
-    vt_code = 'd/raceth/hci'
+    vt_code = 'd/raceth/hci/code'
+    low = LOM.ORDINAL
 
     hci_map = {e[3].lower() if e[3] else None: e for e in RaceEthVT.re_codes}
 
@@ -62,40 +54,50 @@ class RaceEthHCI(TextValue):
     def civick(self):
         return self.hci_map[self.lower()][1]
 
+class RaceEthNameHCI(TextValue):
+    role = ROLE.DIMENSION
+    vt_code = 'd/raceth/hci/name'
+    low = LOM.NOMINAL
 
-class RaceEthCen00VT(ValueType):
+    hci_map = {e[3].lower() if e[3] else None: e for e in RaceEthVT.re_codes}
+
+    @property
+    def civick(self):
+        return self.hci_map[self.lower()][1]
+
+class RaceEthCen00VT(RaceEthVT):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/cen00'
 
-
-class RaceEthCen10VT(ValueType):
+class RaceEthCen10VT(RaceEthVT):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/cen10'
 
-
-class RaceEthOmbVT(ValueType):
+class RaceEthOmbVT(RaceEthVT):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/omb'
 
-
-class RaceEthReidVT(ValueType):
+class RaceEthReidVT(TextValue):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/reid'
-
+    low = LOM.NOMINAL
 
 class RaceEthNameVT(ValueType):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/name'
+    low = LOM.NOMINAL
 
 class AgeVT(IntValue):
     """A single-year age"""
     role = ROLE.DIMENSION
     vt_code = 'd/age'
+    low = LOM.ORDINAL
 
-class AgeRangeVT(StrValue):
+class AgeRangeVT(TextValue):
     """An age range, between two years. The range is half-open. """
     role = ROLE.DIMENSION
     vt_code = 'd/age/range'
+    low = LOM.ORDINAL
 
     # Standard age ranges
     ranges = [
@@ -115,9 +117,11 @@ class AgeRangeVT(StrValue):
         parts = v.split('-')
         self.from_year, self.to_year = int(parts[0]), int(parts[1])
 
-
-class AgeRangeCensus(StrValue):
+class AgeRangeCensus(TextValue):
     """Age ranges that appear in census column titles"""
+    role = ROLE.DIMENSION
+    vt_code = 'd/age/range/census'
+    low = LOM.ORDINAL
 
     under = re.compile('[Uu]nder (?P<to>\d+)')
     over = re.compile('(?P<from>\d+) years and over')
@@ -158,15 +162,23 @@ class AgeRangeCensus(StrValue):
     def __str__(self):
         return "{:02d}-{:02d}".format(self.from_year, self.to_year)
 
-
+class DecileVT(IntValue):
+    """A Decile Ranking, from 1 to 10"""
+    role = ROLE.DIMENSION
+    vt_code = 'd'
+    desc = "Decile ranking"
+    low = LOM.ORDINAL
 
 dimension_value_types = {
     "d/raceth": RaceEthVT,
-    "d/raceth/hci": RaceEthHCI,
+    "d/raceth/hci/name": RaceEthNameHCI,
+    "d/raceth/hci/code": RaceEthCodeHCI,
     "d/raceth/cen00": RaceEthCen00VT,
     "d/raceth/cen10": RaceEthCen10VT,
     "d/raceth/omb": RaceEthOmbVT,
     "d/raceth/reid": RaceEthReidVT,
     "d/raceth/name": RaceEthNameVT,
     "d/age": AgeVT,
-    "d/age/range": AgeRangeVT}
+    "d/age/range": AgeRangeVT,
+    "d/decile": DecileVT
+}

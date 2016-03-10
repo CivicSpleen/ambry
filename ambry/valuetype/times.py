@@ -11,7 +11,7 @@ import re
 
 from datetime import date, time, datetime
 
-def cast_date(v, header_d, clear_errors):
+def cast_date(v, header_d, clear_errors, errors):
     if v is None or v == '':
         return None
     elif isinstance(v, date):
@@ -22,7 +22,7 @@ def cast_date(v, header_d, clear_errors):
     raise ValueError("cast_date: value '{}' for column '{}'  is not a date, and full casting is not implemented yet"
                      .format(v,header_d))
 
-def cast_datetime(v, header_d, clear_errors):
+def cast_datetime(v, header_d, clear_errors, errors):
     if v is None or v == '':
         return None
     elif isinstance(v, datetime):
@@ -33,7 +33,7 @@ def cast_datetime(v, header_d, clear_errors):
     raise ValueError("cast_datetime: value '{}' for column '{}'  is not a datetime, and full casting is not implemented yet"
                      .format(v,header_d))
 
-def cast_time(v, header_d, clear_errors):
+def cast_time(v, header_d, clear_errors, errors):
 
     if v is None or v == '':
         return None
@@ -45,25 +45,30 @@ def cast_time(v, header_d, clear_errors):
     raise ValueError("cast_time: value '{}' for column '{}' is not a time, and full casting is not implemented yet"
                      .format(v,header_d))
 
-
 class TimeVT(TimeValue):
     role = ROLE.DIMENSION
     vt_code = 'd/dt/time'
-
+    desc = 'Time'
+    lom = LOM.ORDINAL
 
 class DateVT(DateValue):
     role = ROLE.DIMENSION
     vt_code = 'd/dt/date'
-
+    desc = 'Date'
+    lom = LOM.ORDINAL
 
 class DateTimeVT(DateTimeValue):
     role = ROLE.DIMENSION
     vt_code = 'd/dt/datetime'
+    desc = 'Date and time'
+    lom = LOM.ORDINAL
 
 class IntervalVT(StrValue):
     """A generic time interval"""
     role = ROLE.DIMENSION
     vt_code = 'd/interval'
+    desc = 'Time interval'
+    lom = LOM.ORDINAL
 
     year_re = re.compile(r'(\d{4})')
     year_range_re = re.compile(r'(\d{4})(?:\/|-|--)(\d{4})') # / and -- make it also an ISO interval
@@ -83,7 +88,7 @@ class IntervalVT(StrValue):
         m = cls.year_range_re.match(v)
 
         if m:
-            return IntervalYearRangeVT(m.group(1), m.group(2))
+            return IntervalYearRangeVT(v)
 
         return IntervalIsoVT(v)
 
@@ -91,7 +96,8 @@ class IntervalYearVT(IntValue):
     """Time interval of a single year"""
     role = ROLE.DIMENSION
     vt_code = 'd/interval/year'
-
+    desc = 'Single year Interval'
+    lom = LOM.ORDINAL
 
     def __new__(cls, v):
 
@@ -112,6 +118,8 @@ class IntervalYearRangeVT(ValueType):
     """A half-open time interval between two years"""
     role = ROLE.DIMENSION
     vt_code = 'd/interval/yrange'
+    desc = 'Year range interval'
+    lom = LOM.ORDINAL
 
     y1 = None
     y2 = None
@@ -128,15 +136,16 @@ class IntervalYearRangeVT(ValueType):
 
         return FailedValue(args[0])
 
-    def __init__(self, v, y2=None):
+    def __init__(self, v):
 
-        if y2 is not None:
-            self.y1 = v
-            self.y2 = y2
-        else:
-            m = IntervalVT.year_range_re.match(v)
+        m = IntervalVT.year_range_re.match(v)
+        if m:
             self.y1 = int(m.group(1))
             self.y2 = int(m.group(2))
+        else:
+            # Hope that this is actually a single year
+            return IntervalYearVT(v)
+
 
     @property
     def start(self):
@@ -152,6 +161,8 @@ class IntervalYearRangeVT(ValueType):
 class IntervalIsoVT(StrValue):
     role = ROLE.DIMENSION
     vt_code = 'd/duration/iso'
+    desc = 'ISO FOrmat Interval'
+    lom = LOM.ORDINAL
 
     interval = None
 
