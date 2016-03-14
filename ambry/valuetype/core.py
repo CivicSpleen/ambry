@@ -22,7 +22,6 @@ ROLE.KEY = 'k'
 ROLE.IDENTIFIER = 'i'
 ROLE.UNKNOWN = 'u'
 
-
 role_descriptions = {
     ROLE.DIMENSION: 'dimension',
     ROLE.CATEGORY: 'category',
@@ -46,6 +45,7 @@ def valuetype(func, *args, **kw):
 
 def count_errors(errors):
     if sum(len(e) for e in errors.values()) > 50 :
+
         raise TooManyCastingErrors("Too many casting errors")
 
 def cast_int(v, header_d, clear_errors, errors):
@@ -126,6 +126,9 @@ class ValueType(object):
     _pythontype = text_type
     desc = ''
 
+    def raise_for_error(self):
+        pass
+
     @classmethod
     def python_type(self):
         return self._pythontype
@@ -156,6 +159,15 @@ class ValueType(object):
 class _NoneValue(object):
     """Represent None as a ValueType"""
 
+    _pythontype = None
+
+    @classmethod
+    def python_type(self):
+        return self._pythontype
+
+    def raise_for_error(self):
+        pass
+
     def __bool__(self):
         return False
 
@@ -165,6 +177,9 @@ class _NoneValue(object):
     def __len__(self):
         return False
 
+    def __getattr__(self, item):
+        return self
+
 NoneValue = _NoneValue()
 
 class FailedValue(str, ValueType):
@@ -172,6 +187,7 @@ class FailedValue(str, ValueType):
     which resolves as a string containing the value that failed """
 
     _pythontype = str
+    exc = None
 
     def __new__(cls, *args, **kwargs):
         o = str.__new__(cls,args[0])
@@ -179,6 +195,10 @@ class FailedValue(str, ValueType):
 
     def __init__(self, v, exc=None):
         self.exc = exc
+
+    def raise_for_error(self):
+        if self.exc:
+            raise self.exc
 
 
     @property
@@ -267,6 +287,9 @@ class DateValue(date, ValueType):
 
         return super(DateValue, cls).__new__(cls, d.year, d.month, d.day)
 
+    def __init__(self, v):
+        pass
+
 class TimeValue(time, ValueType):
     _pythontype = time
     desc = 'time'
@@ -297,3 +320,18 @@ class DateTimeValue(datetime, ValueType):
         d = parser.parse(v)
         return super(DateTimeValue, cls).__new__(cls, d.year, d.month, d.day, d.hour, d.minute, d.second)
 
+class LabelValue(TextValue):
+    _pythontype = text_type
+    desc = 'Value Label'
+    vt_code = 'unicode'
+    low = LOM.NOMINAL
+
+    def __new__(cls, v):
+
+        if v is None:
+            return NoneValue
+
+        try:
+            return text_type.__new__(cls, v)
+        except Exception as e:
+            return FailedValue(v, e)

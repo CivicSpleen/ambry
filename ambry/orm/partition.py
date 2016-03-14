@@ -760,6 +760,55 @@ class Partition(Base):
             for row in r:
                 yield row
 
+    @property
+    def primary_columns(self):
+        """Iterate over the primary columns, columns which do not have a parent"""
+
+        sd = self.stats_dict
+
+        for c in self.table.columns:
+
+            if not c.parent:
+                stats = sd[c.name]
+                #print c.name, stats.count, len(stats.uvalues)
+                yield c
+
+    @property
+    def primary_dimensions(self):
+        """Iterate over the primary columns, columns which do not have a parent
+
+        ALso sets the property partition_stats to the stats collection for the partition and column.
+        """
+        from ambry.valuetype.core import ROLE
+
+        sd = self.stats_dict
+
+        for c in self.table.columns:
+
+            if not c.parent and c.role == ROLE.DIMENSION:
+                stats = sd[c.name]
+                if stats.nuniques > 1:
+                    c.partition_stats = stats
+                    yield c
+
+    @property
+    def primary_measures(self):
+        """Iterate over the primary columns, columns which do not have a parent
+
+        Also sets the property partition_stats to the stats collection for the partition and column.
+        """
+        from ambry.valuetype.core import ROLE
+
+        sd = self.stats_dict
+
+        for c in self.table.columns:
+
+            if not c.parent and c.role == ROLE.MEASURE:
+                stats = sd[c.name]
+                if stats.nuniques > 1:
+                    c.partition_stats = stats
+                    yield c
+
     def dataframe(self, predicate=None):
         """Return the partition as a Pandas dataframe
 

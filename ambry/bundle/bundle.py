@@ -367,8 +367,6 @@ class Bundle(object):
             if  v:
                 s += '\n### {}\n{}'.format(k.title(), v)
 
-
-
         return self.metadata.scalar_term(s)
 
     @property
@@ -1164,6 +1162,7 @@ Caster Code
         from ambry_sources.sources import ( GoogleSource, CsvSource, TsvSource, FixedSource,
                                             ExcelSource, PartitionSource, SourceError, DelayedOpen,
                                             DelayedDownload, ShapefileSource, SocrataSource )
+        from ambry_sources import extract_file_from_zip
 
 
         spec = source.spec

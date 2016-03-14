@@ -93,13 +93,10 @@ class ConfidenceIntervalHalfVT(FloatValue):
         pass
 
 
-class StandardErrorVT(IntValue):
+class StandardErrorVT(FloatValue):
     """A standard error"""
     role = ROLE.ERROR
     vt_code = 'e/se'
-
-    def __init__(self,v):
-        pass
 
     @property
     def m90(self):
@@ -136,12 +133,10 @@ class StandardErrorVT(IntValue):
         return v - self.m95
 
 
-class RelativeStandardErrorVT(ValueType):
+class RelativeStandardErrorVT(FloatValue):
     role = ROLE.ERROR
     vt_code = 'e/rse'
 
-    def __init__(self,v):
-        pass
 
 error_value_types = {
     "e": ErrorVT,

@@ -36,6 +36,11 @@ class Geoid(TextValue):
         if v is None or (isinstance(v, string_types) and v.strip() == ''):
             return None
 
+        if isinstance(v, geoid.Geoid):
+            o = TextValue.__new__(cls, str(v))
+            o.geoid = v
+            return o
+
         try:
             o = TextValue.__new__(cls, *args, **kwargs)
             o.geoid = cls.parser(args[0])
@@ -71,6 +76,12 @@ class GeoVT(TextValue):
     role = ROLE.DIMENSION
     vt_code = 'd/geo'
     desc = 'Geographic Identifier'
+
+class GeoLabelVT(TextValue):
+    role = ROLE.DIMENSION
+    vt_code = 'd/geo/label'
+    desc = 'Geographic Identifier Label'
+
 
 
 class GeoAcsVT(Geoid):
@@ -146,6 +157,7 @@ class GeoStusabVT(TextValue):
 
 geo_value_types = {
     "d/geo": GeoVT,
+    "d/geo/label": GeoLabelVT,
     "d/geo/acs": GeoAcsVT,
     "d/geo/tiger": GeoTigerVT,
     "d/geo/census": GeoCensusVT,

@@ -24,6 +24,7 @@ value_types = {
     "float": FloatValue,
     "d/int": IntValue,
     "d/str": TextValue,
+    "d/label": LabelValue,
     "d/float": FloatValue,
     "key": KeyVT,
     "id": IdentifierVT,

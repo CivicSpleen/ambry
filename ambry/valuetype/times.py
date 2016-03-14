@@ -57,6 +57,10 @@ class DateVT(DateValue):
     desc = 'Date'
     lom = LOM.ORDINAL
 
+    def __init__(self, v):
+        super(DateVT, self).__init__(v)
+
+
 class DateTimeVT(DateTimeValue):
     role = ROLE.DIMENSION
     vt_code = 'd/dt/datetime'
@@ -70,25 +74,29 @@ class IntervalVT(StrValue):
     desc = 'Time interval'
     lom = LOM.ORDINAL
 
-    year_re = re.compile(r'(\d{4})')
+    year_re = re.compile(r'^(\d{4})$')
     year_range_re = re.compile(r'(\d{4})(?:\/|-|--)(\d{4})') # / and -- make it also an ISO interval
 
     def __new__(cls, v):
 
         if v is None or (isinstance(v, string_types) and v.strip() == ''):
-            return None
+            return NoneValue
 
-        v = v.strip()
+        if isinstance(v, (int, float)):
+            return IntervalYearVT(int(v))
+
+        if isinstance(v, string_types):
+            v = v.strip()
 
         m = cls.year_re.match(v)
 
         if m:
-            return IntervalYearVT(v)
+            return IntervalYearVT.__new__(IntervalYearVT,v)
 
         m = cls.year_range_re.match(v)
 
         if m:
-            return IntervalYearRangeVT(v)
+            return IntervalYearRangeVT.__new__(IntervalYearRangeVT, v)
 
         return IntervalIsoVT(v)
 
@@ -102,7 +110,7 @@ class IntervalYearVT(IntValue):
     def __new__(cls, v):
 
         if v is None or (isinstance(v, string_types) and v.strip() == ''):
-            return None
+            return NoneValue
 
         return IntValue.__new__(cls, v)
 
@@ -114,7 +122,7 @@ class IntervalYearVT(IntValue):
     def end(self):
         return int(self)
 
-class IntervalYearRangeVT(ValueType):
+class IntervalYearRangeVT(StrValue):
     """A half-open time interval between two years"""
     role = ROLE.DIMENSION
     vt_code = 'd/interval/yrange'
@@ -124,28 +132,21 @@ class IntervalYearRangeVT(ValueType):
     y1 = None
     y2 = None
 
-    def __new__(cls, *args, **kwargs):
-
-        v = args[0]
-
+    def __new__(cls, v):
         if v is None or (isinstance(v, string_types) and v.strip() == ''):
-            return None
-
-        if len(args) in (1,2):
-            return ValueType.__new__(cls, *args, **kwargs)
-
-        return FailedValue(args[0])
-
-    def __init__(self, v):
+            return NoneValue
 
         m = IntervalVT.year_range_re.match(v)
-        if m:
-            self.y1 = int(m.group(1))
-            self.y2 = int(m.group(2))
-        else:
-            # Hope that this is actually a single year
-            return IntervalYearVT(v)
 
+        if not m:
+            return FailedValue(v,ValueError("IntervalYearRangeVT failed to match year range"))
+
+        o = StrValue.__new__(cls, v)
+
+        o.y1 = int(m.group(1))
+        o.y2 = int(m.group(2))
+
+        return o
 
     @property
     def start(self):

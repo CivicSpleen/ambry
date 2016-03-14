@@ -1003,6 +1003,8 @@ class SchemaFile(RowBuildSourceFile):
             if value_type and not data_type:
                 from ambry.valuetype import resolve_value_type
                 vt_class = resolve_value_type(row['valuetype'])
+                if not vt_class:
+                    raise ConfigurationError("Row error: unknown valuetype '{}'".format(row['valuetype']))
                 data_type = vt_class.python_type().__name__
 
             elif data_type and not value_type:
@@ -1037,6 +1039,7 @@ class SchemaFile(RowBuildSourceFile):
                 description=(row.get('description', '') or '').strip(),
                 datatype=data_type,
                 valuetype=value_type,
+                parent=row.get('parent'),
                 proto_vid=row.get('proto_vid'),
                 size=_clean_int(row.get('size', None)),
                 width=_clean_int(row.get('width', None)),

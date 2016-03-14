@@ -70,6 +70,7 @@ class Column(Base):
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
 
+    parent = SAColumn('c_parent', Text)
     derivedfrom = SAColumn('c_derivedfrom', Text)
     numerator = SAColumn('c_numerator', String(20))
     denominator = SAColumn('c_denominator', String(20))
@@ -218,7 +219,12 @@ class Column(Base):
 
     @property
     def role(self):
+        '''Return the code for the role,  measure, dimension or error'''
         from ambry.valuetype.core import role_descriptions, ROLE
+
+        if not self.valuetype_class:
+            return ''
+
         role = self.valuetype_class.role
 
         if role == ROLE.UNKNOWN:
@@ -231,16 +237,32 @@ class Column(Base):
 
         return role
 
-
-
     @property
     def role_description(self):
         from ambry.valuetype.core import role_descriptions
-        return  role_descriptions.get(self.role,'')
+        return role_descriptions.get(self.role,'')
+
 
     @property
     def has_nulls(self):
+        """Return True if the datatype allows for null values ( it is specified with a '?' at the end ) """
         return self.valuetype.endswith('?')
+
+    @property
+    def children(self):
+        """"Return the table's other columsn that have this column as a parent, excluding labels"""
+        for c in self.table.columns:
+            if c.parent == self.name and '/label' not in c.valuetype:
+                c.partition_stats = self.partition_stats if hasattr(self, 'partition_stats') else None
+                yield c
+
+    @property
+    def label(self):
+        """"Return first child that of the column that is marked as a label"""
+        for c in self.table.columns:
+            if c.parent == self.name and '/label' in c.valuetype:
+                c.partition_stats = self.partition_stats if hasattr(self, 'partition_stats') else None
+                return c
 
     def python_cast(self, v):
         """Cast a value to the type of the column.
@@ -567,6 +589,16 @@ class Column(Base):
         return '<column: {}, {}>'.format(self.name, self.vid)
 
     @staticmethod
+    def update_number(target):
+
+        ton = ObjectNumber.parse(target.t_vid)
+        con = ColumnNumber(ton, target.sequence_id)
+        target.id = str(ton.rev(None))
+        target.vid = str(con)
+        target.id = str(con.rev(None))
+        target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
+
+    @staticmethod
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the seqience_id for this
         object and create an ObjectNumber value for the id_"""
@@ -592,12 +624,7 @@ class Column(Base):
 
         target.name = Column.mangle_name(target.name)
 
-        ton = ObjectNumber.parse(target.t_vid)
-        con = ColumnNumber(ton, target.sequence_id)
-        target.id = str(ton.rev(None))
-        target.vid = str(con)
-        target.id = str(con.rev(None))
-        target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
+        Column.update_number(target)
 
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)

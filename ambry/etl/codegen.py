@@ -38,6 +38,8 @@ col_args_t="""col_args = dict(v=v, i_s=i_s, i_d=i_d, header_s=header_s, header_d
 
 file_header = """
 
+from ambry.valuetype import resolve_value_type
+
 """
 
 column_template = """
@@ -201,7 +203,6 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
     return '\n'.join(out)
 
-
 def calling_code(f, f_name=None, raise_for_missing=True):
     """Return the code string for calling a function. """
     import inspect
@@ -255,7 +256,7 @@ def make_stack(env, stage, segment):
             except TypeError:
                 cc, fl = "{}(v)".format(t.__name__), file_loc()
 
-            preamble.append(qualified_name_import(t))
+            preamble.append("{} = resolve_value_type('{}') # {}".format(t.__name__, t.vt_code, fl))
 
         elif isinstance(t, type):  # A python type, from the datatype columns.
             cc, fl= "parse_{}(v, header_d)".format(t.__name__), file_loc()

@@ -27,43 +27,39 @@ class RaceEthVT(IntValue):
     vt_code = 'd/raceth'
     low = LOM.NOMINAL
 
-    # Civick Numeric, Civick, Census, HCI, Description
+    # Civick Numeric, Civick, Census, HCI Name, HCI Code, Description
     re_codes = [
-        [1, u'aian', u'C', u'AIAN', u'American Indian and Alaska Native Alone'],
-        [2, u'asian', u'D', u'Asian', u'Asian Alone'],
-        [3, u'black', u'B', u'AfricanAm', u'Black or African American Alone'],
-        [4, u'hisp', u'I', u'Latino', u'Hispanic or Latino'],
-        [5, u'nhopi', u'E', u'NHOPI', u'Native Hawaiian and Other Pacific Islander Alone'],
-        [6, u'white', u'A', u'White', u'White alone'],
-        [61, u'whitenh', u'H', None, u'White Alone, Not Hispanic or Latino'],
-        [7, u'multiple', None, u'Multiple', u'Multiple'],
-        [8, u'other', None, u'Other', u'Some Other Race Alone'],
-        [9, u'all', None, u'Total', u'Total Population']]
+        [1, u'aian',        u'C', u'AIAN',      1,    u'American Indian and Alaska Native Alone'],
+        [2, u'asian',       u'D', u'Asian',     2,    u'Asian Alone'],
+        [3, u'black',       u'B', u'AfricanAm', 3,    u'Black or African American Alone'],
+        [4, u'hisp',        u'I', u'Latino',    4,    u'Hispanic or Latino'],
+        [5, u'nhopi',       u'E', u'NHOPI',     5,    u'Native Hawaiian and Other Pacific Islander Alone'],
+        [6, u'white',       u'A', u'White',     6,    u'White alone'],
+        [61, u'whitenh',    u'H', None,         None, u'White Alone, Not Hispanic or Latino'],
+        [7, u'other',       None, u'Other',     7,    u'Some Other Race Alone'],
+        [8, u'multiple',    None, u'Multiple',  8,    u'Multiple'],
+        [9, u'all',         None, u'Total',     9,    u'Total Population']]
+
+    civick_map = {e[0]:e for e in re_codes}
 
     def __init__(self, v):
         pass
 
 class RaceEthCodeHCI(IntValue):
     role = ROLE.DIMENSION
-    vt_code = 'd/raceth/hci/code'
+    vt_code = 'd/raceth/hci'
     low = LOM.ORDINAL
 
-    hci_map = {e[3].lower() if e[3] else None: e for e in RaceEthVT.re_codes}
+    hci_map = {e[4]: e[0] for e in RaceEthVT.re_codes if e[4] is not None}
+
 
     @property
     def civick(self):
-        return self.hci_map[self.lower()][1]
+        try:
+            return RaceEthReidVT(self.hci_map.get(int(self)))
+        except (ValueError, KeyError) as e:
+            return FailedValue(str(self), e)
 
-class RaceEthNameHCI(TextValue):
-    role = ROLE.DIMENSION
-    vt_code = 'd/raceth/hci/name'
-    low = LOM.NOMINAL
-
-    hci_map = {e[3].lower() if e[3] else None: e for e in RaceEthVT.re_codes}
-
-    @property
-    def civick(self):
-        return self.hci_map[self.lower()][1]
 
 class RaceEthCen00VT(RaceEthVT):
     role = ROLE.DIMENSION
@@ -77,15 +73,23 @@ class RaceEthOmbVT(RaceEthVT):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/omb'
 
-class RaceEthReidVT(TextValue):
+class RaceEthReidVT(IntValue):
     role = ROLE.DIMENSION
-    vt_code = 'd/raceth/reid'
+    vt_code = 'd/raceth/civick'
     low = LOM.NOMINAL
 
-class RaceEthNameVT(ValueType):
+    @property
+    def name(self):
+        try:
+            return RaceEthCivickNameVT(RaceEthVT.civick_map[int(self)][1])
+        except Exception as e:
+            return FailedValue(self, e)
+
+class RaceEthCivickNameVT(TextValue):
     role = ROLE.DIMENSION
-    vt_code = 'd/raceth/name'
+    vt_code = 'd/raceth/civick/name'
     low = LOM.NOMINAL
+
 
 class AgeVT(IntValue):
     """A single-year age"""
@@ -171,13 +175,11 @@ class DecileVT(IntValue):
 
 dimension_value_types = {
     "d/raceth": RaceEthVT,
-    "d/raceth/hci/name": RaceEthNameHCI,
-    "d/raceth/hci/code": RaceEthCodeHCI,
+    "d/raceth/hci": RaceEthCodeHCI,
     "d/raceth/cen00": RaceEthCen00VT,
     "d/raceth/cen10": RaceEthCen10VT,
     "d/raceth/omb": RaceEthOmbVT,
-    "d/raceth/reid": RaceEthReidVT,
-    "d/raceth/name": RaceEthNameVT,
+    "d/raceth/civick": RaceEthReidVT,
     "d/age": AgeVT,
     "d/age/range": AgeRangeVT,
     "d/decile": DecileVT

@@ -118,20 +118,32 @@ class Test(TestBase):
 
     def test_raceeth(self):
 
-        from ambry.valuetype import RaceEthHCI, RaceEthReidVT
+        from ambry.valuetype import RaceEthReidVT, RaceEthCodeHCI
+
+        return
+
+        self.assertEqual(1, RaceEthNameHCI('AIAN').civick)
+        self.assertEqual('aian', RaceEthNameHCI('AIAN').civick.name)
+        self.assertEqual(6, RaceEthNameHCI('White').civick)
+        self.assertEqual('white', RaceEthNameHCI('White').civick.name)
+
+        self.assertEqual('all', RaceEthNameHCI('Total').civick.name)
+
+        self.assertFalse(bool(RaceEthNameHCI(None).civick.name))
+
 
     def test_text(self):
 
         from ambry.valuetype import TextValue, cast_str, NoneValue
 
-        x = cast_str(TextValue(None), 'foobar', True)
-        self.assertEqual('', x)
+        x = cast_str(TextValue(None), 'foobar', True, {})
+        self.assertEqual(None, x)
 
-        print cast_str(TextValue(None), 'foobar', False)
+        print cast_str(TextValue(None), 'foobar', False, {})
 
     def test_time(self):
 
-        from ambry.valuetype import IntervalYearVT, IntervalYearRangeVT, IntervalIsoVT
+        from ambry.valuetype import IntervalYearVT, IntervalYearRangeVT, IntervalIsoVT, IntervalVT, resolve_value_type
         from ambry.valuetype import DateValue, TimeValue
 
         self.assertEqual(2000, IntervalYearVT('2000'))
@@ -142,13 +154,42 @@ class Test(TestBase):
         self.assertEqual(2000, IntervalYearRangeVT('2000-2001').start)
         self.assertEqual(2001, IntervalYearRangeVT('2000-2001').end)
 
-        self.assertEqual('2000/2001', str(IntervalYearRangeVT('2000','2001')))
+        self.assertEqual('2000/2001', str(IntervalYearRangeVT('2000/2001')))
 
         self.assertEqual('1981-04-05/1981-03-06',str(IntervalIsoVT('P1M/1981-04-05')))
 
         self.assertEquals(4, DateValue('1981-04-05').month)
 
         self.assertEquals(34,TimeValue('12:34').minute)
+
+        i = resolve_value_type('d/interval')('2000-2001')
+        i.raise_for_error()
+        self.assertEquals(2000, i.start)
+        self.assertEquals(2001, i.end)
+
+        i = resolve_value_type('d/interval')('2000')
+        i.raise_for_error()
+        self.assertEquals(2000, i.start)
+        self.assertEquals(2000, i.end)
+
+        i = resolve_value_type('d/interval')(2000)
+        i.raise_for_error()
+        self.assertEquals(2000, i.start)
+        self.assertEquals(2000, i.end)
+
+        i = resolve_value_type('d/interval')(' 2000 ')
+        i.raise_for_error()
+        self.assertEquals(2000, i.start)
+        self.assertEquals(2000, i.end)
+
+        with self.assertRaises(ValueError):
+            i = resolve_value_type('d/interval')(' foobar ')
+
+        i = resolve_value_type('d/interval')(2010.0)
+        i.raise_for_error()
+        self.assertEquals(2010, i.start)
+        self.assertEquals(2010, i.end)
+
 
     def test_geo(self):
 
