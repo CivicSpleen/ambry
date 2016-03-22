@@ -397,10 +397,14 @@ class Bundle(object):
             return None
 
         if ref:
+            for p in self.partitions:
+                print '!!!', ref, p.name
+                if ref == p.name or ref == p.vname or ref == p.vid or ref == p.id:
+                  p._bundle = self
+                  return p
 
-            p = self.library.partition(ref)
-            p._bundle = self
-            return p
+            raise NotFoundError("No partition found for '{}' (b)".format(ref))
+
         elif kwargs:
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)

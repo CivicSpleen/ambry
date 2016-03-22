@@ -78,12 +78,22 @@ class Table(Base, DictableMixin):
             if not c.parent:
                 yield c
 
+    @property
+    def dimensions(self):
+        """Iterate over the dimension columns, regardless of parent/child status
+
+        """
+        from ambry.valuetype.core import ROLE
+
+        for c in self.columns:
+
+            if c.role == ROLE.DIMENSION:
+                yield c
 
     @property
     def primary_dimensions(self):
-        """Iterate over the primary columns, columns which do not have a parent
+        """Iterate over the primary dimension columns, columns which do not have a parent
 
-        ALso sets the property partition_stats to the stats collection for the partition and column.
         """
         from ambry.valuetype.core import ROLE
 

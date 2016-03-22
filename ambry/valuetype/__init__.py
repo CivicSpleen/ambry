@@ -21,15 +21,7 @@ from errors import *
 value_types = {
     "int": IntValue,
     "str": TextValue,
-    "float": FloatValue,
-    "d/int": IntValue,
-    "d/str": TextValue,
-    "d/label": LabelValue,
-    "d/float": FloatValue,
-    "key": KeyVT,
-    "id": IdentifierVT,
-    "d": DimensionVT,
-
+    "float": FloatValue
 }
 
 value_types.update(geo_value_types)

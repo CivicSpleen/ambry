@@ -18,11 +18,23 @@ class IdentifierVT(IntValue):
     role = ROLE.IDENTIFIER
     vt_code = 'i'
 
-class DimensionVT(TextValue):
+class DimensionMixin(object):
+    pass
+
+
+class IntDimensionVT(IntValue, DimensionMixin):
     role = ROLE.DIMENSION
     vt_code = 'd'
 
-class RaceEthVT(IntValue):
+class FloatDimensionVT(FloatValue, DimensionMixin):
+    role = ROLE.DIMENSION
+    vt_code = 'd'
+
+class TextDimensionVT(TextValue, DimensionMixin):
+    role = ROLE.DIMENSION
+    vt_code = 'd'
+
+class RaceEthVT(IntDimensionVT):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth'
     low = LOM.NOMINAL
@@ -45,7 +57,7 @@ class RaceEthVT(IntValue):
     def __init__(self, v):
         pass
 
-class RaceEthCodeHCI(IntValue):
+class RaceEthCodeHCI(IntDimensionVT):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/hci'
     low = LOM.ORDINAL
@@ -91,13 +103,13 @@ class RaceEthCivickNameVT(TextValue):
     low = LOM.NOMINAL
 
 
-class AgeVT(IntValue):
+class AgeVT(IntDimensionVT):
     """A single-year age"""
     role = ROLE.DIMENSION
     vt_code = 'd/age'
     low = LOM.ORDINAL
 
-class AgeRangeVT(TextValue):
+class AgeRangeVT(TextDimensionVT):
     """An age range, between two years. The range is half-open. """
     role = ROLE.DIMENSION
     vt_code = 'd/age/range'
@@ -121,7 +133,7 @@ class AgeRangeVT(TextValue):
         parts = v.split('-')
         self.from_year, self.to_year = int(parts[0]), int(parts[1])
 
-class AgeRangeCensus(TextValue):
+class AgeRangeCensus(TextDimensionVT):
     """Age ranges that appear in census column titles"""
     role = ROLE.DIMENSION
     vt_code = 'd/age/range/census'
@@ -166,7 +178,7 @@ class AgeRangeCensus(TextValue):
     def __str__(self):
         return "{:02d}-{:02d}".format(self.from_year, self.to_year)
 
-class DecileVT(IntValue):
+class DecileVT(IntDimensionVT):
     """A Decile Ranking, from 1 to 10"""
     role = ROLE.DIMENSION
     vt_code = 'd'
@@ -174,6 +186,13 @@ class DecileVT(IntValue):
     low = LOM.ORDINAL
 
 dimension_value_types = {
+    "key": KeyVT,
+    "id": IdentifierVT,
+    "d": TextDimensionVT,
+    "d/label": TextDimensionVT,
+    "d/float": FloatDimensionVT,
+    "d/int": IntDimensionVT,
+    "d/str": TextDimensionVT,
     "d/raceth": RaceEthVT,
     "d/raceth/hci": RaceEthCodeHCI,
     "d/raceth/cen00": RaceEthCen00VT,

@@ -250,10 +250,9 @@ class Column(Base):
 
     @property
     def children(self):
-        """"Return the table's other columsn that have this column as a parent, excluding labels"""
+        """"Return the table's other column that have this column as a parent, excluding labels"""
         for c in self.table.columns:
             if c.parent == self.name and '/label' not in c.valuetype:
-                c.partition_stats = self.partition_stats if hasattr(self, 'partition_stats') else None
                 yield c
 
     @property
@@ -261,7 +260,6 @@ class Column(Base):
         """"Return first child that of the column that is marked as a label"""
         for c in self.table.columns:
             if c.parent == self.name and '/label' in c.valuetype:
-                c.partition_stats = self.partition_stats if hasattr(self, 'partition_stats') else None
                 return c
 
     def python_cast(self, v):
