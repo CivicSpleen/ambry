@@ -56,7 +56,7 @@ $SUDO mkdir -p /opt/ambry
 $SUDO pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 #pip install git+https://github.com/CivicKnowledge/ambry.git@develop
-mkdir -p /opt/ambry
+[ -d /opt/ambry ] || mkdir -p /opt/ambry
 cd /opt/ambry
 git clone https://github.com/CivicKnowledge/ambry.git
 cd ambry
