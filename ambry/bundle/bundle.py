@@ -398,12 +398,11 @@ class Bundle(object):
 
         if ref:
             for p in self.partitions:
-                print '!!!', ref, p.name
                 if ref == p.name or ref == p.vname or ref == p.vid or ref == p.id:
                   p._bundle = self
                   return p
 
-            raise NotFoundError("No partition found for '{}' (b)".format(ref))
+            raise NotFoundError("No partition found for '{}' (a)".format(ref))
 
         elif kwargs:
             from ..identity import PartitionNameQuery
@@ -1197,7 +1196,8 @@ Caster Code
             try:
                 cache_path, download_time = do_download()
                 spec.download_time = download_time
-            except HTTPError as e:
+            except Exception as e:
+                from ambry_sources.exceptions import DownloadError
                 raise DownloadError("Failed to download {}; {}".format(spec.url, e))
         else:
             cache_path, download_time = None, None
