@@ -44,11 +44,12 @@ else
   $SUDO groupadd ambry
 fi
 
-
-
 if getent passwd ubuntu > /dev/null 2>&1; then
     $SUDO usermod -G ambry ubuntu # ubuntu user is particular to AWS
 fi
+
+# Make a fresh install of Ambry
+[ -d /opt/ambry ] && $SUDO rm -rf /opt/ambry
 
 $SUDO mkdir -p /opt/ambry
 
@@ -57,14 +58,16 @@ $SUDO pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 #pip install git+https://github.com/CivicKnowledge/ambry.git@develop
 [ -d /opt/ambry ] || mkdir -p /opt/ambry
 cd /opt/ambry
+
 git clone https://github.com/CivicKnowledge/ambry.git
 cd ambry
 git checkout develop
+
 # On AWS, gets compile errors in numpy if we don't do this first
 pip install -r requirements.txt
 python setup.py install
 
-ambry config install
+ambry config install -f
 
 pip install git+https://github.com/CivicKnowledge/ambry-admin.git
 ambry config installcli ambry_admin
