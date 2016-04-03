@@ -37,7 +37,9 @@ $SUDO locale-gen en_US.UTF-8
 $SUDO dpkg-reconfigure locales
 
 $SUDO groupadd ambry
-$SUDO usermod -G ambry ubuntu # ubuntu user is particular to AWS
+
+if getent passwd ubuntu > /dev/null 2>&1; then
+    $SUDO usermod -G ambry ubuntu # ubuntu user is particular to AWS
 
 $SUDO mkdir -p /opt/ambry
 
