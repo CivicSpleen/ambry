@@ -36,10 +36,17 @@ export LC_ALL=en_US.UTF-8
 $SUDO locale-gen en_US.UTF-8
 $SUDO dpkg-reconfigure locales
 
-$SUDO groupadd ambry
+if [ $(getent group ambry) ]; then
+  echo "group ambry exists."
+else
+  $SUDO groupadd ambry
+fi
+
+
 
 if getent passwd ubuntu > /dev/null 2>&1; then
     $SUDO usermod -G ambry ubuntu # ubuntu user is particular to AWS
+fi
 
 $SUDO mkdir -p /opt/ambry
 
