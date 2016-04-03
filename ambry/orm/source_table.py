@@ -63,28 +63,39 @@ class SourceColumn(Base):
     d_vid = SAColumn('sc_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False)
     st_vid = SAColumn('sc_st_vid', String(17), ForeignKey('sourcetables.st_vid'), nullable=False)
 
-    position = SAColumn('sc_position', Integer) # Integer position of column
+    position = SAColumn('sc_position', Integer,
+                        doc='Integer position of column')
 
-    source_header = SAColumn('sc_source_header', Text) # Column header, After coalescing but before mangling.
-    dest_header = SAColumn('sc_dest_header', Text)  # orig_header, mangled
+    source_header = SAColumn('sc_source_header', Text,
+                             doc='Column header, After coalescing but before mangling.')
+    dest_header = SAColumn('sc_dest_header', Text,
+                           doc='Original header, mangled')
 
-    datatype = SAColumn('sc_datatype', Text) # Basic data type, usually intuited
-    valuetype = SAColumn('sc_valuetype', Text) # Describes the meaning of the value: state, county, address, etc.
-    has_codes = SAColumn('sc_has_codes', Boolean, default = False) # If True column also has codes of different type
+    datatype = SAColumn('sc_datatype', Text,
+                        doc='Basic data type, usually intuited')
+    valuetype = SAColumn('sc_valuetype', Text,
+                         doc='Describes the meaning of the value: state, county, address, etc.')
+    has_codes = SAColumn('sc_has_codes', Boolean, default=False,
+                         doc='If True column also has codes of different type')
 
-    start = SAColumn('sc_start', Integer) # For fixed width, the column starting position
-    width = SAColumn('sc_width', Integer) # for Fixed width, the field width
-    size = SAColumn('sc_size', Integer)  # Max size of the column values, after conversion to strings.
+    start = SAColumn('sc_start', Integer,
+                     doc='For fixed width, the column starting position')
+    width = SAColumn('sc_width', Integer,
+                     doc='For Fixed width, the field width')
+    size = SAColumn('sc_size', Integer,
+                    doc='Max size of the column values, after conversion to strings.')
 
-    summary = SAColumn('sc_summary', Text) # Short text description
-    description = SAColumn('sc_description', Text) # Long text description
+    summary = SAColumn('sc_summary', Text,
+                       doc='Short text description')
+    description = SAColumn('sc_description', Text,
+                           doc='Long text description')
 
     value_labels = SAColumn('sc_value_labels', MutationDict.as_mutable(JSONEncodedObj))
 
     _next_column_number = None  # Set in next_config_number()
 
     __table_args__ = (
-        UniqueConstraint('sc_st_vid','sc_source_header', name='_uc_sourcecolumns'),
+        UniqueConstraint('sc_st_vid', 'sc_source_header', name='_uc_sourcecolumns'),
     )
 
     @property
@@ -122,8 +133,8 @@ class SourceColumn(Base):
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
 
-        d = OrderedDict([('table',self.table.name)] + [(p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
-                         if p.key not in ['vid', 'st_vid', 'table','dataset', 'ds_id','d_vid',
+        d = OrderedDict([('table', self.table.name)] + [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in ['vid', 'st_vid', 'table', 'dataset', 'ds_id', 'd_vid',
                                           'source', 'value_labels']])
 
         return d
@@ -144,7 +155,7 @@ class SourceColumn(Base):
     def update(self, **kwargs):
 
         if 'table' in kwargs:
-            del kwargs['table'] # In source_schema.csv, this is the name of the table, not the object
+            del kwargs['table']  # In source_schema.csv, this is the name of the table, not the object
 
         for k, v in list(kwargs.items()):
             if hasattr(self, k):
@@ -157,8 +168,6 @@ class SourceColumn(Base):
                 setattr(self, k, v)
 
 
-
-
 class SourceTable(Base):
     __tablename__ = 'sourcetables'
 
@@ -167,11 +176,11 @@ class SourceTable(Base):
     d_vid = SAColumn('st_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False)
     name = SAColumn('st_name', String(50), nullable=False)
 
-    columns = relationship(SourceColumn, backref='table', order_by="asc(SourceColumn.position)",
-                           cascade="all, delete-orphan", lazy='joined')
+    columns = relationship(SourceColumn, backref='table', order_by='asc(SourceColumn.position)',
+                           cascade='all, delete-orphan', lazy='joined')
 
     __table_args__ = (
-        UniqueConstraint('st_d_vid','st_name', name='_uc_sourcetables'),
+        UniqueConstraint('st_d_vid', 'st_name', name='_uc_sourcetables'),
     )
 
     def column(self, source_header_or_pos):
@@ -195,18 +204,16 @@ class SourceTable(Base):
     def add_column(self, position, source_header, datatype, **kwargs):
         """
         Add a column to the source table.
-        :param position: Integer position of the column
+        :param position: Integer position of the column started from 1.
         :param source_header: Name of the column, as it exists in the source file
         :param datatype: Python datatype ( str, int, float, None ) for the column
         :param kwargs:  Other source record args.
         :return:
         """
-        from sqlalchemy.orm import object_session
         from ..identity import GeneralNumber2
 
         c = self.column(source_header)
         c_by_pos = self.column(position)
-
 
         datatype = 'str' if datatype == 'unicode' else datatype
 
@@ -214,8 +221,8 @@ class SourceTable(Base):
 
         # Convert almost anything to True / False
         if 'has_codes' in kwargs:
-            o = kwargs['has_codes']
-            kwargs['has_codes'] = False if kwargs['has_codes'] in ['False','false','F','f','',None,0,'0']  else True
+            FALSE_VALUES = ['False', 'false', 'F', 'f', '', None, 0, '0']
+            kwargs['has_codes'] = False if kwargs['has_codes'] in FALSE_VALUES else True
 
         if c:
 
@@ -225,7 +232,7 @@ class SourceTable(Base):
             c.update(
                 position=position,
                 datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
-                **kwargs )
+                **kwargs)
 
         elif c_by_pos:
 
@@ -236,7 +243,7 @@ class SourceTable(Base):
             assert not c or c_by_pos.vid == c.vid
 
             c_by_pos.update(
-                source_header = source_header,
+                source_header=source_header,
                 datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
                 **kwargs)
 
@@ -246,13 +253,13 @@ class SourceTable(Base):
 
             # Hacking an id number, since I don't want to create a new Identity ObjectNUmber type
             c = SourceColumn(
-            vid = str(GeneralNumber2('C', self.d_vid, self.sequence_id, int(position))),
-            position=position,
-            st_vid=self.vid,
-            d_vid=self.d_vid,
-            datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
-            source_header=source_header,
-            **kwargs)
+                vid=str(GeneralNumber2('C', self.d_vid, self.sequence_id, int(position))),
+                position=position,
+                st_vid=self.vid,
+                d_vid=self.d_vid,
+                datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
+                source_header=source_header,
+                **kwargs)
 
             self.columns.append(c)
 
@@ -260,7 +267,7 @@ class SourceTable(Base):
 
     @property
     def column_map(self):
-        return { c.source_header: c.dest_header for c in self.columns }
+        return {c.source_header: c.dest_header for c in self.columns}
 
     @property
     def column_index_map(self):
@@ -272,10 +279,11 @@ class SourceTable(Base):
 
     @property
     def widths(self):
-        widths =  [ c.width for c in self.columns ]
-        if not  all( bool(e) for e in widths ):
+        widths = [c.width for c in self.columns]
+        if not all(bool(e) for e in widths):
             from ambry.dbexceptions import ConfigurationError
-            raise ConfigurationError("The widths array for source table {} has zero or null entries ".format(self.name))
+            raise ConfigurationError(
+                'The widths array for source table {} has zero or null entries '.format(self.name))
 
         widths = [int(w) for w in widths]
 
@@ -291,11 +299,10 @@ class SourceTable(Base):
 
         self.vid = str(GeneralNumber1('T', self.d_vid, self.sequence_id))
 
-
     def __str__(self):
         from tabulate import tabulate
 
-        headers = "Pos Source_Header Dest_Header Datatype ".split()
+        headers = 'Pos Source_Header Dest_Header Datatype '.split()
         rows = [(c.position, c.source_header, c.dest_header, c.datatype) for c in self.columns]
 
         return ('Source Table: {}\n'.format(self.name)) + tabulate(rows, headers)

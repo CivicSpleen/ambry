@@ -348,6 +348,7 @@ class PartialPartitionName(Name):
     table = None
     grain = None
     format = None
+    variant = None
     segment = None
 
     _name_parts = [
@@ -356,6 +357,7 @@ class PartialPartitionName(Name):
         ('space', None, True),
         ('grain', None, True),
         ('format', None, True),
+        ('variant', None, True),
         ('segment', None, True)]
 
     def promote(self, name):
@@ -367,14 +369,16 @@ class PartialPartitionName(Name):
 
     def __eq__(self, o):
         return (self.time == o.time and self.space == o.space and self.table == o.table and
-                self.grain == o.grain and self.format == o.format and self.segment == o.segment)
+                self.grain == o.grain and self.format == o.format and self.segment == o.segment
+                and self.variant == o.variant
+                )
 
     def __cmp__(self, o):
         return cmp(str(self), str(o))
 
     def __hash__(self):
         return (hash(self.time) ^ hash(self.space) ^ hash(self.table) ^
-                hash(self.grain) ^ hash(self.format) ^ hash(self.segment))
+                hash(self.grain) ^ hash(self.format) ^ hash(self.segment) ^ hash(self.variant))
 
 
 class PartitionName(PartialPartitionName, Name):
@@ -407,6 +411,8 @@ class PartitionName(PartialPartitionName, Name):
         l = []
         if self.grain:
             l.append(str(self.grain))
+        if self.variant:
+            l.append(str(self.variant))
 
         if self.segment:
             l.append(str(self.segment))
@@ -662,6 +668,7 @@ class ObjectNumber(object):
     TYPE.PARTITION = 'p'
     TYPE.TABLE = 't'
     TYPE.COLUMN = 'c'
+    TYPE.CONFIG = 'F'
     TYPE.OTHER1 = 'other1'
     TYPE.OTHER2 = 'other2'
 
@@ -714,7 +721,8 @@ class ObjectNumber(object):
                   't': DLEN.TABLE,
                   'c': DLEN.TABLE + DLEN.COLUMN,
                   'other1': DLEN.OTHER1,
-                  'other2': DLEN.OTHER1 + DLEN.OTHER2
+                  'other2': DLEN.OTHER1 + DLEN.OTHER2,
+                  'F': DLEN.OTHER1  # Configs
                   }
 
     TCMAXVAL = 62 ** DLEN.TABLE - 1  # maximum for table values.
@@ -750,13 +758,13 @@ class ObjectNumber(object):
         on_str = on_str[1:]
 
         if type_ not in list(cls.NDS_LENGTH.keys()):
-            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_, on_str))
+            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_, on_str_orig))
 
         ds_length = len(on_str) - cls.NDS_LENGTH[type_]
 
         if ds_length not in cls.DATASET_LENGTHS:
             raise NotObjectNumberError(
-                "Dataset string '{}' has an unfamiliar length: {}".format(on_str, ds_length))
+                "Dataset string '{}' has an unfamiliar length: {}".format(on_str_orig, ds_length))
 
         ds_lengths = cls.DATASET_LENGTHS[ds_length]
 
@@ -795,7 +803,7 @@ class ObjectNumber(object):
                     TableNumber(DatasetNumber(dataset, assignment_class=assignment_class), table),
                     column, revision=revision)
 
-            elif type_ == cls.TYPE.OTHER1:
+            elif type_ == cls.TYPE.OTHER1 or type_ == cls.TYPE.CONFIG:
                     return GeneralNumber1(on_str_orig[0],
                                           DatasetNumber(dataset, assignment_class=assignment_class),
                                           int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.OTHER1])),
@@ -867,6 +875,15 @@ class ObjectNumber(object):
             idx += 1
 
         return num
+
+    @classmethod
+    def increment(cls, v):
+        """Increment the version number of an object number of object number string"""
+        if not isinstance(v, ObjectNumber):
+            v = ObjectNumber.parse(v)
+
+        return v.rev(v.revision+1)
+
 
     def rev(self, i):
         """Return a clone with a different revision."""
@@ -1608,6 +1625,12 @@ class Identity(object):
 
         return list(self.partitions.values())[0]
 
+    def rev(self, rev):
+        """Return a new identity with the given revision"""
+        d = self.dict
+        d['revision'] = rev
+        return self.from_dict(d)
+
     def __str__(self):
         return self._compose_fqname(self._name.vname, self.vid)
 
@@ -1779,95 +1802,3 @@ class NumberServer(object):
 
 # port to python2
 NumberServer.next = NumberServer.__next__
-
-
-class IdentitySet(object):
-
-    """A set of Identity Objects, with methods to display them."""
-
-    def __init__(self, idents, show_partitions=False, fields=None):
-
-        if isinstance(idents, dict):
-            idents = list(idents.values())
-
-        self.idents = idents
-
-        self.show_partitions = show_partitions
-
-        if not fields:
-            fields = ['locations', 'vid', 'vname']
-
-        self.fields = fields
-
-    @staticmethod
-    def deps(ident):
-        if not ident.data:
-            return '.'
-        if 'dependencies' not in ident.data:
-            return '.'
-        if not ident.data['dependencies']:
-            return '0'
-        return str(len(ident.data['dependencies']))
-
-    # The headings for the fields in all_fields
-    record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
-
-    all_fields = [
-        # Name, width, d_format_string, p_format_string, extract_function
-        ('deps', '{:3s}', '{:3s}', lambda ident: IdentitySet.deps(ident)),
-        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(
-            **ident.data['order'] if 'order' in ident.data else {'major': -1, 'minor': -1})),
-        ('locations', '{:6s}', '{:6s}', lambda ident: ident.locations),
-        ('vid', '{:15s}', '{:20s}', lambda ident: ident.vid),
-        ('status', '{:20s}', '{:20s}', lambda ident: ident.bundle_state if ident.bundle_state else ''),
-        ('vname', '{:40s}', '    {:40s}', lambda ident: ident.vname),
-        ('sname', '{:40s}', '    {:40s}', lambda ident: ident.sname),
-        ('fqname', '{:40s}', '    {:40s}', lambda ident: ident.fqname),
-        ('source_path', '{:s}', '    {:s}', lambda ident: ident.source_path),
-    ]
-
-    def __str__(self):
-        out = []
-        for row in self._yield_rows(self.all_fields):
-            out.append(''.join([format.format(value)
-                       for format, value in row]))
-
-        return '\n'.join(out)
-
-    def _repr_html_(self):
-        out = []
-
-        all_fields = list(self.all_fields)
-
-        for row in self._yield_rows(all_fields):
-            out.append('<tr>' +
-                       ''.join(["<td>{}</td>".format(f.format(value).strip()) for f, value in row]) +
-                       '</tr>')
-
-        return '<table>' + '\n'.join(out) + '</table>'
-
-    def _yield_rows(self, all_fields):
-
-        for ident in self.idents:
-
-            d_formats = []
-            p_formats = []
-            values = []
-
-            for e in all_fields:
-                # Just to make the following code easier to read
-                e = dict(list(zip(self.record_entry_names, e)))
-
-                if e['name'] not in self.fields:
-                    continue
-
-                d_formats.append(e['d_format'])
-                p_formats.append(e['p_format'])
-
-                values.append(e['extractor'](ident))
-
-            yield list(zip(d_formats, values))
-
-            if self.show_partitions and ident.partitions:
-                for pi in itervalues(ident.partitions):
-                    yield list(zip(p_formats, values))

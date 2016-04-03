@@ -5,64 +5,54 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-import copy
 import os.path
 
-from six import StringIO, string_types
+from six import string_types
 
-from ambry.util import AttrDict, lru_cache, parse_url_to_dict, unparse_url_dict
+from ambry.util import AttrDict, parse_url_to_dict
 from .dbexceptions import ConfigurationError
 
 
-@lru_cache()
-def get_runconfig(path=None):
+def get_runconfig(path=None, root=None, db=None):
     """Load the main configuration files and accounts file.
 
-    Load the main configuration files and accounts file from a variety of potential places,
-    and update the configuration with values from environmental variables.
-
-    The routine attempts to load the configuration from these locations, in this order:
-
-    - /etc/ambry.yaml
-    - ~/.ambry.yaml
-    - A path specified by the AMBRY_CONFIG environmenal variable
-    - .ambry.yaml in the directory specified by the VIRTUAL_ENV environmental variable
-    - .ambry.yaml in the current working directory
-
-    Or, if `path` is specified, it load that path and ignores the standard locations.
-
-    The routines also loads the accounts file from one of these locations:
-
-    - A path specified by the AMBRY_ACCOUNTS environmenal variable
-    - .ambry-accounts.yaml in the directory specified by the VIRTUAL_ENV environmental variable
-    - ~/.ambry-accounts.yaml
-
-    After loading the configuation, the config is updated from environmental variables:
-
-    - `config.library.database` from `AMBRY_DB`
-    - `config.library.filesystem_root` from `AMBRY_ROOT`
-    - `config.accounts.password` from `AMBRY_PASSWORD`
-
-    The config file can be empty or missing if  the config has already been loaded into the database, and the
-    database, root and password are specified in environmental variables.
-
-    The typical use cases are that for a single machine installation, or the head of a multi-machine installation,
-    there is a full configuation file and accounts file. In a multi-machine installation, on;y the environmental
-    varaibles AMBRY_DB, AMBRY_ROOT and AMBRY_PASSWORD are specified, allowing satellite machines to get information
-    about remotes and accounts from the database. Since the filesystem entries can be taken from the defaults,
-    the satellite machines  do not need a configuration file.
-
-    :param path: The path to a configuration file to use instead of the standard locataions.
+    Debprecated. Use load()
     """
 
-    return load(path)
+    return load(path, root=root, db=db)
 
-def load(path = None):
 
-    config = load_config(path)
-    config.update(load_accounts())
+def load(path=None, root=None, db=None, load_user=True):
+    "Load all of the config files. "
+
+    config = load_config(path, load_user=load_user)
+
+    remotes = load_remotes(path, load_user=load_user)
+
+    # The external file overwrites the main config
+    if remotes:
+        if not 'remotes' in config:
+            config.remotes = AttrDict()
+
+        for k, v in remotes.remotes.items():
+            config.remotes[k] = v
+
+    accounts = load_accounts(path, load_user=load_user)
+
+    # The external file overwrites the main config
+    if accounts:
+        if not 'accounts' in config:
+            config.accounts = AttrDict()
+        for k, v in accounts.accounts.items():
+            config.accounts[k] = v
 
     update_config(config)
+
+    if root:
+        config.library.filesystem_root = root
+
+    if db:
+        config.library.database = db
 
     return config
 
@@ -70,18 +60,18 @@ from ambry.util import Constant
 
 ENVAR = Constant()
 ENVAR.CONFIG = 'AMBRY_CONFIG'
-ENVAR.ACCT = 'AMBRY_ACCOUNTS'
 ENVAR.PASSWORD = 'AMBRY_ACCOUNT_PASSWORD'
-ENVAR.DB =  'AMBRY_DB'
-ENVAR.ROOT =  'AMBRY_ROOT'
+ENVAR.DB = 'AMBRY_DB'
+ENVAR.ROOT = 'AMBRY_ROOT'
 ENVAR.EDIT = 'AMBRY_CONFIG_EDIT'
 ENVAR.VIRT = 'VIRTUAL_ENV'
 
-BASE_FILE = '.ambry.yaml'
-ROOT_FILE = '/etc/ambry.yaml'
-USER_FILE = '~/'+BASE_FILE
-ACCOUNTS_FILE = '.ambry-accounts.yaml'
-USER_ACCOUNTS_FILE = '~/'+ACCOUNTS_FILE
+ROOT_DIR = '/etc/ambry'
+USER_DIR = '.ambry'
+CONFIG_FILE = 'config.yaml'
+ACCOUNTS_FILE = 'accounts.yaml'
+REMOTES_FILE = 'remotes.yaml'
+DOCKER_FILE = 'docker.yaml'
 
 filesystem_defaults = {
     'build': '{root}/build',
@@ -95,103 +85,143 @@ filesystem_defaults = {
     'test': '{root}/test',
 }
 
-def load_accounts():
-    """Load one Yaml file of account information.
+
+def find_config_file(file_name, extra_path=None, load_user=True):
+    """
+    Find a configuration file in one of these directories, tried in this order:
+
+    - A path provided as an argument
+    - A path specified by the AMBRY_CONFIG environmenal variable
+    - ambry in a path specified by the VIRTUAL_ENV environmental variable
+    - ~/ambry
+    - /etc/ambry
+
+    :param file_name:
+    :param extra_path:
+    :param load_user:
+    :param path:
+    :return:
+    """
+
+    paths = []
+
+    if extra_path is not None:
+        paths.append(extra_path)
+
+    if os.getenv(ENVAR.CONFIG):
+        paths.append(os.getenv(ENVAR.CONFIG))
+
+    if os.getenv(ENVAR.VIRT):
+        paths.append(os.path.join(os.getenv(ENVAR.VIRT), USER_DIR))
+
+    if load_user:
+        paths.append(os.path.expanduser('~/' + USER_DIR))
+
+    paths.append(ROOT_DIR)
+
+    for path in paths:
+        if os.path.isdir(path) and os.path.exists(os.path.join(path, file_name)):
+            f = os.path.join(path, file_name)
+            return f
+
+    raise ConfigurationError(
+        "Failed to find configuration file '{}'. Looked for : {} ".format(file_name, paths))
+
+
+def load_accounts(extra_path=None, load_user=True):
+    """Load the yaml account files
+
+    :param load_user:
+    :return: An `AttrDict`
+    """
+
+    from os.path import getmtime
+
+
+    try:
+        accts_file = find_config_file(ACCOUNTS_FILE, extra_path=extra_path, load_user=load_user)
+    except ConfigurationError:
+        accts_file = None
+
+    if accts_file is not None and os.path.exists(accts_file):
+        config = AttrDict()
+        config.update_yaml(accts_file)
+
+        if not 'accounts' in config:
+            config.remotes = AttrDict()
+
+        config.accounts.loaded = [accts_file, getmtime(accts_file)]
+        return config
+    else:
+        return None
+
+
+def load_remotes(extra_path=None, load_user=True):
+    """Load the YAML remotes file, which sort of combines the Accounts file with part of the
+    remotes sections from the main config
 
     :return: An `AttrDict`
     """
-    from os.path import join
+
     from os.path import getmtime
 
-    config = AttrDict()
+    try:
+        remotes_file = find_config_file(REMOTES_FILE, extra_path=extra_path, load_user=load_user)
+    except ConfigurationError:
+        remotes_file = None
 
-    if os.getenv(ENVAR.ACCT):
-        accts_file = os.getenv(ENVAR.ACCT)
 
-    elif os.getenv(ENVAR.VIRT) and os.path.exists(join(os.getenv(ENVAR.VIRT), ACCOUNTS_FILE)):
-        accts_file = join(os.getenv(ENVAR.VIRT), ACCOUNTS_FILE)
+    if remotes_file is not None and os.path.exists(remotes_file):
+        config = AttrDict()
+        config.update_yaml(remotes_file)
 
+        if not 'remotes' in config:
+            config.remotes = AttrDict()
+
+        config.remotes.loaded = [remotes_file, getmtime(remotes_file)]
+
+        return config
     else:
-        accts_file = os.path.expanduser(USER_ACCOUNTS_FILE)
-
-    if os.path.exists(accts_file):
-        config.update_yaml(accts_file)
-
-        config.accounts.loaded = [accts_file, getmtime(accts_file)]
-
-    else:
-        config.accounts = AttrDict()
-        config.accounts.loaded = [None, 0]
+        return None
 
 
-
-    return config
-
-def load_config(path=None):
+def load_config(path=None, load_user=True):
     """
-    Load configuration information from one or more files. Tries to load from, in this order:
+    Load configuration information from a config directory. Tries directories in this order:
 
-    - /etc/ambry.yaml
-    - ~/.ambry.yaml
+    - A path provided as an argument
     - A path specified by the AMBRY_CONFIG environmenal variable
-    - .ambry.yaml in the directory specified by the VIRTUAL_ENV environmental variable
-    - .ambry.yaml in the current working directory
-
+    - ambry in a path specified by the VIRTUAL_ENV environmental variable
+    - /etc/ambry
+    - ~/ambry
 
     :param path: An iterable of additional paths to load.
     :return: An `AttrDict` of configuration information
     """
 
-    from os.path import join
     from os.path import getmtime
 
     config = AttrDict()
 
-    files = []
-
     if not path:
-        files.append(ROOT_FILE)
+        path = ROOT_DIR
 
-        files.append(os.path.expanduser(USER_FILE))
+    config_file = find_config_file(CONFIG_FILE, extra_path=path, load_user=load_user)
 
-        if os.getenv(ENVAR.CONFIG):
-            files.append(os.getenv(ENVAR.CONFIG))
+    if os.path.exists(config_file):
 
-        if os.getenv(ENVAR.VIRT):
-            files.append(join(os.getenv(ENVAR.VIRT), BASE_FILE))
+        config.update_yaml(config_file)
+        config.loaded = [config_file, getmtime(config_file)]
 
-        try:
-            files.append(join(os.getcwd(), BASE_FILE))
-        except OSError:
-            pass # In webservers, there is no cwd
-
-    if isinstance(path, (list, tuple, set)):
-        for p in path:
-            files.append(p)
     else:
-        files.append(path)
-
-    files = list(set(files))
-    loaded = []
-
-    for f in files:
-        if f is not None and os.path.exists(f):
-
-            try:
-                config.update_yaml(f)
-                loaded.append((f,getmtime(f) ))
-
-            except TypeError:
-                pass  # Empty files will produce a type error
-
-    #if not config:
-    #    raise ConfigurationError("Failed to load any config from: {}".format(files))
-
-    config.loaded = loaded
+        # Probably never get here, since the find_config_dir would have thrown a ConfigurationError
+        config = AttrDict()
+        config.loaded = [None, 0]
 
     return config
 
-def update_config(config):
+
+def update_config(config, use_environ=True):
     """Update the configuration from environmental variables. Updates:
 
     - config.library.database from the AMBRY_DB environmental variable.
@@ -200,12 +230,8 @@ def update_config(config):
 
     :param config: An `attrDict` of configuration information.
     """
+    from ambry.util import select_from_url
 
-
-    try:
-        _ = config.accounts
-    except KeyError:
-        config.accounts = AttrDict()
 
     try:
         _ = config.library
@@ -218,23 +244,59 @@ def update_config(config):
         config.filesystem = AttrDict()
 
     try:
+        _ = config.accounts
+    except KeyError:
+        config.accounts = AttrDict()
+        config.accounts.loaded = [None, 0]
+
+    try:
         _ = config.accounts.password
     except KeyError:
         config.accounts.password = None
 
-    if os.getenv(ENVAR.DB):
-        config.library.database = os.getenv(ENVAR.DB)
+    try:
+        _ = config.remotes
+    except KeyError:
+        config.remotes = AttrDict()  # Default empty
+        config.remotes.loaded = [None, 0]
 
-    if os.getenv(ENVAR.ROOT):
-        config.library.filesystem_root = os.getenv(ENVAR.ROOT)
+    if use_environ:
+        if os.getenv(ENVAR.DB):
+            config.library.database = os.getenv(ENVAR.DB)
 
-    if os.getenv(ENVAR.PASSWORD):
-        config.accounts.password = os.getenv(ENVAR.PASSWORD)
+        if os.getenv(ENVAR.ROOT):
+            config.library.filesystem_root = os.getenv(ENVAR.ROOT)
+
+        if os.getenv(ENVAR.PASSWORD):
+            config.accounts.password = os.getenv(ENVAR.PASSWORD)
+
+    # Move any remotes that were configured under the library to the remotes section
 
     try:
-        _ = config.library.remotes
+        for k, v in config.library.remotes.items():
+            config.remotes[k] = {
+                'url': v
+            }
+
+        del config.library['remotes']
+
+    except KeyError as e:
+        pass
+
+    # Then move any of the account entries that are linked to remotes into the remotes.
+
+    try:
+        for k, v in config.remotes.items():
+            if 'url' in v:
+                host = select_from_url(v['url'], 'netloc')
+                if host in config.accounts:
+                    config.remotes[k].update(config.accounts[host])
+                    del config.accounts[host]
+
     except KeyError:
-        config.library.remotes = AttrDict() # Default empty
+        pass
+
+
 
     # Set a default for the library database
     try:
@@ -247,25 +309,21 @@ def update_config(config):
         'config.library.filesystem_root',
     ]
 
-
-
     for check in checks:
         try:
             _ = eval(check)
         except KeyError:
             raise ConfigurationError("Configuration is missing '{}'; loaded from {} "
-                                     .format(check, [l[0] for l in config.loaded]))
+                                     .format(check, config.loaded[0]))
 
-    _, config.library.database =  normalize_dsn_or_dict(config.library.database)
+    _, config.library.database = normalize_dsn_or_dict(config.library.database)
 
     for k, v in filesystem_defaults.items():
         if k not in config.filesystem:
             config.filesystem[k] = v
 
-    config.modtime = max([l[1] for l in  config.loaded ] + [config.accounts.loaded[1]])
 
-
-
+    config.modtime = max(config.loaded[1], config.remotes.loaded[1], config.accounts.loaded[1])
 
 
 def normalize_dsn_or_dict(d):
@@ -324,9 +382,7 @@ def normalize_dsn_or_dict(d):
                 password=d.get('password', None),
                 username=d.get('username', None)
             )
-
     else:
-        
         up = d.get('username', '') or ''
 
         if d.get('password'):
@@ -334,7 +390,7 @@ def normalize_dsn_or_dict(d):
             up += ':' + d.get('password', '')
 
         if up:
-            up += "@"
+            up += '@'
 
         if up and not d.get('server'):
             raise ConfigurationError("Can't construct a DSN with a username or password without a hostname")
@@ -344,12 +400,12 @@ def normalize_dsn_or_dict(d):
         if d.get('dbname', False):
             path_part = '/' + d.get('dbname')
 
-            #if d['driver'] in ('sqlite3', 'sqlite', 'spatialite'):
-            #    path_part = '/' + path_part
+            # if d['driver'] in ('sqlite3', 'sqlite', 'spatialite'):
+            #     path_part = '/' + path_part
 
         else:
-            path_part = '' # w/ no dbname, Sqlite should use memory, which required 2 slash. Rel dir is 3, abs dir is 4
+            path_part = ''  # w/ no dbname, Sqlite should use memory, which required 2 slash. Rel dir is 3, abs dir is 4
 
-        dsn = "{}://{}{}".format(d['driver'], host_part, path_part)
+        dsn = '{}://{}{}'.format(d['driver'], host_part, path_part)
 
     return config, dsn

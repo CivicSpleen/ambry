@@ -7,12 +7,10 @@ except ImportError:
     # py3, mock is included
     from unittest.mock import patch
 
-from ambry.orm.database import Database
-from ambry.run import get_runconfig
 from ambry.exporters.ckan.core import export, MISSING_CREDENTIALS_MSG
 
 from test.factories import FileFactory
-from test.test_base import TestBase
+from test.proto import TestBase
 
 # CKAN is mocked by default. If you really want to hit CKAN instance set MOCK_CKAN to False.
 MOCK_CKAN = True
@@ -21,21 +19,21 @@ MOCK_CKAN = True
 class Test(TestBase):
 
     def setUp(self):
-        rc = get_runconfig()
-        if 'ckan' not in rc.accounts:
+        super(self.__class__, self).setUp()
+        if 'ckan' not in self.config.accounts:
             raise EnvironmentError(MISSING_CREDENTIALS_MSG)
-        self.sqlite_db = Database('sqlite://')
-        self.sqlite_db.create()
         self._requests = {}  # calls to CKAN mock.
         self._files = {}  # file sent to CKAN mock.
 
     def test_dataset_export(self):
-        bundle = self.setup_bundle('simple', source_url='temp://')
+        bundle = self.import_single_bundle('build.example.com/generators')
         FileFactory._meta.sqlalchemy_session = bundle.dataset._database.session
 
         bundle.dataset.config.metadata.about.access = 'public'
         bundle.dataset.config.metadata.contacts.creator.name = 'creator'
         bundle.dataset.config.metadata.contacts.creator.email = 'creator@example.com'
+        bundle.dataset.config.metadata.contacts.wrangler.name = 'wrangler'
+        bundle.dataset.config.metadata.contacts.wrangler.email = 'wrangler@example.com'
         bundle.dataset.config.metadata.contacts.maintainer.name = 'maintainer'
         bundle.dataset.config.metadata.contacts.maintainer.email = 'maintainer@example.com'
 
@@ -45,8 +43,6 @@ class Test(TestBase):
         FileFactory(
             id=21, dataset=bundle.dataset,
             path='documentation.md', contents='### Documentation')
-
-        self.sqlite_db.commit()
 
         if MOCK_CKAN:
             def fake_call(action, **kwargs):
@@ -84,13 +80,13 @@ class Test(TestBase):
         else:
             assert dataset_package
 
-        self.assertEqual(dataset_package['name'], dataset.vid)
+        self.assertEqual(dataset_package['name'], dataset.vid.lower())
         self.assertIn('### Documentation', dataset_package['notes'])
 
         # test contacts.
         contacts = dataset.config.metadata.contacts
-        self.assertEqual(dataset_package['author'], contacts.creator.name)
-        self.assertEqual(dataset_package['author_email'], contacts.creator.email)
+        self.assertEqual(dataset_package['author'], contacts.wrangler.name)
+        self.assertEqual(dataset_package['author_email'], contacts.wrangler.email)
 
         self.assertEqual(dataset_package['maintainer'], contacts.maintainer.name)
         self.assertEqual(dataset_package['maintainer_email'], contacts.maintainer.email)

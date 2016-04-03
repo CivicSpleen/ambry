@@ -4,13 +4,16 @@ This file is licensed under the terms of the Revised BSD License,
 included in this distribution as LICENSE.txt
 
 """
+
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'library'
+
 from six import iteritems
+from ..cli import prt, prt_no_format, err, fatal, warn  # @UnresolvedImport
+import sys
 
-from ..cli import prt, err, fatal, warn, _print_info  # @UnresolvedImport
-from ambry.util import Progressor
 
-
-def library_parser(cmd):
+def make_parser(cmd):
     import argparse
 
     #
@@ -21,37 +24,11 @@ def library_parser(cmd):
 
     asp = lib_p.add_subparsers(title='library commands', help='command help')
 
-    sp = asp.add_parser('push', help='Push new library files')
-    sp.set_defaults(subcommand='push')
-    sp.add_argument('-w', '--watch', default=False, action='store_true',
-                    help='Check periodically for new files.')
-    sp.add_argument('-f', '--force', default=False, action='store_true', help='Push all files')
-    sp.add_argument('-n', '--dry-run', default=False, action='store_true',
-                    help="Dry run, don't actually send the files.")
-
-    sp = asp.add_parser('files', help='Print out files in the library')
-    sp.set_defaults(subcommand='files')
-    sp.add_argument('-a', '--all', default='all', action='store_const', const='all', dest='file_state',
-                    help='Print all files')
-    sp.add_argument('-n', '--new', default=False, action='store_const', const='new', dest='file_state',
-                    help='Print new files')
-    sp.add_argument('-p', '--pushed', default=False, action='store_const', const='pushed', dest='file_state',
-                    help='Print pushed files')
-    sp.add_argument('-u', '--pulled', default=False, action='store_const', const='pulled', dest='file_state',
-                    help='Print pulled files')
-    sp.add_argument('-s', '--synced', default=False, action='store_const', const='synced', dest='file_state',
-                    help='Print synced source packages')
-
-    sp = asp.add_parser('new', help='Create a new library')
-    sp.set_defaults(subcommand='new')
-
     sp = asp.add_parser('drop', help='Delete all of the tables in the library')
     sp.set_defaults(subcommand='drop')
 
     sp = asp.add_parser('clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
-
-
     sp.add_argument('-a', '--all', default=False, action='store_true', help='Sync everything')
     sp.add_argument('-l', '--library', default=False, action='store_true', help='Sync the library')
     sp.add_argument('-r', '--remote', default=False, action='store_true', help='Sync the remote')
@@ -63,37 +40,6 @@ def library_parser(cmd):
     sp.add_argument('-F', '--bundle-list',
                     help='File of bundle VIDs. Sync only VIDs listed in this file')
 
-    sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. '
-                                    'Possible download the file from the remote library')
-    sp.set_defaults(subcommand='get')
-    sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-p', '--partitions', default=False, action='store_true',
-                    help='Also get all of the partitions. ')
-    sp.add_argument('-f', '--force', default=False, action='store_true',
-                    help='Force retrieving from the remote')
-
-    sp = asp.add_parser('open', help='Open a bundle or partition file with sqlite3')
-    sp.set_defaults(subcommand='open')
-    sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-f', '--force', default=False, action='store_true',
-                    help='Force retrieving from the remote')
-
-    sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
-    sp.set_defaults(subcommand='remove')
-    sp.add_argument('-a', '--all', default=False, action='store_true', help='Remove all records')
-    sp.add_argument('-b', '--bundle', default=False, action='store_true',
-                    help='Remove the dataset and partition records')
-    sp.add_argument('-l', '--library', default=False, action='store_true',
-                    help='Remove the library file record and library files')
-    sp.add_argument('-r', '--remote', default=False, action='store_true', help='Remove the remote record')
-    sp.add_argument('-s', '--source', default=False, action='store_true', help='Remove the source record')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
-                    help='Name or ID of the bundle or partition to remove')
-
-    whsp = asp.add_parser('config', help='Configure varibles')
-    whsp.set_defaults(subcommand='config')
-    whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
-
     sp = asp.add_parser('number', help='Return a new number from the number server')
     sp.set_defaults(subcommand='number')
     sp.add_argument('-k', '--key', default='self',
@@ -102,11 +48,27 @@ def library_parser(cmd):
     sp = asp.add_parser('pg', help='Operations on a Postgres library database')
     sp.set_defaults(subcommand='pg')
     sp.add_argument('-p', '--processes', default=False, action='store_true', help='List all processes')
+    sp.add_argument('-c', '--connect', default=False, action='store_true',
+                    help='Connection and exit with return code to indicate success or failure')
     sp.add_argument('-l', '--locks', default=False, action='store_true', help='List all locks')
     sp.add_argument('-b', '--blocks', default=False, action='store_true',
                     help='List locks that are blocked or are blocking another process')
 
-def library_command(args, rc):
+    sp = asp.add_parser('export', help='Dump a library configuration, remortes, accounts and bundles')
+    sp.set_defaults(subcommand='export')
+    sp.add_argument('-p', '--password', required=True, help='Encryption password')
+
+    sp.add_argument('config_file', nargs='?', type=argparse.FileType('wb'), default = sys.stdout,
+                    help='Config file to write to. If absent, will write to stdout')
+
+    sp = asp.add_parser('import', help='Import or list library configuration, remortes, accounts and bundles')
+    sp.set_defaults(subcommand='import')
+    sp.add_argument('-p', '--password', required=True, help='Decryption password')
+    sp.add_argument('-l', '--list', default=False, action='store_true', help='List, dont import')
+    sp.add_argument('config_file', nargs='?', type=argparse.FileType('rb'), default = sys.stdin,
+                    help='Config file to read from. If absent, will read from stdin')
+
+def run_command(args, rc):
     from ..library import new_library
     from . import global_logger
     from ambry.orm.exc import NotFoundError
@@ -126,6 +88,8 @@ def library_command(args, rc):
 
     globals()['library_' + args.subcommand](args, l, rc)
 
+    if l:
+        l.close()
 
 def library_drop(args, l, config):
     prt("Drop tables")
@@ -147,219 +111,26 @@ def library_clean(args, l, config):
     l.clean()
     l.sync_config()
 
-def library_remove(args, l, config):
-    from ambry.orm.exc import NotFoundError
-
-    cache_keys = set()
-    refs = set()
-
-    def remove_by_ident(ident):
-
-        try:
-
-            if ident.partition:
-                cache_keys.add(ident.partition.cache_key)
-                refs.add(ident.partition.vid)
-
-            # The reference is to a bundle, so we have to delete everything
-            else:
-                cache_keys.add(ident.cache_key)
-                refs.add(ident.vid)
-
-                b = l.get(ident.vid)
-
-                if b:
-                    for p in b.partitions:
-                        cache_keys.add(p.cache_key)
-                        refs.add(p.vid)
-
-        except NotFoundError:
-            pass
-
-    for name in args.terms:
-
-        ident = l.resolve(name, location=None)
-
-        if ident:
-            remove_by_ident(ident)
-            continue
-
-        if name.startswith('s'):
-            l.remove_store(name)
-
-        elif name.startswith('m'):
-            l.remove_manifest(name)
-
-        else:
-            warn("Found no references to term {}".format(name))
-
-    if args.library or args.all:
-        for ck in cache_keys:
-            l.cache.remove(ck, propagate=True)
-            prt("Remove file {}".format(ck))
-
-    for ref in refs:
-
-        if args.bundle or args.all:
-            prt("Remove bundle record {}".format(ref))
-            if ref.startswith('d'):
-                l.database.remove_dataset(ref)
-            if ref.startswith('p'):
-                l.database.remove_partition_record(ref)
-
-            # We also need to delete everything in this case; no point in having
-            # a file record if there there is no bundle or partition.
-            l.files.query.ref(ref).delete()
-
-        if args.library or args.all:
-            prt("Remove library record {}".format(ref))
-            if ref.startswith('d'):
-                l.files.query.ref(ref).type(l.files.TYPE.BUNDLE).delete()
-            if ref.startswith('p'):
-                l.files.query.ref(ref).type(l.files.TYPE.PARTITION).delete()
-
-        if args.remote or args.all:
-            prt("Remove remote record {}".format(ref))
-            l.files.query.ref(ref).type(l.files.TYPE.REMOTE).delete()
-            l.files.query.ref(ref).type(l.files.TYPE.REMOTEPARTITION).delete()
-
-        if (args.source or args.all) and ref.startswith('d'):
-            prt("Remove source record {}".format(ref))
-            l.files.query.ref(ref).type(l.files.TYPE.SOURCE).delete()
-
-        l.database.commit()
-
-
-
-def library_push(args, l, config):
-    from ..orm import Dataset
-    import time
-    from functools import partial
-    from boto.exception import S3ResponseError
-    from collections import defaultdict
-
-    if args.force:
-        files = [(f.ref, f.type_) for f in l.files.query.installed.all]
-    else:
-
-        files = [(f.ref, f.type_) for f in l.files.query.installed.state('new').all]
-
-    remote_errors = defaultdict(int)
-
-    def push_cb(rate, note, md, t):
-        if note == 'Has':
-            prt("{} {}", note, md['fqname'])
-        elif note == 'Pushing':
-            prt("{} {}  {} KB/s ", note, md['fqname'], rate)
-        elif note == 'Pushed':
-            pass
-        else:
-            prt("{} {}", note, md['fqname'])
-
-    if len(files):
-
-        total_time = 0.0
-        total_size = 0.0
-        rate = 0
-
-        # start = time.clock()
-        for ref, t in files:
-
-            if t not in (Dataset.LOCATION.LIBRARY, Dataset.LOCATION.PARTITION):
-                continue
-
-            bp = l.resolve(ref)
-
-            if not bp:
-                err("Failed to resolve file ref to bundle {} ".format(ref))
-                continue
-
-            b = l.bundle(bp.vid)
-
-            remote_name = b.metadata.about.access
-
-            if remote_name not in l.remotes:
-                err("Can't push {} (bundle: '{}' ); no remote named '{}' ".format(ref, bp.vname, remote_name))
-                continue
-
-            if remote_errors[remote_name] > 4:
-                err("Too many errors on remote '{}', skipping ".format(remote_name))
-                continue
-
-            remote = l.remotes[remote_name]
-
-            try:
-                what, start, end, size = l.push(remote, ref, cb=partial(push_cb, rate), dry_run=args.dry_run)
-            except S3ResponseError:
-                err("Failed to push to remote '{}' ".format(remote_name))
-                remote_errors[remote_name] += 1
-                continue
-
-            except Exception as e:
-                prt("Failed: {}", e)
-                raise
-
-            if what == 'pushed':
-                total_time += end - start
-                total_size += size
-
-                if total_time > 0:
-                    rate = int(float(total_size) / float(total_time) / 1024.0)
-                else:
-                    rate = 0
-
-    # Update the list file. This file is required for use with HTTP access, since you can't get
-    # a list otherwise.
-    for remote_name, remote in iteritems(l.remotes):
-        prt('  {}'.format(remote.repo_id))
-
-        if not args.dry_run:
-            remote.store_list()
-
-
-def library_get(args, l, config):
-    ident = l.resolve(args.term)
-
-    if not ident:
-        fatal("Could not resolve term {} ", args.term)
-
-    # This will fetch the data, but the return values aren't quite right
-    prt("get: {}".format(ident.vname))
-    b = l.get(
-        args.term,
-        force=args.force,
-        cb=Progressor('Download {}'.format(args.term)).progress)
-
-    if not b:
-        fatal("Download failed: {}", args.term)
-
-    ident = b.identity
-
-    if b.partition:
-        ident.add_partition(b.partition.identity)
-
-    elif b.partitions:
-        for p in b.partitions:
-            prt("get: {}".format(p.identity.vname))
-            l.get(p.identity.vid)
-
-        b.partition = None
-
-    _print_info(l, ident)
-
-    return b
-
 def library_number(args, l, config):
     print(l.number(assignment_class=args.key))
 
-
-
 def library_pg(args, l, config):
-    db = l.database
+    """Report on the operation of a Postgres Library database"""
     import tabulate
     import terminaltables
     from textwrap import fill
     from ambry.util.text import getTerminalSize
+    import sys
+
+    if args.connect:
+        try:
+            l.database.connection.execute('SELECT * FROM pg_stat_activity;')
+            sys.exit(0)
+        except Exception as e:
+            prt(str(e))
+            sys.exit(1)
+
+    db = l.database
 
     (x, y) = getTerminalSize()
 
@@ -455,6 +226,88 @@ SELECT pid, database, mode, locktype, mode, relation, tuple, virtualxid FROM pg_
             if rows:
                 table = terminaltables.UnixTable([headers] + rows)
                 print table.table
+
+def library_import(args, l, config):
+    import json
+    from ambry.library.config import LibraryConfigSyncProxy
+    from ambry.orm import Account
+    from simplecrypt import encrypt, decrypt, DecryptionException
+
+    try:
+        jsn = decrypt(args.password, args.config_file.read().decode('base64'))
+    except DecryptionException as e:
+        fatal(e)
+    finally:
+        args.config_file.close()
+
+    args.config_file.close()
+
+    d = json.loads(jsn)
+
+    for k, v in d['accounts'].items():
+        if v.get('major_type') != 'user' and 'encrypted_secret' in v:
+            v['secret'] = Account.sym_decrypt(args.password, v['encrypted_secret'])
+
+    if args.list:
+        prt_no_format(json.dumps(d, indent=4))
+    else:
+        lcsp = LibraryConfigSyncProxy(l)
+
+        lcsp.sync_remotes(d['remotes'], cb=l.logger.info)
+        lcsp.sync_accounts(d['accounts'], cb=l.logger.info)
+
+        for vid, v in d['bundles'].items():
+            l.logger.info("Check in remote bundle {}, {}".format(vid, v['vname']))
+            l.checkin_remote_bundle(vid)
+
+
+def library_export(args, l, config):
+    from simplecrypt import encrypt, decrypt, DecryptionException
+    import json
+    from ambry.util import random_string
+
+    if args.password:
+        password = args.password
+    else:
+        password = random_string(16)
+
+    d = {
+        'remotes': {},
+        'accounts': {},
+        'bundles': {}
+    }
+
+    for r in l.remotes:
+        d['remotes'][r.short_name] = { k:v for k,v in r.dict.items() if bool(v ) and k not in ('id','list' ) }
+
+    for k in l.accounts.keys():
+        a = l.account(k)
+
+        da = { k:v for k,v in a.dict.items() if bool(v )and k != 'secret' }
+
+        # Change the secret encryption password
+        if 'encrypted_secret' in da and da['encrypted_secret']:
+            ds = a.decrypt_secret()
+            if ds:
+                da['encrypted_secret'] = a.encrypt_secret(ds, password)
+
+
+        d['accounts'][a.account_id] = da
+
+    for b in l.bundles:
+        d['bundles'][b.identity.vid] = {
+            'vid' : b.identity.vid,
+            'vname': str(b.identity.name),
+            'cache_key': b.identity.cache_key
+        }
+
+    if not args.password:
+        prt("Password: {}".format(password))
+
+    args.config_file.write(encrypt(password, json.dumps(d, indent = 4)).encode('base64'))
+    args.config_file.close()
+
+
 
 
 def library_unknown(args, l, config):

@@ -111,7 +111,18 @@ class Process(Base):
         if self.state == 'error':
             action_char = '!'
 
-        parts.append(action_char+' '+(self.message if self.message else ''))
+        parts.append(action_char)
+
+        if self.s_vid:
+            parts.append(self.s_vid)
+
+        if self.t_vid:
+            parts.append(self.t_vid)
+
+        if self.p_vid:
+            parts.append(self.p_vid)
+
+        parts.append(self.message if self.message else '')
 
         if self.item_count:
             ic = 'processed '+str(self.item_count)
@@ -123,6 +134,8 @@ class Process(Base):
                 ic += ' '+self.item_type
 
             parts.append(ic)
+
+
 
         return ' '.join(parts)
 

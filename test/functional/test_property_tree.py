@@ -4,15 +4,17 @@ from ambry.metadata.schema import Top
 
 from ambry.orm import Config
 
-from test.test_base import TestBase
+from test.factories import DatasetFactory
+from test.proto import TestBase
 
 
 class DatabaseConfigUpdateTest(TestBase):
     """ Tests db update after property tree change. """
     def setUp(self):
         super(DatabaseConfigUpdateTest, self).setUp()
-        self.db = self.new_database()
-        self.dataset = self.new_db_dataset(self.db, n=0)
+        self.db = self.library().database
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        self.dataset = DatasetFactory()
 
     def test_create_group_and_config_in_the_db(self):
         """ Setting empty property tree key creates group and config in the db. """
@@ -84,8 +86,9 @@ class BuildPropertyTreeFromDatabaseTest(TestBase):
 
     def setUp(self):
         super(self.__class__, self).setUp()
-        self.db = self.new_database()
-        self.dataset = self.new_db_dataset(self.db, n=0)
+        self.db = self.library().database
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        self.dataset = DatasetFactory()
 
     # helpers
     def _create_db_tree(self):
@@ -95,17 +98,18 @@ class BuildPropertyTreeFromDatabaseTest(TestBase):
         """
         db = self.db
         dataset = self.dataset
-        top_config = Config(d_vid=dataset.vid, parent=None, type='metadata', sequence_id = 1)
+        top_config = Config(d_vid=dataset.vid, parent=None, type='metadata', sequence_id=1)
         db.session.add(top_config)
         db.session.commit()
-        names_config = Config(d_vid=dataset.vid, key='names', group='names',
-            parent=top_config, type='metadata', sequence_id = 2)
+        names_config = Config(
+            d_vid=dataset.vid, key='names', group='names',
+            parent=top_config, type='metadata', sequence_id=2)
         db.session.add(names_config)
         db.session.commit()
 
         vid_value_config = Config(
             d_vid=dataset.vid, key='vid', value=dataset.vid,
-            parent=names_config, type='metadata', sequence_id = 3)
+            parent=names_config, type='metadata', sequence_id=3)
         db.session.add(vid_value_config)
         db.session.commit()
 

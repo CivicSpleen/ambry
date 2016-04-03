@@ -1,29 +1,33 @@
 """Value Types for FIPS codes
 
-The value converters can recognize, parse, normalize and transform common codes, such as FIPS, ANSI and census codes.
+The value converters can recognize, parse, normalize and transform common codes,
+such as FIPS, ANSI and census codes.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from .. import ValueType, IntValue
+from .. import IntValue
 
 from ..usps import states
+
 
 class County(IntValue):
     """Up-to 3 digit integers, or three digit strings. """
 
     _county_map = None
 
-    def __init__(self, v):
-        #FIXME. loading a global library is probably a really bad idea.
-        from ambry.library import global_library
+    def __new__(cls, bundle, v):
+        o = super(IntValue, cls).__new__(cls, cls.parse(v))
+        return o
+
+    def __init__(self, bundle, v):
+
         # v is set in __new__
 
         self.state = None
-        self.library = global_library
-
+        self.library = bundle.library
 
     def intuit_name(self, name):
         """Return a numeric value in the range [-1,1), indicating the likelyhood that the name is for a valuable of
@@ -65,26 +69,36 @@ class County(IntValue):
                     name = row['name'].replace(', ' + state_names[row['state']], '')
                     first, last = name[:name.rindex(' ')], name[name.rindex(' '):]
 
-                    if first.strip().endswith('Census'): # Last bit should be "Census Area"
+                    if first.strip().endswith('Census'):  # Last bit should be "Census Area"
                         first, lastm1 = first[:first.rindex(' ')], first[first.rindex(' '):]
                         last = lastm1+' '+last
 
                     County._county_map[(row['state'], row['county'])] = (name.strip(), first.strip(), last.strip())
             except NotFoundError as e:
-                self.library.logger.error("Failed to get partition; County map will return inputs; {}".format(e))
+                self.library.logger.error(
+                    'Failed to get partition; County map will return inputs; {}'
+                    .format(e))
 
                 from collections import MutableMapping
 
                 class keymap(MutableMapping):
-                    def __getitem__(self, key):return ["No County Map; {}".format(key)]*3
-                    def __setitem__(self, key, value): pass
-                    def __delitem__(self, key): pass
-                    def __iter__(self): return iter([])
-                    def __len__(self): return 0
 
-                County._county_map =  keymap()
+                    def __getitem__(self, key):
+                        return ['No County Map; {}'.format(key)] * 3
 
+                    def __setitem__(self, key, value):
+                        pass
 
+                    def __delitem__(self, key):
+                        pass
+
+                    def __iter__(self):
+                        return iter([])
+
+                    def __len__(self):
+                        return 0
+
+                County._county_map = keymap()
 
         return County._county_map
 
@@ -151,7 +165,7 @@ class State(IntValue):
         v = int(v)
 
         if isinstance(v, int):
-            if not v in cls.abr_map():
+            if v not in cls.abr_map():
                 raise ValueError("Integer '{}' is not a valid FIPS state code".format(v))
 
         return v

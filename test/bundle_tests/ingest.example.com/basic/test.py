@@ -16,8 +16,7 @@ class Test(BundleTest):
 
     @after_ingest()
     def test_after_ingest(self):
-
-        self.assertInSourceHeaders('simple', [u'id', u'uuid', u'int', u'float'])
+        self.assertInDatafileHeaders('simple', [u'id', u'uuid', u'int', u'float'])
 
     @after_run
     def test_after_run(self):

@@ -101,7 +101,7 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         logger.debug('Extending datasets with partitions.')
         for partition in self.backend.partition_index.search(search_phrase):
             datasets[partition.dataset_vid].p_score += partition.score
-            datasets[partition.dataset_vid].partitions.add(partition.vid)
+            datasets[partition.dataset_vid].partitions.add(partition)
         return list(datasets.values())
 
     def _make_query_from_terms(self, terms):

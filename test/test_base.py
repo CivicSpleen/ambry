@@ -12,12 +12,13 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.sql.expression import text
 
 from six.moves.urllib.parse import urlparse
-from six.moves import input as six_input
+from fs.opener import fsopendir
 
 from ambry.identity import DatasetNumber
-from ambry.orm import Database, Dataset
+from ambry.orm import Dataset
 from ambry.orm.database import POSTGRES_SCHEMA_NAME, POSTGRES_PARTITION_SCHEMA_NAME
 import ambry.run
+from ambry.util import parse_url_to_dict, unparse_url_dict
 
 MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add test-postgres '\
     'to the database section of the ambry config.'
@@ -26,89 +27,146 @@ SAFETY_POSTFIX = 'ab1kde2'  # Prevents wrong database dropping.
 
 class TestBase(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+
+        cls.dbname = os.environ.get('AMBRY_TEST_DB') or 'sqlite'
+
+        config = ambry.run.load()  # not cached; get_config is
+        cls.test_dsn_key = 'test-{}'.format(cls.dbname)
+
+        cls.library_test_dsn = config.get('database', {}).get(cls.test_dsn_key)
+        cls.library_prod_dsn = config.library.database
+
+        if not cls.library_test_dsn:
+            if cls.dbname not in config.library.database:
+                raise Exception(
+                    'Can not run tests on {dbname} database without credentials.\n'
+                    '  HINT: Set library.database or database.test-{dbname} keys '
+                    '  in the ~/.ambry/config.yaml'
+                    .format(dbname=cls.dbname))
+
+            if cls.dbname == 'sqlite':
+                d = parse_url_to_dict(config.library.database)
+                last_part = d['path'].split('/')[-1]
+                if last_part.endswith('.db'):
+                    new_last_part = last_part.replace('.db', '_test_1k.db')
+                else:
+                    new_last_part = last_part + '_test_1k'
+                d['path'] = d['path'].rstrip(last_part) + new_last_part
+                cls.library_test_dsn = unparse_url_dict(d)
+
+            elif cls.dbname == 'postgres':
+                # create test database dsn and write it to the config.
+                parsed_url = urlparse(config.library.database)
+                db_name = parsed_url.path.replace('/', '')
+                test_db_name = '{}_test_{}'.format(db_name, SAFETY_POSTFIX)
+                cls.library_test_dsn = parsed_url._replace(path=test_db_name).geturl()
+
+        cls._is_postgres = cls.dbname == 'postgres'
+        cls._is_sqlite = cls.dbname == 'sqlite'
+
+        cls._delete_db_in_teardown = True
+
     def setUp(self):
-        import uuid
+
+        self.db = None
+        self._library = None
 
         super(TestBase, self).setUp()
-
-        # WAARNING! This path and dsn is only used if it is explicitly referenced.
-        # Otherwise, the get_rc() will use a database specified in the
-        # test rc file.
-        self.db_path = '/tmp/ambry-test-{}.db'.format(str(uuid.uuid4()))
-
-        self.dsn = 'sqlite:///{}'.format(self.db_path)
 
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
-        self.db = None
-        self._library = None
+        self._library = None  # Will be populated if someone calls library() method.
+
+        if self.__class__._is_postgres:
+            PostgreSQLTestBase._create_postgres_test_db(test_db_dsn=self.__class__.library_test_dsn)
 
     def tearDown(self):
 
         if self._library:
             self._library.close()
+            if self.__class__._is_sqlite and self.__class__._delete_db_in_teardown:
+                try:
+                    # FIXME: Ensure you are dropping test database.
+
+                    path = self._library.database.dsn.replace('sqlite:///', '')
+
+                    os.remove(path)
+
+                    # Delete the progress database
+                    parts = os.path.split(path)
+                    parts = parts[:-1] + ('progress.db',)
+                    os.remove(os.path.join(*parts))
+
+                except OSError:
+                    pass
+
+        if self.__class__._is_postgres and self.__class__._delete_db_in_teardown:
+            PostgreSQLTestBase._drop_postgres_test_db()
 
     def ds_params(self, n, source='source'):
         return dict(vid=self.dn[n], source=source, dataset='dataset')
 
-    @staticmethod  # So it can be called from either setUp or setUpClass
-    def get_rc(rewrite=True):
+    @classmethod  # So it can be called from either setUp or setUpClass
+    def get_rc(cls, rewrite=True):
         """Create a new config file for test and return the RunConfig.
 
-         This method will start with the user's default Ambry configuration, but will replace the
-         library.filesystem_root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
-         environmental variable, it will set library.database to the DSN of either database.test-sqlite or
-         database.test-postrgres
+        This method will start with the user's default Ambry configuration, but will replace the
+        library.filesystem_root with the value of filesystem.test, then depending on the value of the AMBRY_TEST_DB
+        environmental variable, it will set library.database to the DSN of either database.test-sqlite or
+        database.test-postgres
 
         """
 
-        from fs.opener import fsopendir
-
         config = ambry.run.load()  # not cached; get_config is
-
-        dbname = os.environ.get('AMBRY_TEST_DB', 'sqlite')
 
         orig_root = config.library.filesystem_root
         root_dir = config.filesystem.test.format(root=orig_root)
 
-        dsn = config.get('database', {}).get('test-{}'.format(dbname), 'sqlite:///{root}/library.db')
+        if config.library.database == cls.library_test_dsn:
+            raise Exception('production database and test database can not be the same.')
 
         config.library.filesystem_root = root_dir
-        config.library.database = dsn
+        config.library.database = cls.library_test_dsn
         config.accounts = None
 
         test_root = fsopendir(root_dir, create_dir=True)
 
         if rewrite:
-            with test_root.open('.ambry.yaml', 'w', encoding='utf-8', ) as f:
+            with test_root.open('config.yaml', 'w', encoding='utf-8', ) as f:
                 config.loaded = None
                 config.dump(f)
 
-        return ambry.run.get_runconfig(test_root.getsyspath('.ambry.yaml'))
+        return ambry.run.load(test_root.getsyspath('/'))
 
     @classmethod
     def config(cls):
         return cls.get_rc()
 
-    @staticmethod # So it can be called from either setUp or setUpClass
-    def _get_library(config):
+    @classmethod  # So it can be called from either setUp or setUpClass
+    def _get_library(cls, config):
+
         from ambry.library import new_library
+        return new_library(config if config else cls.get_rc())
 
-        return new_library(config if config else TestBase.get_rc())
+    def library(self, config=None, use_proto=True):
 
-    def library(self, config=None):
+        from proto import ProtoLibrary
 
-        if not self._library:
-            self._library = self._get_library(config)
+        dsn = os.environ.get('AMBRY_TEST_DB', None)
 
-        return self._library
+        proto = ProtoLibrary(dsn=dsn)
 
-    @staticmethod # So it can be called from either setUp or setUpClass
+        l = proto.init_library(use_proto=use_proto)
+
+        return l
+
+    @staticmethod  # So it can be called from either setUp or setUpClass
     def _import_bundles(library, clean=True, force_import=False):
 
         from test import bundle_tests
-        import os
 
         if clean:
             library.clean()
@@ -129,13 +187,12 @@ class TestBase(unittest.TestCase):
 
         library = self.library()
 
-        self._import_bundles(library,clean, force_import )
+        self._import_bundles(library, clean, force_import)
 
     def import_single_bundle(self, cache_path, clean=True):
         from test import bundle_tests
 
-        l = self.library()
-        print l.database.dsn
+        l = self.library(use_proto=False)
 
         if clean:
             l.clean()
@@ -146,7 +203,7 @@ class TestBase(unittest.TestCase):
 
         b = next(b for b in l.bundles).cast_to_subclass()
         b.clean()
-        b.sync_in()
+        b.sync_in(force=True)
         return b
 
     def new_dataset(self, n=1, source='source'):
@@ -156,28 +213,18 @@ class TestBase(unittest.TestCase):
         return db.new_dataset(**self.ds_params(n, source=source))
 
     def copy_bundle_files(self, source, dest):
-        from ambry.bundle.files import file_info_map
+        from ambry.bundle.files import file_classes
         from fs.errors import ResourceNotFoundError
 
-        for const_name, (path, clz) in list(file_info_map.items()):
+        for const_name, cls in file_classes.items():
             try:
-                dest.setcontents(path, source.getcontents(path))
+                dest.setcontents(cls._file_name, source.getcontents(cls._file_name))
             except ResourceNotFoundError:
                 pass
 
-    def dump_database(self, table, db=None):
-
-        if db is None:
-            db = self.db
-
+    def dump_database(self, table, db):
         for row in db.connection.execute('SELECT * FROM {};'.format(table)):
             print(row)
-
-    def new_database(self):
-        # FIXME: this connection will not be closed properly in a postgres case.
-        db = Database(self.dsn)
-        db.open()
-        return db
 
     def setup_bundle(self, name, source_url=None, build_url=None, library=None):
         """Configure a bundle from existing sources"""
@@ -185,12 +232,9 @@ class TestBase(unittest.TestCase):
         from os.path import dirname, join
         from fs.opener import fsopendir
         import yaml
-        from ambry.util import parse_url_to_dict
 
         if not library:
-            library = self.__class__.library()
-
-        self.db = library._db
+            library = self.library()
 
         if not source_url:
             source_url = 'mem://source'.format(name)
@@ -213,31 +257,41 @@ class TestBase(unittest.TestCase):
         b.set_file_system(source_url=source_url, build_url=build_url)
 
         self.copy_bundle_files(test_source_fs, b.source_fs)
-
         return b
+
+    def proto_library(self, dsn=None):
+        """Return a new proto library"""
+
+        from proto import ProtoLibrary
+
+        pl = ProtoLibrary(dsn=dsn)
+
+        return pl.init_library()
 
 
 class PostgreSQLTestBase(TestBase):
-    """ Base class for database tests who requires postgresql database. """
+    """ Base class for database tests who requires postgresql database.
+
+    Note:
+        If postgres is not installed all tests of all subclasses will be skipped.
+
+    """
 
     def setUp(self):
         super(PostgreSQLTestBase, self).setUp()
-        # Create database and populate required fields.
-        self._create_postgres_test_db()
-        self.dsn = self.__class__.postgres_test_db_data['test_db_dsn']
-        self.postgres_dsn = self.__class__.postgres_test_db_data['postgres_db_dsn']
-        self.postgres_test_db = self.__class__.postgres_test_db_data['test_db_name']
 
-    def tearDown(self):
-        super(PostgreSQLTestBase, self).tearDown()
-        self._drop_postgres_test_db()
+        if not self.__class__._is_postgres:
+            raise unittest.SkipTest('Postgres tests are disabled.')
 
     @classmethod
     def _drop_postgres_test_db(cls):
         if hasattr(cls, 'postgres_test_db_data'):
             # drop test database
             test_db_name = cls.postgres_test_db_data['test_db_name']
-            assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
+            if not test_db_name.endswith(SAFETY_POSTFIX):
+                raise AssertionError("""
+                    Can't drop a postgres database that does not end in the saftey postfix
+                    Add '{}' to the end of the database at: {}""".format(SAFETY_POSTFIX, test_db_name))
 
             engine = create_engine(cls.postgres_test_db_data['postgres_db_dsn'])
             connection = engine.connect()
@@ -250,26 +304,23 @@ class PostgreSQLTestBase(TestBase):
             pass
 
     @classmethod
-    def _create_postgres_test_db(cls, conf=None):
-        db = os.environ.get('AMBRY_TEST_DB', 'sqlite')
-        if db != 'postgres':
-            raise unittest.SkipTest('Postgres tests are disabled.')
-        if not conf:
-            conf = TestBase.get_rc()  # get_runconfig()
+    def _create_postgres_test_db(cls, prod_db_dsn=None, test_db_dsn=None):
+        assert test_db_dsn or prod_db_dsn
 
-        # we need valid postgres dsn.
-        if not ('database' in conf and 'test-postgres' in conf['database']):
-            # example of the config
-            # database:
-            #     test-postgres: postgresql+psycopg2://user:pass@127.0.0.1/ambry
-            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
-        dsn = conf.database['test-postgres']
-        parsed_url = urlparse(dsn)
-        postgres_user = parsed_url.username
-        db_name = parsed_url.path.replace('/', '')
-        test_db_name = '{}_test_{}'.format(db_name, SAFETY_POSTFIX)
-        postgres_db_dsn = parsed_url._replace(path='postgres').geturl()
-        test_db_dsn = parsed_url._replace(path=test_db_name).geturl()
+        if test_db_dsn:
+            parsed_url = urlparse(test_db_dsn)
+            postgres_user = parsed_url.username
+            db_name = parsed_url.path.replace('/', '')
+            test_db_name = db_name
+            postgres_db_dsn = parsed_url._replace(path='postgres').geturl()
+        else:
+            # test db is not given, create test dsn from prod.
+            parsed_url = urlparse(prod_db_dsn)
+            postgres_user = parsed_url.username
+            db_name = parsed_url.path.replace('/', '')
+            test_db_name = '{}_test_{}'.format(db_name, SAFETY_POSTFIX)
+            postgres_db_dsn = parsed_url._replace(path='postgres').geturl()
+            test_db_dsn = parsed_url._replace(path=test_db_name).geturl()
 
         # connect to postgres database because we need to create database for tests.
         engine = create_engine(postgres_db_dsn, poolclass=NullPool)
@@ -279,21 +330,17 @@ class PostgreSQLTestBase(TestBase):
 
             # drop test database created by previuos run (control + c case).
             if cls.postgres_db_exists(test_db_name, engine):
-                assert test_db_name.endswith(SAFETY_POSTFIX), 'Can not drop database without safety postfix.'
-                while True:
-                    delete_it = six_input(
-                        '\nTest database with {} name already exists. Can I delete it (Yes|No): '
-                        .format(test_db_name))
-                    if delete_it.lower() == 'yes':
-                        try:
-                            connection.execute('DROP DATABASE {};'.format(test_db_name))
-                            connection.execute('COMMIT;')
-                        except:
-                            connection.execute('ROLLBACK;')
-                        break
 
-                    elif delete_it.lower() == 'no':
-                        break
+                if not test_db_name.endswith(SAFETY_POSTFIX):
+                    raise AssertionError(
+                        "Can't drop a postgres database that does not end in the saftey postfix\n"
+                        "Add '{}' to the end of the database at: {}".format(SAFETY_POSTFIX, test_db_dsn))
+
+                try:
+                    connection.execute('DROP DATABASE {};'.format(test_db_name))
+                    connection.execute('COMMIT;')
+                except:
+                    connection.execute('ROLLBACK;')
 
             #
             # check for test template with required extensions.

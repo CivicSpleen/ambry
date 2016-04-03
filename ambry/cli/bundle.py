@@ -1,10 +1,14 @@
 # coding: utf-8
-"""Copyright (c) 2013 Clarinova.
+"""Copyright (c) 2015 Civic Knowledge.
 
 This file is licensed under the terms of the Revised BSD License,
 included in this distribution as LICENSE.txt
 
 """
+
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'bundle'
+
 import yaml
 from six import iteritems, iterkeys, callable as six_callable, text_type, binary_type
 from tabulate import tabulate
@@ -14,137 +18,48 @@ from ambry.bundle import Bundle
 from ambry.identity import NotObjectNumberError
 from ambry.orm.exc import NotFoundError
 from ambry.util import drop_empty
-from . import get_docker_links, docker_client
+
 from fs.opener import fsopendir
 from ..cli import prt, fatal, warn, prt_no_format
 from ..orm import File
 
-
-def bundle_command(args, rc):
-
-    from ..library import Library
-    from . import global_logger
-    from ambry.orm.exc import ConflictError
-    from ambry.dbexceptions import LoggedException
-
-    if args.test_library:
-        rc.set_library_database('test')
-
-    l = Library(rc, echo=args.echo)
-
-    global global_library
-
-    global_library = l
-
-    l.logger = global_logger
-
-    l.sync_config()
-
-    if args.debug:
-        from ..util import debug
-        warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
-        debug.listen()
-
-    if args.processes:
-        args.multi = args.processes
-        l.processes = args.processes
-
-    try:
-        globals()['bundle_' + args.subcommand](args, l, rc)
-    except ConflictError as e:
-        fatal(str(e))
-    except LoggedException as e:
-        exc = e.exc
-        b = e.bundle
-        b.fatal(str(e.message))
-
-
-def get_bundle_ref(args, l, use_history=False):
-    """ Use a variety of methods to determine which bundle to use
-
-    :param args:
-    :return:
-    """
-
-    if not use_history:
-        if args.id:
-            return (args.id, '-i argument')
-
-        try:
-            if args.ref:
-                l.bundle(args.ref)  # Exception if not exists
-                return (args.ref, 'argument')
-        except (AttributeError, NotFoundError, NotObjectNumberError):
-            pass
-
-        if 'AMBRY_BUNDLE' in os.environ:
-            return (os.environ['AMBRY_BUNDLE'], 'environment')
-
-        cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
-
-        if os.path.exists(cwd_bundle):
-
-            with open(cwd_bundle) as f:
-                config = yaml.load(f)
-                try:
-                    id_ = config['identity']['id']
-                    return (id_, 'directory')
-                except KeyError:
-                    pass
-
-    history = l.edit_history()
-
-    if history:
-        return (history[0].d_vid, 'history')
-
-    return None, None
-
-
-def using_bundle(args, l, print_loc=True, use_history=False):
-
-    ref, frm = get_bundle_ref(args, l, use_history=use_history)
-
-    if not ref:
-        fatal("Didn't get a bundle ref from the -i option, history, environment or argument")
-
-    if print_loc:
-        prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
-
-    b = l.bundle(ref, True)
-
-    b.multi = args.multi
-    b.capture_exceptions = not args.exceptions
-
-    if args.debug:
-        warn('Bundle debug mode. Send USR2 signal (kill -USR2 ) to displaya stack trace')
-        l.init_debug()
-
-    if args.limited_run:
-        b.limited_run = True
-    if print_loc:  # Try to only do this once
-        b.log_to_file('==============================')
-    return b
-
-
-def bundle_parser(cmd):
+def doc_parser():
     import argparse
 
-    parser = cmd.add_parser('bundle', help='Manage bundle files')
+    parser = argparse.ArgumentParser(prog='ambry', description='')
+
+    make_parser(parser=parser)
+
+    return parser
+
+def make_parser(cmd=None, parser=None):
+
+    import argparse
+
+    if not parser:
+        parser = cmd.add_parser('bundle', help='Manage bundle files')
+
     parser.set_defaults(command='bundle')
 
-    parser.add_argument('-i', '--id', required=False, help='Bundle ID')
+    parser.add_argument('-i', '--id', required=False,
+                        help='Bundle reference. May be an id, name, vid or vname. See also, bundle_ref')
     parser.add_argument('-D', '--debug', required=False, default=False, action='store_true',
-                        help='URS1 signal will break to interactive prompt')
+                        help='THE USR1 signal will break to interactive prompt')
     parser.add_argument('-L', '--limited-run', default=False, action='store_true',
                         help='Enable bundle-specific behavior to reduce number of rows processed')
     parser.add_argument('-e', '--echo', required=False, default=False, action='store_true',
                         help='Echo database queries.')
     parser.add_argument('-E', '--exceptions', default=False, action='store_true',
                         help="Don't capture and reformat exceptions; show the traceback on the console")
+    parser.add_argument('-T', '--trace', default=False, action='store_true',
+                        help="Trace every line of program execution")
     parser.add_argument('-m', '--multi', default=False, action='store_true',
                         help='Run in multiprocessing mode')
     parser.add_argument('-p', '--processes',  type=int,
                         help='Number of multiprocessing processors. implies -m')
+
+    #parser.add_argument('bundle_ref', nargs='?', type=str,
+    #                    help='Bundle reference. May be an id, name, vid or vname. See also, -i')
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -164,6 +79,25 @@ def bundle_parser(cmd):
                     )
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
+    # Make a variant of an existing bundle.
+
+    sp = sub_cmd.add_parser('variant', help='Create a variant of an existing bundle')
+    sp.set_defaults(subcommand='variant')
+    sp.set_defaults(revision=1)  # Needed in Identity.name_parts
+    sp.add_argument('-s', '--source', default=None, help='Source, usually a domain name')
+    sp.add_argument('-d', '--dataset', default=None, help='Name of the dataset')
+    sp.add_argument('-b', '--subset', default=None, help='Name of the subset')
+    sp.add_argument('-t', '--time', default=None, help='Time period. Use ISO Time intervals where possible. ')
+    sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
+    sp.add_argument('-v', '--variation', default=None, help='Name of the variation')
+    sp.add_argument('-n', '--dryrun', action='store_true', default=False, help='Dry run')
+    sp.add_argument('-k', '--key', default='self',
+                    help="Number server key. One of 'self', 'unregistered', 'registered', 'authority' "
+                         ' Use \'self\' for a random, self-generated key.'
+                    )
+    sp.add_argument('ref', help='Reference to an existing bundle')
+
+
     # Config sub commands
     #
 
@@ -182,9 +116,7 @@ def bundle_parser(cmd):
     group.add_argument('-t', '--dest_tables', default=False, action='store_const',
                        const='tables', dest='table',
                        help='Dump destination tables, but not the table columns')
-    group.add_argument('-C', '--dest_table_columns', default=False, action='store_const',
-                       const='columns', dest='table',
-                       help='Dump destination tables along with their columns')
+
     group.add_argument('-f', '--files', default=False, action='store_const', const='files', dest='table',
                        help='Dump bundle definition files')
     group.add_argument('-i', '--ingested', default=False, action='store_const',
@@ -205,7 +137,8 @@ def bundle_parser(cmd):
     group.add_argument('-m', '--metadata', default=False, action='store_const',
                        const='metadata', dest='table',
                        help='Dump metadata as json')
-    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+
+    command_p.add_argument('ref', nargs='?', type=str, help='Specific object ID to dump')
 
     # Set command
     #
@@ -213,6 +146,8 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='set')
     group = command_p.add_mutually_exclusive_group()
     group.add_argument('-s', '--state', default=None, help='Set the build state')
+    group.add_argument('-S', '--source-dir', default=False, action='store_true',
+                       help='Set the source directory to the current directory')
 
     # Info command
     #
@@ -241,11 +176,18 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('sync', help='Sync with a source representation')
     command_p.set_defaults(subcommand='sync')
-    command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
+    command_p.add_argument('file_name', nargs='?', type=str, help='File reference')
     command_p.add_argument('-i', '--in', default=False, action='store_true',
+                           help='Sync from files to records, and records to objects')
+    command_p.add_argument('-F', '--files', default=False, action='store_true',
                            help='Sync from files to records')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',help='Force sync')
+    command_p.add_argument('-r', '--records', default=False, action='store_true',
+                           help='Sync from records to objects')
     command_p.add_argument('-o', '--out', default=False, action='store_true',
                            help='Sync from records to files')
+    command_p.add_argument('-O', '--objects', default=False, action='store_true',
+                           help='Sync from objects to records')
     command_p.add_argument('-c', '--code', default=False, action='store_true',
                            help='Sync bundle.py, bundle.yaml and other code files in, but not sources or schemas.')
 
@@ -254,6 +196,8 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('duplicate',
                                    help='Increment a bundles version number and create a new bundle')
     command_p.set_defaults(subcommand='duplicate')
+    command_p.add_argument('-s', '--new-source-dir', default=False, action='store_true',
+                           help='Assign a new source directory. Otherwise, use the current source directory')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
     # Clean Command
@@ -275,7 +219,7 @@ def bundle_parser(cmd):
                            help='Clean the build directory')
     command_p.add_argument('-B', '--build-state', default=False, action='store_true',
                            help='Clean the build state configuration')
-    command_p.add_argument('-S', '--sync', default=False, action='store_true',
+    command_p.add_argument('-y', '--sync', default=False, action='store_true',
                            help='Sync in after cleaning')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Clean even built and finalized bundles')
@@ -292,35 +236,45 @@ def bundle_parser(cmd):
                            help='Force ingesting already ingested files')
     command_p.add_argument('-c', '--clean', default=False, action='store_true',
                            help='Clean ingested files first')
-    command_p.add_argument('-p', '--purge-tables', default=False, action='store_true',
-                           help='Completely remove all source tables. Equivalent to deleting source_scheama.csv'
-                           ' and syncing.')
+    command_p.add_argument('-m', '--load_meta', default=False, action='store_true',
+                           help="If only one source, and it supports metadata, load the bundle title "
+                                "and summary from the source's metadata ")
+
     command_p.add_argument('-t', '--table', action='append',
                            help='Only run the schema for the named tables. ')
     command_p.add_argument('-s', '--source',  action='append',
                            help='Sources to ingest, instead of running all sources')
     command_p.add_argument('-S', '--stage', help='Ingest sources at this stage')
+    command_p.add_argument('-y', '--sync', default=False, action='store_true', help='Sync first')
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
-
 
     # Schema Command
     #
     command_p = sub_cmd.add_parser('schema', help='Generate destination schemas from the source schemas')
     command_p.set_defaults(subcommand='schema')
 
+    command_p.add_argument('-s', '--source', action='append', nargs='?',
+                           help='Sources to build source schema for, instead of building all soruces')
+
+    command_p.add_argument('-S', '--source-clean', action='store_true',
+                           help='Build the source schema, cleaning the existing schema first ')
+
+    command_p.add_argument('-d', '--dest', action='store_true',
+                           help='Build the destination schema, merging with the existing schema. ')
+    command_p.add_argument('-D', '--dest-clean', action='store_true',
+                           help='Build the destination schema, cleaning the existing schema first ')
+
     command_p.add_argument('-b', '--build', action='store_true',
                            help='For the destination schema, use the build process to '
                                 'determine the schema, not the source tables ')
 
-    command_p.add_argument('-c', '--clean', default=False, action='store_true',
-                           help='Remove all columns from existing tables')
-
-    command_p.add_argument('-f', '--force', default=False, action='store_true',
-                           help='Re-run the schema, even if it already exists.')
     command_p.add_argument('-t', '--table', action='append',
-                           help='Only run the schema for the named tables. ')
-    command_p.add_argument('-s', '--source', action='append',
-                           help='Sources to ingest, instead of running all sources')
+                           help='Build only the destination schemfor these tables. ')
+
+    command_p.add_argument('-y', '--sync', default=False, action='store_true', help="Sync in first")
+
+    command_p.add_argument('-o', '--sync-out', default=False, action='store_true',
+                           help="Sync generated file out")
 
     command_p.add_argument('ref', nargs='?', type=str, help='Bundle reference')
 
@@ -361,8 +315,8 @@ def bundle_parser(cmd):
     command_p.add_argument('-y', '--sync', default=False, action='store_true',
                            help='Synchronize before and after')
 
-    command_p.add_argument('-q', '--quick', default=False, action='store_true',
-                           help="Just rebuild; don't clean beforehand")
+    command_p.add_argument('-c', '--clean', default=False, action='store_true',
+                           help='Equivalent to bambry clean -y ')
 
     command_p.add_argument('-s', '--source', action='append',
                            help='Sources to build, instead of running all sources')
@@ -377,11 +331,28 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('finalize', help='Finalize the bundle, preventing further changes')
     command_p.set_defaults(subcommand='finalize')
 
+    # Package Command
+    #
+    command_p = sub_cmd.add_parser('package', help='Package the bundle into a sqlite file.')
+    command_p.set_defaults(subcommand='package')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Rebuild if is already exists')
+    command_p.add_argument('-s', '--source', default=False, action='store_true',
+                           help='Only package source files')
+    command_p.add_argument('-i', '--incver', default=False, action='store_true',
+                           help='Increment the revision number')
+
     # Checkin Command
     #
     command_p = sub_cmd.add_parser('checkin', help='Commit the bundle to the remote store')
     command_p.set_defaults(subcommand='checkin')
-
+    command_p.add_argument('-n', '--no-partitions', default=False, action='store_true',
+                           help="Don't check in partitions")
+    command_p.add_argument('-r', '--remote', help='Specify remote, rather than using default for bundle')
+    command_p.add_argument('-s', '--source', default=False, action='store_true',
+                           help='Only package source files')
+    command_p.add_argument('-f', '--force', default=False, action='store_true',
+                           help='Overwrite already uploaded files')
     #
     # Update Command
     #
@@ -410,7 +381,7 @@ def bundle_parser(cmd):
     command_p.add_argument('-c', '--clean', default=False, action='store_true', help='Clean first')
     command_p.add_argument('-f', '--force', default=False, action='store_true',
                            help='Force running on a built or finalized bundle')
-    command_p.add_argument('-s', '--sync', default=False, action='store_true',
+    command_p.add_argument('-y', '--sync', default=False, action='store_true',
                            help='Syncrhonize before and after')
     command_p.add_argument('method', metavar='Method', type=str, help='Name of the method to run')
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
@@ -419,8 +390,10 @@ def bundle_parser(cmd):
     # Ampr
     #
 
-    command_p = sub_cmd.add_parser('view', help='View the datafile for a source or partition, using the ampr command')
+    command_p = sub_cmd.add_parser('view',
+                                   help='View the datafile for a source or partition, using the ampr command')
     command_p.set_defaults(subcommand='view')
+
     from ambry_sources.cli import make_arg_parser
     make_arg_parser(command_p)
 
@@ -430,8 +403,6 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('repopulate',
                                    help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
-
-
 
     command_p = sub_cmd.add_parser('import', help='Import a source bundle. ')
     command_p.set_defaults(subcommand='import')
@@ -448,7 +419,8 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('extract', help='Extract data from a bundle')
     command_p.set_defaults(subcommand='extract')
     command_p.add_argument('-l', '--limit', type=int, default=None, help='Limit on number of rows per file')
-    command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to extract')
+    command_p.add_argument('partition', nargs='?', metavar='partition', type=str,
+                           help='Partition to extract')
     command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
     # Colmap
@@ -471,29 +443,6 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='test')
     command_p.add_argument('tests', nargs='*', type=str, help='Tests to run')
 
-    # Docker
-    #
-
-    command_p = sub_cmd.add_parser('docker', help='Run bambry commands in a docker container')
-    command_p.set_defaults(subcommand='docker')
-    command_p.add_argument('-i', '--docker_id', default=False, action='store_true',
-                           help='Print the id of the running container')
-    command_p.add_argument('-c', '--container', help='Use a specific container id')
-    command_p.add_argument('-k', '--kill', default=False, action='store_true',
-                           help='Kill the running container')
-    command_p.add_argument('-n', '--docker_name', default=False, action='store_true',
-                           help='Print the name of the running container')
-    command_p.add_argument('-l', '--logs', default=False, action='store_true',
-                           help='Get the logs (stdout) from a runnings container')
-    command_p.add_argument('-s', '--shell', default=False, action='store_true',
-                           help='Run a shell on the currently running container')
-    command_p.add_argument('-S', '--stats', default=False, action='store_true',
-                           help='Report stats from the currently running container')
-    command_p.add_argument('-v', '--version', default=False, action='store_true',
-                           help='Select a docker version that is the same as this Ambry installation')
-
-    command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
-
     #
     # Log
     #
@@ -504,15 +453,146 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='log')
 
     command_p.add_argument('-e', '--exceptions', default=None, action='store_true',
-                       help='Print exceptions from the progress log')
+                           help='Print exceptions from the progress log')
     command_p.add_argument('-p', '--progress', default=None, action='store_true',
-                       help='Display progress logs')
+                           help='Display progress logs')
     command_p.add_argument('-s', '--stats', default=None, action='store_true',
-                       help='Display states and counts of partitions and sources')
+                           help='Display states and counts of partitions and sources')
     command_p.add_argument('-a', '--all', default=None, action='store_true',
                            help='Display all records')
 
+    #
+    # Web UI
+    #
+    command_p = sub_cmd.add_parser('ui',
+                                   help='If the ambry-ui package is installed, start the web user interface')
+    command_p.set_defaults(subcommand='ui')
+    command_p.add_argument('-p', '--port', help="Server port", default=8080)
 
+    #
+    # Jupyter notebook
+    #
+    command_p = sub_cmd.add_parser('notebook', help='If the ambry-ui package is installed, run Jupyter notebook on the bundle')
+    command_p.set_defaults(subcommand='notebook')
+
+    # Copy
+
+    command_p = sub_cmd.add_parser('copy',
+                                   help='Copy partitions from another bundle into references in this one')
+    command_p.set_defaults(subcommand='copy')
+    command_p.add_argument('ref', help='Reference to an existing bundle')
+
+
+
+def run_command(args, rc):
+
+    from ..library import Library
+    from . import global_logger
+    from ambry.orm.exc import ConflictError
+    from ambry.dbexceptions import LoggedException
+    from ambry.etl.pipeline import PipelineError
+
+    if args.test_library:
+        rc.set_library_database('test')
+
+    l = Library(rc, echo=args.echo)
+
+    global global_library
+
+    global_library = l
+
+    l.logger = global_logger
+
+    l.sync_config()
+
+    if args.debug:
+        from ..util import debug
+        warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
+        debug.listen()
+
+    if args.processes:
+        args.multi = args.processes
+        l.processes = args.processes
+
+    if args.trace:
+        from ambry.util.debug import traceit
+        import sys
+        sys.settrace(traceit)
+
+    try:
+        globals()['bundle_' + args.subcommand](args, l, rc)
+    except (ConflictError, NotFoundError, PipelineError) as e:
+        if args.exceptions:
+            raise
+        fatal(str(e))
+    except LoggedException as e:
+        if args.exceptions:
+            raise
+        exc = e.exc
+        b = e.bundle
+        b.fatal(str(e.message))
+
+def get_bundle_ref(args, l, use_history=False):
+    """ Use a variety of methods to determine which bundle to use
+
+    :param args:
+    :return:
+    """
+
+    if not use_history:
+
+        if args.id:
+            return (args.id, '-i argument')
+
+        if hasattr(args, 'bundle_ref') and args.bundle_ref:
+            return (args.bundle_ref, 'bundle_ref argument')
+
+
+        if 'AMBRY_BUNDLE' in os.environ:
+            return (os.environ['AMBRY_BUNDLE'], 'environment')
+
+        cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
+
+        if os.path.exists(cwd_bundle):
+
+            with open(cwd_bundle) as f:
+                config = yaml.load(f)
+                try:
+                    return (config['names']['vid'], 'directory')
+                except KeyError:
+                    pass
+
+    history = l.edit_history()
+
+    if history:
+        return (history[0].d_vid, 'history')
+
+    return None, None
+
+def using_bundle(args, l, print_loc=True, use_history=False):
+
+    ref, frm = get_bundle_ref(args, l, use_history=use_history)
+
+    if not ref:
+        fatal("Didn't get a bundle ref from the -i option, history, environment or argument")
+
+    if print_loc:
+        prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
+
+    b = l.bundle(ref, True)
+
+    b.multi = args.multi
+    b.capture_exceptions = not args.exceptions
+
+    if hasattr(args, 'debug') and args.debug:
+        warn('Bundle debug mode. Send USR2 signal (kill -USR2 ) to displaya stack trace')
+        l.init_debug()
+
+    if hasattr(args, 'limited_run') and args.limited_run:
+        b.limited_run = True
+    if print_loc:  # Try to only do this once
+        b.log_to_file('==============================')
+    return b
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
@@ -581,8 +661,14 @@ def bundle_info(args, l, rc):
     inf(0, 'VID', b.identity.vid)
     inf(0, 'VName', b.identity.vname)
 
-    inf(1, 'Build State', b.buildstate.state.current)
-    inf(1, 'Build Time', b.buildstate.build_duration_pretty)
+
+    inf(1, 'Dataset State', b.dstate)
+    inf(1, 'Build State', (b.buildstate.state.current if b.buildstate.state.current else '') +
+        (', '+str(b.buildstate.build_duration_pretty) if b.buildstate.build_duration_pretty else ''))
+
+    if 'remote_name' in b.dataset.data:
+        inf(1, 'Remote Url', b.dataset.data.get('remote_url'))
+
     try:
         inf(1, 'Geo cov', str(list(b.metadata.coverage.geo)))
         inf(1, 'Grain cov', str(list(b.metadata.coverage.grain)))
@@ -596,6 +682,8 @@ def bundle_info(args, l, rc):
 
     inf(0, 'Build  FS', str(b.build_fs))
     inf(0, 'Source FS', str(b.source_fs))
+    if b.dataset.upstream:
+        inf(0, 'Upstream', str(b.dataset.upstream))
 
     print(tabulate(join(info[0]), tablefmt='plain'))
 
@@ -662,9 +750,8 @@ def bundle_info(args, l, rc):
 
         rows = []
         for p in (b.dataset.query(Partition).filter(Partition.d_vid == b.identity.vid)
-                          .options(lazyload('*'), joinedload(Partition.table))
+                           .options(lazyload('*'), joinedload(Partition.table))
                   ).all():
-
 
             rows.append([p.vid, p.vname, p.table.name,  p.count,
                          p.identity.time, p.identity.space, p.identity.grain,
@@ -677,33 +764,87 @@ def bundle_info(args, l, rc):
         if rows:
             print(tabulate(rows[1:], headers=rows[0]))
 
-
 def check_built(b):
     """Exit if the bundle is built or finalized"""
-    if b.is_built or b.is_finalized:
+    if b.is_finalized:
         fatal("Can't perform operation; state = '{}'. "
-              "Call `bambry clean` explicitly or build with -f option".format(b.state))
+              "Call `bambry clean -f` explicitly or build with -f option".format(b.state))
 
+def bundle_package(args, l, rc):
+    b = using_bundle(args, l)
+    prt('Packaging bundle into sqlite file')
+    package = b.package(rebuild=args.force, source_only=args.source, incver=args.incver)
+    prt('Package writen to: {} '.format(package.path))
 
 def bundle_duplicate(args, l, rc):
 
-    b = using_bundle(args, l)
+    orig_b = using_bundle(args, l)
 
-    if not b.is_finalized:
-        fatal("Can't increment a bundle unless it is finalized")
+    prt('Building bundle package')
+    package = orig_b.package(rebuild=True, source_only=True, incver=True)
 
-    nb = l.duplicate(b)
+    prt('Wrote package to {}'.format(package.path))
+    b = l.checkin_bundle(package.path)
+    prt('Checked in: {}'.format(b.identity.fqname))
 
-    nb.set_last_access(Bundle.STATES.NEW)
+    if args.new_source_dir:
+        b.clear_file_systems()
+    else:
+        b.set_file_system(source_url=orig_b.source_fs_url)
 
-    prt('New Bundle: {} '.format(nb.identity.vname))
+    b.sync_out(force=True)
 
+    b.commit()
+
+def bundle_variant(args, l, rc):
+    """Create a new bundle as a variant of an existing bundle"""
+
+    from ambry.orm.exc import ConflictError
+
+    ob = l.bundle(args.ref)
+
+    d = dict(
+        dataset=args.dataset or ob.identity.dataset,
+        revision=args.revision,
+        source=args.source or ob.identity.source,
+        bspace=args.space or ob.identity.bspace,
+        subset=args.subset or ob.identity.subset,
+        btime=args.time or ob.identity.btime,
+        variation=args.variation or ob.identity.variation)
+
+    try:
+        ambry_account = rc.accounts.get('ambry', {})
+    except:
+        ambry_account = None
+
+    if not ambry_account:
+        fatal("Failed to get an accounts.ambry entry from the configuration. ")
+
+    if not ambry_account.get('name') or not ambry_account.get('email'):
+        fatal('Must set accounts.ambry.email and accounts.ambry.name n account config file')
+
+    try:
+        b = l.new_bundle(assignment_class=args.key, **d)
+        b.metadata.contacts.wrangler.name = ambry_account.get('name')
+        b.metadata.contacts.wrangler.email = ambry_account.get('email')
+        b.commit()
+
+    except ConflictError:
+        fatal("Can't create dataset; one with a conflicting name already exists")
+
+    # Now, need to copy over all of the partitions into the new bundle.
+    for p in ob.partitions:
+        ds = b.dataset.new_source(p.name, ref=p.name, reftype='partition')
+        print ds
+
+    b.build_source_files.sources.objects_to_record()
+
+    b.commit()
 
 def bundle_finalize(args, l, rc):
     b = using_bundle(args, l)
     b.finalize()
     b.set_last_access(Bundle.STATES.FINALIZED)
-
 
 def bundle_clean(args, l, rc):
 
@@ -754,34 +895,34 @@ def bundle_clean(args, l, rc):
 
     b.commit()
 
-
-def bundle_download(args, l, rc):
-    b = using_bundle(args, l).cast_to__subclass()
-    b.download()
-    b.set_last_access(Bundle.STATES.DOWNLOADED)
-
-
 def bundle_sync(args, l, rc):
 
     b = using_bundle(args, l)
 
-    sync_in = getattr(args, 'in') or not any((getattr(args, 'in'), args.code,  args.out))
+    sync_in = getattr(args, 'in') or not any((getattr(args, 'in'), args.code,  args.out, args.files, args.records))
 
     if sync_in:
-        prt('Sync in')
         b.sync_in()
 
     if args.code:
         synced = b.sync_code()
         prt('Synced {} files'.format(synced))
 
+    if args.objects:
+        b.sync_objects_out()
+
     if args.out:
-        prt('Sync out')
-        b.sync_out()
+        b.sync_out(file_name=args.file_name, force=args.force)
+
+    if args.files:
+        b.sync_in_files()
+
+
+    if args.records:
+        b.sync_in_records()
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
-
 
 def bundle_ingest(args, l, rc):
 
@@ -794,58 +935,109 @@ def bundle_ingest(args, l, rc):
     if not args.force and not args.table and not args.source:
         check_built(b)
 
-    b.sync_code()
+    if b.sync_code() > 0:
+        # If the bundle.py file changed, need to reload it
+        b = using_bundle(args, l).cast_to_subclass()
 
     if b.sync_sources() > 0:
-        b.log("Source file changed, automatically cleaning")
+        b.log("Source file changed, automatically cleaning ingested files")
         args.clean = True
 
     if args.clean:
         b.clean_ingested()
 
-    if args.purge_tables:
-        b.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
-        b.dataset.source_tables[:] = []
-        b.commit()
+    b.ingest(tables=args.table, sources=args.source, force=args.force, load_meta=args.load_meta)
 
-    b.ingest(tables=args.table, sources=args.source, force=args.force)
+    b.build_source_files.sources.objects_to_record()
 
-    b.sync_out()
+    b.commit()
 
     b.set_last_access(Bundle.STATES.INGESTED)
 
-
 def bundle_schema(args, l, rc):
+    from ambry.orm.file import File
+
+    # The -s/--source option can take zer or more parmas.
+    sources = []
+    if isinstance(args.source, list):
+        for s in args.source:
+            if s:
+                sources.append(s)
+
+        args.source = True
+    else:
+        args.source = False
 
     b = using_bundle(args, l).cast_to_subclass()
     b.set_last_access(Bundle.STATES.SYNCED)
     b.clean_progress()
     b.commit()
 
-    b.sync_code()
+    if args.sync:
+        b.sync_code()
 
-    b.ingest(sources=args.source, tables=args.table, force=args.force)
+    if args.source_clean:
+        b.build_source_files.file(File.BSFILE.SOURCESCHEMA).remove()
+        b.dataset.source_tables[:] = []
+        b.log("Cleaned source schema")
+        b.commit()
 
-    b.schema(sources=args.source, tables=args.table, clean=args.clean, use_pipeline=args.build)
+    if args.dest_clean:
+        b.build_source_files.file(File.BSFILE.SCHEMA).remove()
+        b.clean_tables()
+        b.commit()
+        b.log("Cleaned destination schema")
+        b.commit()
+
+    if args.source or args.source_clean:
+        b.source_schema(sources=sources, tables=args.table)
+        b.build_source_files.sourceschema.objects_to_record()
+        b.log("Created source schema")
+
+    if args.dest or args.dest_clean:
+        b.schema(tables=args.table, clean=args.source_clean, use_pipeline=args.build)
+        b.build_source_files.schema.objects_to_record()
+        b.log("Created destination schema")
+
+    if (args.source or args.source_clean) and args.sync_out:
+        bsf = b.build_source_files.file(File.BSFILE.SOURCESCHEMA)
+        bsf.record_to_fs()
+
+    if (args.dest or args.dest_clean) and args.sync_out:
+        bsf = b.build_source_files.file(File.BSFILE.SCHEMA)
+        bsf.objects_to_record()
+        bsf.record_to_fs()
 
     b.set_last_access(Bundle.STATES.SCHEMA)
-
-    b.sync_out()
-
-    prt("Created destination schema")
-
+    b.commit()
 
 def bundle_build(args, l, rc):
 
     b = using_bundle(args, l)
+
     b.set_last_access(Bundle.STATES.SYNCED)
     b.clean_progress()
     b.commit()
 
-    args.force = True if args.quick else args.force
+    if args.clean:
+        from argparse import Namespace
+        # Args to duplicate `bambry clean -y`
+        clean_ns = Namespace(command='bundle', subcommand='clean', id=None, exceptions = False,
+                             all=False, build=False, build_state=False,  config=None,  files=False,
+                             force=False, ingested=False, limited_run=False, multi=False,
+                             partitions=False, ref=None, single_config=False,
+                             source=False, sync=True, tables=False)
+
+        bundle_clean(clean_ns, l, rc)
+
 
     if not args.force and not args.table and not args.source:
         check_built(b)
+
+
+    if b.dstate == b.STATES.SOURCE:
+        prt("Source bundle; sync in records")
+        b.sync_in_records()
 
     if args.sync:
         b.sync_in()
@@ -883,14 +1075,12 @@ def bundle_run(args, l, rc):
 
     b = b.cast_to_subclass()
 
-    b.run(sources=args.source, tables=args.table, stage=args.stage, force=args.force)
+    b.run_stages()
 
     b.set_last_access(Bundle.STATES.BUILT)
 
-
 def bundle_install(args, l, rc):
     raise NotImplementedError()
-
 
 def bundle_exec(args, l, rc):
 
@@ -932,21 +1122,21 @@ def bundle_exec(args, l, rc):
 
     prt('RETURN: ', r)
 
-
 def bundle_checkin(args, l, rc):
 
     ref, frm = get_bundle_ref(args, l)
 
     b = l.bundle(ref, True)
 
-    remote_name = l.resolve_remote(b)
-    remote = l.remote(remote_name)
-
-    remote, path = b.checkin()
+    remote_instance, path = b.checkin(remote_name=args.remote,
+                                      no_partitions=args.no_partitions,
+                                      source_only=args.source,
+                                      force=args.force)
 
     if path:
-        b.log("Checked in to remote '{}' path '{}'".format(remote, path))
-
+        b.log("Checked in to remote '{}' path '{}'".format(remote_instance, b.identity.fqname))
+    else:
+        b.error("Failed to get a path while checking in {}".format(b.identity.fqname))
 
 def bundle_set(args, l, rc):
 
@@ -959,6 +1149,9 @@ def bundle_set(args, l, rc):
         b.state = args.state
         b.commit()
 
+    if args.source_dir:
+        from os import getcwd
+        b.set_file_system(source_url=getcwd())
 
 def bundle_dump(args, l, rc):
     import datetime
@@ -968,7 +1161,9 @@ def bundle_dump(args, l, rc):
 
     b = l.bundle(ref, True)
 
-    prt('Dumping {} for {}\n'.format(args.table, b.identity.fqname))
+    if not args.table == 'files':
+        # Suppress on dumping files so the files can be cat'ed to other tools.
+        prt('Dumping {} for {}\n'.format(args.table, b.identity.fqname))
 
     def trunc(v, l):
         return v[:l] + (v[l:] and '..')
@@ -992,38 +1187,72 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'files':
 
-        records = []
-        headers = 'Path Major Minor State Size Modified'.split()
-        for row in b.dataset.files:
-            records.append((
-                row.path,
-                row.major_type,
-                row.minor_type,
-                row.state,
-                row.size,
-                datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else ''
+        if args.ref:
+            records = None
+            try:
+                f = b.build_source_files.file_by_path(args.ref)
+                if args.ref.endswith('.yaml'):
+                    import yaml
+                    prt_no_format(yaml.safe_dump(f.unpacked_contents, default_flow_style=False, indent=4,
+                                                 encoding='utf-8', width=79))
+                elif args.ref.endswith('.ipynb') or args.ref.endswith('.json'):
+                    import json
+                    prt_no_format(json.dumps(f.unpacked_contents, indent=4))
+                else:
+                    prt_no_format(f.unpacked_contents)
+            except (NotFoundError, AttributeError):
+                fatal("Did not find file for path '{}' ".format(args.ref))
+
+
+
+        else:
+            records = []
+            headers = 'Path Major Minor State Size Modified Synced SyncDir'.split()
+
+            for f in b.build_source_files:
+                row = f.record
+                records.append((
+                    row.path,
+                    row.major_type,
+                    row.minor_type,
+                    row.state,
+                    row.size,
+                    datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else '',
+                    datetime.datetime.fromtimestamp(float(row.synced_fs)).isoformat() if row.synced_fs else '',
+                    f.sync_dir()
+                    )
                 )
-            )
-        records = sorted(records, key=lambda row: (row[0], row[1], row[2]))
+            records = sorted(records, key=lambda row: (row[0], row[1], row[2]))
 
     elif args.table == 'partitions':
 
-        records = []
-        headers = 'Vid Name State Type'.split()
-        for row in b.dataset.partitions:
-            records.append((
-                row.vid,
-                row.name,
-                row.state,
-                row.type
-            )
-            )
-        records = sorted(records, key=lambda row: (row[0]))
+        if args.ref:
+            p = b.partition(args.ref)
+
+            headers = ['property','value']
+            records = sorted(p.dict.items())
+
+        else:
+
+            records = []
+            headers = 'Vid Name State Type EPSG'.split()
+            for row in b.dataset.partitions:
+                records.append((
+                    row.vid,
+                    row.name,
+                    row.state,
+                    row.type,
+                    row.epsg
+                ))
+            records = sorted(records, key=lambda row: (row[0]))
 
     elif args.table == 'datasources':
 
         records = []
-        for i, row in enumerate(b.dataset.sources):
+
+
+        for i, row in enumerate(b.sources):
+
             if not records:
                 records.append(list(row.dict.keys()))
 
@@ -1040,27 +1269,10 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'sourcetables':
 
-        records = []
-        for t in b.dataset.source_tables:
-            for c in t.columns:
-                if not records:
-                    records.append(['vid'] + list(c.row.keys()))
+        if args.ref:
+            print('---{}'.format(args.ref))
 
-                records.append([c.vid] + list(c.row.values()))
-
-        # Transpose, remove empty columns, transpose back
-        records = drop_empty(records)
-
-        if records:
-            headers, records = records[0], records[1:]
-        else:
-            headers = []
-
-    elif args.table == 'columns':
-
-        for t in b.dataset.tables:
-
-            print('---{}'.format(t.name))
+            t = b.source_table(args.ref)
 
             def record_gen():
                 for i, row in enumerate([c.row for c in t.columns]):
@@ -1072,41 +1284,72 @@ def bundle_dump(args, l, rc):
 
             records = drop_empty(records)
 
-            print(tabulate(records[1:], headers=records[0]))
 
-        return  # Can't follow the normal process b/c we have to run each table seperately.
 
-    elif args.table == 'tables':
+        else:
 
-        records = []
+            records = [['vid','name']]
 
-        for table in b.dataset.tables:
-            row = table.row
-            if not records:
-                records.append(row.keys())
-            records.append(row.values())
+            for table in b.dataset.source_tables:
+                records.append([table.vid, table.name])
 
-        records = drop_empty(records)
+            records = drop_empty(records)
 
         if records:
             headers, records = records[0], records[1:]
         else:
             headers, records = [], []
 
-        records = sorted(records, key=lambda row: (row[0]))
+    elif args.table == 'tables':
+
+        if args.ref:
+            print('---{}'.format(args.ref))
+
+            t = b.table(args.ref)
+
+            def record_gen():
+                for i, row in enumerate([c.row for c in t.columns]):
+                    if i == 0:
+                        yield row.keys()
+
+                    yield row.values()
+
+            records = list(record_gen())
+
+            records = drop_empty(records)
+
+            if records:
+                headers, records = records[0], records[1:]
+            else:
+                headers, records = [], []
+
+        else:
+
+            records = []
+
+            for table in b.dataset.tables:
+                row = table.row
+                if not records:
+                    records.append(row.keys())
+                records.append(row.values())
+
+            records = drop_empty(records)
+
+            if records:
+                headers, records = records[0], records[1:]
+            else:
+                headers, records = [], []
+
+            records = sorted(records, key=lambda row: (row[0]))
 
     elif args.table == 'pipes':
         terms = args.ref
 
         b.import_lib()
 
-        if len(terms) == 2:
-            phase, source = terms
-        else:
-            phase = terms
-            source = None
 
-        pl = b.pipeline(phase, source)
+
+        pl = b.pipeline(terms)
 
         print(pl)
 
@@ -1122,7 +1365,7 @@ def bundle_dump(args, l, rc):
         records = []
 
         for s in b.sources:
-            if s.is_downloadable:
+            if s.datafile.exists:
                 df = s.datafile
 
                 try:
@@ -1152,10 +1395,8 @@ def bundle_dump(args, l, rc):
     if records:
         print(tabulate(records, headers=headers))
 
-
 def bundle_new(args, l, rc):
-    """Clone one or more registered source packages ( via sync ) into the
-    source directory."""
+    """Create a new bundle"""
 
     from ambry.orm.exc import ConflictError
 
@@ -1188,15 +1429,20 @@ def bundle_new(args, l, rc):
 
     try:
         b = l.new_bundle(assignment_class=args.key, **d)
-        b.metadata.contacts.wrangler.email = 'non@eample.com'
+
+        if ambry_account:
+            b.metadata.contacts.wrangler = ambry_account
+
+        b.build_source_files.bundle_meta.objects_to_record()
+        b.commit()
 
     except ConflictError:
         fatal("Can't create dataset; one with a conflicting name already exists")
 
     print(b.identity.fqname)
 
-
 def bundle_import(args, l, rc):
+    from ambry.identity import Identity
 
     if args.source:
         source_dir = args.source
@@ -1205,29 +1451,36 @@ def bundle_import(args, l, rc):
 
     source_dir = os.path.abspath(source_dir)
 
-    fs = fsopendir(source_dir)
+    if source_dir.endswith('.db'):  # it's a database package
+        prt('Loading bundle package')
+        b = l.checkin_bundle(source_dir)
 
-    config = yaml.load(fs.getcontents('bundle.yaml'))
+    else:  # It's a source directory
 
-    if not config:
-        fatal("Failed to get a valid bundle configuration from '{}'".format(source_dir))
+        fs = fsopendir(source_dir)
 
-    bid = config['identity']['id']
+        config = yaml.load(fs.getcontents('bundle.yaml'))
 
-    try:
-        b = l.bundle(bid, True)
-    except NotFoundError:
-        b = l.new_from_bundle_config(config)
+        if not config:
+            fatal("Failed to get a valid bundle configuration from '{}'".format(source_dir))
 
-    b.set_file_system(source_url=source_dir)
+        # Need to construct an Identity b/c the config data only has the id, not the vid.
+        bid = Identity.from_dict(config['identity']).vid
 
-    b.sync()
+        try:
+            b = l.bundle(bid, True)
+
+        except NotFoundError:
+            b = l.new_from_bundle_config(config)
+
+        b.set_file_system(source_url=source_dir)
+
+        b.sync_in(force=True)
 
     prt('Loaded bundle: {}'.format(b.identity.fqname))
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
-
 
 def bundle_export(args, l, rc):
 
@@ -1244,25 +1497,14 @@ def bundle_export(args, l, rc):
 
         b.set_file_system(source_url=source_dir)
 
-    b.sync(force='rtf', defaults=args.defaults)
+    b.build_source_files.set_defaults()
 
-    b.sync_out()
+    b.sync_out(force=True)
 
     prt('Exported bundle: {}'.format(b.source_fs))
 
     b.set_last_access(Bundle.STATES.SYNCED)
     b.commit()
-
-file_const_map = dict(
-    b=File.BSFILE.BUILD,
-    d=File.BSFILE.DOC,
-    m=File.BSFILE.META,
-    s=File.BSFILE.SCHEMA,
-    S=File.BSFILE.SOURCESCHEMA,
-    r=File.BSFILE.SOURCES)
-
-
-
 
 def bundle_extract(args, l, rc):
     import unicodecsv as csv
@@ -1280,25 +1522,29 @@ def bundle_extract(args, l, rc):
             continue
 
         b.logger.info('Extracting: {} '.format(p.name))
-        with bfs.open(p.name + '.csv', 'wb') as f, p.datafile.reader as r:
-            w = csv.writer(f)
-            w.writerow(r.headers)
-            if limit:
-                from itertools import islice
-                w.writerows(islice(r.rows, None, limit))
-            else:
-                w.writerows(r.rows)
+        try:
+            with bfs.open(p.name + '.csv', 'wb') as f, p.datafile.reader as r:
+                w = csv.writer(f)
+                w.writerow(r.headers)
+                if limit:
+                    from itertools import islice
+                    w.writerows(islice(r.rows, None, limit))
+                else:
+                    w.writerows(r.rows)
+        except Exception as e:
+            b.error('Failed to extract {}: {}'.format(p.name, e))
 
     b.logger.info('Extracted to: {}'.format(bfs.getsyspath('/')))
 
-
 def bundle_view(args, l, rc):
     from ambry_sources.cli import main
+    from fs.errors import ResourceNotFoundError
 
     b = using_bundle(args, l)
 
     arg = args.path[0]
     df = None
+
     if os.path.exists(arg):
         path = arg
 
@@ -1310,27 +1556,35 @@ def bundle_view(args, l, rc):
             pass
 
     # Maybe it is a partition
-    if not df:
+    if not df or not df.exists:
         try:
+            # Try to get the partition from the bundle.
             p = b.partition(arg)
             df = p.datafile
+
         except:
             pass
 
-    if not df:
+    if not df or not df.exists:
         try:
+            # Nope, try to get it from the library
             p = l.partition(arg)
+            p.localize()
             df = p.datafile
         except:
             pass
 
     if not df:
         fatal("Didn't get a path to an MPR file, nor a reference to a soruce or partition")
+    else:
+        pass
 
     args.path = [df]
 
-    main(args)
-
+    try:
+        main(args)
+    except ResourceNotFoundError as e:
+        raise NotFoundError(str(e))
 
 def bundle_colmap(args, l, rc):
     """
@@ -1460,195 +1714,40 @@ def bundle_colmap(args, l, rc):
     else:
         fatal('No option given')
 
-
 def bundle_test(args, l, rc):
     b = using_bundle(args, l).cast_to_subclass()
 
     b.run_tests(args.tests)
 
-
-def bundle_docker(args, l, rc):
-    import os
-    import sys
-    from docker.errors import NotFound, NullResource
-
-    username, dsn, volumes_c, db_c, envs = get_docker_links(rc)
-
-    b = using_bundle(args, l, print_loc=False)
-    client = docker_client()
-
-    if args.container:
-        last_container = args.container
-    else:
-        try:
-            last_container = b.buildstate.docker.last_container
-        except KeyError:
-            last_container = None
-
-    try:
-        inspect = client.inspect_container(last_container)
-
-    except NotFound:
-        # OK; the last_container is dead
-        b.buildstate.docker.last_container = None
-        b.buildstate.commit()
-        inspect  = None
-    except NullResource:
-        inspect = None
-        pass  # OK; no container specified in the last_container value
-
-    #
-    # Command args
-    #
-
-    bambry_cmd = ' '.join(args.args).strip()
-
-    def run_container(bambry_cmd=None):
-        """Run a new docker container"""
-
-
-        if bambry_cmd:
-
-            if last_container:
-                fatal("Bundle already has a running container: {}\n{}".format(inspect['Name'], inspect['Id']))
-
-            bambry_cmd_args = []
-
-            if args.limited_run:
-                bambry_cmd_args.append('-L')
-
-            if args.multi:
-                bambry_cmd_args.append('-m')
-
-            if args.processes:
-                bambry_cmd_args.append('-p' + str(args.processes))
-
-            envs['AMBRY_COMMAND'] = 'bambry -i {} {} {}'.format(
-                                    b.identity.vid, ' '.join(bambry_cmd_args), bambry_cmd)
-
-            detach = True
-        else:
-            detach = False
-
-        if args.limited_run:
-            envs['AMBRY_LIMITED_RUN'] = '1'
-
-        try:
-            image_tag = rc.docker.ambry_image
-        except KeyError:
-            image_tag = 'civicknowledge/ambry'
-
-        if args.version:
-            import ambry._meta
-            image = '{}:{}'.format(image_tag,ambry._meta.__version__)
-        else:
-            image = image_tag
-
-        try:
-            volumes_from = [rc.docker.volumes_from]
-        except KeyError:
-            volumes_from = []
-
-        volumes_from.append(volumes_c)
-
-        host_config = client.create_host_config(
-            volumes_from=volumes_from,
-            links={
-                db_c:'db'
-            }
-        )
-
-        kwargs = dict(
-            image=image,
-            detach=detach,
-            tty=not detach,
-            stdin_open=not detach,
-            environment=envs,
-            host_config=host_config
-        )
-
-        prt('Starting container with image {} '.format(image))
-
-        r = client.create_container(**kwargs)
-
-        client.start(r['Id'])
-
-        return r['Id']
-
-    if args.kill:
-
-        if last_container:
-
-            if inspect and inspect['State']['Running']:
-                client.kill(last_container)
-
-            client.remove_container(last_container)
-
-            prt('Killed {}', last_container)
-
-            b.buildstate.docker.last_container = None
-            b.buildstate.commit()
-            last_container = None
-        else:
-            warn('No container to kill')
-
-    if bambry_cmd:
-        # If there is command, run the container first so the subsequent arguments can operate on it
-        last_container = run_container(bambry_cmd)
-        b.buildstate.docker.last_container = last_container
-        b.buildstate.commit()
-
-    if args.docker_id:
-        if last_container:
-            prt(last_container)
-
-        return
-
-    elif args.docker_name:
-
-        if last_container:
-            prt(inspect['Name'])
-
-        return
-
-    elif args.logs:
-
-        if last_container:
-            for line in client.logs(last_container, stream=True):
-                print line,
-        else:
-            fatal('No running container')
-
-    elif args.stats:
-
-        for s in client.stats(last_container, decode=True):
-
-            sys.stderr.write("\x1b[2J\x1b[H")
-            prt_no_format(s.keys())
-            prt_no_format(s['memory_stats'])
-            prt_no_format(s['cpu_stats'])
-
-    elif args.shell:
-        # Run a shell on a container
-        # This is using execlp rather than the docker API b/c we want to entirely replace the
-        # current process to get a good tty.
-        os.execlp('docker', 'docker', 'exec', '-t','-i', last_container, '/bin/bash')
-
-    elif not bambry_cmd and not args.kill:
-        # Run a container and then attach to it.
-        cid = run_container()
-
-        os.execlp('docker', 'docker', 'attach', cid)
-
-
 def bundle_log(args, l, rc):
     b = using_bundle(args, l)
     from ambry.util import drop_empty
-    from itertools import groupby
-    from collections import defaultdict
-    from ambry.orm import Partition
-    from tabulate import tabulate
 
+    from tabulate import tabulate
+    from ambry.orm import Process
+    import time
+    from collections import OrderedDict
+
+    def append(pr, edit=None):
+
+        if not isinstance(pr, dict):
+            pr = pr.dict
+
+        d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.items() if k in
+                        ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
+                         'phase', 'stage', 'modified', 'item_count',
+                         'message'])
+
+        d['modified'] = round(float(d['modified']) - time.time(), 1)
+
+        if edit:
+            for k, v in edit.items():
+                d[k] = v(d[k])
+
+        if not records:
+            records.append(d.keys())
+
+        records.append(d.values())
 
     if args.exceptions:
         print '=== EXCEPTIONS ===='
@@ -1658,91 +1757,105 @@ def bundle_log(args, l, rc):
 
     elif args.progress:
         print '=== PROGRESS ===='
-        from ambry.orm import Process
-        import time
-        from collections import OrderedDict
-        from sqlalchemy.sql import and_
 
+        records = b.progress.bundle_process_logs(show_all=args.all)
 
+        if records:
+            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]), records[0]))
+
+    elif args.all:
         records = []
 
-        def append(pr, edit=None):
-
-            if not isinstance(pr, dict):
-                pr = pr.dict
-
-            d = OrderedDict((k, str(v).strip()[:60]) for k, v in pr.items() if k in
-                            ['id', 'group', 'state', 'd_vid', 's_vid', 'hostname', 'pid',
-                             'phase', 'stage', 'modified', 'item_count',
-                             'message'])
-
-            d['modified'] = round(float(d['modified']) - time.time(),1)
-
-
-            if edit:
-                for k, v in edit.items():
-                    d[k] = v(d[k])
-
-            if not records:
-                records.append(d.keys())
-
-            records.append(d.values())
-
-        q = b.progress.query.order_by(Process.modified.desc())
+        q = b.progress.query.order_by(Process.id.asc())
 
         for pr in q.all():
-            # Don't show reports that are done or older than 2 minutes.
-            if args.all or (pr.state != 'done' and pr.modified > time.time() - 120):
-                append(pr)
-
-        # Add old running rows, which may indicate a dead process.
-        q = (b.progress.query.filter(Process.s_vid != None)
-             .filter(and_(Process.state == 'running',Process.modified < time.time() - 60)))
-
-        for pr in q.all():
-            append(pr, edit={'modified': lambda e: (str(e)+' (dead?)') })
+            append(pr)
 
         records = drop_empty(records)
 
         if records:
-            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]),records[0]))
+            prt_no_format(tabulate(sorted(records[1:], key=lambda x: x[5]), records[0]))
 
     if args.stats:
         print '=== STATS ===='
-        ds = b.dataset
-        key_f = key=lambda e: e.state
-        states = set()
-        d = defaultdict(lambda: defaultdict(int))
 
-        for state, sources in groupby(sorted(ds.sources, key=key_f), key_f):
-            d['Sources'][state] = sum(1 for _ in sources) or None
-            states.add(state)
-
-        key_f = key = lambda e: (e.state, e.type)
-
-        for (state, type), partitions in groupby(sorted(ds.partitions, key=key_f), key_f):
-            states.add(state)
-            if type == Partition.TYPE.UNION:
-                d['Partitions'][state] = sum(1 for _ in partitions) or None
-            else:
-                d['Segments'][state] = sum(1 for _ in partitions) or None
-
-        headers = sorted(states)
-        rows = []
-
-        for r in ('Sources','Partitions','Segments'):
-            row = [r]
-            for state in headers:
-                row.append(d[r].get(state,''))
-            rows.append(row)
+        headers, rows = b.progress.stats()
 
         if rows:
             prt_no_format(tabulate(rows, headers))
 
+def bundle_notebook(args, l, rc):
 
+    import webbrowser
 
+    b = using_bundle(args, l)
 
+    try:
+        import ambry_ui
+    except ImportError:
+        fatal("ambry-ui package note installed, or not importable")
 
+    try:
+        from notebook.notebookapp import NotebookApp
+    except ImportError:
+        fatal('Jupyter notebook not installed')
 
+    import sys
 
+    sys.argv = ['ambry']
+    app = NotebookApp.instance()
+    app._library = l
+    app.contents_manager_class = 'ambry_ui.jupyter.AmbryContentsManager'
+    app.open_browser = False
+    app.initialize(None)
+
+    l.root.config.library.notebook.url = app.connection_url
+    l.commit()
+
+    webbrowser.open("{}tree/{}".format(app.connection_url,b.identity.cache_key))
+
+    app.start()
+
+def bundle_ui(args, l, rc):
+
+    from ambry_ui import app
+    import ambry_ui.views
+    import ambry_ui.jsonviews
+    import ambry_ui.api
+    import ambry_ui.user
+    import webbrowser
+    import socket
+
+    b = using_bundle(args, l)
+
+    try:
+        host = 'localhost'
+        app.config['SECRET_KEY'] = 'secret'  # To Ensure logins persist
+        app.config["WTF_CSRF_SECRET_KEY"] = 'secret'
+
+        webbrowser.open("http://{}:{}/bundles/{}".format(host, args.port, b.identity.vid))
+        l.root.config.library.ui.url = app.connection_url = "http://{}:{}".format(host, args.port)
+        l.commit()
+        app.run(host=host, port=int(args.port), debug=args.debug)
+    except socket.error as e:
+        warn("Failed to start ui: {}".format(e))
+
+def bundle_copy(args, l, rc):
+
+    b = using_bundle(args, l)
+
+    ref_b = l.bundle(args.ref)
+
+    for p in ref_b.partitions:
+
+        try:
+            s = b.source(p.identity.vid)
+            print s.name, s.ref
+        except NotFoundError:
+            b.log("Copy in as source: {}".format(p.identity.name))
+            b.dataset.new_source(name=p.identity.vid, reftype='partition', ref=text_type(p.identity.name))
+
+    b.build_source_files.sources.objects_to_record()
+
+    b.commit()
 

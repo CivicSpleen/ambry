@@ -1,0 +1,14 @@
+remotes:
+    remotes1:
+        url: s3://remotes1.library.example.com
+
+    remotes2:
+        url: s3://remotes2.library.example.com
+        access: AKIAIWFOOBARDEA37SYQ
+        secret: l7Ijwnl4+Fk7gk1s6qF6MvnMRm53XBQ1QBcLpLfA
+    remotes3:
+        url: s3://remotes3.library.example.com
+        access: AKIAIWFOOBARDEA37SYQ
+        secret: l7Ijwnl4+Fk7gk1s6qF6MvnMRm53XBQ1QBcLpLfA
+
+

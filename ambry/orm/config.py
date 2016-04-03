@@ -46,16 +46,21 @@ class Config(Base):
     parent = relationship('Config',  remote_side=[id])
     children = relationship('Config')
 
+    def incver(self):
+        """Increment all of the version numbers and return a new object"""
+        from . import incver
+        return incver(self, ['d_vid', 'id', 'parent_id'])
+
     @property
     def dict(self):
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     def __repr__(self):
-        return u('<config: {},{},{} = {}>').format(self.d_vid, self.group, self.key, self.value)
+        return u('<config: {} {},{},{} = {}>').format(self.id, self.d_vid, self.group, self.key, self.value)
 
     @property
     def dotted_key(self):
-        return "{}.{}.{}".format(self.type,self.group,self.key)
+        return '{}.{}.{}'.format(self.type, self.group, self.key)
 
     def update_sequence_id(self, session, dataset):
         assert dataset.vid == self.d_vid
@@ -71,7 +76,7 @@ class Config(Base):
         if not target.sequence_id:
             from ambry.orm.exc import DatabaseError
             assert bool(target.d_vid)
-            raise DatabaseError("Must set a sequence id before inserting")
+            raise DatabaseError('Must set a sequence id before inserting')
 
         if not target.id:
             target.id = str(GeneralNumber1('F', target.d_vid, target.sequence_id))
@@ -181,6 +186,10 @@ class ConfigGroupAccessor(object):
         for config in [config for config in self._dataset.configs if config.type == self._type_name]:
             self._dataset.configs.remove(config)
 
+    def delete_group(self, group):
+
+        ssq = self._dataset.session.query
+        ssq(Config).filter(Config.type == self._type_name).filter(Config.group == group).delete()
 
     def __iter__(self):
         for config in [config for config in self._dataset.configs if config.type == self._type_name]:
@@ -234,7 +243,7 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
 
         try:
             return pretty_time(int(built) - int(self.state.building))
-        except TypeError: # one of the values is  None or not a number
+        except TypeError:  # one of the values is  None or not a number
             return None
 
     @property
@@ -246,6 +255,7 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
         except TypeError:
             # build_done is null
             return None
+
     @property
     def new_datetime(self):
         """Return the time the bundle was created as a datetime object"""
@@ -265,5 +275,3 @@ class BuildConfigGroupAccessor(ConfigGroupAccessor):
             return datetime.fromtimestamp(self.state.lasttime)
         except TypeError:
             return None
-
-

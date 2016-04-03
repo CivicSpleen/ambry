@@ -20,21 +20,34 @@ class LibraryFilesystem(object):
 
         self._config = config
 
-    def _compose(self, name, args):
+    def _compose(self, name, args, mkdir=True):
         """Get a named filesystem entry, and extend it into a path with additional
         path arguments"""
+        from os.path import normpath
+        from ambry.dbexceptions import ConfigurationError
 
-        p = self._config.filesystem[name]
+        root = p = self._config.filesystem[name].format(root=self._root)
 
         if args:
-            p = join(p, *args)\
+            args = [e.strip() for e in args]
+            p = join(p, *args)
 
-        p = p.format(root=self._root)
-
-        if not isdir(p):
+        if not isdir(p) and mkdir:
             makedirs(p)
 
+        p = normpath(p)
+
+        if not p.startswith(root):
+            raise ConfigurationError("Path for name='{}', args={} resolved outside of define filesystem root"
+                                 .format(name, args))
+
         return p
+
+    def compose(self, name, *args):
+        """Compose, but don't create base directory"""
+
+        return self._compose(name, args, mkdir=False)
+
 
     @property
     def root(self):
@@ -62,6 +75,10 @@ class LibraryFilesystem(object):
         """For file-based search systems, like Whoosh"""
         return self._compose('search',args)
 
+    def git(self, *args):
+        """Git home directory, indicates that git is installed"""
+        return self._compose('git',args)
+
     @property
     def database_dsn(self):
         """Substitute the root dir into the database DSN, for Sqlite"""
@@ -71,37 +88,4 @@ class LibraryFilesystem(object):
 
         return self._config.library.database.format(root=self._root)
 
-    def s3(self, url, account_acessor):
-        from fs.s3fs import S3FS
-        from ambry.util import parse_url_to_dict
-        from ambry.dbexceptions import ConfigurationError
 
-        import ssl
-
-        _old_match_hostname = ssl.match_hostname
-
-        def _new_match_hostname(cert, hostname):
-            if hostname.endswith('.s3.amazonaws.com'):
-                pos = hostname.find('.s3.amazonaws.com')
-                hostname = hostname[:pos].replace('.', '') + hostname[pos:]
-            return _old_match_hostname(cert, hostname)
-
-        ssl.match_hostname = _new_match_hostname
-
-        pd = parse_url_to_dict(url)
-
-        account = account_acessor(pd['netloc'])
-
-        assert account['account_id'] == pd['netloc']
-
-        s3 = S3FS(
-            bucket=pd['netloc'],
-            prefix=pd['path'],
-            aws_access_key=account['access_key'],
-            aws_secret_key=account['secret'],
-
-        )
-
-        # ssl.match_hostname = _old_match_hostname
-
-        return s3

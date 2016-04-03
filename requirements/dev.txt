@@ -5,6 +5,6 @@
 coverage==3.7.1
 factory_boy
 contexttimer
-fudge
 requirements-parser
 mock
+ambry_client

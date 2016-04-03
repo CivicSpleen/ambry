@@ -5,7 +5,6 @@ of the bundles that have been installed into it.
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 import imp
-import logging
 import os
 import sys
 import tempfile
@@ -30,12 +29,14 @@ from ambry.library.search import Search
 from ambry.orm import Partition, File, Config, Table, Database, Dataset, Account
 from ambry.orm.exc import NotFoundError, ConflictError
 from ambry.run import get_runconfig
-from ambry.util import get_logger
+from ambry.util import get_logger, memoize
 
 from .filesystem import LibraryFilesystem
 
-logger = get_logger(__name__, level=logging.INFO, propagate=False)
-
+logger = get_logger(__name__)
+# debug logging
+import logging
+#logger = get_logger(__name__, level=logging.DEBUG)
 global_library = None
 
 
@@ -53,9 +54,29 @@ def new_library(config=None):
     return l
 
 
+class LibraryContext(object):
+    """A context object for creating a new library and closing it"""
+
+    def __init__(self, ctor_args):
+        self._ctor_args = ctor_args
+        self._library = None
+
+    def __enter__(self):
+
+        logger.debug("Entering library context id={}".format(id(self)))
+        self._library = Library(**self._ctor_args)
+        return self._library
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        logger.debug("Leaving library context id={}".format(id(self)))
+        if self._library:
+            self._library.commit()
+            self._library.close()
+
+
 class Library(object):
 
-    def __init__(self,  config=None, search=None, echo=None, read_only=False):
+    def __init__(self, config=None, search=None, echo=None, read_only=False):
         from sqlalchemy.exc import OperationalError
         from ambry.orm.exc import DatabaseMissingError
 
@@ -68,6 +89,8 @@ class Library(object):
 
         self.read_only = read_only  # allow optimizations that assume we aren't building bundles.
 
+        self._echo = echo
+
         self._fs = LibraryFilesystem(config)
 
         self._db = Database(self._fs.database_dsn, echo=echo)
@@ -79,6 +102,7 @@ class Library(object):
         try:
             self._db.open()
         except OperationalError as e:
+
             raise DatabaseMissingError("Failed to open database '{}': {} ".format(self._db.dsn, e))
 
         self.processes = None  # Number of multiprocessing proccors. Default to all of them
@@ -88,11 +112,34 @@ class Library(object):
         else:
             self._search = None
 
-    def sync_config(self):
+    @property
+    def ctor_args(self):
+        """Return arguments for constructing a copy"""
+
+        return dict(
+            config=self._config,
+            search=self._search,
+            echo=self._echo,
+            read_only=self.read_only
+        )
+
+    def clone(self):
+        """Create a deep copy of this library"""
+        return Library(**self.ctor_args)
+
+    @property
+    def context(self):
+        """Return a new LibraryContext, for use later. This will result in a new instance of the current library.
+        not on operations on the current library. The new context will open new connectinos on the database.
+        """
+
+        return LibraryContext(self.ctor_args)
+
+    def sync_config(self, force=False):
         """Sync the file config into the library proxy data in the root dataset """
         from ambry.library.config import LibraryConfigSyncProxy
         lcsp = LibraryConfigSyncProxy(self)
-        lcsp.sync()
+        lcsp.sync(force=force)
 
     def init_debug(self):
         """Initialize debugging features, such as a handler for USR2 to print a trace"""
@@ -128,6 +175,9 @@ class Library(object):
     def close(self):
         return self.database.close()
 
+    def exists(self):
+        return self.database.exists
+
     def create(self):
         from config import LibraryConfigSyncProxy
         self.database.create()
@@ -140,15 +190,26 @@ class Library(object):
         return self._db
 
     @property
+    def dsn(self):
+        return self._db.dsn
+
+    @property
     def filesystem(self):
         return self._fs
 
-    @property
-    def warehouse(self):
-        if not self._warehouse:
-            from ambry.library.warehouse import Warehouse
-            self._warehouse = Warehouse(self)
-        return self._warehouse
+    @memoize
+    def warehouse(self, dsn=None):
+
+        from ambry.library.warehouse import Warehouse
+
+        if self.database.dsn.startswith('sqlite') and dsn is None:
+            from ambry.util import parse_url_to_dict
+
+            d = parse_url_to_dict(self.database.dsn)
+
+            dsn = self.database.dsn.replace(os.path.basename(d['path']), 'warehouse.db')
+
+        return Warehouse(self, dsn=dsn)
 
     @property
     def config(self):
@@ -200,8 +261,10 @@ class Library(object):
                           build_url=self._fs.build(b.identity.source_path))
 
         bs_meta = b.build_source_files.file(File.BSFILE.META)
-        bs_meta.objects_to_record()
+        bs_meta.set_defaults()
         bs_meta.record_to_objects()
+        bs_meta.objects_to_record()
+        b.commit()
 
         self._db.commit()
         return b
@@ -217,8 +280,6 @@ class Library(object):
 
         ds = self._db.dataset(identity.vid, exception=False)
 
-        if not ds:
-            ds = self._db.dataset(identity.name, exception=False)
         if not ds:
             ds = self._db.new_dataset(**identity.dict)
 
@@ -259,6 +320,12 @@ class Library(object):
 
         return b
 
+    def bundle_by_cache_key(self, cache_key):
+
+        ds = self._db.dataset_by_cache_key(cache_key)
+
+        return self.bundle(ds)
+
     @property
     def bundles(self):
         """ Returns all datasets in the library as bundles. """
@@ -266,24 +333,28 @@ class Library(object):
         for ds in self.datasets:
             yield self.bundle(ds.vid)
 
-    def partition(self, ref):
+    def partition(self, ref, localize=False):
         """ Finds partition by ref and converts to bundle partition.
 
-        Args:
-            ref (str): id, vid (versioned id), name or vname (versioned name) (FIXME: try all)
-
-        Raises:
-            NotFoundError: if partition with given ref not found.
-
-        Returns:
-            FIXME:
+        :param ref: A partition reference
+        :param localize: If True, copy a remote partition to local filesystem. Defaults to False
+        :raises: NotFoundError: if partition with given ref not found.
+        :return: orm.Partition: found partition.
         """
+
+        if not ref:
+            raise NotFoundError("No partition for empty ref")
 
         try:
             on = ObjectNumber.parse(ref)
             ds_on = on.as_dataset
 
             ds = self._db.dataset(ds_on)  # Could do it in on SQL query, but this is easier.
+
+            # The refresh is required because in some places the dataset is loaded without the partitions,
+            # and if that persist, we won't have partitions in it until it is refreshed.
+
+            self.database.session.refresh(ds)
 
             p = ds.partition(ref)
 
@@ -298,7 +369,12 @@ class Library(object):
             raise NotFoundError("No partition for ref: '{}'".format(ref))
 
         b = self.bundle(p.d_vid)
-        return b.wrap_partition(p)
+        p = b.wrap_partition(p)
+
+        if localize:
+            p.localize()
+
+        return p
 
     def table(self, ref):
         """ Finds table by ref and returns it.
@@ -335,8 +411,11 @@ class Library(object):
     def remove(self, bundle):
         """ Removes a bundle from the library and deletes the configuration for
         it from the library database."""
+        from six import string_types
 
-        bundle.remove()
+        if isinstance(bundle, string_types):
+            bundle = self.bundle(bundle)
+
         self.database.remove_dataset(bundle.dataset)
 
     #
@@ -394,9 +473,10 @@ class Library(object):
 
         nb.commit()
 
+        # Copy all of the files.
         for f in b.dataset.files:
             assert f.major_type == f.MAJOR_TYPE.BUILDSOURCE
-            nb.dataset.files.append(nb.dataset.bsfile(f.minor_type).update(f))
+            nb.dataset.files.append(nb.dataset.bsfile(f.minor_type, f.path).update(f))
 
         # Load the metadata in to records, then back out again. The objects_to_record process will set the
         # new identity object numbers in the metadata file
@@ -407,7 +487,43 @@ class Library(object):
 
         return nb
 
-    def checkin(self, b):
+    def checkin_bundle(self, db_path, replace=True, cb=None):
+        """Add a bundle, as a Sqlite file, to this library"""
+        from ambry.orm.exc import NotFoundError
+
+        db = Database('sqlite:///{}'.format(db_path))
+        db.open()
+
+        ds = db.dataset(db.datasets[0].vid)  # There should only be one
+
+        assert ds is not None
+        assert ds._database
+
+        try:
+            b = self.bundle(ds.vid)
+            self.logger.info(
+                "Removing old bundle before checking in new one of same number: '{}'"
+                .format(ds.vid))
+            self.remove(b)
+        except NotFoundError:
+            pass
+
+        try:
+            self.dataset(ds.vid)  # Skip loading bundles we already have
+        except NotFoundError:
+            self.database.copy_dataset(ds, cb=cb)
+
+        b = self.bundle(ds.vid)  # It had better exist now.
+        # b.state = Bundle.STATES.INSTALLED
+        b.commit()
+
+        #self.search.index_library_datasets(tick)
+
+        self.search.index_bundle(b)
+
+        return b
+
+    def send_to_remote(self, b, no_partitions=False):
         """
         Copy a bundle to a new Sqlite file, then store the file on the remote.
 
@@ -421,24 +537,11 @@ class Library(object):
 
         remote = self.remote(remote_name)
 
-        db_path = self.create_bundle_file(b)
-
-        db = Database('sqlite:///{}'.format(db_path))
-        ds = db.dataset(b.dataset.vid)
+        db_path = b.package()
 
         with b.progress.start('checkin', 0, message='Check in bundle') as ps:
 
-            ps.add(message='Checking in bundle {} to {}'.format(ds.identity.vname, remote))
-
-            # Set the location for the bundle file
-            for p in ds.partitions:
-                p.location = 'remote'
-
-            # Fixme; this should be on ds, not b
-            # b.buildstate.state.current = Bundle.STATES.INSTALLED
-            ds.commit()
-            db.commit()
-            db.close()
+            ps.add(message='Checking in bundle {} to {}'.format(b.identity.vname, remote))
 
             db_ck = b.identity.cache_key + '.db'
 
@@ -458,31 +561,32 @@ class Library(object):
 
             ps.update(state='done')
 
-            os.remove(db_path)
+            if not no_partitions:
+                for p in b.partitions:
 
-            for p in b.partitions:
+                    ps.add(message='Upload partition', item_type='bytes', item_count=0, p_vid=p.vid)
 
-                ps.add(message='Upload partition', item_type='bytes', item_count=0, p_vid=p.vid)
+                    with p.datafile.open(mode='rb') as fin:
 
-                with p.datafile.open(mode='rb') as fin:
+                        total = [0]
 
-                    total = [0]
+                        @call_interval(5)
+                        def progress(bytes):
+                            total[0] += bytes
+                            ps.update(
+                                message='Upload partition'.format(p.identity.vname),
+                                item_count=total[0])
 
-                    @call_interval(5)
-                    def progress(bytes):
-                        total[0] += bytes
-                        ps.update(message='Upload partition'.format(p.identity.vname), item_count=total[0])
+                        remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
+                        event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
+                        event.wait()
 
-                    remote.makedir(os.path.dirname(p.datafile.path), recursive=True, allow_recreate=True)
-                    event = remote.setcontents_async(p.datafile.path, fin, progress_callback=progress)
-                    event.wait()
-
-                    ps.update(state='done')
+                        ps.update(state='done')
 
             ps.add(message='Setting metadata')
             ident = json.dumps(b.identity.dict)
             remote.setcontents(os.path.join('_meta', 'vid', b.identity.vid), ident)
-            remote.setcontents(os.path.join('_meta', 'id', b.identity.id), ident)
+            remote.setcontents(os.path.join('_meta', 'id', b.identity.id_), ident)
             remote.setcontents(os.path.join('_meta', 'vname', text_type(b.identity.vname)), ident)
             remote.setcontents(os.path.join('_meta', 'name', text_type(b.identity.name)), ident)
             ps.update(state='done')
@@ -491,118 +595,277 @@ class Library(object):
 
             return remote_name, db_ck
 
+    def _init_git(self, b):
+        """If the source directory is configured for git, create a new repo and
+        add the bundle to it. """
+
     #
     # Remotes
     #
 
-    def sync_remote(self, remote_name, bundle_name, list_only=False):
-        remote = self.remote(remote_name)
+    def sync_remote(self, remote_name):
+        from ambry.orm import Remote
 
-        temp = fsopendir('temp://ambry-import', create_dir=True)
+        if isinstance(remote_name, text_type):
+            remote = self.remote(remote_name)
+        else:
+            remote = remote_name
 
-        entries = []
+        assert isinstance(remote, Remote)
 
-        for fn in remote.walkfiles(wildcard='*.db'):
+        for e in remote.list():
+            self._checkin_remote_bundle(remote, e)
 
-            this_name = fn.strip('/').replace('/', '.').replace('.db', '')
+        self.commit()
 
-            if bundle_name and this_name != bundle_name:
-                continue
+    def checkin_remote_bundle(self, ref, remote=None):
+        """ Checkin a remote bundle to this library.
 
-            if list_only:
-                entries.append(this_name)
-                self.logger.info(this_name)
-                continue
-            else:
-                self.logger.info('Sync {}'.format(this_name))
+        :param ref: Any bundle reference
+        :param remote: If specified, use this remote. If not, search for the reference
+            in cached directory listings
+        :param cb: A one argument progress callback
+        :return:
+        """
 
-            temp.makedir(os.path.dirname(fn), recursive=True, allow_recreate=True)
-            with remote.open(fn, 'rb') as f:
-                temp.setcontents(fn, f)
+        if not remote:
+            remote, vname = self.find_remote_bundle(ref)
+            if vname:
+                ref = vname
+        else:
+            pass
 
-            try:
-                db = Database('sqlite:///{}'.format(temp.getsyspath(fn)))
-                db.open()
+        if not remote:
+            raise NotFoundError("Failed to find bundle ref '{}' in any remote".format(ref))
 
-                ds = list(db.datasets)[0]
+        self.logger.info("Load '{}' from '{}'".format(ref, remote))
 
-                try:
-                    self.dataset(ds.vid)
-                except NotFoundError:
-                    self.database.copy_dataset(ds)
+        vid = self._checkin_remote_bundle(remote, ref)
 
-                b = self.bundle(ds.vid)
-                b.state = Bundle.STATES.INSTALLED
-                b.commit()
+        self.commit()
 
-                self.search.index_bundle(b)
+        return vid
 
-                entries.append(this_name)
+    def _checkin_remote_bundle(self, remote, ref):
+        """
+        Checkin a remote bundle from a remote
+        :param remote: a Remote object
+        :param ref: Any bundle reference
+        :return: The vid of the loaded bundle
+        """
+        from ambry.bundle.process import call_interval
+        from ambry.orm.exc import NotFoundError
+        from ambry.orm import Remote
+        from ambry.util.flo import copy_file_or_flo
+        from tempfile import NamedTemporaryFile
 
-            except Exception as e:
-                self.logger.error('Failed to sync {} from {}, {}: {}'
-                                  .format(fn, remote_name, temp.getsyspath(fn), e))
+        assert isinstance(remote, Remote)
 
-            # If we synced a requested bundle, no need to check more
-            if bundle_name and this_name == bundle_name:
-                break
+        @call_interval(5)
+        def cb(r, total):
+            self.logger.info("{}: Downloaded {} bytes".format(ref, total))
 
-        self.database.commit()
-        return entries
+        b = None
+        try:
+            b = self.bundle(ref)
+            self.logger.info("{}: Already installed".format(ref))
+            vid = b.identity.vid
+
+        except NotFoundError:
+            self.logger.info("{}: Syncing".format(ref))
+
+            db_dir = self.filesystem.downloads('bundles')
+            db_f = os.path.join(db_dir, ref) #FIXME. Could get multiple versions of same file. ie vid and vname
+
+            if not os.path.exists(os.path.join(db_dir, db_f)):
+
+                self.logger.info("Downloading bundle '{}' to '{}".format(ref, db_f))
+                with open(db_f, 'wb') as f_out:
+                    with remote.checkout(ref) as f:
+                        copy_file_or_flo(f, f_out, cb=cb)
+                        f_out.flush()
+
+            self.checkin_bundle(db_f)
+
+            b = self.bundle(ref)  # Should exist now.
+
+            b.dataset.data['remote_name'] = remote.short_name
+
+            b.dataset.upstream = remote.url
+
+            b.dstate = b.STATES.CHECKEDOUT
+
+            b.commit()
+
+        finally:
+            if b:
+                b.progress.close()
+
+        vid = b.identity.vid
+
+        return vid
 
     @property
     def remotes(self):
         """Return the names and URLs of the remotes"""
-        root = self.database.root_dataset
-        rc = root.config.library.remotes
+        from ambry.orm import Remote
+        for r in self.database.session.query(Remote).all():
+            if not r.short_name:
+                continue
 
-        return dict(rc.items())
+            yield self.remote(r.short_name)
+
+    def _remote(self, name):
+        """Return a remote for which 'name' matches the short_name or url """
+        from ambry.orm import Remote
+        from sqlalchemy import or_
+        from ambry.orm.exc import NotFoundError
+        from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+
+        if not name.strip():
+            raise NotFoundError("Empty remote name")
+
+        try:
+            r = self.database.session.query(Remote).filter(Remote.short_name == name).one()
+
+            if not r:
+                r = self.database.session.query(Remote).filter(Remote.url == name).one()
+
+        except NoResultFound as e:
+            raise NotFoundError(str(e))
+        except MultipleResultsFound as e:
+            self.logger.error("Got multiple results for search for remote '{}': {}".format(name, e))
+            return None
+
+        return r
 
     def remote(self, name_or_bundle):
 
-        from fs.opener import fsopendir
+        from ambry.orm.exc import NotFoundError
 
-        r = self.remotes[self.resolve_remote(name_or_bundle)]
+        r = None
 
-        # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
-        # https://github.com/boto/boto/issues/2836
-        if r.startswith('s3'):
-            return self.filesystem.s3(r, self.account_acessor)
+        if not r:
+            # It is the upstream for the dataset -- where it was checked out from
+            # This should really only apply to partitions, so they come from the same place as bundle
+            try:
+                if name_or_bundle.dstate != Bundle.STATES.BUILDING:
+                    r = self._remote(name_or_bundle.dataset.upstream)
+            except (NotFoundError, AttributeError, KeyError):
+                r = None
+
+        if not isinstance(name_or_bundle, Bundle): # It is a remote short_name
+            try:
+                r = self._remote(text_type(name_or_bundle))
+            except NotFoundError:
+                r = None
+
+        if not r: # Explicitly named in the metadata
+            try:
+                r = self._remote(name_or_bundle.metadata.about.remote)
+            except (NotFoundError, AttributeError, KeyError):
+                r = None
+
+        if not r: # Inferred from the metadata
+            try:
+                r = self._remote(name_or_bundle.metadata.about.access)
+            except (NotFoundError, AttributeError, KeyError):
+                r = None
+
+        if not r:
+            raise NotFoundError("Failed to find remote for ref '{}'".format(str(name_or_bundle)))
+
+        r.account_accessor = self.account_accessor
+
+        return r
+
+    def add_remote(self, r):
+        self.database.session.add(r)
+        self.commit()
+
+    def find_or_new_remote(self, name, **kwargs):
+
+        try:
+            r = self.remote(name)
+        except NotFoundError:
+            from ambry.orm import Remote
+            if 'short_name' in kwargs:
+                assert name == kwargs['short_name']
+                del kwargs['short_name']
+            r = Remote(short_name=name, **kwargs)
+            self.database.session.add(r)
+
+        return r
+
+    def delete_remote(self, r_or_name):
+        from ambry.orm import Remote
+
+        if isinstance(r_or_name, Remote):
+            r = r_or_name
         else:
-            return fsopendir(r, create_dir=True)
+            r = self.remote(r_or_name)
 
-        return self.filesystem.remote(self.resolve_remote(name_or_bundle))
+        self.database.session.delete(r)
+        self.commit()
 
-    def resolve_remote(self, name_or_bundle):
-        """Determine the remote name for a name that is either a remote name, or the name
-        of a bundle, which references a remote"""
-        fails = []
+    def _find_remote_bundle(self, ref, remote_service_type='s3'):
+        """
+        Locate a bundle, by any reference, among the configured remotes. The routine will
+        only look in the cache directory lists stored in the remotes, which must
+        be updated to be current.
 
-        remote_names = self.remotes.keys()
+        :param ref:
+        :return: (remote,vname) or (None,None) if the ref is not found
+        """
 
-        try:
-            if name_or_bundle in remote_names:
-                return name_or_bundle
-        except KeyError:
-            fails.append(name_or_bundle)
+        for r in self.remotes:
 
-        try:
-            if name_or_bundle.metadata.about.remote in remote_names:
-                return name_or_bundle.metadata.about.remote
-        except AttributeError:
-            pass
-        except KeyError:
-            fails.append(name_or_bundle.metadata.about.access)
+            if remote_service_type and r.service != remote_service_type:
+                continue
 
-        try:
-            if name_or_bundle.metadata.about.access in remote_names:
-                return name_or_bundle.metadata.about.access
-        except AttributeError:
-            pass
-        except KeyError:
-            fails.append(name_or_bundle.metadata.about.access)
+            if 'list' not in r.data:
+                continue
 
-        raise ConfigurationError('Failed to find remote for key values: {}'.format(fails))
+            for k, v in r.data['list'].items():
+                if ref in v.values():
+                    return (r, v['vname'])
+
+        return None, None
+
+    def find_remote_bundle(self, ref, try_harder=None):
+        """
+        Locate a bundle, by any reference, among the configured remotes. The routine will only look in the cache
+        directory lists stored in the remotes, which must be updated to be current.
+
+        :param vid: A bundle or partition reference, vid, or name
+        :param try_harder: If the reference isn't found, try parsing for an object id, or subsets of the name
+        :return: (remote,vname) or (None,None) if the ref is not found
+        """
+        from ambry.identity import ObjectNumber
+
+        remote, vid = self._find_remote_bundle(ref)
+
+        if remote:
+            return (remote, vid)
+
+        if try_harder:
+
+            on = ObjectNumber.parse(vid)
+
+            if on:
+                raise NotImplementedError()
+                don = on.as_dataset
+                return self._find_remote_bundle(vid)
+
+            # Try subsets of a name, assuming it is a name
+            parts = ref.split('-')
+
+            for i in range(len(parts) - 1, 2, -1):
+                remote, vid = self._find_remote_bundle('-'.join(parts[:i]))
+
+                if remote:
+                    return (remote, vid)
+        return (None, None)
 
     #
     # Accounts
@@ -624,13 +887,18 @@ class Library(object):
         :param accounts_password: The password for decrypting the secret
         :return:
         """
+        from sqlalchemy.orm.exc import NoResultFound
+        from ambry.orm.exc import NotFoundError
 
-        act = self.database.session.query(Account).filter(Account.account_id == account_id).one()
-        act.password = self._account_password
-        return act
+        try:
+            act = self.database.session.query(Account).filter(Account.account_id == account_id).one()
+            act.secret_password = self._account_password
+            return act
+        except NoResultFound:
+            raise NotFoundError("Did not find account for account id: '{}' ".format(account_id))
 
     @property
-    def account_acessor(self):
+    def account_accessor(self):
 
         def _accessor(account_id):
             return self.account(account_id).dict
@@ -647,7 +915,7 @@ class Library(object):
         """
         d = {}
 
-        if not self._account_password:
+        if False and not self._account_password:
             from ambry.dbexceptions import ConfigurationError
             raise ConfigurationError(
                 "Can't access accounts without setting an account password"
@@ -655,17 +923,46 @@ class Library(object):
                 " env var.")
 
         for act in self.database.session.query(Account).all():
-            act.password = self._account_password
+            if self._account_password:
+                act.secret_password = self._account_password
             e = act.dict
             a_id = e['account_id']
-            del e['account_id']
             d[a_id] = e
 
         return d
 
+    def add_account(self, a):
+        self.database.session.add(a)
+        self.commit()
+
+    def delete_account(self, a):
+        from six import string_types
+
+        if isinstance(a, string_types):
+            a = self.account(a)
+
+        self.database.session.delete(a)
+        self.commit()
+
+    def find_or_new_account(self, name, **kwargs):
+
+        try:
+            a = self.account(name)
+        except NotFoundError:
+            from ambry.orm import Account
+            a = Account(account_id=name, **kwargs)
+            self.database.session.add(a)
+            a.secret_password = self._account_password
+
+        return a
+
     @property
     def services(self):
         return self.database.root_dataset.config.library['services']
+
+    @property
+    def ui_config(self):
+        return self.database.root_dataset.config.library['ui']
 
     def number(self, assignment_class=None, namespace='d'):
         """
@@ -794,7 +1091,7 @@ class Library(object):
 
         for f in fs.walkfiles(wildcard='bundle.yaml'):
 
-            self.logger.info("Visiting {}".format(f))
+            self.logger.info('Visiting {}'.format(f))
             config = yaml.load(fs.getcontents(f))
 
             if not config:
@@ -820,17 +1117,18 @@ class Library(object):
             b.sync_in()
 
             if detach:
-                self.logger.info("{} Detaching".format(b.identity.fqname))
+                self.logger.info('{} Detaching'.format(b.identity.fqname))
                 b.set_file_system(source_url=None)
 
             if force:
-                self.logger.info("{} Sync out".format(b.identity.fqname))
+                self.logger.info('{} Sync out'.format(b.identity.fqname))
                 # FIXME. It won't actually sync out until re-starting the bundle.
                 # The source_file_system is probably cached
                 b = self.bundle(bid)
                 b.sync_out()
 
             bundles.append(b)
+            b.close()
 
         return bundles
 

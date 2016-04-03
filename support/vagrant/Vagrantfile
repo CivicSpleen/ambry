@@ -1,0 +1,89 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  config.vm.hostname = 'ambry'
+
+  # Every Vagrant virtual environment requires a box to build off of.
+  config.vm.box = "ubuntu/trusty64"
+
+  # The url from where the 'config.vm.box' box will be fetched if it
+  # doesn't already exist on the user's system.
+  #config.vm.box_url = "http://opscode-vm-bento.s3.amazonaws.com/vagrant/virtualbox/opscode_ubuntu-13.10_chef-provisionerless.box"
+
+  config.vm.synced_folder "home-ambry/", "/home/vagrant/ambry"
+
+  config.vm.network "private_network", type: "dhcp"
+
+  config.vm.network "public_network", type: "dhcp"
+
+  config.vm.provider "virtualbox" do |v|
+    # Need more memory to get Pandas to complile
+    v.memory = 2000
+  end
+
+
+  $script = <<SCRIPT
+
+apt-get update 
+apt-get install -y language-pack-en build-essential make gcc wget curl git 
+apt-get install -y python python-dev python-pip libffi-dev sqlite3 libpq-dev
+apt-get install -y python libgdal-dev gdal-bin python-gdal python-numpy python-scipy 
+apt-get install -y libsqlite3-dev libspatialite5 libspatialite-dev spatialite-bin libspatialindex-dev
+apt-get install -y libhdf5-7 libhdf5-dev
+apt-get install -y runit
+apt-get clean && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# Fixes security warnings in later pip installs. The --ignore-installed bit is requred 
+# because some of the installed packages already exist, but pip 8 refuses to remove
+# them because they were installed with distutils.
+
+pip install --upgrade pip && pip install --ignore-installed requests
+
+export LANGUAGE=en_US.UTF-8
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+locale-gen en_US.UTF-8
+dpkg-reconfigure locales
+
+groupadd ambry
+usermod -G ambry vagrant
+
+pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
+
+pip install git+https://github.com/CivicKnowledge/ambry.git@develop
+su - vagrant -c 'ambry config install'
+
+pip install git+https://github.com/CivicKnowledge/ambry-admin.git
+su - vagrant -c 'ambry config installcli ambry_admin'
+
+pip install git+https://github.com/CivicKnowledge/ambry-ui.git
+su - vagrant -c 'ambry config installcli ambry_ui'
+
+echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
+
+
+mkdir -p /etc/sv
+cp -r /vagrant/service/* /etc/sv
+
+mkdir -p /var/log/ambry/notebook
+mkdir -p /var/log/ambry/ambryui
+
+adduser log --system --disabled-password
+
+chown log /var/log/ambry/ambryui
+chown log /var/log/ambry/notebook
+
+ln -s /etc/sv/ambryui /etc/service
+ln -s /etc/sv/notebook /etc/service
+
+
+SCRIPT
+
+  config.vm.provision "shell", inline: $script
+
+end

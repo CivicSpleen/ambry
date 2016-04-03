@@ -4,15 +4,16 @@ import unittest
 
 try:
     # py2, mock is external lib.
-    from mock import patch, Mock
+    from mock import patch, Mock, PropertyMock
 except ImportError:
     # py3, mock is included
-    from unittest.mock import patch, Mock
+    from unittest.mock import patch, Mock, PropertyMock
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection as SQLAlchemyConnection, Engine
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from ambry.orm.database import get_stored_version, _validate_version, _migration_required, SCHEMA_VERSION,\
@@ -21,21 +22,18 @@ from ambry.orm.exc import DatabaseError, DatabaseMissingError
 from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME, POSTGRES_SCHEMA_NAME
 from ambry.orm.dataset import Dataset
 
-from ambry.run import get_runconfig
-
 from test.factories import DatasetFactory, TableFactory,\
     ColumnFactory, PartitionFactory
 
 from test.unit.asserts import assert_spec
 
-from test.test_base import TestBase, PostgreSQLTestBase
+from test.proto import TestBase
 
 
 class DatabaseTest(TestBase):
 
     def setUp(self):
-        self.sqlite_db = Database('sqlite://')
-        self.sqlite_db.create()
+        self.db = self.library(use_proto=False).database
 
     # helpers
     def _assert_exists(self, model_class, **filter_kwargs):
@@ -52,38 +50,38 @@ class DatabaseTest(TestBase):
         dsn = 'postgresql+psycopg2://ambry:secret@127.0.0.1/exampledb'
         db = Database(dsn)
         self.assertEqual(db.path, '/exampledb')
-        self.assertEqual(db.driver, 'postgresql+psycopg2')
+        self.assertEqual(db.driver, 'postgres')
 
     # .create tests
     def test_creates_new_database(self):
         # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(self.sqlite_db._create_path, ['self'])
-        assert_spec(self.sqlite_db.exists, ['self'])
-        assert_spec(self.sqlite_db.create_tables, ['self'])
-        assert_spec(self.sqlite_db._add_config_root, ['self'])
+        assert_spec(self.db._create_path, ['self'])
+        assert_spec(self.db.exists, ['self'])
+        assert_spec(self.db.create_tables, ['self'])
+        assert_spec(self.db._add_config_root, ['self'])
 
         # prepare state
-        self.sqlite_db.exists = Mock(return_value=False)
-        self.sqlite_db._create_path = Mock()
-        self.sqlite_db.create_tables = Mock()
+        self.db.exists = Mock(return_value=False)
+        self.db._create_path = Mock()
+        self.db.create_tables = Mock()
 
         # run
-        ret = self.sqlite_db.create()
+        ret = self.db.create()
 
         # check result and calls.
         self.assertTrue(ret)
-        self.sqlite_db.exists.assert_called_once_with()
-        self.sqlite_db._create_path.assert_called_once_with()
-        self.sqlite_db.create_tables.assert_called_once_with()
+        self.db.exists.assert_called_once_with()
+        self.db._create_path.assert_called_once_with()
+        self.db.create_tables.assert_called_once_with()
 
     def test_returns_false_if_database_exists(self):
 
         # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(self.sqlite_db.exists, ['self'])
+        assert_spec(self.db.exists, ['self'])
 
         # prepare state
-        with patch.object(self.sqlite_db, 'exists', Mock(return_value=True)):
-            ret = self.sqlite_db.create()
+        with patch.object(self.db, 'exists', Mock(return_value=True)):
+            ret = self.db.create()
             self.assertFalse(ret)
 
     # ._create_path tests
@@ -152,12 +150,12 @@ class DatabaseTest(TestBase):
         fake_path.return_value = True
 
         # testing.
-        self.assertTrue(self.sqlite_db.exists())
+        self.assertTrue(self.db.exists())
 
     @patch('ambry.orm.database.os.path.exists')
     def test_returns_false_if_config_table_was_not_found_by_inspector(self, fake_path):
         # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(self.sqlite_db.connection.execute, ['self', 'object'])
+        assert_spec(self.db.connection.execute, ['self', 'object'])
 
         # prepare state
         fake_path.return_value = True
@@ -165,11 +163,11 @@ class DatabaseTest(TestBase):
         from sqlalchemy.engine.reflection import Inspector
         with patch.object(Inspector, 'get_table_names', Mock(return_value=[])) as fake_get:
             # run
-            ret = self.sqlite_db.exists()
+            ret = self.db.exists()
 
             # test
             self.assertFalse(ret)
-            fake_get.assert_called_once_with(schema=self.sqlite_db._schema)
+            fake_get.assert_called_once_with(schema=self.db._schema)
 
     # engine() tests.
     @patch('ambry.orm.database._validate_version')
@@ -185,9 +183,17 @@ class DatabaseTest(TestBase):
         self.assertIsInstance(db.connection, SQLAlchemyConnection)
         self.assertIsInstance(db._connection, SQLAlchemyConnection)
 
-    # .session tests # FIXME:
+    # .session tests
+    def test_contains_sqlalchemy_session(self):
+        db = Database('sqlite://')
+        session = db.session
+        self.assertIsInstance(session, Session)
 
-    # .open tests # FIXME:
+    # .open tests
+    def test_creates_session(self):
+        db = Database('sqlite://')
+        db.open()
+        self.assertIsNotNone(db._session)
 
     # .close tests
     def test_closes_session_and_connection(self):
@@ -234,11 +240,25 @@ class DatabaseTest(TestBase):
             db.rollback()
             fake_rollback.assert_called_once_with()
 
-    # .clean tests FIXME:
+    # .clean tests
+    def test_removes_all_datasets(self):
+        db = Database('sqlite://')
+        ds1 = Mock(spec=Dataset)
+        ds1.name = 'ds1'
+        ds2 = Mock(spec=Dataset)
+        ds2.name = 'ds2'
+        ds3 = Mock(spec=Dataset)
+        ds3.name = 'ds3'
 
-    # .drop tests FIXME:
+        with patch.object(Database, 'datasets', PropertyMock(return_value=[ds1, ds2, ds3])):
+            with patch.object(Database, 'remove_dataset') as fake_remove:
+                db.clean()
+                self.assertEqual(len(fake_remove.mock_calls), 3)
 
-    # .metadata tests FIXME:
+    # .metadata tests
+    def test_contains_sqlachemy_metadata(self):
+        db = Database('sqlite://')
+        self.assertTrue(db.metadata.is_bound())
 
     # .inspector tests
     def test_contains_engine_inspector(self):
@@ -262,42 +282,42 @@ class DatabaseTest(TestBase):
             fake_drop.assert_called_once_with()
 
     def test_creates_dataset_table(self):
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
 
         # Now all tables are created. Can we use ORM to create datasets?
         DatasetFactory()
-        self.sqlite_db.commit()
+        self.db.commit()
 
     def test_creates_table_table(self):
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        TableFactory._meta.sqlalchemy_session = self.db.session
 
         # Now all tables are created. Can we use ORM to create datasets?
         ds1 = DatasetFactory()
-        self.sqlite_db.commit()
+        self.db.commit()
         TableFactory(dataset=ds1)
-        self.sqlite_db.commit()
+        self.db.commit()
 
     def test_creates_column_table(self):
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        TableFactory._meta.sqlalchemy_session = self.db.session
 
         ds1 = DatasetFactory()
-        self.sqlite_db.commit()
+        self.db.commit()
         table = TableFactory(dataset=ds1)
-        ColumnFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ColumnFactory._meta.sqlalchemy_session = self.db.session
 
         # Now all tables are created. Can we use ORM to create columns?
-        ColumnFactory(table=table)
-        self.sqlite_db.commit()
+        ColumnFactory(name='id', table=table)
+        self.db.commit()
 
     def test_creates_partition_table(self):
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        PartitionFactory._meta.sqlalchemy_session = self.db.session
 
         ds1 = DatasetFactory()
         PartitionFactory(dataset=ds1)
-        self.sqlite_db.commit()
+        self.db.commit()
 
     # ._add_config_root tests
     def test_creates_new_root_config(self):
@@ -323,30 +343,59 @@ class DatabaseTest(TestBase):
     def test_closes_session_if_root_config_exists(self):
 
         # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(self.sqlite_db.close_session, ['self'])
+        assert_spec(self.db.close_session, ['self'])
 
         # testing
-        with patch.object(self.sqlite_db, 'close_session', Mock()) as fake_close:
-            self.sqlite_db._add_config_root()
+        with patch.object(self.db, 'close_session', Mock()) as fake_close:
+            self.db._add_config_root()
             fake_close.assert_called_once_with()
 
-    # .new_dataset test FIXME:
+    # .new_dataset test
+    def test_creates_new_dataset(self):
+        db = Database('sqlite://')
+        db.create()
+        ds = db.new_dataset(vid='d111', source='source', dataset='dataset')
+        self.assertTrue(ds.vid, 'd111')
 
-    # .root_dataset tests FIXME:
+    # .dataset tests
+    def test_finds_dataset_by_vid(self):
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        ds1 = DatasetFactory()
+        ret = self.db.dataset(ds1.vid)
+        self.assertEqual(ds1.vid, ret.vid)
 
-    # .dataset tests FIXME:
+    def test_finds_dataset_by_id(self):
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        ds1 = DatasetFactory()
+        assert ds1.id != ds1.vid
+        ret = self.db.dataset(ds1.id)
+        self.assertEqual(ds1.id, ret.id)
+
+    def test_finds_dataset_by_versioned_name(self):
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        ds1 = DatasetFactory()
+        assert ds1.vname != ds1.name
+        ret = self.db.dataset(ds1.vname)
+        self.assertEqual(ds1.vname, ret.vname)
+
+    def test_finds_dataset_by_name(self):
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
+        ds1 = DatasetFactory()
+        assert ds1.vname != ds1.name
+        ret = self.db.dataset(ds1.name)
+        self.assertEqual(ds1.name, ret.name)
 
     # .datasets tests
     def test_returns_list_with_all_datasets(self):
         # prepare state
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
 
         ds1 = DatasetFactory()
         ds2 = DatasetFactory()
         ds3 = DatasetFactory()
 
         # testing
-        ret = self.sqlite_db.datasets
+        ret = self.db.datasets
         self.assertIsInstance(ret, list)
         self.assertEqual(len(ret), 3)
         self.assertIn(ds1, ret)
@@ -357,15 +406,15 @@ class DatabaseTest(TestBase):
     def test_removes_dataset(self):
 
         # prepare state.
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        DatasetFactory._meta.sqlalchemy_session = self.db.session
         ds1 = DatasetFactory()
-        self.sqlite_db.session.commit()
+        self.db.session.commit()
         ds1_vid = ds1.vid
 
         # testing
-        self.sqlite_db.remove_dataset(ds1)
+        self.db.remove_dataset(ds1)
         self.assertEqual(
-            self.sqlite_db.session.query(Dataset).filter_by(vid=ds1_vid).all(),
+            self.db.session.query(Dataset).filter_by(vid=ds1_vid).all(),
             [],
             'Dataset was not removed.')
 
@@ -380,22 +429,21 @@ class GetVersionTest(TestBase):
         self.assertEqual(version, 22)
 
     def test_returns_user_version_from_postgres_table(self):
-        try:
-            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
-            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
-            with engine.connect() as conn:
-                create_table_query = '''
-                    CREATE TABLE {}.user_version (
-                        version INTEGER NOT NULL); '''\
-                    .format(POSTGRES_SCHEMA_NAME)
+        if self.__class__._db_type != 'postgres':
+            raise unittest.SkipTest('Postgres tests are disabled.')
 
-                conn.execute(create_table_query)
-                conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
-                conn.execute('commit')
-                version = get_stored_version(conn)
-                self.assertEqual(version, 22)
-        finally:
-            PostgreSQLTestBase._drop_postgres_test_db()
+        engine = create_engine(self.__class__.library_test_dsn,  poolclass=NullPool)
+        with engine.connect() as conn:
+            create_table_query = '''
+                CREATE TABLE {}.user_version (
+                    version INTEGER NOT NULL); '''\
+                .format(POSTGRES_SCHEMA_NAME)
+
+            conn.execute(create_table_query)
+            conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
+            conn.execute('COMMIT;')
+            version = get_stored_version(conn)
+            self.assertEqual(version, 22)
 
 
 class ValidateVersionTest(unittest.TestCase):
@@ -403,10 +451,11 @@ class ValidateVersionTest(unittest.TestCase):
     @patch('ambry.orm.database.get_stored_version')
     def test_raises_database_error_if_db_version_is_between_10_100(self, fake_get):
         fake_get.return_value = 88
-        engine = create_engine('sqlite://')
+        dsn = 'sqlite://'
+        engine = create_engine(dsn)
         connection = engine.connect()
         with self.assertRaises(DatabaseError):
-            _validate_version(connection)
+            _validate_version(connection, dsn)
 
     @patch('ambry.orm.database.get_stored_version')
     @patch('ambry.orm.database._migration_required')
@@ -415,9 +464,10 @@ class ValidateVersionTest(unittest.TestCase):
         fake_required.return_value = True
         fake_get.return_value = 100
 
-        engine = create_engine('sqlite://')
+        dsn = 'sqlite://'
+        engine = create_engine(dsn)
         connection = engine.connect()
-        _validate_version(connection)
+        _validate_version(connection, dsn)
         fake_required.assert_called_once_with(connection)
 
 
@@ -457,39 +507,35 @@ class UpdateVersionTest(TestBase):
         self.assertEqual(stored_version, 122)
 
     def test_creates_user_version_postgresql_table(self):
-        try:
-            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
-            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
-            with engine.connect() as conn:
-                _update_version(conn, 123)
-                version = conn\
-                    .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
-                    .fetchone()[0]
-                self.assertEqual(version, 123)
-        finally:
-            PostgreSQLTestBase._drop_postgres_test_db()
+        if self.__class__._db_type != 'postgres':
+            raise unittest.SkipTest('Postgres tests are disabled.')
+        engine = create_engine(self.__class__.library_test_dsn,  poolclass=NullPool)
+        with engine.connect() as conn:
+            _update_version(conn, 123)
+            version = conn\
+                .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                .fetchone()[0]
+            self.assertEqual(version, 123)
 
     def test_updates_user_version_postgresql_table(self):
-        try:
-            postgres_test_db_dsn = PostgreSQLTestBase._create_postgres_test_db(get_runconfig())['test_db_dsn']
-            engine = create_engine(postgres_test_db_dsn,  poolclass=NullPool)
-            with engine.connect() as conn:
-                create_table_query = '''
-                    CREATE TABLE {}.user_version (
-                        version INTEGER NOT NULL); '''\
-                    .format(POSTGRES_SCHEMA_NAME)
+        if self.__class__._db_type != 'postgres':
+            raise unittest.SkipTest('Postgres tests are disabled.')
+        engine = create_engine(self.__class__.library_test_dsn,  poolclass=NullPool)
+        with engine.connect() as conn:
+            create_table_query = '''
+                CREATE TABLE {}.user_version (
+                    version INTEGER NOT NULL); '''\
+                .format(POSTGRES_SCHEMA_NAME)
 
-                conn.execute(create_table_query)
-                conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
-                conn.execute('commit')
+            conn.execute(create_table_query)
+            conn.execute('INSERT INTO {}.user_version VALUES (22);'.format(POSTGRES_SCHEMA_NAME))
+            conn.execute('COMMIT;')
 
-                _update_version(conn, 123)
-                version = conn\
-                    .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
-                    .fetchone()[0]
-                self.assertEqual(version, 123)
-        finally:
-            PostgreSQLTestBase._drop_postgres_test_db()
+            _update_version(conn, 123)
+            version = conn\
+                .execute('SELECT version FROM {}.user_version;'.format(POSTGRES_SCHEMA_NAME))\
+                .fetchone()[0]
+            self.assertEqual(version, 123)
 
     def test_raises_DatabaseMissingError_error(self):
         with patch.object(self.sqlite_connection, 'engine', Mock(name='foo')):
@@ -529,7 +575,8 @@ class GetStoredVersionTest(unittest.TestCase):
 class MigrateTest(unittest.TestCase):
 
     def setUp(self):
-        engine = create_engine('sqlite://')
+        self._dsn = 'sqlite://'
+        engine = create_engine(self._dsn)
         self.connection = engine.connect()
 
     @patch('ambry.orm.database._is_missed')
@@ -544,7 +591,7 @@ class MigrateTest(unittest.TestCase):
         fake_get.return_value = test_migrations
 
         # run.
-        migrate(self.connection)
+        migrate(self.connection, self._dsn)
 
         # testing.
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
@@ -562,7 +609,7 @@ class MigrateTest(unittest.TestCase):
         fake_migrate.side_effect = MyException('My fake exception')
         self.connection.execute('PRAGMA user_version = 22')
         with self.assertRaises(MyException):
-            migrate(self.connection)
+            migrate(self.connection, self._dsn)
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
         fake_migrate.assert_called_once_with(self.connection)
         self.assertEqual(stored_version, 22)

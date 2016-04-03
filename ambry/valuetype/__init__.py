@@ -7,81 +7,67 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 from six import text_type
+from datetime import date, time, datetime
 
+from ambry.util import Constant, memoize
 
-def import_valuetype(name):
-    import importlib
-    full_qual = 'ambry.valuetype.' + name
-    path, cls_name = full_qual.rsplit('.', 1)
-    mod = importlib.import_module(path)
-    cls = getattr(mod, cls_name)
+from core import *
+from times import *
+from geo import *
+from dimensions import *
+from measures import *
+from errors import *
 
-    return cls
+value_types = {
+    "int": IntValue,
+    "str": TextValue,
+    "float": FloatValue
+}
 
+value_types.update(geo_value_types)
+value_types.update(times_value_types)
+value_types.update(dimension_value_types)
+value_types.update(error_value_types)
+value_types.update(measure_value_types)
 
-def python_type(name):
-    """Return the python type for a ValueType. This the type that the ValueType will be
-    reduced to before being stored in a partition"""
+@memoize
+def resolve_value_type(vt_code):
+    import sys
 
-    return import_valuetype(name)._pythontype
+    if six.PY2 and isinstance(vt_code, unicode):
+        vt_code = str(vt_code)
 
+    vt_code = vt_code.strip('?')
 
-class ValueType(object):
-
-    _code = None
-
-    @classmethod
-    def intuit_name(self, name):
-        """Return a numeric value in the range [-1,1), indicating the likelihood that the name is for a valuable of
-        of this type. -1 indicates a strong non-match, 1 indicates a strong match, and 0 indicates uncertainty. """
-        raise NotImplementedError()
-
-    @classmethod
-    def parse(cls, v):
-        """Parse a value of this type and return a list of parsed values"""
-
-        return v
-
-
-class StrValue(str, ValueType):
-
-    _pythontype = str
-
-    def __new__(cls, v):
-        o = super(StrValue, cls).__new__(cls, cls.parse(v))
+    try:
+        o = value_types[vt_code]
+        o.vt_code = vt_code
         return o
+    except KeyError:
 
+        parts = vt_code.split('/')
+        args = []
+        while len(parts):
+            args.append(parts.pop())
 
-class TextValue(text_type, ValueType):
+            try:
+                base_vt_code = '/'.join(parts)
+                o = value_types[base_vt_code]
+                # Return a dynamic subclass that has the extra parameters built in
+                cls = o.subclass(vt_code, '/'.join(args))
 
-    _pythontype = text_type
+                # Stuff the class into the current module
+                globals()[cls.__name__] = cls
 
-    def __new__(cls, v):
-        o = super(TextValue, cls).__new__(cls, cls.parse(v))
-        return o
+                # And also in the same module as the base class
+                setattr(sys.modules[o.__module__], cls.__name__, cls)
 
+                # FIXME. Shouldn't need this, but codegen.py seems to try to import
+                # from the wrong module.
+                setattr(sys.modules['ambry.valuetype.core'], cls.__name__, cls)
 
-class IntValue(int, ValueType):
-    _pythontype = int
+                return cls
 
-    def __new__(cls, v):
-        o = super(IntValue, cls).__new__(cls, cls.parse(v))
-        return o
+            except KeyError:
+                pass
 
-
-class FloatValue(float, ValueType):
-    _pythontype = float
-
-    def __new__(cls, v):
-        o = super(FloatValue, cls).__new__(cls, cls.parse(v))
-        return o
-
-
-class RegEx(StrValue):
-    pass
-
-from decorator import decorator
-
-@decorator
-def valuetype(func, *args, **kw):
-    return func(*args, **kw)

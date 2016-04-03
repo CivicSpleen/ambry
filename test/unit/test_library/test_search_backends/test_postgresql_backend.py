@@ -1,33 +1,23 @@
 # -*- coding: utf-8 -*-
 
 from ambry.library.search_backends.postgres_backend import PostgreSQLSearchBackend
-from ambry.library import new_library
+from ambry.orm.database import POSTGRES_SCHEMA_NAME
 from ambry.util import AttrDict
 
-from test.test_base import PostgreSQLTestBase
 from test.factories import PartitionFactory
+from test.proto import TestBase
 
 from sqlalchemy.exc import ProgrammingError
 
 
-class PostgreSQLBackendBaseTest(PostgreSQLTestBase):
+class PostgreSQLBackendBaseTest(TestBase):
     def setUp(self):
         super(PostgreSQLBackendBaseTest, self).setUp()
+        if self._db_type != 'postgres':
+            self.skipTest('Postgres tests are disabled.')
 
-        # create test database
-        rc = self.get_rc()
-        self._real_test_database = rc.config.library.database
-        rc.config.library.database = self.dsn
-        self.library = new_library(rc)
-        self.backend = PostgreSQLSearchBackend(self.library)
-
-    def tearDown(self):
-        self.library.database.close()
-        super(PostgreSQLBackendBaseTest, self).tearDown()
-
-        # restore database config
-        rc = self.get_rc()
-        rc.config.library.database = self._real_test_database
+        self._my_library = self.library(use_proto=False)
+        self.backend = PostgreSQLSearchBackend(self._my_library)
 
 
 class PostgreSQLSearchBackendTest(PostgreSQLBackendBaseTest):
@@ -55,14 +45,16 @@ class PostgreSQLSearchBackendTest(PostgreSQLBackendBaseTest):
 class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_dataset_index(self):
-        with self.library.database._engine.connect() as conn:
-            result = conn.execute('SELECT * FROM dataset_index;').fetchall()
+        # backend __init__ created the index. Just check here.
+        with self._my_library.database._engine.connect() as conn:
+            query = 'SELECT * FROM {}.dataset_index;'.format(POSTGRES_SCHEMA_NAME)
+            result = conn.execute(query).fetchall()
             self.assertEqual(result, [])
 
     # search() tests
     def test_returns_found_datasets(self):
-        dataset1 = self.new_db_dataset(self.library.database, n=0)
-        dataset2 = self.new_db_dataset(self.library.database, n=1)
+        dataset1 = self.new_db_dataset(self._my_library.database, n=0)
+        dataset2 = self.new_db_dataset(self._my_library.database, n=1)
         dataset1.config.metadata.about.title = 'title'
         dataset2.config.metadata.about.title = 'title'
         self.backend.dataset_index.index_one(dataset1)
@@ -77,7 +69,7 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_returns_limited_datasets(self):
         for n in range(4):
-            ds = self.new_db_dataset(self.library.database, n=n)
+            ds = self.new_db_dataset(self._my_library.database, n=n)
             ds.config.metadata.about.title = 'title'
             self.backend.dataset_index.index_one(ds)
 
@@ -96,20 +88,20 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     # is_indexed tests
     def test_returns_true_if_dataset_is_indexed(self):
-        ds = self.new_db_dataset(self.library.database)
+        ds = self.new_db_dataset(self._my_library.database)
         self.backend.dataset_index.index_one(ds)
         ret = self.backend.dataset_index.is_indexed(ds)
         self.assertTrue(ret)
 
     def test_returns_false_if_dataset_is_not_indexed(self):
-        ds = self.new_db_dataset(self.library.database)
+        ds = self.new_db_dataset(self._my_library.database)
         ret = self.backend.dataset_index.is_indexed(ds)
         self.assertFalse(ret)
 
     # all() tests
     def test_returns_list_with_all_indexed_datasets(self):
-        ds1 = self.new_db_dataset(self.library.database, n=0)
-        ds2 = self.new_db_dataset(self.library.database, n=1)
+        ds1 = self.new_db_dataset(self._my_library.database, n=0)
+        ds2 = self.new_db_dataset(self._my_library.database, n=1)
         self.backend.dataset_index.index_one(ds1)
         self.backend.dataset_index.index_one(ds2)
         ret = self.backend.dataset_index.all()
@@ -124,7 +116,7 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     # _delete tests
     def test_deletes_given_dataset_from_index(self):
-        ds1 = self.new_db_dataset(self.library.database, n=0)
+        ds1 = self.new_db_dataset(self._my_library.database, n=0)
         self.backend.dataset_index.index_one(ds1)
 
         # was it really added?
@@ -140,8 +132,9 @@ class DatasetPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_identifier_index(self):
-        with self.library.database._engine.connect() as conn:
-            result = conn.execute('SELECT * FROM identifier_index;').fetchall()
+        with self._my_library.database._engine.connect() as conn:
+            query = 'SELECT * FROM {}.identifier_index;'.format(POSTGRES_SCHEMA_NAME)
+            result = conn.execute(query).fetchall()
             self.assertEqual(result, [])
 
     # search() tests
@@ -230,14 +223,15 @@ class IdentifierPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     def test_creates_partition_index(self):
-        with self.library.database._engine.connect() as conn:
-            result = conn.execute('SELECT * from partition_index;').fetchall()
+        with self._my_library.database._engine.connect() as conn:
+            query = 'SELECT * FROM {}.partition_index;'.format(POSTGRES_SCHEMA_NAME)
+            result = conn.execute(query).fetchall()
             self.assertEqual(result, [])
 
     # search() tests
     def test_returns_found_partitions(self):
-        dataset = self.new_db_dataset(self.library.database, n=0)
-        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        dataset = self.new_db_dataset(self._my_library.database, n=0)
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)
 
@@ -254,8 +248,8 @@ class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     # is_indexed tests
     def test_returns_true_if_partition_is_indexed(self):
-        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
-        dataset = self.new_db_dataset(self.library.database, n=0)
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = self.new_db_dataset(self._my_library.database, n=0)
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)
         ret = self.backend.partition_index.is_indexed(partition)
@@ -270,8 +264,8 @@ class PartitionPostgreSQLIndexTest(PostgreSQLBackendBaseTest):
 
     # _delete tests
     def test_deletes_given_partition_from_index(self):
-        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
-        dataset = self.new_db_dataset(self.library.database, n=0)
+        PartitionFactory._meta.sqlalchemy_session = self._my_library.database.session
+        dataset = self.new_db_dataset(self._my_library.database, n=0)
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)
 

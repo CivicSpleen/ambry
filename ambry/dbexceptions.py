@@ -1,9 +1,11 @@
 """Common exception objects.
 
-Copyright (c) 2015 Civick Knowledge. This file is licensed under the terms of
+Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
+
+# Deprecated, use exc instead.
 
 
 class RequirementError(ImportError):
@@ -103,7 +105,10 @@ class GeoError(Exception):
 
     """General error doing geographic processing."""
 
+
+
 class PhaseError(Exception):
+
     def __init__(self, *args, **kwargs):
         """General error while running a pipeline phase."""
         super(PhaseError, self).__init__(*args, **kwargs)
@@ -123,9 +128,13 @@ class IngestionError(PhaseError):
     """General error while ingesting sources."""
 
 
+class AccessError(PhaseError):
 
-
+    """Could not access a remote resource"""
 
 class TestError(PhaseError):
 
     """Error or failure in built in tests"""
+
+
+

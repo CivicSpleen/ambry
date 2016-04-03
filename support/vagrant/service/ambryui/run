@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# move stderr to stdout
+exec 2>&1
+
+HOST=0.0.0.0
+PORT=80
+WORKERS=4
+
+exec gunicorn -w $WORKERS --max-requests 10 --timeout 300 \
+--access-logfile - --error-logfile - \
+-b $HOST:$PORT ambry_ui:app

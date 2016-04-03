@@ -24,20 +24,17 @@ from ambry.util import memoize
 
 
 @memoize
-def config():
+def config(path=None, root=None, db=None):
     """Return the default run_config object for this installation."""
-    from ambry.run import get_runconfig
-    return get_runconfig()
+    import ambry.run
+    return ambry.run.load(path=path, root=root, db=db)
 
 
 @memoize
-def get_library(database_name=None):
+def get_library(path=None, root=None, db=None):
     import ambry.library as _l
     """Return the default library for this installation."""
 
-    rc = config()
-
-    if database_name:
-        rc.set_library_database(database_name)
+    rc = config(path=path, root=root, db=db )
 
     return _l.new_library(rc)

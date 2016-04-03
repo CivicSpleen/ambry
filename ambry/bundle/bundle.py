@@ -31,20 +31,18 @@ BUILD_LOG_FILE = 'log/build_log{}.txt'
 def _CaptureException(f, *args, **kwargs):
     """Decorator implementation for capturing exceptions."""
     from ambry.dbexceptions import LoggedException
-    from sqlalchemy.exc import InvalidRequestError
-    from sqlalchemy.orm.exc import DetachedInstanceError
 
     b = args[0]  # The 'self' argument
 
     try:
         return f(*args, **kwargs)
     except Exception as e:
-
+        raise
         try:
             b.set_error_state()
             b.commit()
         except Exception as e2:
-            b.log("Failed to set bundle error state: {}".format(e))
+            b.log('Failed to set bundle error state: {}'.format(e))
             raise e
 
         if b.capture_exceptions:
@@ -76,11 +74,14 @@ class Bundle(object):
     STATES.FINALIZED = 'finalized'
     STATES.INSTALLING = 'install'
     STATES.INSTALLED = 'installed'
+    STATES.CHECKEDIN = 'checkedin'
+    STATES.CHECKEDOUT = 'checkedout'
     STATES.META = 'meta'
     STATES.SCHEMA = 'schema'
     STATES.INGESTING = 'ingest'
     STATES.INGESTED = 'ingested'
     STATES.NOTINGESTABLE = 'not_ingestable'
+    STATES.SOURCE = 'source'
 
     # Other things that can be part of the 'last action'
     STATES.INFO = 'info'
@@ -135,7 +136,6 @@ class Bundle(object):
         self.is_subprocess = False  # Externally set in child processes.
         # AMBRY_IS_REMOTE is set in the docker file for the builder container
         self.is_remote_process = os.getenv('AMBRY_IS_REMOTE', False)
-        assert bool(library)
 
         # Test class imported from the test.py file
         self.test_class = None
@@ -158,6 +158,7 @@ class Bundle(object):
             self._source_url = source_url
             self.dataset.config.library.source.url = self._source_url
             self._source_fs = None
+
         elif source_url is None:
             self._source_url = None
             self.dataset.config.library.source.url = self._source_url
@@ -167,6 +168,19 @@ class Bundle(object):
             self._build_url = build_url
             self.dataset.config.library.build.url = self._build_url
             self._build_fs = None
+
+        self.dataset.commit()
+
+    def clear_file_systems(self):
+        """Remove references to build and source file systems, reverting to the defaults"""
+
+        self._source_url = None
+        self.dataset.config.library.source.url = None
+        self._source_fs = None
+
+        self._build_url = None
+        self.dataset.config.library.build.url = None
+        self._build_fs = None
 
         self.dataset.commit()
 
@@ -193,14 +207,16 @@ class Bundle(object):
         try:
             clz = bsf.import_bundle()
 
-            b = clz(self._dataset, self._library, self._source_url, self._build_url)
-            b.limited_run = self.limited_run
-            b.capture_exceptions = self.capture_exceptions
-            b.multi = self.multi
-            return b
-
         except Exception as e:
+
             raise BundleError('Failed to load bundle code file, skipping : {}'.format(e))
+
+        b = clz(self._dataset, self._library, self._source_url, self._build_url)
+        b.limited_run = self.limited_run
+        b.capture_exceptions = self.capture_exceptions
+        b.multi = self.multi
+
+        return b
 
     def import_lib(self):
         """Import the lib.py file from the bundle"""
@@ -234,7 +250,7 @@ class Bundle(object):
 
     @property
     def session(self):
-        return self.dataset._database.session
+        return self.dataset.session
 
     def rollback(self):
         return self.dataset.rollback()
@@ -246,6 +262,9 @@ class Bundle(object):
         if inspect(self._dataset).detached:
             vid = self._vid
             self._dataset = self._dataset._database.dataset(vid)
+            assert self._dataset._database # New
+        else:
+            assert self._dataset._database # Old
 
         assert self._dataset, vid
 
@@ -262,6 +281,17 @@ class Bundle(object):
     def library(self):
         return self._library
 
+    def warehouse(self, name):
+        from ambry.library.warehouse import Warehouse
+
+        self.build_fs.makedir('warehouses', allow_recreate=True)
+
+        path = self.build_fs.getsyspath('warehouses/' + name)
+
+        dsn = 'sqlite:////{}.db'.format(path)
+
+        return Warehouse(self.library, dsn=dsn, logger=self._logger)
+
     def dep(self, source_name):
         """Return a bundle dependency from the sources list
 
@@ -269,11 +299,29 @@ class Bundle(object):
         :return:
         """
         from ambry.orm.exc import NotFoundError
+        from ambry.dbexceptions import ConfigurationError
 
         source = self.source(source_name)
 
+        ref = source.url
+
+        if not ref:
+            raise ValueError("Got an empty ref for source '{}' ".format(source.name))
+
         try:
-            p = self.library.partition(source.url)
+            try:
+
+                p = self.library.partition(ref)
+            except NotFoundError:
+
+                self.warn("Partition reference {} not found, try to download it".format(ref))
+                remote, vname = self.library.find_remote_bundle(ref, try_harder=True)
+                if remote:
+                    self.warn("Installing {} from {}".format(remote, vname))
+                    self.library.checkin_remote_bundle(vname, remote)
+                    p = self.library.partition(ref)
+                else:
+                    raise
 
             if not p.is_local:
                 with self.progress.start('test', 0, message='localizing') as ps:
@@ -282,7 +330,7 @@ class Bundle(object):
             return p
 
         except NotFoundError:
-            return self.library.bundle(source.url)
+            return self.library.bundle(ref)
 
     @property
     def config(self):
@@ -308,7 +356,18 @@ class Bundle(object):
         # Return the documentation as a scalar term, which has .text() and .html methods to do
         # metadata substitution using Jinja
 
-        return self.metadata.scalar_term(self.build_source_files.documentation.record_content)
+        s = ''
+
+        rc = self.build_source_files.documentation.record_content
+
+        if rc:
+            s += rc
+
+        for k, v in  self.metadata.documentation.items():
+            if  v:
+                s += '\n### {}\n{}'.format(k.title(), v)
+
+        return self.metadata.scalar_term(s)
 
     @property
     def progress(self):
@@ -331,27 +390,40 @@ class Bundle(object):
 
     def partition(self, ref=None, **kwargs):
         """Return a partition in this bundle for a vid reference or name parts"""
+        from ambry.orm.exc import NotFoundError
+        from sqlalchemy.orm.exc import NoResultFound
 
         if not ref and not kwargs:
             return None
 
         if ref:
-
             for p in self.partitions:
-                if p.vid == b(ref) or p.name == b(ref):
-                    p._bundle = self
-                    return p
+                if ref == p.name or ref == p.vname or ref == p.vid or ref == p.id:
+                  p._bundle = self
+                  return p
 
-            return None
+            raise NotFoundError("No partition found for '{}' (a)".format(ref))
 
         elif kwargs:
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
+            try:
+                p = self.partitions._find_orm(pnq).one()
+                if p:
+                    p._bundle = self
+                    return p
+            except NoResultFound:
+                raise NotFoundError("No partition found for '{}' (b)".format(kwargs))
 
-            p = self.partitions._find_orm(pnq).one()
-            if p:
-                p._bundle = self
-                return p
+    def partition_by_vid(self, ref):
+        """A much faster way to get partitions, by vid only"""
+        from ambry.orm import Partition
+
+        p = self.session.query(Partition).filter(Partition.vid == str(ref)).first()
+        if p:
+            return self.wrap_partition(p)
+        else:
+            return None
 
     def new_partition(self, table, **kwargs):
         """
@@ -465,7 +537,7 @@ class Bundle(object):
             sources = [s for s in sources if predicate(s)]
 
         if stage:
-            sources = [s for s in sources if s.stage == stage]
+            sources = [s for s in sources if str(s.stage) == str(stage)]
 
         return sources
 
@@ -498,22 +570,28 @@ class Bundle(object):
         return BuildSourceFileAccessor(self, self.dataset, self.source_fs)
 
     @property
+    def source_fs_url(self):
+        source_url = self._source_url if self._source_url else self.dataset.config.library.source.url
+
+        if not source_url:
+            source_url = self.library.filesystem.source(self.identity.cache_key)
+
+        return source_url
+
+    @property
     def source_fs(self):
         from fs.opener import fsopendir
         from fs.errors import ResourceNotFoundError
 
         if not self._source_fs:
 
-            source_url = self._source_url if self._source_url else self.dataset.config.library.source.url
-
-            if not source_url:
-                source_url = self.library.filesystem.source(self.identity.cache_key)
+            source_url = self.source_fs_url
 
             try:
                 self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
                 if not self.is_remote_process:
-                    self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
+                    self.logger.warn('Failed to locate source dir {}; using default'.format(source_url))
                 source_url = self.library.filesystem.source(self.identity.cache_key)
                 self._source_fs = fsopendir(source_url)
 
@@ -546,7 +624,7 @@ class Bundle(object):
         base_path = os.path.dirname(self.identity.cache_key)
 
         if not self.build_fs.exists(base_path):
-            self.build_fs.makedir(base_path, allow_recreate=True)
+            self.build_fs.makedir(base_path, recursive=True, allow_recreate=True)
 
         return self.build_fs.opendir(base_path)
 
@@ -569,6 +647,8 @@ class Bundle(object):
 
         """
         search = []
+
+        assert phase is not None
 
         # Create a search list of names for getting a pipline from the metadata
         if source and source.source_table_name:
@@ -611,6 +691,7 @@ class Bundle(object):
         if not self._logger:
 
             ident = self.identity
+
             if self.multi:
                 template = '%(levelname)s %(process)d {} %(message)s'.format(ident.vid)
             else:
@@ -728,7 +809,7 @@ class Bundle(object):
         except Exception as e:
             caster_code = str(e)
 
-        v = u("""
+        templ = u("""
 Pipeline     : {}
 run time     : {}
 phase        : {}
@@ -746,8 +827,13 @@ Caster Code
 ===========
 {}
 
-""".format(pl.name, str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
-           pl.dest_table, unicode(pl), pl.headers_report(), caster_code))
+""")
+        try:
+            v = templ.format(pl.name, str(datetime.now()), pl.phase, pl.source_name, pl.source_table,
+                             pl.dest_table, unicode(pl), pl.headers_report(), caster_code)
+        except UnicodeError as e:
+            v = ''
+            self.error('Faled to write pipeline log for pipeline {} '.format(pl.name))
 
         path = os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt')
 
@@ -788,8 +874,6 @@ Caster Code
         if phase_config:
             pl.configure(phase_config)
 
-        body = []
-
         # Find the pipe configuration, from the metadata
         pipe_config = None
         pipe_name = None
@@ -801,11 +885,11 @@ Caster Code
                 raise ConfigurationError("Pipeline '{}' declared in source '{}', but not found in metadata"
                                          .format(source.pipeline, source.name))
         else:
+
             for name in self.phase_search_names(source, phase):
                 if name in self.metadata.pipelines:
                     pipe_config = self.metadata.pipelines[name]
                     pipe_name = name
-
                     break
 
         if pipe_name:
@@ -842,6 +926,7 @@ Caster Code
             apply_config(pl, self.metadata.pipelines['all'])
 
         # Allows developer to over ride pipe configuration in code
+
         self.edit_pipeline(pl)
 
         try:
@@ -861,6 +946,7 @@ Caster Code
 
     def edit_pipeline(self, pipeline):
         """Called after the meta pipeline is constructed, to allow per-pipeline modification."""
+
 
         if self._pipeline_editor:
             self._pipeline_editor(pipeline)
@@ -887,8 +973,10 @@ Caster Code
 
         # Modify for special fields
         for i, f in enumerate(fields):
-            if f == 'state':
+            if f == 'bstate':
                 row[i] = self.state
+            elif f == 'dstate':
+                row[i] = self.dstate
             elif f == 'source_fs':
                 row[i] = self.source_fs
             elif f.startswith('about'):  # all metadata in the about section, ie: about.title
@@ -920,39 +1008,106 @@ Caster Code
         return iter_source, source_pipe
 
     def _iterable_source(self, source, ps=None):
-        from ambry_sources.sources import FixedSource, GeneratorSource
+        from ambry_sources.sources import FixedSource, GeneratorSource, AspwCursorSource, PandasDataframeSource
         from ambry_sources.exceptions import MissingCredentials
         from ambry_sources import get_source
-        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe
+        from ambry.etl import GeneratorSourcePipe, SourceFileSourcePipe, PartitionSourcePipe
         from ambry.bundle.process import call_interval
+        from ambry.dbexceptions import ConfigurationError
 
         s = None
 
-        if source.reftype == 'partition':
-            source.update_table()  # Generate the source tables.
-            if ps:
-                ps.update(message='Ingested partition: {}'.format(source.datafile.path), state='done')
+        source.reftype = source.reftype.strip() if source.reftype else None
 
-            s = source.partition
+        if source.reftype == 'partition':
+            sp = PartitionSourcePipe(self, source, source.partition)
+
+        elif source.reftype == 'sql':
+
+            if source.ref.strip().lower().startswith('select'):
+                # Inline SQL
+                sql_text = source.ref.strip().strip(';')+';'
+                table = None
+                warehouse_name = source.vid
+
+            else:
+                # References a SQL file
+                if ':' in source.ref:
+                    # The ref specifies a table/view to call
+                    sql_file, table = source.ref.split(':', 1)
+                else:
+                    # Just use the first select in the sql file.
+                    sql_file, table = source.ref, None
+
+                f = self.build_source_files.file_by_path(sql_file)
+                sql_text = f.unpacked_contents
+                warehouse_name = os.path.splitext(sql_file)[0]
+
+            w = self.warehouse(warehouse_name)
+
+            cursor = w.query(sql_text, logger=self.logger)
+
+            if table:
+                # If the table as secified, select all from it
+                # For now, asuming knowledge that this is an ASPW connection
+                cursor.close()
+
+                connection = w._backend._get_connection()
+
+                cursor = connection.cursor()
+
+                cursor.execute('SELECT * FROM {};'.format(table))
+
+            else:
+                # Otherwise, use the first select encountered in the sql file, which is
+                # already prepared in the cursor from the return value
+                pass
+
+            spec = source.spec
+            spec.start_line = 1
+            spec.header_lines = [0]
+
+            s = AspwCursorSource(spec, cursor)
+            sp = GeneratorSourcePipe(self, source, s)
+
+        elif source.reftype == 'notebook':
+
+            notebook_file, env_key = source.ref.split(':', 1)
+
+            f = self.build_source_files.instance_from_name(notebook_file)
+
+            env_dict = f.execute()
+
+            o = env_dict[env_key]
+
+            spec = source.spec
+            spec.start_line = 1
+            spec.header_lines = [0]
+
+            s = PandasDataframeSource(spec, o)
             sp = GeneratorSourcePipe(self, source, s)
 
         elif source.reftype == 'generator':
             import sys
 
-            if hasattr(self, source.generator):
-                gen_cls = getattr(self, source.generator)
-            elif source.generator in sys.modules['ambry.build'].__dict__:
-                gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
-            else:
-                gen_cls = self.import_lib().__dict__[source.generator]
+            try:
+                if hasattr(self, source.generator):
+                    gen_cls = getattr(self, source.generator)
+                elif source.generator in sys.modules['ambry.build'].__dict__:
+                    gen_cls = sys.modules['ambry.build'].__dict__[source.generator]
+                else:
+                    gen_cls = self.import_lib().__dict__[source.generator]
+            except KeyError:
+                raise ConfigurationError("Could not find generator named '{}' ".format(source.generator))
 
             spec = source.spec
             spec.start_line = 1
             spec.header_lines = [0]
-            s = GeneratorSource(spec, gen_cls(self, source))
+            s = GeneratorSource(spec, gen_cls(self, source, *source.generator_args))
             sp = GeneratorSourcePipe(self, source, s)
 
         elif source.is_downloadable:
+
 
             @call_interval(5)
             def progress(read_len, total_len):
@@ -960,12 +1115,14 @@ Caster Code
                     ps.add_update('Downloading {}: {}'.format(source.url, total_len), source=source,
                                   state='downloading')
                 else:
-                    self.log('Downloading {}'.format(source.url, total_len), source=source, state='downloading')
-
+                    self.log(
+                        'Downloading {}'.format(source.url, total_len),
+                        source=source,
+                        state='downloading')
             try:
-                s = get_source(
-                    source.spec, self.library.download_cache,
-                    account_accessor=self.library.account_acessor, callback=progress)
+
+                s = self.get_source(source, callback = progress)
+
 
             except MissingCredentials as exc:
                 from ambry.dbexceptions import ConfigurationError
@@ -977,7 +1134,7 @@ Caster Code
                     'add credentials:\n' \
                     '{location}:\n' \
                     '{cred}'.format(location=exc.location, cred='\n'.join(formatted_cred))
-                raise ConfigurationError(msg+'\nOriginal Exception: '+str(exc))
+                raise ConfigurationError(msg + '\nOriginal Exception: ' + str(exc))
 
             if isinstance(s, FixedSource):
                 from ambry_sources.sources.spec import ColumnSpec
@@ -992,6 +1149,111 @@ Caster Code
 
         return s, sp
 
+    def get_source(self, source, clean=False,  callback=None):
+        """
+        Download a file from a URL and return it wrapped in a row-generating acessor object.
+
+        :param spec: A SourceSpec that describes the source to fetch.
+        :param account_accessor: A callable to return the username and password to use for access FTP and S3 URLs.
+        :param clean: Delete files in cache and re-download.
+        :param callback: A callback, called while reading files in download. signatire is f(read_len, total_len)
+
+        :return: a SourceFile object.
+        """
+        from fs.zipfs import ZipOpenError
+        import os
+        from ambry_sources.sources import ( GoogleSource, CsvSource, TsvSource, FixedSource,
+                                            ExcelSource, PartitionSource, SourceError, DelayedOpen,
+                                            DelayedDownload, ShapefileSource, SocrataSource )
+        from ambry_sources import extract_file_from_zip
+
+
+        spec = source.spec
+        cache_fs = self.library.download_cache
+        account_accessor = self.library.account_accessor
+
+        # FIXME. urltype should be moved to reftype.
+        url_type = spec.get_urltype()
+
+        def do_download():
+            from ambry_sources.fetch import download
+
+            return download(spec.url, cache_fs, account_accessor, clean=clean,
+                            logger=self.logger, callback=callback)
+
+        if url_type == 'file':
+
+            from fs.opener import fsopen
+
+            syspath = spec.url.replace('file://', '')
+
+            contents = self.source_fs.getcontents(syspath)
+            cache_path = syspath
+            cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate = True)
+            cache_fs.setcontents(cache_path, contents)
+
+        elif url_type not in ('gs', 'socrata'):  # FIXME. Need to clean up the logic for gs types.
+            try:
+                cache_path, download_time = do_download()
+                spec.download_time = download_time
+            except Exception as e:
+                from ambry_sources.exceptions import DownloadError
+                raise DownloadError("Failed to download {}; {}".format(spec.url, e))
+        else:
+            cache_path, download_time = None, None
+
+
+
+        if url_type == 'zip':
+            try:
+                fstor = extract_file_from_zip(cache_fs, cache_path, spec.url, spec.file)
+            except ZipOpenError:
+                # Try it again
+                cache_fs.remove(cache_path)
+                cache_path, spec.download_time = do_download()
+                fstor = extract_file_from_zip(cache_fs, cache_path, spec.url, spec.file)
+
+            file_type = spec.get_filetype(fstor.path)
+
+        elif url_type == 'gs':
+            fstor = get_gs(spec.url, spec.segment, account_accessor)
+            file_type = 'gs'
+
+        elif url_type == 'socrata':
+            spec.encoding = 'utf8'
+            spec.header_lines = [0]
+            spec.start_line = 1
+            url = SocrataSource.download_url(spec)
+            fstor = DelayedDownload(url, cache_fs)
+            file_type = 'socrata'
+
+        else:
+            fstor = DelayedOpen(cache_fs, cache_path, 'rb')
+            file_type = spec.get_filetype(fstor.path)
+
+        spec.filetype = file_type
+
+        TYPE_TO_SOURCE_MAP = {
+            'gs': GoogleSource,
+            'csv': CsvSource,
+            'tsv': TsvSource,
+            'fixed': FixedSource,
+            'txt': FixedSource,
+            'xls': ExcelSource,
+            'xlsx': ExcelSource,
+            'partition': PartitionSource,
+            'shape': ShapefileSource,
+            'socrata': SocrataSource
+        }
+
+        cls = TYPE_TO_SOURCE_MAP.get(file_type)
+        if cls is None:
+            raise SourceError(
+                "Failed to determine file type for source '{}'; unknown type '{}' "
+                    .format(spec.name, file_type))
+
+        return cls(spec, fstor)
+
     #
     # States
     #
@@ -1001,11 +1263,6 @@ Caster Code
         self.buildstate.clean()
         self.buildstate.commit()
         return
-
-    @property
-    def state(self):
-        """Return the current build state"""
-        return self.buildstate.state.current
 
     @property
     def error_state(self):
@@ -1020,9 +1277,22 @@ Caster Code
 
         return self.progress.build
 
+    @property
+    def state(self):
+        """Return the current build state.
+
+        Note! This is different from the dataset state.
+        """
+        return self.buildstate.state.current
+
     @state.setter
     def state(self, state):
-        """Set the current build state and record the time to maintain history"""
+        """Set the current build state and record the time to maintain history.
+
+        Note! This is different from the dataset state. Setting the build set is commiteed to the
+        progress table/database immediately. The dstate is also set, but is not committed until the
+        bundle is committed. So, the dstate changes more slowly.
+        """
 
         assert state != 'build_bundle'
 
@@ -1034,6 +1304,27 @@ Caster Code
         self.buildstate.state.exception = None
         self.buildstate.state.exception_type = None
         self.buildstate.commit()
+
+        if state in (self.STATES.NEW, self.STATES.CLEANED, self.STATES.BUILT, self.STATES.FINALIZED,
+                     self.STATES.SOURCE):
+            state = state if state != self.STATES.CLEANED else self.STATES.NEW
+            self.dstate = state
+
+    @property
+    def dstate(self):
+        """Return the current dataset state.
+
+        Note! This is different from the build state.
+        """
+        return self.dataset.state
+
+    @dstate.setter
+    def dstate(self, v):
+        """Return the current dataset state.
+
+        Note! This is different from the build state.
+        """
+        self.dataset.state = v
 
     def record_stage_state(self, phase, stage):
         """Record the completion times of phases and stages"""
@@ -1064,9 +1355,20 @@ Caster Code
 
         self.ingest(sources, tables, stage, force=force)
 
+        self.source_schema(sources, tables, clean=force)
+
         self.schema(sources, tables, force=force)
 
         self.build(sources, tables, stage, force=force)
+
+    def run_stages(self):
+
+        stages = set([source.stage for source in self.sources])
+
+        for stage in stages:
+            sources = [source for source in self.sources if source.stage == stage]
+
+            self.run(sources=sources)
 
     #
     # Syncing
@@ -1080,6 +1382,8 @@ Caster Code
         :return:
         """
 
+        self.dstate = self.STATES.BUILDING
+
         if self.is_finalized:
             self.error("Can't sync; bundle is finalized")
             return False
@@ -1091,36 +1395,98 @@ Caster Code
 
         self.library.search.index_bundle(self, force=True)
 
+        self.commit()
         return syncs
 
-    def sync_in(self):
+    def sync_in(self, force=False):
         """Synchronize from files to records, and records to objects"""
         self.log('---- Sync In ----')
-        from ambry.bundle.files import BuildSourceFile
-        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
-        self.build_source_files.record_to_objects()
 
-        self.library.commit()
+        self.dstate = self.STATES.BUILDING
+
+        for path_name in self.source_fs.listdir():
+
+            f = self.build_source_files.instance_from_name(path_name)
+
+            if not f:
+                self.warn('Ignoring unknown file: {}'.format(path_name))
+                continue
+
+            if f and f.exists and (f.fs_is_newer or force):
+                self.log('Sync: {}'.format(f.record.path))
+                f.fs_to_record()
+                f.record_to_objects()
+
+        self.commit()
+
         self.library.search.index_bundle(self, force=True)
         # self.state = self.STATES.SYNCED
 
+    def sync_in_files(self, force=False):
+        """Synchronize from files to records"""
+        self.log('---- Sync Files ----')
+
+        self.dstate = self.STATES.BUILDING
+
+        for f in self.build_source_files:
+
+            if self.source_fs.exists(f.record.path):
+                # print f.path, f.fs_modtime, f.record.modified, f.record.source_hash, f.fs_hash
+                if f.fs_is_newer or force:
+                    self.log('Sync: {}'.format(f.record.path))
+                    f.fs_to_record()
+
+        self.commit()
+
+    def sync_in_records(self, force=False):
+        """Synchronize from files to records"""
+        self.log('---- Sync Files ----')
+
+        for f in self.build_source_files:
+            f.record_to_objects()
+
+        # Only the metadata needs to be driven to the objects, since the other files are used as code,
+        # directly from the file record.
+        self.build_source_files.file(File.BSFILE.META).record_to_objects()
+
+        self.commit()
+
+    def sync_out(self, file_name=None, force=False):
+        """Synchronize from objects to records"""
+        self.log('---- Sync Out ----')
+        from ambry.bundle.files import BuildSourceFile
+
+        self.dstate = self.STATES.BUILDING
+
+        for f in self.build_source_files.list_records():
+
+            if (f.sync_dir() == BuildSourceFile.SYNC_DIR.RECORD_TO_FILE or f.record.path == file_name) or force:
+                self.log('Sync: {}'.format(f.record.path))
+                f.record_to_fs()
+
+        self.commit()
+
     def sync_objects_in(self):
         """Synchronize from records to objects"""
+        self.dstate = self.STATES.BUILDING
         self.build_source_files.record_to_objects()
 
-    def sync_out(self):
-        """Synchronize from objects to records"""
-        from ambry.bundle.files import BuildSourceFile
-        self.build_source_files.objects_to_record()
-        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
-        # self.state = self.STATES.SYNCED
-
-    def sync_objects_out(self):
+    def sync_objects_out(self, force=False):
         """Synchronize from objects to records, and records to files"""
-        self.log('---- Sync Out ----')
-        self.build_source_files.objects_to_record()
+        self.log('---- Sync Objects Out ----')
+        from ambry.bundle.files import BuildSourceFile
+
+        self.dstate = self.STATES.BUILDING
+
+        for f in self.build_source_files.list_records():
+
+            self.log('Sync: {}'.format(f.record.path))
+            f.objects_to_record()
+
+        self.commit()
 
     def sync_objects(self):
+        self.dstate = self.STATES.BUILDING
         self.build_source_files.record_to_objects()
         self.build_source_files.objects_to_record()
 
@@ -1129,9 +1495,11 @@ Caster Code
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
 
+        self.dstate = self.STATES.BUILDING
+
         synced = 0
 
-        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST]:
+        for fc in [File.BSFILE.BUILD, File.BSFILE.META, File.BSFILE.LIB, File.BSFILE.TEST, File.BSFILE.DOC]:
             bsf = self.build_source_files.file(fc)
             if bsf.fs_is_newer:
                 self.log('Syncing {}'.format(bsf.file_name))
@@ -1144,18 +1512,19 @@ Caster Code
 
         return synced
 
-    def sync_sources(self):
+    def sync_sources(self, force=False):
         """Sync in only the sources.csv file"""
         from ambry.orm.file import File
-        from ambry.bundle.files import BuildSourceFile
+
+        self.dstate = self.STATES.BUILDING
 
         synced = 0
 
         for fc in [File.BSFILE.SOURCES]:
             bsf = self.build_source_files.file(fc)
-            if bsf.fs_is_newer:
+            if bsf.fs_is_newer or force:
                 self.log('Syncing {}'.format(bsf.file_name))
-                bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+                bsf.fs_to_objects()
                 synced += 1
 
         return synced
@@ -1165,11 +1534,13 @@ Caster Code
         from ambry.orm.file import File
         from ambry.bundle.files import BuildSourceFile
 
+        self.dstate = self.STATES.BUILDING
+
         synced = 0
         for fc in [File.BSFILE.SCHEMA, File.BSFILE.SOURCESCHEMA]:
             bsf = self.build_source_files.file(fc)
             if bsf.fs_is_newer:
-                self.log("Syncing {}".format(bsf.file_name))
+                self.log('Syncing {}'.format(bsf.file_name))
                 bsf.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
                 synced += 1
 
@@ -1193,6 +1564,7 @@ Caster Code
 
         self.log('---- Cleaning ----')
         self.state = self.STATES.CLEANING
+        self.dstate = self.STATES.BUILDING
 
         self.commit()
 
@@ -1297,7 +1669,7 @@ Caster Code
         """"Clean ingested files"""
         for s in self.sources:
             df = s.datafile
-            if df.exists:
+            if df.exists and not s.is_partition:
                 df.remove()
                 s.state = s.STATES.NEW
 
@@ -1325,9 +1697,7 @@ Caster Code
 
     def clean_build_files(self):
         """Remove all of the build files"""
-
-        for bs in self.build_source_files:
-            print('!!!!', bs.path)
+        pass
 
     def clean_build_state(self):
 
@@ -1339,7 +1709,7 @@ Caster Code
     #
 
     @CaptureException
-    def ingest(self, sources=None, tables=None, stage=None, force=False):
+    def ingest(self, sources=None, tables=None, stage=None, force=False, load_meta=False):
         """Ingest a set of sources, specified as source objects, source names, or destination tables.
         If no stage is specified, execute the sources in groups by stage.
 
@@ -1355,6 +1725,9 @@ Caster Code
 
         self.log('---- Ingesting ----')
 
+        self.dstate = self.STATES.BUILDING
+        self.commit() # WTF? Without this, postgres blocks between table query, and update seq id in source tables.
+
         key = lambda s: s.stage if s.stage else 1
 
         def not_final_or_delete(s):
@@ -1366,7 +1739,7 @@ Caster Code
             try:
                 return s.is_processable and not s.is_ingested and not s.is_built
             except (IOError, zlib.error):
-                s.datafile.remove()
+                s.local_datafile.remove()
                 return True
 
         sources = sorted(self._resolve_sources(sources, tables, stage, predicate=not_final_or_delete),
@@ -1381,42 +1754,62 @@ Caster Code
         count = 0
         errors = 0
 
-        if True:
-            self._run_events(TAG.BEFORE_INGEST, 0)
-            # Clear out all ingested files that are malformed
-            for s in self.sources:
-                if s.is_downloadable:
-                    df = s.datafile
-                    try:
-                        info = df.info
-                        df.close()
-                    except (ResourceNotFoundError, zlib.error, IOError):
-                        df.remove()
+        self._run_events(TAG.BEFORE_INGEST, 0)
+        # Clear out all ingested files that are malformed
+        for s in self.sources:
+            if s.is_downloadable:
+                df = s.datafile
+                try:
+                    info = df.info
+                    df.close()
+                except (ResourceNotFoundError, zlib.error, IOError):
+                    df.remove()
 
-            for stage, g in groupby(sources, key):
-                sources = [s for s in g if not_final_or_delete(s)]
+        for stage, g in groupby(sources, key):
+            sources = [s for s in g if not_final_or_delete(s)]
 
-                if not len(sources):
-                    continue
+            if not len(sources):
+                continue
 
-                self._run_events(TAG.BEFORE_INGEST, stage)
-                stage_errors = self._ingest_sources(sources, stage, force=force)
+            self._run_events(TAG.BEFORE_INGEST, stage)
 
-                errors += stage_errors
+            stage_errors = self._ingest_sources(sources, stage, force=force)
 
-                count += len(sources) - stage_errors
+            errors += stage_errors
 
-                self._run_events(TAG.AFTER_INGEST, stage)
-                self.record_stage_state(self.STATES.INGESTING, stage)
+            count += len(sources) - stage_errors
 
-            self.state = self.STATES.INGESTED
+            self._run_events(TAG.AFTER_INGEST, stage)
+            self.record_stage_state(self.STATES.INGESTING, stage)
+
+        self.state = self.STATES.INGESTED
 
         try:
             pass
         finally:
             self._run_events(TAG.AFTER_INGEST, 0)
 
-        self.log("Ingested {} sources".format(count))
+        self.log('Ingested {} sources'.format(count))
+
+        if load_meta:
+
+            if len(sources) == 1:
+                iterable_source, source_pipe = self.source_pipe(sources[0])
+
+                try:
+                    meta = iterable_source.meta
+                    if meta:
+                        self.metadata.about.title = meta['title']
+                        self.metadata.about.summary = meta['summary']
+                        self.build_source_files.bundle_meta.objects_to_record()
+
+                except AttributeError as e:
+                    self.warn("Failed to set metadata: {}".format(e))
+                    pass
+            else:
+                self.warn("Didn't not load meta from source. Must have exactly one soruce, got {}".format(len(sources)))
+
+        self.commit()
 
         if errors == 0:
             return True
@@ -1442,6 +1835,7 @@ Caster Code
 
             # Create all of the source tables first, so we can't get contention for creating them
             # in MP.
+
             for source in sources:
                 _ = source.source_table
 
@@ -1465,7 +1859,9 @@ Caster Code
                     raise
             else:
                 for i, source in enumerate(downloadable_sources, 1):
-                    ps.add(message='Ingesting source #{}, {}'.format(i, source.name), source=source, state='running')
+                    ps.add(
+                        message='Ingesting source #{}, {}'.format(i, source.name),
+                        source=source, state='running')
                     r = self._ingest_source(source, ps, force)
                     if not r:
                         errors += 1
@@ -1485,12 +1881,15 @@ Caster Code
             from ambry.orm.exc import NotFoundError
 
             if not source.is_partition and source.datafile.exists:
+
                 if not source.datafile.is_finalized:
                     source.datafile.remove()
                 elif force:
                     source.datafile.remove()
                 else:
-                    ps.update(message='Source {} already ingested, skipping'.format(source.name), state='skipped')
+                    ps.update(
+                        message='Source {} already ingested, skipping'.format(source.name),
+                        state='skipped')
                     return True
 
             if source.is_partition:
@@ -1509,8 +1908,8 @@ Caster Code
             iterable_source, source_pipe = self.source_pipe(source, ps)
 
             if not source.is_ingestible:
-                self.update(message='Not an ingestiable source: {}'.format(source.name),
-                            state='skipped', source=source)
+                ps.update(message='Not an ingestiable source: {}'.format(source.name),
+                          state='skipped', source=source)
                 source.state = source.STATES.NOTINGESTABLE
 
                 return True
@@ -1522,15 +1921,29 @@ Caster Code
             def ingest_progress_f(i):
                 (desc, n_records, total, rate) = source.datafile.report_progress()
 
-                ps.update(message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
+                ps.update(
+                    message='Ingesting {}: rate: {}'.format(source.spec.name, rate), item_count=n_records)
 
-            source.datafile.load_rows(iterable_source, callback=ingest_progress_f,
-                                      limit=500 if self.limited_run else None)
+            source.datafile.load_rows(iterable_source,
+                                      callback=ingest_progress_f,
+                                      limit=500 if self.limited_run else None,
+                                      intuit_type=True, run_stats=False)
+
+            if source.datafile.meta['warnings']:
+                for w in source.datafile.meta['warnings']:
+                    self.error("Ingestion error: {}".format(w))
+
+            ps.update(message='Ingested to {}'.format(source.datafile.syspath))
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
 
-            source.update_table()  # Generate the source tables.
+            # source.update_table()  # Generate the source tables.
             source.update_spec()  # Update header_lines, start_line, etc.
+
+            if self.limited_run:
+                source.end_line = None  # Otherwize, it will be 500
+
+            self.build_source_files.sources.objects_to_record()
 
             ps.update(message='Ingested {}'.format(source.datafile.path), state='done')
             source.state = source.STATES.INGESTED
@@ -1543,7 +1956,7 @@ Caster Code
             from ambry.util import qualified_class_name
 
             ps.update(
-                message="Source {} failed with exception: {}".format(source.name, e),
+                message='Source {} failed with exception: {}'.format(source.name, e),
                 exception_class=qualified_class_name(e),
                 exception_trace=str(traceback.format_exc()),
                 state='error'
@@ -1569,6 +1982,20 @@ Caster Code
     #
 
     @CaptureException
+    def source_schema(self, sources=None, tables=None, clean=False):
+        """Process a collection of ingested sources to make source tables. """
+
+        sources = self._resolve_sources(sources, tables, None,
+                                        predicate=lambda s: s.is_processable)
+
+        for source in sources:
+            source.update_table()
+            self.log("Creating source schema for '{}': Table {},  {} columns"
+                     .format(source.name, source.source_table.name, len(source.source_table.columns)))
+
+        self.commit()
+
+    @CaptureException
     def schema(self, sources=None, tables=None, clean=False, force=False, use_pipeline=False):
         """
         Generate destination schemas.
@@ -1578,13 +2005,16 @@ Caster Code
         :param clean: Delete tables and partitions first
         :param force: Population tables even if the table isn't empty
         :param use_pipeline: If True, use the build pipeline to determine columns. If False,
-            use the source schemas.
 
         :return: True on success.
         """
         from itertools import groupby
         from operator import attrgetter
         from ambry.etl import Collect, Head
+        from ambry.orm.exc import NotFoundError
+
+        self.dstate = self.STATES.BUILDING
+        self.commit()  # Workaround for https://github.com/CivicKnowledge/ambry/issues/171
 
         self.log('---- Schema ----')
 
@@ -1597,9 +2027,6 @@ Caster Code
         # Group the sources by the destination table name
         keyfunc = attrgetter('dest_table')
         for t, table_sources in groupby(sorted(resolved_sources, key=keyfunc), keyfunc):
-
-            if not force and not t.is_empty():
-                continue
 
             if use_pipeline:
                 for source in table_sources:
@@ -1628,17 +2055,40 @@ Caster Code
                 # with the header, then sort on the postition. This will produce a stream of header names
                 # that may have duplicates, but which is generally in the order the headers appear in the
                 # sources. The duplicates are properly handled when we add the columns in add_column()
+
+                self.commit()
+
+                def source_cols(source):
+                    if source.is_partition and not source.source_table_exists:
+                        return enumerate(source.partition.table.columns)
+
+                    else:
+                        return enumerate(source.source_table.columns)
+
                 columns = sorted(set([(i, col.dest_header, col.datatype, col.description, col.has_codes)
-                                      for source in table_sources
-                                      for i, col in enumerate(source.source_table.columns)]))
+                                      for source in table_sources for i, col in source_cols(source)]))
 
                 initial_count = len(t.columns)
 
                 for pos, name, datatype, desc, has_codes in columns:
-                    c = t.add_column(name=name,
-                                     datatype=datatype,
-                                     description=desc,
-                                     update_existing=True)
+
+                    kwds = dict(
+                        name=name,
+                        datatype=datatype,
+                        description=desc,
+                        update_existing=True
+                    )
+
+
+                    try:
+                        extant = t.column(name)
+                    except NotFoundError:
+                        extant = None
+
+                    if extant is None or not extant.description:
+                        kwds['description'] = desc
+
+                    c = t.add_column(**kwds)
 
                     if has_codes:
                         c.datatype = 'types.{}OrCode'.format(datatype.title())
@@ -1659,30 +2109,7 @@ Caster Code
 
         self.commit()
 
-        bsf = self.build_source_files.file(File.BSFILE.SCHEMA)
-
-        bsf.objects_to_record()
-        bsf.record_to_fs()
-
         return True
-
-    def source_schema(self, sources=None, tables=None, clean=False):
-        """Process a collection of ingested sources to make source tables. """
-        from ambry.bundle.files import BuildSourceFile
-
-        sources = self._resolve_sources(sources, tables, None,
-                                        predicate=lambda s: s.is_processable and not s.is_partition)
-
-        for source in sources:
-            if source.datafile.exists:
-                source.update_table()
-
-        self.commit()
-
-        bsf = self.build_source_files.file(File.BSFILE.SOURCESCHEMA)
-
-        bsf.objects_to_record()
-        bsf.record_to_fs()
 
     #
     # Build
@@ -1722,17 +2149,21 @@ Caster Code
             if p.type == p.TYPE.SEGMENT:
                 self.log("Removing old segment partition: {}".format(p.identity.name))
                 try:
-                    self.wrap_partition(p).datafile.remove()
+                    self.wrap_partition(p).local_datafile.remove()
                     self.session.delete(p)
                 except NotFoundError:
                     pass
 
         for s in sources:
 
+            # Don't delete partitions fro mother bundles!
+            if s.reftype == 'partition':
+                continue
+
             p = s.partition
             if p:
                 try:
-                    self.wrap_partition(p).datafile.remove()
+                    self.wrap_partition(p).local_datafile.remove()
                     self.session.delete(p)
                 except NotFoundError:
                     pass
@@ -1742,8 +2173,8 @@ Caster Code
 
         self.commit()
 
-    #@CaptureException
-    def build(self, sources=None, tables=None, stage=None, force=False, finalize=True):
+    # @CaptureException
+    def build(self, sources=None, tables=None, stage=None, force=False):
         """
         :param phase:
         :param stage:
@@ -1758,6 +2189,7 @@ Caster Code
 
         self.log('==== Building ====')
         self.state = self.STATES.BUILDING
+        self.commit()
 
         class SourceSet(object):
             """Container for sources that can reload them after they get expired from the session"""
@@ -1776,113 +2208,108 @@ Caster Code
             def __len__(self):
                 return len(self._s_vids)
 
-        try:
-            # FIXME: Find appropriate place for sql execution.
-            from ambry.library.warehouse import execute_sql
-            for f in self.dataset.files:
-                if f.path == 'bundle.sql' and f.unpacked_contents:
-                    # close current sqlite connection (pysqlite) because virtual tables implementations
-                    # uses its own connection (apsw)
-                    self.close()
-                    execute_sql(self, f.unpacked_contents)
-                    break
+        self._run_events(TAG.BEFORE_BUILD, 0)
 
-            self._run_events(TAG.BEFORE_BUILD, 0)
+        resolved_sources = SourceSet(self, self._resolve_sources(sources, tables, stage=stage,
+                                                                 predicate=lambda s: s.is_processable))
 
-            resolved_sources = SourceSet(self, self._resolve_sources(sources, tables, stage=stage,
-                                                                     predicate=lambda s: s.is_processable))
+        with self.progress.start('build', stage, item_total=len(resolved_sources)) as ps:
 
-            with self.progress.start('build', stage, item_total=len(resolved_sources)) as ps:
+            if len(resolved_sources) == 0:
+                ps.update(message='No sources', state='skipped')
+                self.log('No processable sources, skipping build stage {}'.format(stage))
+                return True
 
-                if len(resolved_sources) == 0:
-                    ps.done(message='No sources', state='skipped')
-                    self.log('No processable sources, skipping build stage {}'.format(stage))
-                    return True
+            if not self.pre_build(force):
+                ps.update(message='Pre-build failed', state='skipped')
+                return False
 
-                if not self.pre_build(force):
-                    ps.done(message='Pre-build failed', state='skipped')
-                    return False
+            if force:
+                self._reset_build(resolved_sources)
 
-                if force:
-                    self._reset_build(resolved_sources)
+            resolved_sources.reload()
 
-                resolved_sources.reload()
+            e = [
+                (stage, SourceSet(self, list(stage_sources)))
+                for stage, stage_sources in groupby(sorted(resolved_sources, key=attrgetter('stage')),
+                                                    attrgetter('stage'))
 
-                e = [
-                    (stage, SourceSet(self, list(stage_sources)))
-                    for stage, stage_sources in groupby(sorted(resolved_sources, key=attrgetter('stage')),
-                                                        attrgetter('stage'))
+                ]
 
-                    ]
+            for stage, stage_sources in e:
 
-                for stage, stage_sources in e:
+                stage_sources.reload()
 
-                    stage_sources.reload()
+                for s in stage_sources:
+                    s.state = self.STATES.WAITING
+                self.commit()
 
-                    for s in stage_sources:
-                        s.state = self.STATES.WAITING
-                    self.commit()
+                stage_sources.reload()
 
-                    stage_sources.reload()
+                self.log('Processing {} sources, stage {} ; first 10: {}'
+                         .format(len(stage_sources), stage, [x.name for x in stage_sources.sources[:10]]))
+                self._run_events(TAG.BEFORE_BUILD, stage)
 
-                    self.log('Processing {} sources, stage {} ; first 10: {}'
-                             .format(len(stage_sources), stage, [x.name for x in stage_sources.sources[:10]]))
-                    self._run_events(TAG.BEFORE_BUILD, stage)
+                if self.multi:
 
-                    if self.multi:
+                    try:
+                        # The '1' for chunksize ensures that the subprocess only gets one
+                        # source to build. Combined with maxchildspertask = 1 in the pool,
+                        # each process will only handle one source before exiting.
 
-                        try:
-                            # The '1' for chunksize ensures that the subprocess only gets one
-                            # source to build. Combined with maxchildspertask = 1 in the pool,
-                            # each process will only handle one source before exiting.
+                        args = [(self.identity.vid, stage, source.vid, force) for source in stage_sources]
+                        pool = self.library.process_pool(limited_run=self.limited_run)
+                        r = pool.map_async(build_mp, args, 1)
+                        completed_sources = r.get()
 
-                            args = [(self.identity.vid, stage, source.vid, force) for source in stage_sources]
-                            pool = self.library.process_pool(limited_run=self.limited_run)
-                            r = pool.map_async(build_mp, args, 1)
-                            completed_sources = r.get()
+                        ps.add('Finished MP building {} sources. Starting MP coalescing'
+                               .format(len(completed_sources)))
 
-                            ps.add("Finished MP building {} sources. Starting MP coalescing"
-                                   .format(len(completed_sources)))
+                        partition_names = [(self.identity.vid, k) for k, v
+                                           in self.collect_segment_partitions().items()]
 
-                            partition_names = [(self.identity.vid, k) for k, v
-                                               in self.collect_segment_partitions().items()]
+                        r = pool.map_async(unify_mp, partition_names, 1)
 
-                            r = pool.map_async(unify_mp, partition_names, 1)
+                        completed_partitions = r.get()
 
-                            completed_partitions = r.get()
+                        ps.add('Finished MP coalescing {} partitions'.format(len(completed_partitions)))
 
-                            ps.add("Finished MP coalescing {} partitions".format(len(completed_partitions)))
+                        pool.close()
+                        pool.join()
 
-                            pool.close()
-                            pool.join()
+                    except KeyboardInterrupt:
+                        self.log('Got keyboard interrrupt; terminating workers')
+                        pool.terminate()
 
-                        except KeyboardInterrupt:
-                            self.log('Got keyboard interrrupt; terminating workers')
-                            pool.terminate()
+                else:
 
-                    else:
+                    for i, source in enumerate(stage_sources):
+                        id_ = ps.add(message='Running source {}'.format(source.name),
+                                     source=source, item_count=i, state='running')
+                        self.build_source(stage, source, ps, force=force)
 
-                        for i, source in enumerate(stage_sources):
-                            ps.add(message='Running source {}'.format(source.name),
-                                   source=source, item_count=i, state='running')
-                            self.build_source(stage, source, ps, force=force)
+                        ps.update(message='Finished processing source', state='done')
 
-                        self.unify_partitions()
+                        # This bit seems to solve a problem where the records from the ps.add above
+                        # never gets closed out.
+                        ps.get(id_).state = 'done'
+                        self.progress.commit()
 
-                    self._run_events(TAG.AFTER_BUILD, stage)
+                    self.unify_partitions()
 
-            self.state = self.STATES.BUILT
+                self._run_events(TAG.AFTER_BUILD, stage)
 
-            if finalize:
-                self.finalize()
+        self.state = self.STATES.BUILT
+        self.commit()
 
-        finally:
-            self._run_events(TAG.AFTER_BUILD, 0)
+        self._run_events(TAG.AFTER_BUILD, 0)
 
         self.close_session()
 
         self.log('==== Done Building ====')
         self.buildstate.commit()
+        self.state = self.STATES.BUILT
+        self.commit()
         return True
 
     def build_table(self, table, force=False):
@@ -1897,7 +2324,6 @@ Caster Code
 
     def build_source(self, stage, source, ps, force=False):
         """Build a single source"""
-        from ambry.bundle.events import TAG
         from ambry.bundle.process import call_interval
 
         assert source.is_processable, source.name
@@ -1926,9 +2352,7 @@ Caster Code
                 if n_records > 0:
                     ps.update(message='Running pipeline {}: rate: {}'
                               .format(source_name, rate),
-                              s_vid=s_vid,
-                              item_type='rows',
-                              item_count=n_records)
+                              s_vid=s_vid, item_type='rows', item_count=n_records)
 
             pl.run(callback=run_progress_f)
 
@@ -1937,7 +2361,7 @@ Caster Code
                 ps.update(message='Run final routine: {}'.format(f.__name__))
                 f(pl)
 
-            ps.update(message='Finished running source')
+            ps.update(message='Finished building source')
 
         except:
             self.log_pipeline(pl)
@@ -1973,7 +2397,6 @@ Caster Code
 
         self.commit()
 
-        ps.update(message='Finished source', state='done')
         return source.name
 
     def collect_segment_partitions(self):
@@ -1993,8 +2416,8 @@ Caster Code
         return partitions
 
     def unify_partitions(self):
-        """For all of the segments for a partition, create the parent partition, combine the children into the parent,
-        and delete the children. """
+        """For all of the segments for a partition, create the parent partition, combine the
+        children into the parent, and delete the children. """
 
         partitions = self.collect_segment_partitions()
 
@@ -2024,40 +2447,48 @@ Caster Code
                         segments.add(p)
 
         parent = self.partitions.get_or_new_partition(partition_name, type=Partition.TYPE.UNION)
+
         parent.state = parent.STATES.COALESCING
 
-        if parent.datafile.exists:
-            ps.add("Removing exisiting datafile", partition=parent)
-            parent.datafile.remove()
+        if parent.local_datafile.exists:
+            ps.add('Removing existing datafile', partition=parent)
+            parent.local_datafile.remove()
 
         if len(segments) == 1:
             seg = list(segments)[0]
             # If there is only one segment, just move it over
             ps.update('Coalescing single partition {} '.format(seg.identity.name), partition=seg)
-            with self.wrap_partition(seg).datafile.open() as f:
-                parent.datafile.set_contents(f)
+
+            with self.wrap_partition(seg).local_datafile.open() as f:
+                parent.local_datafile.set_contents(f)
+                parent.epsg = seg.epsg
+                parent.title = seg.title
+                parent.description = seg.description
+                parent.notes = parent.notes
+                parent.segment = None
 
         else:
 
-            headers = None
             i = 1  # Row id.
 
             def coalesce_progress_f(i):
-                (desc, n_records, total, rate) = parent.datafile.report_progress()
+                (desc, n_records, total, rate) = parent.local_datafile.report_progress()
 
                 ps.update(message='Coalescing {}: {}/{} of {}, rate: {}'
                           .format(parent.identity.name, i, n_records, total, rate))
 
             coalesce_progress_f = CallInterval(coalesce_progress_f, 10)  # FIXME Should be a decorator
 
-            with parent.datafile.writer as w:
+            with parent.local_datafile.writer as w:
                 for seg in sorted(segments, key=lambda x: b(x.name)):
                     ps.add('Coalescing {} '.format(seg.identity.name), partition=seg)
 
-                    with self.wrap_partition(seg).datafile.reader as reader:
-                        import time
+                    if not parent.epsg and seg.epsg:
+                        parent.epsg = seg.epsg
+
+                    with self.wrap_partition(seg).local_datafile.reader as reader:
                         for row in reader.rows:
-                            w.insert_row((i,) + row[1:])
+                            w.insert_row((i,) + row[1:])  # Writes the ID Value
                             i += 1
 
                             if i % 1000 == 1:
@@ -2070,7 +2501,10 @@ Caster Code
 
         for s in segments:
             assert s.segment is not None
-            self.wrap_partition(s).datafile.remove()
+            assert s.type == s.TYPE.SEGMENT
+            assert s.d_vid == self.identity.vid  # Be sure it is in our bundle
+
+            self.wrap_partition(s).local_datafile.remove()
             self.session.delete(s)
 
         self.commit()
@@ -2088,9 +2522,12 @@ Caster Code
         from ambry.valuetype.types import parse_date, parse_time, parse_datetime
         import ambry.valuetype.types
         import ambry.valuetype.math
-        import ambry.valuetype.string
+        import ambry.valuetype.number
         import ambry.valuetype.exceptions
         import ambry.valuetype.test
+        import ambry.valuetype.string
+        import ambry.valuetype
+
 
         def set_from(f, frm):
             try:
@@ -2108,7 +2545,7 @@ Caster Code
             parse_time=parse_time,
             parse_datetime=parse_datetime,
             partial=partial,
-            bundle=self,
+            bundle=self
         )
 
         test_env.update(kwargs)
@@ -2117,9 +2554,13 @@ Caster Code
         test_env.update(random.__dict__)
         test_env.update(ambry.valuetype.math.__dict__)
         test_env.update(ambry.valuetype.string.__dict__)
+        test_env.update(ambry.valuetype.number.__dict__)
         test_env.update(ambry.valuetype.types.__dict__)
         test_env.update(ambry.valuetype.exceptions.__dict__)
         test_env.update(ambry.valuetype.test.__dict__)
+        test_env.update(ambry.valuetype.__dict__)
+
+
 
         localvars = {}
 
@@ -2181,21 +2622,13 @@ Caster Code
         env_dict['source'] = source
         env_dict['pipe'] = pipe
 
-        assert not pipe or (pipe.source is source and pipe.bundle is self)
-
         exec (compile(code, abs_path, 'exec'), env_dict)
 
         return env_dict['row_processors']
 
     def finalize_write_bundle_file(self):
 
-        path = self.library.create_bundle_file(self)
-
-        with open(path) as f:
-            self.build_fs.makedir(os.path.dirname(self.identity.cache_key), allow_recreate=True)
-            self.build_fs.setcontents(self.identity.cache_key + '.db', data=f)
-
-        self.log('Wrote bundle sqlite file to {}'.format(path))
+        return self.package()
 
     def post_build_test(self):
 
@@ -2289,10 +2722,6 @@ Caster Code
 
         return self.state == self.STATES.FINALIZED or self.state == self.STATES.INSTALLED
 
-    def do_finalize(self):
-        """Call's finalize(); for similarity with other process commands. """
-        return self.finalize()
-
     def finalize(self):
 
         self.state = self.STATES.FINALIZING
@@ -2302,8 +2731,9 @@ Caster Code
 
         self.log('Writing bundle sqlite file')
         self.finalize_write_bundle_file()
-        self.state = self.STATES.FINALIZED
+        self.dstate = self.state = self.STATES.FINALIZED
 
+        self.commit()
         return True
 
     def import_tests(self):
@@ -2407,19 +2837,119 @@ Caster Code
     # Check in to remote
     #
 
-    def checkin(self):
+    def package(self, rebuild=True, partition_location='remote', incver=False,
+                source_only=False, variation=None):
 
-        if self.is_built:
-            self.finalize()
+        from ambry.orm import Database, Partition, Config
 
-        if not self.is_finalized:
-            self.error("Can't checkin; bundle state must be either finalized or prepared")
-            return False, False
+        identity = self.identity
+        kwargs = {}  # Alter values of the new dataset
+
+        if incver:
+            identity = self.identity.rev(identity.on.revision + 1)
+
+        if variation:
+            identity.name.variation = variation
+            kwargs['variation'] = variation
+
+        self.build_fs.makedir(os.path.dirname(identity.cache_key), allow_recreate=True)
+
+        path = self.build_fs.getsyspath(identity.cache_key + '.db')
+
+        if not rebuild and os.path.exists(path):
+            self.log('Bundle sqlite file {} exists'.format(path))
+            return Database('sqlite:///{}'.format(path))
+
+        if os.path.exists(path):
+            os.remove(path)
+            try:
+                os.remove(path + '-shm')
+                os.remove(path + '-wal')
+            except (IOError, OSError):
+                pass
+
+        db = Database('sqlite:///{}'.format(path))
+        db.open()
+        db.clean()
 
         self.commit()
-        remote, path = self.library.checkin(self)
 
-        return remote, path
+        if source_only:
+            ds = db.copy_dataset_files(self.dataset, incver=incver, **kwargs)
+            ds.state = Bundle.STATES.SOURCE
+
+            # Hack, but I'm tired of fighting with it.
+            ds.session.query(Config) \
+                .filter(Config.type == 'buildstate') \
+                .filter(Config.group == 'state') \
+                .delete()
+            ds.commit()
+
+            pl = ProcessLogger(ds, self.logger, new_connection=False, new_sqlite_db=False)
+            pl.clean()
+            pl.build.state.current = ds.state
+            pl.build.state[ds.state] = 0
+            pl.build.state.lasttime = 0
+
+            pl.build.state.error = False
+            pl.build.state.exception = None
+            pl.build.state.exception_type = None
+            pl.build.commit()
+            db.commit()
+
+        else:
+            ds = db.copy_dataset(self.dataset, incver=incver, **kwargs)
+
+        b = Bundle(ds, self.library)
+        bfs = b.build_source_files.file(File.BSFILE.META)
+        bfs.update_identity()
+        b.clear_file_systems()
+        b.commit()
+
+        db.session.query(Partition).update({'_location': partition_location})
+        db.session.commit()
+        db.close()
+
+        self.log('Wrote bundle package file to {}'.format(db.path))
+
+        db.library = self.library
+        return db
+
+    def checkin(self, no_partitions=False, remote_name=None, source_only=False, force=False, cb=None):
+        from ambry.bundle.process import call_interval
+        from requests.exceptions import HTTPError
+
+        package = self.package(source_only=source_only)
+
+        if not cb:
+            #@call_interval(10)
+            def cb(message, bytes):
+                self.log("{}; {} bytes".format(message, bytes))
+
+        if remote_name:
+            remote = self.library.remote(remote_name)
+        else:
+            remote = self.library.remote(self)
+
+        remote.account_accessor = self.library.account_accessor
+
+        try:
+            remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)
+        except HTTPError as e:
+            self.error("HTTP Error: {}".format(e))
+
+            return None, None
+
+        self.dataset.upstream = remote.url
+
+        if not source_only:
+            self.finalize()
+
+        self.dstate = self.STATES.CHECKEDIN
+
+        self.commit()
+
+        return remote_instance, package
 
     @property
     def is_installed(self):
@@ -2432,3 +2962,6 @@ Caster Code
     def remove(self):
         """Delete resources associated with the bundle."""
         pass  # Remove files in the file system other resource.
+
+    def __str__(self):
+        return '<bundle: {}>'.format(self.identity.vname)

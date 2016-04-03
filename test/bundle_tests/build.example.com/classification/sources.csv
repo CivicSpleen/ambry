@@ -1,0 +1,3 @@
+name,dest_table_name,start_line,end_line,header_lines,ref,state
+classify,classify,1,73,0,file://data/classifications.csv,ingest_done
+classifydt,,1,9,0,file://data/classifydt.csv,ingest_done

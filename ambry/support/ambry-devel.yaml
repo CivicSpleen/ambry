@@ -7,6 +7,7 @@ library:
     remotes:
         public: 's3://test.library.civicknowledge.com/public'
         test: 's3://test.library.civicknowledge.com/test'
+        system: 's3://system.library.civicknowledge.com'
 
 filesystem:
 

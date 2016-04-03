@@ -1,0 +1,9 @@
+
+library:
+    category: development
+    filesystem_root: /tmp/ambry
+    database: 'sqlite:///{root}/library.db'
+    remotes:
+        config1: s3://config1.library.example.com
+        config2: s3://config2.library.example.com
+

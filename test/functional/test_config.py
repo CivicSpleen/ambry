@@ -1,26 +1,22 @@
-
 import os
 
-import yaml
+from fs.opener import fsopendir
 
-from ambry.run import get_runconfig
+from ambry.dbexceptions import ConfigurationError
+from ambry.library import Library
+from ambry.library.filesystem import LibraryFilesystem
+from ambry.run import load, CONFIG_FILE
+from test.proto import TestBase
+import unittest
 
-from test import bundlefiles
-from test.test_base import TestBase
 
-
-class Test(TestBase):
-
+class TestConfigParsing(TestBase):
 
     def test_run_config_filesystem(self):
-        rc = self.get_rc()
-        self.assertEqual('{root}/downloads', rc.filesystem.downloads)
-        self.assertEqual('{root}/extracts', rc.filesystem.extracts)
-
+        self.assertEqual('{root}/downloads', self.config.filesystem.downloads)
+        self.assertEqual('{root}/extracts', self.config.filesystem.extracts)
 
     def test_dsn_config(self):
-        from ambry.dbexceptions import ConfigurationError
-
         from ambry.run import normalize_dsn_or_dict as n
 
         self.assertEqual('sqlite://', n(dict(driver='sqlite', dbname=''))[1])
@@ -60,16 +56,11 @@ class Test(TestBase):
             n('sqlite3://foobar')
 
     def test_basic_config(self):
+        config_root = fsopendir('temp://')
+        config_root.createfile(CONFIG_FILE)
+        config_file_syspath = config_root.getsyspath(CONFIG_FILE)
 
-        from ambry.util import temp_file_name
-        import ambry.run
-        from ambry.dbexceptions import ConfigurationError
-        import os
-        from ambry.library.filesystem import LibraryFilesystem
-
-        tf = temp_file_name()
-
-        with open(tf, 'w') as f:
+        with open(config_file_syspath, 'w') as f:
             f.write("""
 library:
     category: development
@@ -81,12 +72,12 @@ library:
                     """)
 
         with self.assertRaises(ConfigurationError):
-            config = ambry.run.load(tf)
+            config = load(config_root.getsyspath('/'))
 
         if 'AMBRY_DB' in os.environ:
             del os.environ['AMBRY_DB']
 
-        with open(tf,'w') as f:
+        with open(config_file_syspath, 'w') as f:
             f.write("""
 library:
     category: development
@@ -99,16 +90,16 @@ library:
         test: s3://test.library.civicknowledge.com/test
             """)
 
-        config = ambry.run.load(tf)
+        config = load(config_root.getsyspath('/'))
         config.account = None
 
         self.assertEquals('postgres://foo:bar@baz:5432/ambry', config.library.database)
-        self.assertEquals('/tmp/foo/bar',config.library.filesystem_root)
+        self.assertEquals('/tmp/foo/bar', config.library.filesystem_root)
 
-        self.assertEqual(1, len(config.loaded))
-        self.assertEqual(tf, config.loaded[0][0])
+        self.assertEqual(2, len(config.loaded))
+        self.assertEqual(config_file_syspath, config.loaded[0])
 
-        with open(tf, 'w') as f:
+        with open(config_file_syspath, 'w') as f:
             f.write("""
 library:
     filesystem_root: /foo/root
@@ -116,34 +107,30 @@ library:
 
         os.environ['AMBRY_DB'] = 'sqlite:////library.db'
 
-        with open(tf, 'w') as f:
+        with open(config_file_syspath, 'w') as f:
             f.write("""""")
 
         os.environ['AMBRY_DB'] = 'sqlite:////{root}/library.db'
         os.environ['AMBRY_ROOT'] = '/tmp/foo/bar'
 
-        config = ambry.run.load(tf)
+        config = load(config_root.getsyspath('/'))
 
         lf = LibraryFilesystem(config)
 
         self.assertEqual('sqlite://///tmp/foo/bar/library.db', lf.database_dsn)
-        self.assertEqual('/tmp/foo/bar/downloads/a/b',lf.downloads('a','b'))
+        self.assertEqual('/tmp/foo/bar/downloads/a/b', lf.downloads('a', 'b'))
 
     def test_library(self):
-        from ambry.util import temp_file_name
-        import ambry.run
-        from ambry.library import Library
-        from shutil import rmtree
-        from ambry.library.filesystem import LibraryFilesystem
 
         db_path = '/tmp/foo/bar/library.db'
-        import os
         if os.path.exists(db_path):
             os.remove(db_path)
 
-        tf = temp_file_name()
+        config_root = fsopendir('temp://')
+        config_root.createfile(CONFIG_FILE)
+        config_file_syspath = config_root.getsyspath(CONFIG_FILE)
 
-        with open(tf, 'w') as f:
+        with open(config_file_syspath, 'w') as f:
             f.write("""
 library:
     category: development
@@ -154,56 +141,111 @@ library:
         restricted: s3://test.library.civicknowledge.com/restricted
         test: s3://test.library.civicknowledge.com/test""")
 
-        config = ambry.run.load(tf)
+        config = load(config_root.getsyspath('/'))
 
         lf = LibraryFilesystem(config)
 
         self.assertTrue('/tmp/foo/bar', lf.root)
 
         l = Library(config)
+        l.sync_config()
 
-        self.assertEqual(['test', 'restricted', 'census', 'public'], l.remotes.keys())
+        self.assertEqual(
+            sorted(['test', 'restricted', 'census', 'public']),
+            sorted([x.short_name for x in l.remotes]))
+
+from test.proto import TestBase as TestBaseProto
 
 
-    def test_alt_session_not_reused(self):
+class TestConfigFiles(unittest.TestCase):
+
+
+    def _test_config_dirs(self, files_dir):
+        import test
+        from os.path import dirname, join
+        import ambry.run
+
+        test_config_dir = join(dirname(test.__file__), 'test_config', files_dir)
+
+        config = ambry.run.load(test_config_dir, load_user=False)
+
+        print config.dump()
+
+        self.assertEqual(1, sum(1 for v in config.accounts.values() if isinstance(v,dict) and 'service' in v))
+
+        self.assertEqual(5, sum(1 for v in config.remotes.values() if 'url' in v))
+
+        for r in ('config1', 'config2', 'remotes1', 'remotes2', 'remotes3'):
+            self.assertIn(r, config.remotes)
+
+        self.assertEqual('34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW', config.remotes.config1.secret)
+        self.assertEqual('34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW', config.remotes.remotes1.secret)
+
+        # for r in config.flatten():
+        #    print r
+
+    def test_multiple_files(self):
+        import test
+        from os.path import dirname, join
+        import ambry.run
+
+        test_config_dir =  join(dirname(test.__file__), 'test_config','separate_files')
+
+        self.assertEquals(join(test_config_dir,ambry.run.ACCOUNTS_FILE),
+                          ambry.run.find_config_file(ambry.run.ACCOUNTS_FILE, test_config_dir))
+
+        self._test_config_dirs('separate_files')
+
+        self._test_config_dirs('single_file')
+
+    def test_remotes_accounts(self):
+        import test
+        from os.path import dirname, join, exists
+        from os import makedirs
+        import ambry.run
+        from ambry.library import Library
+
+        test_config_dir = join(dirname(test.__file__), 'test_config', 'separate_files')
+
+        config = ambry.run.load(test_config_dir, load_user=False)
+
+        if not exists(config.library.filesystem_root):
+            makedirs(config.library.filesystem_root)
+
+        l = Library(config)
+        l.sync_config(force=True)
+
+        for r in l.remotes:
+            print r.short_name, r.access, r.secret
+
+class MetadataTest(TestBaseProto):
+
+    def test_dump_metadata(self):
+        from ambry.util import AttrDict
 
         l = self.library()
 
-        db = l.database
-        session = l.database.session
-        conn, alt_session = db.alt_session()
+        b = l.bundle('build.example.com-casters')
 
-        self.assertNotEqual(id(session), id(alt_session))
+        v = 'Packaged for [Ambry](http://ambry.io) by {{contact_bundle.creator.org}}'
 
-        ds = db.root_dataset
+        self.assertEqual(v, AttrDict(b.metadata.about.items()).processed)
+        self.assertEqual(v, b.metadata.about.processed)
+        self.assertEqual(v, b.build_source_files.bundle_meta.record.unpacked_contents['about']['processed'])
+        self.assertEqual(v, b.build_source_files.bundle_meta.get_object().about.processed)
 
-        pc = ds.config.process
-        pc.clean()
-        pc.commit()
+        b.metadata.about.processed = 'foobar'
+        b.commit()
 
-        pc.foo.bar = 'baz'
+        self.assertEqual('foobar', b.metadata.about.processed)
 
-        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
+        self.assertNotEqual(b.metadata.about.processed,
+                            b.build_source_files.bundle_meta.get_object().about.processed)
 
-        ds.session.refresh(ds)
-        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
 
-        pc.commit()
+        b.build_source_files.bundle_meta.objects_to_record()
 
-        self.assertNotIn('process.foo.bar', [c.dotted_key for c in ds.configs])
+        self.assertEqual(b.metadata.about.processed,
+                            b.build_source_files.bundle_meta.get_object().about.processed)
 
-        ds.session.refresh(ds)
-        self.assertIn('process.foo.bar', [c.dotted_key for c in ds.configs])
-
-        pc.set_activity('foo')
-
-        ds.session.refresh(ds)
-        self.assertEqual('foo', [ c.value for c in ds.configs if c.key == 'activity' ][0])
-
-        self.assertEqual('foo', pc.activity)
-
-        pc.set_activity('bar')
-
-        ds.session.refresh(ds)
-        self.assertEqual('bar', [c.value for c in ds.configs if c.key == 'activity'][0])
 

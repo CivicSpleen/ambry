@@ -5,40 +5,60 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
-from sqlalchemy import Text, String, ForeignKey, LargeBinary
+from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy import event
-from simplecrypt import encrypt, decrypt, DecryptionException
+
+from simplecrypt import encrypt, decrypt, DecryptionException as SC_DecryptionException
 import simplecrypt
 
-# How many times the
-simplecrypt.EXPANSION_COUNT = (100,100,100)
-
+from ambry.orm.exc import OrmObjectError
 
 from . import Base, MutationDict, JSONEncodedObj
+
+
+# How many times the encryption should run. The default is 100,000 rounds, but that's horrifically
+# slow, and seems to be required as a defense against bad passwords.
+simplecrypt.EXPANSION_COUNT = (1000, 1000, 1000)
+
+
+class AccountDecryptionError(OrmObjectError):
+    pass
+
+
+class MissingPasswordError(OrmObjectError):
+    pass
+
 
 class Account(Base):
 
     __tablename__ = 'accounts'
 
     id = SAColumn('ac_id', Integer, primary_key=True)
+    d_vid = SAColumn('ac_d_vid', String(20), ForeignKey('datasets.d_vid'), index=True)
+    user_id = SAColumn('ac_user_id', Text, index=True, doc='Ambry User')
+    organization_id = SAColumn('ac_org_id', Text, index=True,
+                               doc='Ambry Organization')
 
-    d_vid = SAColumn('ac_d_vid', String(20), ForeignKey('datasets.d_vid'),  index=True)
+    major_type = SAColumn('ac_major_type', Text,
+                          doc='Major type, often name of service or account providing company')
+    minor_type = SAColumn('ac_minor_type', Text,
+                          doc='Minor type, subtype of the major type')
 
     # Foreign account identifier, often a bucket name or domain name.
     # The key used to reference the account
-    account_id = SAColumn('ac_account_id', Text, unique = True)
-    access_key = SAColumn('ac_access', Text)  # Access token or username
+    account_id = SAColumn('ac_account_id', Text, unique=True)
 
-    user_id = SAColumn('ac_user_id', Text, index=True) # Ambry User
-    organization_id = SAColumn('ac_org_id', Text, index=True) # Ambry Organization
-    major_type = SAColumn('ac_major_type', Text)  # Major type, often name of service or account providing company
-    minor_type = SAColumn('ac_minor_type', Text)  # Minor type, subtype of the major type
+    url = SAColumn('ac_org', Text, doc='URL of service')
 
-    _secret = SAColumn('ac_secret', Text) # Secret or password
-    name = SAColumn('ac_name', Text)  # Person's name
-    email = SAColumn('ac_email', Text)  # Email for foreign account
-    org = SAColumn('ac_url', Text)  # Organization name
-    url = SAColumn('ac_org', Text)  # General URL, maybe the login URL
+    access_key = SAColumn('ac_access', Text, doc='Access token or username')
+
+    encrypted_secret = SAColumn('ac_secret', Text, doc='Symmetrically encrypted secret')
+
+    encrypted_password = SAColumn('ac_password', Text, doc='Asymmetrically encrypted user password')
+
+    name = SAColumn('ac_name', Text, doc='Person\'s name')
+    email = SAColumn('ac_email', Text, doc='Email for foreign account')
+    org = SAColumn('ac_url', Text, doc='Organization name')
     comment = SAColumn('ac_comment', Text)  # Access token or username
     data = SAColumn('ac_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -46,30 +66,90 @@ class Account(Base):
         UniqueConstraint('ac_account_id', 'ac_access', name='_uc_account_1'),
     )
 
-    password = None # Must be set to encrypt or decrypt secret
+    secret_password = None  # Must be set to encrypt or decrypt secret
 
+    def incver(self):
+        """Increment all of the version numbers and return a new object"""
+        from . import incver
+        return incver(self, ['d_vid'])
+
+    @staticmethod
+    def sym_encrypt(password, v):
+        return encrypt(password, v).encode('base64')
+
+    @staticmethod
+    def sym_decrypt(password, v):
+        import binascii
+
+        try:
+            return decrypt(password, v.decode('base64'))
+        except SC_DecryptionException as e:
+            raise AccountDecryptionError('Wrong password ')
+        except binascii.Error as e:
+            raise AccountDecryptionError('Bad password: {}'.format(e))
 
     @property
     def secret(self):
-
-        if not self._secret:
+        assert self.secret_password  # The encryption password
+        if self.encrypted_secret:
+            return self.sym_decrypt(self.secret_password, self.encrypted_secret)
+        else:
             return None
 
-        if self.password:
-            try:
-                return decrypt(self.password, self._secret.decode('base64'))
-            except DecryptionException as e:
-                raise DecryptionException("Bad password")
-        else:
-            raise Exception("Must have a password to get or set the secret")
-
     @secret.setter
-    def secret(self,v):
+    def secret(self, v):
+        assert self.secret_password  # The encryption password
+        self.encrypted_secret = self.sym_encrypt(self.secret_password, v)
 
-        if self.password:
-            self._secret = encrypt(self.password, v).encode('base64')
+    def decrypt_secret(self, password=None):
+
+        if not password:
+            password = self.secret_password
+
+        if not self.encrypted_secret:
+            return None
+
+        if self.major_type == 'user':
+            return None  # These can't be decrypted, only tested.
+
+        if password:
+            try:
+                return self.sym_decrypt(password, self.encrypted_secret)
+            except AccountDecryptionError as e:
+                raise AccountDecryptionError("Decryption error for account '{}': {}".format(self.account_id, e))
         else:
-            raise Exception("Must have a password to get or set the secret")
+            raise MissingPasswordError('Must have a password to get or set the secret')
+
+    def encrypt_secret(self, v, password=None):
+
+        if not password:
+            password = self.secret_password
+
+        if password:
+            self.encrypted_secret = self.sym_encrypt(password, v)
+        else:
+            raise MissingPasswordError('Must have a password to get or set the secret')
+
+        return self.encrypted_secret
+
+    @property
+    def password(self):
+        raise NotImplemented('Use test()')
+
+    @password.setter
+    def password(self, v):
+        assert self.secret_password
+        self.encrypted_password = self.sym_encrypt(self.secret_password, v)
+
+    def encrypt_password(self, v):
+        from passlib.hash import pbkdf2_sha512
+        assert v is not None
+        self.encrypted_password = pbkdf2_sha512.encrypt(v, rounds=50000, salt_size=16)
+
+    def test(self, v):
+        """Test the password against a value"""
+        from passlib.hash import pbkdf2_sha512
+        return pbkdf2_sha512.verify(v, self.encrypted_password)
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -79,6 +159,29 @@ class Account(Base):
     def before_update(mapper, conn, target):
         pass
 
+    @classmethod
+    def prop_map(cls):
+
+        prop_map = {
+            'service': 'major_type',
+            'host': 'url',
+            'organization': 'org',
+            'apikey': 'secret',
+
+            'access': 'access_key',
+            'access_key': 'access_key',
+            'secret': 'secret',
+            'name': 'name',
+            'org': 'org',
+            'url': 'url',
+            'email': 'email',
+        }
+
+        for p in cls.__mapper__.attrs:
+            prop_map[p.key] = p.key
+
+        return prop_map
+
     @property
     def dict(self):
         """A dict that holds key/values for all of the properties in the
@@ -87,14 +190,22 @@ class Account(Base):
         :return:
 
         """
-        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ('data', '_secret') }
 
-        d['secret'] = self.secret
+        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ('data')}
 
-        for k, v in self.data.items():
-            d[k] = v
+        d['secret'] = 'not available'
 
-        return { k:v for k,v in d.items() if v }
+        if self.secret_password:
+            try:
+                d['secret'] = self.decrypt_secret()
+            except AccountDecryptionError:
+                pass
+
+        if self.data:
+            for k, v in self.data.items():
+                d[k] = v
+
+        return {k: v for k, v in d.items()}
 
 
 event.listen(Account, 'before_insert', Account.before_insert)

@@ -1,11 +1,4 @@
-import os
-
-import yaml
-
-from ambry.run import get_runconfig
-
-from test import bundlefiles
-from test.test_base import TestBase
+from test.proto import TestBase
 
 
 class Test(TestBase):
@@ -19,6 +12,7 @@ class Test(TestBase):
         db = l.database
 
         pl = ProcessLogger(db.root_dataset)
+        pl.clean()
 
         ps = pl.start('bork', 0, message='Starting')
         ps.done()
@@ -31,15 +25,18 @@ class Test(TestBase):
         ps.update('Update 2')
         ps.update('Update 3')
         ps.done('Done')
+        pl.commit()
 
-        messages = [r.message for r in db.root_dataset.process_records if r.stage == 1]
+        messages = [r.message for r in pl.records if r.stage == 1]
 
-        self.assertEquals([u'Starting', u'Add 1', u'Add 2', u'Update 3', u'Done'], messages)
+        self.assertEqual(
+            sorted([u'Starting', u'Add 1', u'Add 2', u'Update 3', u'Done']),
+            sorted(messages))
 
         with self.assertRaises(ProgressLoggingError):
-            ps.add("Should Fail")
+            ps.add('Should Fail')
 
-        ps = pl.start('Fronk', 2, message = 'Fronking')
+        ps = pl.start('Fronk', 2, message='Fronking')
 
         ps.add('1')
         ps.add_update('2')
@@ -48,25 +45,32 @@ class Test(TestBase):
         ps.add('5')
         ps.update('6')
 
-        messages = [r.message for r in db.root_dataset.process_records if r.stage == 2]
+        messages = [r.message for r in pl.records if r.stage == 2]
 
-        self.assertEqual([u'Fronking', u'1', u'4', u'6'], messages)
-        ##
+        self.assertEqual(
+            sorted([u'Fronking', u'1', u'4', u'6']),
+            sorted(messages))
 
         with self.assertRaises(ValueError):
-            with pl.start('Exc',3, message="Get Exceptions") as ps:
+            with pl.start('Exc', 3, message='Get Exceptions') as ps:
                 raise ValueError('This is an exception')
 
         messages = [r.message for r in pl.dataset.process_records if r.stage == 3]
-        self.assertEquals([u'Get Exceptions', u'This is an exception'], messages)
+        self.assertEqual(
+            sorted([u'Get Exceptions', u'This is an exception', 'Failed in context with exception']),
+            sorted(messages))
 
         exc_type = [r.message for r in pl.dataset.process_records if r.stage == 3 and r.exception_trace][0]
         self.assertEqual('This is an exception', exc_type)
 
+        records = []
+        children = []
         for r in pl.records:
-            print r
+            records.append(r)
             for c in r.children:
-                print "    ", c
+                children.append(c)
+        self.assertEqual(len(records), 14)
+        self.assertEqual(len(children), 10)
 
         return
         ##
@@ -83,4 +87,6 @@ class Test(TestBase):
 
         messages = sorted(list(set([r.message for r in db.root_dataset.process_records if r.stage == 20])))
 
-        self.assertEquals([None, u'Intervals', u'More', u'here'], messages)
+        self.assertEquals(
+            sorted([None, u'Intervals', u'More', u'here']),
+            sorted(messages))

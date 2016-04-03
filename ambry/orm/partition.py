@@ -7,6 +7,7 @@ __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
 
+import six
 from six import string_types
 
 from geoid.util import isimplify
@@ -20,12 +21,97 @@ from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import relationship, object_session, backref
 
 from ambry.identity import ObjectNumber, PartialPartitionName, PartitionIdentity
-from ambry.orm import DictableMixin
 from ambry.orm.columnstat import ColumnStat
 from ambry.orm.dataset import Dataset
 from ambry.util import Constant
 
+import logging
+from ambry.util import get_logger
+logger = get_logger(__name__)
+#logger.setLevel(logging.DEBUG)
+
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
+
+class PartitionDisplay(object):
+    """Helper object to select what to display for titles and descriptions"""
+    def __init__(self, p):
+
+        self._p = p
+
+        desc_used = False
+        self.title = self._p.title
+        self.description = ''
+
+        if not self.title:
+            self.title = self._p.table.description
+            desc_used = True
+
+        if not self.title:
+            self.title = self._p.vname
+
+        if not desc_used:
+            self.description = self._p.description.strip('.') + '.' if self._p.description else ''
+
+
+
+        self.notes = self._p.notes
+
+    @property
+    def geo_description(self):
+        """Return a description of the geographic extents, using the largest scale
+        space and grain coverages"""
+        from geoid.civick import GVid
+
+        sc = self._p.space_coverage
+        gc = self._p.grain_coverage
+
+        if sc and gc:
+            if GVid.parse(gc[0]).level == 'state' and GVid.parse(sc[0]).level == 'state':
+                return GVid.parse(sc[0]).geo_name
+            else:
+                return ("{} in {}".format(
+                    GVid.parse(gc[0]).level_plural.title(),
+                    GVid.parse(sc[0]).geo_name))
+        elif sc:
+            return GVid.parse(sc[0]).geo_name.title()
+        elif sc:
+            return GVid.parse(gc[0]).level_plural.title()
+        else:
+            return ''
+
+    @property
+    def time_description(self):
+        """String description of the year or year range"""
+
+        tc = [t for t in self._p.time_coverage if t]
+
+        if not tc:
+            return ''
+
+        mn = min(tc)
+        mx = max(tc)
+
+        if not mn and not mx:
+            return ''
+        elif mn == mx:
+            return mn
+        else:
+            return "{} to {}".format(mn, mx)
+
+    @property
+    def sub_description(self):
+        """Time and space dscription"""
+        gd = self.geo_description
+        td = self.time_description
+
+        if gd and td:
+            return '{}, {}. {} Rows.'.format(gd, td, self._p.count)
+        elif gd:
+            return '{}. {} Rows.'.format(gd, self._p.count)
+        elif td:
+            return '{}. {} Rows.'.format(td, self._p.count)
+        else:
+            return '{} Rows.'.format(self._p.count)
 
 
 class Partition(Base):
@@ -59,6 +145,11 @@ class Partition(Base):
     name = SAColumn('p_name', String(200), nullable=False, index=True)
     vname = SAColumn('p_vname', String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('p_fqname', String(200), unique=True, nullable=False, index=True)
+
+    title = SAColumn('p_title', String())
+    description = SAColumn('p_description', String())
+    notes = SAColumn('p_notes', String())
+
     cache_key = SAColumn('p_cache_key', String(200), unique=True, nullable=False, index=True)
     parent_vid = SAColumn('p_p_vid', String(16), ForeignKey('partitions.p_vid'), nullable=True, index=True)
     ref = SAColumn('p_ref', String(16), index=True,
@@ -73,6 +164,14 @@ class Partition(Base):
     format = SAColumn('p_format', String(50))
     segment = SAColumn('p_segment', Integer,
                        doc='Part of a larger partition. segment_id is usually also a source ds_id')
+    epsg = SAColumn('p_epsg', Integer, doc='EPSG SRID for the reference system of a geographic dataset. ')
+
+    # The partition could hold data that is considered a dimension -- if multiple datasets
+    # were joined, that dimension would be a dimension column, but it only has a single
+    # value in each partition.
+    # That could be part of the name, or it could be declared in a table, with a single value for all of the
+    # rows in a partition.
+
     min_id = SAColumn('p_min_id', BigIntegerType)
     max_id = SAColumn('p_max_id', BigIntegerType)
     count = SAColumn('p_count', Integer)
@@ -100,8 +199,8 @@ class Partition(Base):
     children = relationship('Partition', backref=backref('parent', remote_side=[vid]), cascade='all')
 
     _bundle = None  # Set when returned from a bundle.
-    _datafile = None
-    _datafile_writer = None
+    _datafile = None  # TODO: Unused variable.
+    _datafile_writer = None  # TODO: Unused variable.
     _stats_dict = None
 
     @property
@@ -126,6 +225,7 @@ class Partition(Base):
             'time': self.time,
             'table': self.table_name,
             'grain': self.grain,
+            'variant': self.variant,
             'segment': self.segment,
             'format': self.format if self.format else 'db'
         }
@@ -133,12 +233,19 @@ class Partition(Base):
         return PartitionIdentity.from_dict(dict(list(ds.dict.items()) + list(d.items())))
 
     @property
+    def display(self):
+        """Return an acessor object to get display titles and descriptions"""
+        return PartitionDisplay(self)
+
+    @property
+    def bundle(self):
+        return self._bundle  # Set externally, such as Bundle.wrap_partition
+
+    @property
     def is_segment(self):
         return self.type == self.TYPE.SEGMENT
 
-    @property
-    def description(self):
-        return self.table.description
+
 
     @property
     def headers(self):
@@ -198,13 +305,15 @@ class Partition(Base):
             parsed = []
 
             for gvid in values:
+                # The gvid should not be a st
+                if gvid is None or gvid == 'None':
+                    continue
                 try:
                     parsed.append(GVid.parse(gvid))
                 except ValueError as e:
                     if self._bundle:
                         self._bundle.error("Failed to parse gvid '{}' in {}.{}: {}"
                                            .format(str(gvid), column.table.name, column.name, e))
-                    pass
 
             try:
                 return isimplify(parsed)
@@ -273,7 +382,7 @@ class Partition(Base):
                 if year:
                     tcov.add(year)
 
-        self.time_coverage = [ t for t in tcov if t ]
+        self.time_coverage = [t for t in tcov if t]
 
         #
         # Grains
@@ -285,61 +394,6 @@ class Partition(Base):
 
         self.grain_coverage = sorted(str(g) for g in grains if g)
 
-    @property
-    def geo_description(self):
-        """Return a description of the geographic extents, using the largest scale
-        space and grain coverages"""
-        from geoid.civick import GVid
-
-        sc = self.space_coverage
-        gc = self.grain_coverage
-
-        if sc and gc:
-            return ("{} in {}".format(
-                GVid.parse(gc[0]).level_plural.title(),
-                GVid.parse(sc[0]).geo_name))
-        elif sc:
-            return GVid.parse(sc[0]).geo_name.title()
-        elif sc:
-            return GVid.parse(gc[0]).level_plural.title()
-        else:
-            return ''
-
-
-    @property
-    def time_description(self):
-        """String description of the year or year range"""
-
-        tc = [ t for t in self.time_coverage if t]
-
-        if not tc:
-            return ''
-
-        mn = min(tc)
-        mx = max(tc)
-
-        if not mn and not mx:
-            return ''
-        elif mn == mx:
-            return mn
-        else:
-            return "{} to {}".format(mn, mx)
-
-
-    @property
-    def sub_description(self):
-        """Time and space dscription"""
-        gd = self.geo_description
-        td = self.time_description
-
-        if gd and td:
-            return '{}, {}'.format(gd, td)
-        elif gd:
-            return gd
-        elif td:
-            return td
-        else:
-            return ''
 
     @property
     def dict(self):
@@ -359,7 +413,6 @@ class Partition(Base):
                     d[k] = v
 
         return d
-
 
     @property
     def stats_dict(self):
@@ -385,7 +438,11 @@ class Partition(Base):
                 return iter(self.__dict__.items())
 
             def __getitem__(self, k):
-                return self.__dict__[k]
+                if k in self.__dict__:
+                    return self.__dict__[k]
+                else:
+                    from . import ColumnStat
+                    return ColumnStat(hist=[])
 
         if not self._stats_dict:
             cols = {s.column.name: Bunch(s.dict) for s in self.stats}
@@ -466,6 +523,10 @@ class Partition(Base):
 
         self._location = 'build'
 
+        self.title = PartitionDisplay(self).title
+        self.description = PartitionDisplay(self).description
+
+
         self.state = self.STATES.FINALIZED
 
     # =============
@@ -474,8 +535,8 @@ class Partition(Base):
 
     def clean(self):
         """Remove all built files and return the partition to a newly-created state"""
-
-        self.datafile.remove()
+        if self.datafile:
+            self.datafile.remove()
 
     @property
     def location(self):
@@ -497,59 +558,102 @@ class Partition(Base):
 
     @property
     def datafile(self):
+        from ambry.exc import NotFoundError
+
+
+        if self.is_local:
+            # Use the local version, if it exists
+            logger.debug('datafile: Using local datafile {}'.format(self.vname))
+            return self.local_datafile
+        else:
+            # If it doesn't try to get the remote.
+            try:
+                logger.debug('datafile: Using remote datafile {}'.format(self.vname))
+                return self.remote_datafile
+            except NotFoundError:
+                # If the remote doesnt exist, return the local, so the caller can call  exists() on it,
+                # get its path, etc.
+                return self.local_datafile
+
+
+
+    @property
+    def local_datafile(self):
         """Return the datafile for this partition, from the build directory, the remote, or the warehouse"""
         from ambry_sources import MPRowsFile
         from fs.errors import ResourceNotFoundError
         from ambry.orm.exc import NotFoundError
 
-        if self._datafile is None:
+        try:
+            return MPRowsFile(self._bundle.build_fs, self.cache_key)
 
-            try:
-                self._datafile = MPRowsFile(self._bundle.build_fs, self.cache_key)
-
-            except ResourceNotFoundError:
-                raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
-
-
-        return self._datafile
+        except ResourceNotFoundError:
+            raise NotFoundError(
+                'Could not locate data file for partition {} (local)'.format(self.identity.fqname))
 
     @property
     def remote_datafile(self):
 
         from fs.errors import ResourceNotFoundError
-        from ambry.orm.exc import NotFoundError
+        from ambry.exc import AccessError, NotFoundError
+        from boto.exception import S3ResponseError
 
         try:
 
             from ambry_sources import MPRowsFile
-            # Get bundle for this partition
-            # Actually ... this seems way too complex. Why not self._bundle.remote()
-            # FIXME
-            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
-            remote = self._bundle.library.remote(b)
 
-            datafile = MPRowsFile(remote, self.cache_key)
+            ds = self.dataset
+
+            if 'remote_name' not in ds.data:
+
+                raise NotFoundError('Failed to find both local and remote file for partition: {}'
+                                    .format(self.identity.fqname))
+
+            remote = self._bundle.library.remote(ds.data['remote_name'])
+
+            datafile = MPRowsFile(remote.fs, self.cache_key)
+
+            if not datafile.exists:
+                raise NotFoundError(
+                    'Could not locate data file for partition {} from remote {} : file does not exist'
+                    .format(self.identity.fqname, remote))
 
         except ResourceNotFoundError as e:
-            raise NotFoundError("Could not locate data file for partition {}".format(self.identity.fqname))
+            raise NotFoundError('Could not locate data file for partition {} (remote): {}'
+                                .format(self.identity.fqname, e))
+        except S3ResponseError as e:
+            # HACK. It looks like we get the response error with an access problem when
+            # we have access to S3, but the file doesn't exist.
+            raise NotFoundError("Can't access MPR file for {} in remote {}".format(self.cache_key, remote.fs))
 
         return datafile
 
     @property
     def is_local(self):
-        """Return ture is the partition file is local"""
-        return self.datafile.exists
+        """Return true is the partition file is local"""
+        from ambry.orm.exc import NotFoundError
+        try:
+            if self.local_datafile.exists:
+                return True
+        except NotFoundError:
+            pass
 
+        return False
 
     def localize(self, ps=None):
         """Copy a non-local partition file to the local build directory"""
-        from  filelock import FileLock
+        from filelock import FileLock
         from ambry.util import ensure_dir_exists
         from ambry_sources import MPRowsFile
+        from fs.errors import ResourceNotFoundError
+
+        if self.is_local:
+            return
 
         local = self._bundle.build_fs
 
         b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+
         remote = self._bundle.library.remote(b)
 
         lock_path = local.getsyspath(self.cache_key + '.lock')
@@ -564,30 +668,52 @@ class Partition(Base):
                           item_type='bytes',
                           state='downloading')
 
-        def progress(bts):
-            if ps:
+        if ps:
+            def progress(bts):
                 if ps.rec.item_total is None:
                     ps.rec.item_count = 0
+
+                if not ps.rec.data:
+                    ps.rec.data = {}  # Should not need to do this.
+                    return self
 
                 item_count = ps.rec.item_count + bts
                 ps.rec.data['updates'] = ps.rec.data.get('updates', 0) + 1
 
                 if ps.rec.data['updates'] % 32 == 1:
                     ps.update(message='Localizing {}'.format(self.identity.name),
-                          item_count=item_count )
+                              item_count=item_count)
+        else:
+            from ambry.bundle.process import call_interval
+            @call_interval(5)
+            def progress(bts):
+                self._bundle.log("Localizing {}. {} bytes downloaded".format(self.vname, bts))
 
         def exception_cb(e):
             raise e
 
         with lock:
-            with remote.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
-                event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
-                                                f,
-                                                progress_callback=progress,
-                                                error_callback=exception_cb)
-                event.wait()
-                if ps:
-                    ps.update_done()
+            # FIXME! This won't work with remote ( http) API, only FS ( s3:, file:)
+
+            if self.is_local:
+                return self
+
+            try:
+                with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
+                    event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
+                                                    f,
+                                                    progress_callback=progress,
+                                                    error_callback=exception_cb)
+                    event.wait()
+                    if ps:
+                        ps.update_done()
+            except ResourceNotFoundError as e:
+                from ambry.orm.exc import NotFoundError
+                raise NotFoundError("Failed to get MPRfile '{}' from {}: {} "
+                                    .format(self.cache_key, remote.fs, e))
+
+
+        return self
 
     @property
     def reader(self):
@@ -629,9 +755,32 @@ class Partition(Base):
         """ Iterator over the partition, returning RowProxy objects.
         :return: a generator
         """
+
         with self.reader as r:
             for row in r:
                 yield row
+
+
+    @property
+    def analysis(self):
+        """Return an AnalysisPartition prox, which wraps this partition to provide acess to
+        dataframes, shapely shapes and other analysis services"""
+        if isinstance(self, PartitionProxy):
+            return AnalysisPartition(self._obj)
+        else:
+            return AnalysisPartition(self)
+
+
+    @property
+    def measuredim(self):
+        """Return a MeasureDimension proxy, which wraps the partition to provide access to
+        columns in terms of measures and dimensions"""
+
+        if isinstance(self, PartitionProxy):
+            return MeasureDimensionPartition(self._obj)
+        else:
+            return MeasureDimensionPartition(self)
+
 
     # ============================
 
@@ -675,6 +824,7 @@ class Partition(Base):
             time=self.time,
             space=self.space,
             grain=self.grain,
+            variant=self.variant,
             segment=self.segment
         )
 
@@ -694,6 +844,9 @@ class Partition(Base):
 
         target._set_ids()
 
+        if target.name and target.vname and target.cache_key and target.fqname and not target.dataset:
+            return
+
         Partition.before_update(mapper, conn, target)
 
     @staticmethod
@@ -701,5 +854,385 @@ class Partition(Base):
         target._update_names()
 
 
+    @staticmethod
+    def before_delete(mapper, conn, target):
+        pass
+
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
+event.listen(Partition, 'before_delete', Partition.before_delete)
+
+class PartitionProxy(object):
+    __slots__ = ["_obj", "__weakref__"]
+
+    def __init__(self, obj):
+        object.__setattr__(self, "_obj", obj)
+
+    #
+    # proxying (special cases)
+    #
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_obj"), name)
+
+    def __delattr__(self, name):
+        delattr(object.__getattribute__(self, "_obj"), name)
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, "_obj"), name, value)
+
+    def __nonzero__(self):
+        return bool(object.__getattribute__(self, "_obj"))
+
+    def __str__(self):
+        return str(object.__getattribute__(self, "_obj"))
+
+    def __repr__(self):
+        return repr(object.__getattribute__(self, "_obj"))
+
+    def __iter__(self):
+        return iter(object.__getattribute__(self, "_obj"))
+
+
+
+class AnalysisPartition(PartitionProxy):
+    """A subclass of Partition with methods designed for analysis with Pandas. It is produced from
+    the partitions analysis property"""
+
+
+    def dataframe(self, predicate=None, columns=None):
+        """Return the partition as a Pandas dataframe
+
+
+        :param predicate: If defined, a callable that is called for each row, and if it returns true, the
+        row is included in the output.
+        :param columns: A list or tuple of column names to return
+
+        :return: Pandas dataframe
+
+
+        """
+
+        from ambry.pands import AmbryDataFrame
+        from operator import itemgetter
+
+        if columns:
+            ig = itemgetter(*columns)
+        else:
+            ig = None
+            columns = self.table.header
+
+        if predicate:
+            def yielder():
+                for row in self.reader:
+                    if predicate(row):
+                        if ig:
+                            yield ig(row)
+                        else:
+                            yield row.dict
+
+            return AmbryDataFrame(yielder(), columns=columns, partition=self.measuredim)
+
+        else:
+
+            def yielder():
+                for row in self.reader:
+                    yield row.values()
+
+            return AmbryDataFrame(yielder(), columns=columns, partition=self.measuredim)
+
+    def geoframe(self, simplify=None, predicate=None, crs=None, epsg=None):
+        """
+        Return geopandas dataframe
+
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+        :param crs: Coordinate reference system information
+        :param epsg: Specifiy the CRS as an EPGS number.
+        :return: A Geopandas GeoDataFrame
+        """
+        import geopandas
+        from shapely.wkt import loads
+        from fiona.crs import from_epsg
+
+        if crs is None and epsg is None and self.epsg is not None:
+            epsg = self.epsg
+
+        if crs is None:
+            try:
+                crs = from_epsg(epsg)
+            except TypeError:
+                raise TypeError('Must set either crs or epsg for output.')
+
+        df = self.dataframe(predicate=predicate)
+        geometry = df['geometry']
+
+        if simplify:
+            s = geometry.apply(lambda x: loads(x).simplify(simplify))
+        else:
+            s = geometry.apply(lambda x: loads(x))
+
+        df['geometry'] = geopandas.GeoSeries(s)
+
+        return geopandas.GeoDataFrame(df, crs=crs, geometry='geometry')
+
+    def shapes(self, simplify=None, predicate=None):
+        """
+        Return geodata as a list of Shapely shapes
+
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+
+        :return: A list of Shapely objects
+        """
+
+        from shapely.wkt import loads
+
+        if not predicate:
+            predicate = lambda row: True
+
+        if simplify:
+            return [loads(row.geometry).simplify(simplify) for row in self if predicate(row)]
+        else:
+            return [loads(row.geometry) for row in self if predicate(row)]
+
+    def patches(self, basemap, simplify=None, predicate=None, args_f=None, **kwargs):
+        """
+        Return geodata as a list of Matplotlib patches
+
+        :param basemap: A mpl_toolkits.basemap.Basemap
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+        :param args_f: A function that takes a row and returns a dict of additional args for the Patch constructor
+
+        :param kwargs: Additional args to be passed to the descartes Path constructor
+        :return: A list of patch objects
+        """
+        from descartes import PolygonPatch
+        from shapely.wkt import loads
+        from shapely.ops import transform
+
+        if not predicate:
+            predicate = lambda row: True
+
+        def map_xform(x, y, z=None):
+            return basemap(x, y)
+
+        def make_patch(shape, row):
+
+            args = dict(kwargs.items())
+
+            if args_f:
+                args.update(args_f(row))
+
+            return PolygonPatch(transform(map_xform, shape), **args)
+
+        def yield_patches(row):
+
+            if simplify:
+                shape = loads(row.geometry).simplify(simplify)
+            else:
+                shape = loads(row.geometry)
+
+            if shape.geom_type == 'MultiPolygon':
+                for subshape in shape.geoms:
+                    yield make_patch(subshape, row)
+            else:
+                yield make_patch(shape, row)
+
+        return [patch for row in self if predicate(row)
+                for patch in yield_patches(row)]
+
+class MeasureDimensionPartition(PartitionProxy):
+    """A partition proxy for accessing measure and dimensions. When returning a column, it returns
+    a PartitionColumn, which proxies the table column while adding partition specific functions. """
+
+    def column(self, c_name):
+
+        return PartitionColumn(self.table.column(c_name), self)
+
+    @property
+    def columns(self):
+        """Iterate over all columns"""
+
+        return [PartitionColumn(c, self) for c in self.table.columns]
+
+    @property
+    def primary_columns(self):
+        """Iterate over the primary columns, columns which do not have a parent"""
+
+        return [c for c in self.columns if not c.parent]
+
+    @property
+    def dimensions(self):
+        """Iterate over all dimensions"""
+        from ambry.valuetype.core import ROLE
+
+        return [c for c in self.columns if c.role == ROLE.DIMENSION]
+
+    @property
+    def primary_dimensions(self):
+        """Iterate over the primary columns, columns which do not have a parent and have a
+        cardinality greater than 1"""
+        from ambry.valuetype.core import ROLE
+
+        return [ c for c in self.columns if not c.parent and c.role == ROLE.DIMENSION and c.pstats.nuniques > 1 ]
+
+    @property
+    def measures(self):
+        """Iterate over all measures"""
+        from ambry.valuetype.core import ROLE
+
+        return [c for c in self.columns if c.role == ROLE.MEASURE]
+
+    @property
+    def primary_measures(self):
+        """Iterate over the primary measures, columns which do not have a parent"""
+
+        return [ c for c in self.measures if not c.parent ]
+
+
+    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={}, unstack=True ):
+        """
+        Yield rows in a reduced format, with one dimension as an index, one measure column per secondary dimension,
+        and all other dimensions filtered.
+
+        :param measure: The column names of one or more measures
+        :param p_dim: The primary dimension. This will be the index of the dataframe.
+        :param s_dim: a secondary dimension. The returned frame will be unstacked on this dimension
+        :param filtered_dims: A dict of dimension columns names that are filtered, mapped to the dimension value
+        to select.
+        :return:
+        """
+
+        from six import text_type
+
+        def maybe_quote(v):
+            from six import string_types
+            if isinstance(v, string_types):
+                return '"{}"'.format(v)
+            else:
+                return v
+
+        all_dims = [p_dim]+filtered_dims.keys()
+
+        if s_dim:
+            all_dims.append(s_dim)
+
+        all_dims = [text_type(c) for c in all_dims]
+
+        primary_dims = [text_type(c.name) for c in self.primary_dimensions]
+
+        if set(all_dims) != set(primary_dims):
+            raise ValueError("The primary secondary and filtered dimensions must cover all primary dimensions"+
+                             " {} != {}".format(sorted(all_dims), sorted(primary_dims)))
+
+        # Use dimension labels, if they exist
+        try:
+            p_dim = self.column(p_dim).label.name
+        except ValueError:
+            pass
+
+        if s_dim:
+
+            try:
+                s_dim = self.column(s_dim).label.name
+
+            except ValueError:
+                pass
+
+            columns = [p_dim, s_dim, measure]
+
+        else:
+            columns = [p_dim, measure]
+
+        # Create the predicate to filter out the filtered dimensions
+        code = ' and '.join("row.{} == {}".format(k,maybe_quote(v)) for k, v in filtered_dims.items())
+
+        predicate = eval('lambda row: {}'.format(code))
+
+        df = self.analysis.dataframe(predicate, columns=columns)
+
+        if s_dim:
+            df = df.set_index([p_dim, s_dim])
+
+            if unstack:
+                df = df.unstack()
+
+                df.columns = df.columns.get_level_values(1)  # [' '.join(col).strip() for col in df.columns.values]
+
+        else:
+            df = df.set_index(p_dim)
+
+        if 'plot_meta' not in df._metadata:
+            df._metadata.append('plot_meta')
+
+        df.plot_meta = {
+            'primary_dim': p_dim.name,
+            'secondary_dim': s_dim.name,
+            'filtered_dims': filtered_dims,
+            'measure': measure
+        }
+
+        return df
+
+
+
+class ColumnProxy(PartitionProxy):
+
+    def __init__(self, obj, partition):
+        object.__setattr__(self, "_obj", obj)
+        object.__setattr__(self, "_partition", partition)
+
+class PartitionColumn(ColumnProxy):
+    """A proxy on the Column that links a Column to a Partition, for direct access to the stats
+    and column labels"""
+
+    def __init__(self, obj, partition):
+        super(PartitionColumn, self).__init__(obj, partition)
+        object.__setattr__(self, "pstats", partition.stats_dict[obj.name])
+
+    @property
+    def children(self):
+        """"Return the table's other column that have this column as a parent, excluding labels"""
+        for child in self.children:
+            yield PartitionColumn(child, self._partition)
+
+
+    @property
+    def label(self):
+        """"Return first child that of the column that is marked as a label"""
+        for c in self.table.columns:
+            if c.parent == self.name and '/label' in c.valuetype:
+                return PartitionColumn(c, self._partition)
+
+    @property
+    def labels(self):
+        """Return a map of column code values mapped to labels, for columns that have a label column
+
+        If the column is not assocaited with a label column, it returns an identity map.
+        """
+
+        from operator import itemgetter
+
+        card = self.pstats.nuniques
+
+        if self.label:
+            ig = itemgetter(self.name, self.label.name)
+        else:
+            ig = itemgetter(self.name, self.name)
+
+        label_set = set()
+        for row in self._partition:
+            label_set.add(ig(row))
+
+            if len(label_set) >= card:
+                break
+
+        d = dict(label_set)
+
+        assert len(d) == len(label_set)  # Else the label set has multiple values per key
+
+        return d
+
+
+

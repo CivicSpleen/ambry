@@ -1,0 +1,52 @@
+filesystem:
+    build: '{root}/build'
+    documentation: '{root}/doc'
+    downloads: '{root}/downloads'
+    extracts: '{root}/extracts'
+    logs: '{root}/logs'
+    python: '{root}/python'
+    search: '{root}/search'
+    source: '{root}/source'
+    test: '{root}/test'
+library:
+    category: development
+    database: '{root}/library.db'
+    filesystem_root: /tmp/ambry
+accounts:
+    ambry:
+        email: bobson@civicknowledge.com
+        name: Bob Bobson
+        org: Civic Knowledge
+        url: http://civicknowledge.com
+    ckan:
+        service: ckan
+        apikey: 49caxtegp3in
+        host: http://unwqzizk25fe.example.com
+        organization: foocom
+    password: bingo
+remotes:
+    config1:
+        access: KJKJHGKKJWEHFW34765JH
+        secret: 34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW
+        service: s3
+        url: s3://config1.library.example.com
+        user: test
+    config2:
+        access: KJKJHGKKJWEHFW34765JH
+        secret: 34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW
+        service: s3
+        url: s3://config2.library.example.com
+    remotes1:
+        access: KJKJHGKKJWEHFW34765JH
+        secret: 34765JHTEp13/g8vcK+EIcAj7KJKJHGKKJWEHFW
+        service: s3
+        url: s3://remotes1.library.example.com
+    remotes2:
+        access: AKIAIWFOOBARDEA37SYQ
+        secret: l7Ijwnl4+Fk7gk1s6qF6MvnMRm53XBQ1QBcLpLfA
+        url: s3://remotes2.library.example.com
+    remotes3:
+        access: AKIAIWFOOBARDEA37SYQ
+        secret: l7Ijwnl4+Fk7gk1s6qF6MvnMRm53XBQ1QBcLpLfA
+        url: s3://remotes3.library.example.com
+

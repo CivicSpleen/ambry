@@ -71,6 +71,51 @@ class Table(Base, DictableMixin):
         except TypeError:
             raise TypeError('Not a valid type for name ' + str(type(name)))
 
+    @property
+    def primary_columns(self):
+        """Iterate over the primary columns, columns which do not have a parent"""
+        for c in self.columns:
+            if not c.parent:
+                yield c
+
+    @property
+    def dimensions(self):
+        """Iterate over the dimension columns, regardless of parent/child status
+
+        """
+        from ambry.valuetype.core import ROLE
+
+        for c in self.columns:
+
+            if c.role == ROLE.DIMENSION:
+                yield c
+
+    @property
+    def primary_dimensions(self):
+        """Iterate over the primary dimension columns, columns which do not have a parent
+
+        """
+        from ambry.valuetype.core import ROLE
+
+        for c in self.columns:
+
+            if not c.parent and c.role == ROLE.DIMENSION:
+                    yield c
+
+    @property
+    def primary_measures(self):
+        """Iterate over the primary columns, columns which do not have a parent
+
+        Also sets the property partition_stats to the stats collection for the partition and column.
+        """
+        from ambry.valuetype.core import ROLE
+
+        for c in self.columns:
+
+            if not c.parent and c.role == ROLE.MEASURE:
+                    yield c
+
+
     def column(self, ref):
         # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
         # so iterating over the collection only involves one SELECT.
@@ -93,8 +138,6 @@ class Table(Base, DictableMixin):
         :param kwargs: Other arguments for the the Column() constructor
         :return: a Column object
         """
-        from . import next_sequence_id
-        from sqlalchemy.orm import object_session
         from ..identity import ColumnNumber
 
         try:
@@ -170,7 +213,6 @@ class Table(Base, DictableMixin):
 
         return False
 
-
     @property
     def header(self):
         """Return an array of column names in the same order as the column
@@ -242,7 +284,6 @@ class Table(Base, DictableMixin):
             dataset_vid = ObjectNumber.parse(self.d_vid)
             self.vid = str(TableNumber(dataset_vid, self.sequence_id))
 
-
     @property
     def transforms(self):
         """Return an array of arrays of column transforms.
@@ -264,10 +305,11 @@ class Table(Base, DictableMixin):
         import six
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
+        SKIP_KEYS = ['id', 'd_id', 'd_vid', 'dataset', 'columns', 'data',
+                     'partitions', 'sources', 'process_records']
 
-        d = OrderedDict([( p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                         if p.key not in ['id','d_id','d_vid','dataset','columns','data',
-                                          'partitions', 'sources','process_records']])
+        d = OrderedDict([(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in SKIP_KEYS])
 
         for k, v in six.iteritems(self.data):
             d['d_' + k] = v
@@ -277,10 +319,26 @@ class Table(Base, DictableMixin):
     def __str__(self):
         from tabulate import tabulate
 
-        headers = 'Seq Vid Name Datatype '.split()
-        rows = [(c.sequence_id, c.vid, c.name, c.datatype) for c in self.columns]
+        headers = 'Seq Vid Name Datatype ValueType'.split()
+        rows = [(c.sequence_id, c.vid, c.name, c.datatype, c.valuetype) for c in self.columns]
 
         return ('Dest Table: {}\n'.format(self.name)) + tabulate(rows, headers)
+
+    def _repr_html_(self):
+        from tabulate import tabulate
+        from ambry.util import drop_empty
+
+        def record_gen():
+            for i, row in enumerate([c.row for c in self.columns]):
+                if i == 0:
+                    yield row.keys()
+                yield row.values()
+
+        records = list(record_gen())
+
+        records = drop_empty(records)
+
+        return "<h2>{}</h2>".format(self.name)+tabulate(records[1:], headers=records[0], tablefmt="html")
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -288,7 +346,7 @@ class Table(Base, DictableMixin):
         object and create an ObjectNumber value for the id"""
         if target.sequence_id is None:
             from ambry.orm.exc import DatabaseError
-            raise DatabaseError("Must have sequence id before insertion")
+            raise DatabaseError('Must have sequence id before insertion')
 
         Table.before_update(mapper, conn, target)
 

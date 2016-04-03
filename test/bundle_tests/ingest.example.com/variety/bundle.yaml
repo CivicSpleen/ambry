@@ -11,7 +11,8 @@ about:
     source: '{{contact_source.creator.org}}'
     space: California
     subject: demo
-    summary: Ingest a variety of files, with a lot of different header structure and file types {{contact_source.creator.org}}.
+    summary: Ingest a variety of files, with a lot of different header structure and
+        file types {{contact_source.creator.org}}.
     tags:
     - example
     - demo
@@ -31,13 +32,13 @@ external_documentation: {}
 identity:
     dataset: variety
     id: d00variety
-    revision: 3
+    revision: 4
     source: ingest.example.com
-    version: 0.1.3
+    version: 0.0.4
 names:
-    fqname: example.com-complete-load-0.1.3~d00000load003
-    name: example.com-complete-load
-    vid: d00000load003
-    vname: example.com-complete-load-0.1.3
+    fqname: ingest.example.com-variety-0.0.4~d00variety004
+    name: ingest.example.com-variety
+    vid: d00variety004
+    vname: ingest.example.com-variety-0.0.4
 requirements:
     xlrd: xlrd

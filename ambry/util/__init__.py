@@ -5,7 +5,6 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-
 from collections import OrderedDict, defaultdict, Mapping, deque, MutableMapping, Callable
 from functools import partial, reduce, wraps
 import json
@@ -18,21 +17,18 @@ import re
 import subprocess
 import sys
 from time import time
-import uuid
 import yaml
 from yaml.representer import RepresenterError
+import warnings
 
 from bs4 import BeautifulSoup
 
 from six.moves import filterfalse, xrange as six_xrange
-from six import iteritems, iterkeys, itervalues, print_, StringIO, text_type
-from six.moves import builtins, zip as six_izip
+from six import iteritems, iterkeys, itervalues, print_, StringIO
 from six.moves.urllib.parse import urlparse, urlsplit, urlunsplit
 from six.moves.urllib.request import urlopen
 
-
 from ambry.dbexceptions import ConfigurationError
-
 
 logger_init = set()
 
@@ -43,8 +39,11 @@ def get_logger(name, file_name=None, stream=None, template=None, propagate=False
     """
 
     logger = logging.getLogger(name)
-    if 'test' in sys.argv and not level:
-        # testing without level, this means user does not want to see any log messages.
+    running_tests = (
+        'test' in sys.argv  # running with setup.py
+        or sys.argv[0].endswith('py.test'))  # running with py.test
+    if running_tests and not level:
+        # testing without level, this means tester does not want to see any log messages.
         level = logging.CRITICAL
 
     if not level:
@@ -212,7 +211,6 @@ def lru_cache(maxsize=128, maxtime=60):
     return decorating_function
 
 
-
 class YamlIncludeLoader(yaml.Loader):
     def __init__(self, stream):
         self._root = os.path.split(stream.name)[0]
@@ -351,7 +349,7 @@ class AttrDict(OrderedDict):
             return cls()
 
         with open(path) as f:
-            return cls(yaml.load(f, OrderedDictYAMLLoader))
+            return cls(yaml.load(f, OrderedDictYAMLLoader) or {})
 
     @staticmethod
     def flatten_dict(data, path=tuple()):
@@ -367,20 +365,6 @@ class AttrDict(OrderedDict):
 
     def flatten(self, path=tuple()):
         return self.flatten_dict(self, path=path)
-
-    def to_dict(self):
-        root = {}
-        val = self.flatten()
-        for k, v in val:
-            dst = root
-            for slug in k[:-1]:
-                if dst.get(slug) is None:
-                    dst[slug] = dict()
-                dst = dst[slug]
-            if v is not None or not isinstance(dst.get(k[-1]), Mapping):
-                dst[k[-1]] = v
-
-        return root
 
     def update_flat(self, val):
 
@@ -412,6 +396,23 @@ class AttrDict(OrderedDict):
     def update_yaml(self, path):
         self.update_flat(self.from_yaml(path))
         return self
+
+    def to_dict(self):
+        root = {}
+        val = self.flatten()
+        for k, v in val:
+            dst = root
+            for slug in k[:-1]:
+                if dst.get(slug) is None:
+                    dst[slug] = dict()
+                dst = dst[slug]
+            if v is not None or not isinstance(dst.get(k[-1]), Mapping):
+                dst[k[-1]] = v
+
+        return root
+
+    def update_dict(self, data):
+        self.update_flat(self.flatten_dict(data))
 
     def clone(self):
         clone = AttrDict()
@@ -652,8 +653,6 @@ def md5_for_file(f, block_size=2 ** 20):
             return md5_for_file(f, block_size)
 
 
-
-
 def make_acro(past, prefix, s):  # pragma: no cover
     """Create a three letter acronym from the input string s.
 
@@ -732,33 +731,6 @@ def make_acro(past, prefix, s):  # pragma: no cover
             pass
 
     raise Exception('Could not get acronym.')
-
-
-def temp_file_name():
-    """Create a path to a file in the temp directory."""
-
-    import platform
-
-    if platform.system() == 'Windows':
-
-        import tempfile
-
-        f = tempfile.NamedTemporaryFile(delete=True)
-        f.close()
-
-        if os.path.exists(f.name):
-            os.remove(f.name)
-
-        return f.name
-
-    else:
-
-        tmp_dir = '/tmp/ambry'
-
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir)
-
-        return os.path.join(tmp_dir, str(uuid.uuid4()))
 
 
 def ensure_dir_exists(path):
@@ -1008,14 +980,28 @@ def unparse_url_dict(d):
     return url
 
 
+def set_url_part(url, **kwargs):
+    """Change one or more parts of a URL"""
+    d = parse_url_to_dict(url)
+
+    d.update(kwargs)
+
+    return unparse_url_dict(d)
+
+
 def filter_url(url, **kwargs):
-    """Alter a url by setting parameters set in parse_url_to_dict."""
+    """filter a URL by returning a URL with only the parts specified in the keywords"""
 
     d = parse_url_to_dict(url)
 
     d.update(kwargs)
 
     return unparse_url_dict({k: v for k, v in list(d.items()) if v})
+
+
+def select_from_url(url, key):
+    d = parse_url_to_dict(url)
+    return d.get(key)
 
 
 def normalize_newlines(string):
@@ -1035,12 +1021,21 @@ def qualified_class_name(o):
         return o.__class__.__name__
     return module + '.' + o.__class__.__name__
 
+
 def qualified_name(cls):
     """Full name of a class, including the module. Like qualified_class_name, but when you already have a class """
     module = cls.__module__
     if module is None or module == str.__class__.__module__:
         return cls.__name__
     return module + '.' + cls.__name__
+
+def qualified_name_import(cls):
+    """Full name of a class, including the module. Like qualified_class_name, but when you already have a class """
+
+    parts = qualified_name(cls).split('.')
+
+    return "from {} import {}".format('.'.join(parts[:-1]), parts[-1])
+
 
 
 class _Getch:
@@ -1090,9 +1085,10 @@ def scrape(library, url, as_html=False):
 
     if url.startswith('s3:'):
         s3 = library.filesystem.s3(url)
-        return scrape_s3(url, s3, as_html = as_html)
+        return scrape_s3(url, s3, as_html=as_html)
     else:
-        return scrape_urls_from_web_page()
+        return scrape_urls_from_web_page(url)
+
 
 def scrape_s3(root_url, s3, as_html=False):
     from os.path import join
@@ -1101,7 +1097,7 @@ def scrape_s3(root_url, s3, as_html=False):
     for f in s3.walkfiles('/'):
         if as_html:
             try:
-                url, _ = s3.getpathurl(f).split('?',1)
+                url, _ = s3.getpathurl(f).split('?', 1)
             except ValueError:
                 url = s3.getpathurl(f)
         else:
@@ -1112,6 +1108,7 @@ def scrape_s3(root_url, s3, as_html=False):
         d['sources'][fn] = dict(url=url, description='', title=fn)
 
     return d
+
 
 def scrape_urls_from_web_page(page_url):
     parts = list(urlsplit(page_url))
@@ -1179,13 +1176,15 @@ def scrape_urls_from_web_page(page_url):
 
     return d
 
+
 def drop_empty(rows):
     """Transpose the columns into rows, remove all of the rows that are empty after the first cell, then
     transpose back. The result is that columns that have a header but no data in the body are removed, assuming
     the header is the first row. """
     return zip(*[col for col in zip(*rows) if bool(filter(bool, col[1:]))])
 
-#http://stackoverflow.com/a/20577580
+
+# http://stackoverflow.com/a/20577580
 def dequote(s):
     """
     If a string has single or double quotes around it, remove them.
@@ -1197,6 +1196,7 @@ def dequote(s):
         return s[1:-1]
 
     return s
+
 
 def pretty_time(s, granularity=3):
     """Pretty print time in seconds. COnverts the input time in seconds into a string with
@@ -1228,9 +1228,8 @@ def pretty_time(s, granularity=3):
 
         return ', '.join(result[:granularity])
 
-    return display_time(s,granularity)
+    return display_time(s, granularity)
 
-import warnings
 
 # From: http://code.activestate.com/recipes/391367-deprecated/
 def deprecated(func):
@@ -1246,9 +1245,100 @@ def deprecated(func):
     newFunc.__dict__.update(func.__dict__)
     return newFunc
 
+
 def int_maybe(v):
     """Try to convert to an int and return None on failure"""
     try:
         return int(v)
     except (TypeError, ValueError):
         return None
+
+
+def random_string(length):
+    import random
+    import string
+    return ''.join(random.SystemRandom().choice(string.ascii_lowercase + string.ascii_uppercase + string.digits)
+                   for _ in range(length))
+
+# From: http://code.activestate.com/recipes/496741-object-proxying/
+
+class Proxy(object):
+    __slots__ = ["_obj", "__weakref__"]
+    def __init__(self, obj):
+        object.__setattr__(self, "_obj", obj)
+
+    #
+    # proxying (special cases)
+    #
+    def __getattribute__(self, name):
+        return getattr(object.__getattribute__(self, "_obj"), name)
+    def __delattr__(self, name):
+        delattr(object.__getattribute__(self, "_obj"), name)
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, "_obj"), name, value)
+
+    def __nonzero__(self):
+        return bool(object.__getattribute__(self, "_obj"))
+    def __str__(self):
+        return str(object.__getattribute__(self, "_obj"))
+    def __repr__(self):
+        return repr(object.__getattribute__(self, "_obj"))
+
+    #
+    # factories
+    #
+    _special_names = [
+        '__abs__', '__add__', '__and__', '__call__', '__cmp__', '__coerce__',
+        '__contains__', '__delitem__', '__delslice__', '__div__', '__divmod__',
+        '__eq__', '__float__', '__floordiv__', '__ge__', '__getitem__',
+        '__getslice__', '__gt__', '__hash__', '__hex__', '__iadd__', '__iand__',
+        '__idiv__', '__idivmod__', '__ifloordiv__', '__ilshift__', '__imod__',
+        '__imul__', '__int__', '__invert__', '__ior__', '__ipow__', '__irshift__',
+        '__isub__', '__iter__', '__itruediv__', '__ixor__', '__le__', '__len__',
+        '__long__', '__lshift__', '__lt__', '__mod__', '__mul__', '__ne__',
+        '__neg__', '__oct__', '__or__', '__pos__', '__pow__', '__radd__',
+        '__rand__', '__rdiv__', '__rdivmod__', '__reduce__', '__reduce_ex__',
+        '__repr__', '__reversed__', '__rfloorfiv__', '__rlshift__', '__rmod__',
+        '__rmul__', '__ror__', '__rpow__', '__rrshift__', '__rshift__', '__rsub__',
+        '__rtruediv__', '__rxor__', '__setitem__', '__setslice__', '__sub__',
+        '__truediv__', '__xor__', 'next',
+    ]
+
+    @classmethod
+    def _create_class_proxy(cls, theclass):
+        """creates a proxy for the given class"""
+
+        def make_method(name):
+            def method(self, *args, **kw):
+                return getattr(object.__getattribute__(self, "_obj"), name)(*args, **kw)
+            return method
+
+        namespace = {}
+        for name in cls._special_names:
+            if hasattr(theclass, name):
+                namespace[name] = make_method(name)
+        return type("%s(%s)" % (cls.__name__, theclass.__name__), (cls,), namespace)
+
+    def __new__(cls, obj, *args, **kwargs):
+        """
+        creates an proxy instance referencing `obj`. (obj, *args, **kwargs) are
+        passed to this class' __init__, so deriving classes can define an
+        __init__ method of their own.
+        note: _class_proxy_cache is unique per deriving class (each deriving
+        class must hold its own cache)
+        """
+        try:
+            cache = cls.__dict__["_class_proxy_cache"]
+        except KeyError:
+            cls._class_proxy_cache = cache = {}
+        try:
+            theclass = cache[obj.__class__]
+        except KeyError:
+            cache[obj.__class__] = theclass = cls._create_class_proxy(obj.__class__)
+        ins = object.__new__(theclass)
+        theclass.__init__(ins, obj, *args, **kwargs)
+        return ins
+
+
+
+

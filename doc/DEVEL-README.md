@@ -56,7 +56,7 @@ python setup.py fetch --all build --enable-all-extensions install test
 ```
 See http://apidoc.apsw.googlecode.com/hg/build.html#recommended for more details.
 
-#### PostgreSQL (Foreign Data Wrapper), Debian/Ubuntu, virtualenv
+#### PostgreSQL (Foreign Data Wrapper), Debian/Ubuntu, virtualenv TODO: Check steps again.
 1. Install postgresql-server-dev package
 ```bash
 $ sudo apt-get install postgresql-server-dev-(your version here)
@@ -69,18 +69,18 @@ $ unzip v1.2.3.zip
 $ cd Multicorn-1.2.3
 $ make && make install
 ```
-3. Install ambryfdw *to global environment*.
+3. Install ambry_sources *to global environment*.
 ```bash
-pip install ambryfdw
+pip install ambry_sources
 ```
 4. Create \*.pth files for both libraries in the site-packages of your virtual environment.
 Add multicorn.pth containing path to the multicorn package. Example (use your own path instead):
 ```
 /usr/local/lib/python2.7/dist-packages/multicorn-1.2.3_dev-py2.7-linux-i686.egg
 ```
-Add ambryfdw.pth containing path to the ambryfdw package. Example (use your own path instead):
+Add ambry_sources.pth containing path to the ambry_sources package. Example (use your own path instead):
 ```
-/usr/local/lib/python2.7/dist-packages/ambryfdw
+/usr/local/lib/python2.7/dist-packages/ambry_sources
 ```
 
 ### To write python2/python3 compatible code:
@@ -157,8 +157,7 @@ Doing so prevents 2to3 to replace \__nonzero__.
     10. Use six.u() if you need unicode, use six.b() if you need bytestring:
 ```python
 u('some-str')
-```
-instead of
+``` instead of
 ```python
 u'some-str'
 ```
@@ -210,3 +209,33 @@ The config file in the container is: /var/lib/postgresql/data/postgresql.conf.
 
 To connect to the database, you'll use a DSN URL that has the port that docker picted to make the internal Postgres 
 port to, which you can get with `docker ps` or `docker port ambry 5432`
+
+# Running test
+```bash
+python setup.py test -a
+```
+This run all tests. Tests will use engine found in library.database and library.warehouse sections of .ambry.yaml.
+
+## How to run tests for sqlite and postgres db backends
+Add database.test_sqlite and database.test_postgres settings to the .ambry.yaml. Run
+```bash
+python setup.py test -a -sqlite -postgres
+```
+This will run all tests using sqlite as backend, then run all tests using postgres as backend.
+
+## Getting broken tests notifications to email.
+Run tests with --email parameter
+```bash
+python setup.py test -a --email=test@example.com
+```
+
+By default local smtp server will be used. To change to external server create .email_settings.json file near setup.py. Example of the .email_settings.json for gmail.
+```json
+{
+    "use_tls": true,
+    "sender": "test@example.com",
+    "server": "smtp.gmail.com:587",
+    "username": "test@example.com",
+    "password": "secret"
+}
+```

@@ -1,0 +1,45 @@
+about:
+    access: restricted
+    footnote: nll
+    grain: null
+    groups: null
+    license: ckdbl
+    processed: null
+    rights: public
+    source: null
+    space: null
+    subject: null
+    summary: Dataset Summary
+    tags: []
+    time: null
+    title: Dataset Title
+contacts:
+    wrangler:
+        email: bob@example.com
+        name: Bob Bobson
+        url: http://example.com
+dependencies: {}
+external_documentation:
+    dataset:
+        description: Web page the links to the dataset description
+        source: null
+        title: Dataset Page
+        url: http://example.com
+    download:
+        description: Web page that links to the source files.
+        source: null
+        title: Download Page
+        url: http://example.com
+identity:
+    dataset: notebooks
+    id: dEgPThFUK5
+    revision: 1
+    source: misc.example.com
+    version: 0.0.1
+names:
+    fqname: misc.example.com-notebooks-0.0.1~dEgPThFUK5001
+    name: misc.example.com-notebooks
+    vid: dEgPThFUK5001
+    vname: misc.example.com-notebooks-0.0.1
+requirements: {}
+versions: {}

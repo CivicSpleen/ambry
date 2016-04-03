@@ -15,7 +15,7 @@ import six
 from ambry.exporters.ckan.core import _convert_bundle, _convert_partition, export, MISSING_CREDENTIALS_MSG,\
     UnpublishedAccessError, CKAN_CONFIG
 from ambry.orm.database import Database
-from ambry.run import get_runconfig
+from ambry.orm import Partition
 
 from test.factories import DatasetFactory, PartitionFactory, FileFactory
 
@@ -65,36 +65,28 @@ class ConvertPartitionTest(unittest.TestCase):
         self.sqlite_db.create()
 
     def test_converts_partition_to_resource_dict(self):
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
-
-        ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
-        self.sqlite_db.commit()
-        partition1._datafile = MagicMock()
-        ret = _convert_partition(partition1)
+        fake_partition = MagicMock(spec=Partition)
+        fake_partition.dataset.vid = 'ds1vid'
+        fake_partition.name = 'partition1'
+        ret = _convert_partition(fake_partition)
         self.assertIn('package_id', ret)
-        self.assertEqual(ret['package_id'], ds1.vid)
-        self.assertEqual(ret['name'], partition1.name)
+        self.assertEqual(ret['package_id'], 'ds1vid')
+        self.assertEqual(ret['name'], fake_partition.name)
 
     def test_converts_partition_content_to_csv(self):
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
-
-        ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
-        self.sqlite_db.commit()
-
-        # make partition iterator return my values.
-        partition1._datafile = MagicMock()
-        partition1._datafile.headers = ['col1', 'col2']
+        # prepare partition mock
+        fake_partition = MagicMock(spec=Partition)
+        fake_partition.dataset.vid = 'ds1vid'
+        fake_partition.datafile.headers = ['col1', 'col2']
         fake_iter = lambda: iter([{'col1': '1', 'col2': '1'}, {'col1': '2', 'col2': '2'}])
-        with patch('ambry.orm.partition.Partition.__iter__', side_effect=fake_iter):
-            ret = _convert_partition(partition1)
+        fake_partition.__iter__.side_effect = fake_iter
+
+        # run.
+        ret = _convert_partition(fake_partition)
 
         # check converted partition.
         self.assertIn('package_id', ret)
-        self.assertEqual(ret['package_id'], ds1.vid)
+        self.assertEqual(ret['package_id'], 'ds1vid')
         self.assertIn('upload', ret)
         self.assertTrue(isinstance(ret['upload'], six.StringIO))
         rows = []
@@ -243,34 +235,6 @@ class ConvertSchemaTest(unittest.TestCase):
         self.assertIn('package_id', ret)
         self.assertEqual(ret['package_id'], ds1.vid)
         self.assertEqual(ret['name'], partition1.name)
-
-    def test_converts_partition_content_to_csv(self):
-        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
-
-        ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
-        self.sqlite_db.commit()
-
-        # make partition iterator return my values.
-        partition1._datafile = MagicMock()
-        partition1._datafile.headers = ['col1', 'col2']
-        fake_iter = lambda: iter([{'col1': '1', 'col2': '1'}, {'col1': '2', 'col2': '2'}])
-        with patch('ambry.orm.partition.Partition.__iter__', side_effect=fake_iter):
-            ret = _convert_partition(partition1)
-
-        # check converted partition.
-        self.assertIn('package_id', ret)
-        self.assertEqual(ret['package_id'], ds1.vid)
-        self.assertIn('upload', ret)
-        self.assertTrue(isinstance(ret['upload'], six.StringIO))
-        rows = []
-        reader = unicodecsv.reader(ret['upload'])
-        for row in reader:
-            rows.append(row)
-        self.assertEqual(rows[0], ['col1', 'col2'])
-        self.assertEqual(rows[1], ['1', '1'])
-        self.assertEqual(rows[2], ['2', '2'])
 
 
 def _get_fake_bundle(dataset, partitions=None):

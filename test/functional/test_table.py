@@ -1,9 +1,10 @@
-
 import unittest
+
+from ambry.identity import DatasetNumber
+
 from ambry.orm.database import Database
 from ambry.orm.dataset import Dataset
 from ambry.orm.partition import Partition
-from ambry.identity import DatasetNumber
 
 
 class Test(unittest.TestCase):
@@ -27,7 +28,7 @@ class Test(unittest.TestCase):
         return Partition(ds, sequence_id=n, t_id=t_vids[n])
 
     def dump_database(self, db, table):
-        for row in db.connection.execute("SELECT * FROM {}".format(table)):
+        for row in db.connection.execute('SELECT * FROM {}'.format(table)):
             print(row)
 
     def test_table_basic(self):
@@ -59,16 +60,16 @@ class Test(unittest.TestCase):
 
         with Timer() as tr:
             for i in range(100):
-                t = ds.new_table('table'+str(i))
+                t = ds.new_table('table' + str(i))
 
                 for j in range(10):
-                    c = t.add_column("col"+str(j), datatype = 'integer')
+                    t.add_column('col' + str(j), datatype='integer')
 
             ds.commit()
 
-        print(len(ds.tables), len(ds.tables)/tr.elapsed)
+        print(len(ds.tables), len(ds.tables) / tr.elapsed)
 
         self.assertEqual(100, len(ds.tables))
 
         for t in ds.tables:
-            self.assertEqual(11, len(t.columns)) # 10 + id column
+            self.assertEqual(11, len(t.columns))  # 10 + id column

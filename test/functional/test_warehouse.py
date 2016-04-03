@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
+from itertools import islice
 import os
 import stat
+import unittest
 
 from ambry_sources import MPRowsFile
-from ambry_sources.med import postgresql as postgres_med
 from ambry_sources.sources import GeneratorSource, SourceSpec
 
-from test.factories import PartitionFactory, TableFactory
-from test.helpers import assert_sqlite_index, assert_valid_ambry_sources
-from test.test_base import TestBase, PostgreSQLTestBase
+from test.helpers import assert_sqlite_index, assert_ambry_sources, assert_postgres_index
+from test.proto import TestBase
 
 
 class Mixin(object):
@@ -17,139 +17,154 @@ class Mixin(object):
     # helpers
 
     def _assert_is_indexed(self, warehouse, partition, column):
-        ''' Raises AssertionError if column is not indexed. '''
-        raise NotImplementedError('Override the method and provide db specific index check.')
+        """ Raises AssertionError if column is not indexed. """
+
+        if warehouse.dsn.startswith('sqlite'):
+            assert_sqlite_index(warehouse._backend._connection, partition, column)
+        else:
+            assert_postgres_index(warehouse._backend._connection, partition, column)
 
     def test_query_mpr_with_auto_install(self):
+
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.6. Update your installation.')
             assert_shares_group(user='postgres')
-        config = self._get_config()
-        library = self._get_library(config)
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        partition1 = PartitionFactory(dataset=bundle.dataset)
-        bundle.wrap_partition(partition1)
+        library = self.library()
+
+        bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
+
+        partition = list(bundle.partitions)[0]
+        self.assertTrue(os.path.exists(partition.datafile.syspath))
+
+        warehouse = self.get_warehouse()
 
         try:
-            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
+            # query partition.
+            rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
+
+            self.assertEqual(0, rows[0][2])
+            self.assertEqual(1, rows[1][2])
+            self.assertEqual(2, rows[2][2])
         finally:
             bundle.progress.close()
-            library.warehouse.close()
+            warehouse.close()
             library.database.close()
 
     def test_install_and_query_materialized_partition(self):
         # materialized view for postgres and readonly table for sqlite.
+
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
+        library = self.library()
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        partition1 = PartitionFactory(dataset=bundle.dataset)
-        bundle.wrap_partition(partition1)
+        bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
+
+        partition = list(bundle.partitions)[0]
+        self.assertTrue(os.path.exists(partition.datafile.syspath))
+
+        warehouse = self.get_warehouse()
 
         try:
-            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
-
             # materialize partition (materialized view for postgres, readonly table for sqlite)
-            library.warehouse.materialize(partition1.vid)
+            warehouse.materialize(partition.vid)
 
             # query partition.
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
+            rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
 
-            # now drop the *.mpr file and check again. Query should return the same data.
-            #
-            syspath = partition1._datafile.syspath
-            os.remove(syspath)
-            self.assertFalse(os.path.exists(syspath))
-            rows = library.warehouse.query('SELECT * FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
+            self.assertEqual(0, rows[0][2])
+            self.assertEqual(1, rows[1][2])
+            self.assertEqual(2, rows[2][2])
+
+            self._assert_materialized(warehouse, partition)
+
         finally:
             bundle.progress.close()
-            library.warehouse.close()
+            warehouse.close()
             library.database.close()
 
     def test_index_creation(self):
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
+        library = self.library()
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        partition1 = PartitionFactory(dataset=bundle.dataset)
-        bundle.wrap_partition(partition1)
+        bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
+
+        partition = list(bundle.partitions)[0]
+        self.assertTrue(os.path.exists(partition.datafile.syspath))
+
+        warehouse = self.get_warehouse()
 
         try:
-            partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
 
             # Index creation requires materialized tables.
-            library.warehouse.materialize(partition1.vid)
+            warehouse.materialize(partition.vid)
+
+            column = 'int'
+            assert column in partition.table.header
 
             # Create indexes
-            library.warehouse.index(partition1.vid, ['col1', 'col2'])
+            warehouse.index(partition.vid, column)
 
             # query partition.
-            self._assert_is_indexed(library.warehouse, partition1, 'col1')
-            self._assert_is_indexed(library.warehouse, partition1, 'col2')
+            self._assert_is_indexed(warehouse, partition, column)
 
             # query indexed data
-            rows = library.warehouse.query('SELECT col1, col2 FROM {};'.format(partition1.vid))
-            self.assertEqual(rows, [(0, 0), (1, 1), (2, 2)])
+            # rows = warehouse.query('SELECT {} FROM {} LIMIT 1;'.format(partition.vid, column))
+            rows = warehouse \
+                .query(
+                    'SELECT {} FROM {} ORDER BY int ASC LIMIT 2;'
+                    .format(column, partition.vid)) \
+                .fetchall()
+            self.assertEqual(rows, [(0,), (0,)])
         finally:
             bundle.progress.close()
-            library.warehouse.close()
+            warehouse.close()
             library.database.close()
 
+    @unittest.skip('This test needs a bundle that has multiple partitions of the same table')
     def test_table_install_and_query(self):
-        if isinstance(self, PostgreSQLTest):
-            try:
-                assert_valid_ambry_sources('0.1.6')
-            except AssertionError:
-                self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
-        else:
-            # sqlite tests
-            try:
-                assert_valid_ambry_sources('0.1.8')
-            except AssertionError:
-                self.SkipTest('Need ambry_sources >= 0.1.8. Update your installation.')
+        try:
+            assert_ambry_sources('0.1.8')
+        except AssertionError:
+            self.SkipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
+        library = self.library()
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        TableFactory._meta.sqlalchemy_session = bundle.dataset.session
+        bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
+        partition1 = list(bundle.partitions)[0]
+        partition2 = list(bundle.partitions)[1]
+        self.assertTrue(os.path.exists(partition1.datafile.syspath))
+        self.assertTrue(os.path.exists(partition2.datafile.syspath))
 
-        table1 = TableFactory(dataset=bundle.dataset)
-        partition1 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=1)
-        partition2 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=2)
-        bundle.wrap_partition(partition1)
-        bundle.wrap_partition(partition2)
+        warehouse = self.get_warehouse()
 
         try:
             partition1._datafile = _get_datafile(bundle.build_fs, partition1.cache_key)
@@ -168,39 +183,33 @@ class Mixin(object):
             library.warehouse.close()
             library.database.close()
 
+    @unittest.skip('This test needs a bundle that has multiple partitions of the same table')
     def test_query_with_union(self):
         if isinstance(self, PostgreSQLTest):
             try:
-                assert_valid_ambry_sources('0.1.6')
+                assert_ambry_sources('0.1.6')
             except AssertionError:
                 self.SkipTest('Need ambry_sources >= 0.1.6. Update your installation.')
         else:
             # sqlite tests
             try:
-                assert_valid_ambry_sources('0.1.8')
+                assert_ambry_sources('0.1.8')
             except AssertionError:
                 self.skipTest('Need ambry_sources >= 0.1.8. Update your installation.')
 
-        config = self._get_config()
-        library = self._get_library(config)
+        library = self.library()
 
-        # FIXME: Find the way how to initialize bundle with partitions and drop partition creation.
-        bundle = self.setup_bundle(
-            'simple', source_url='temp://', build_url='temp://', library=library)
-        PartitionFactory._meta.sqlalchemy_session = bundle.dataset.session
-        TableFactory._meta.sqlalchemy_session = bundle.dataset.session
-
-        table1 = TableFactory(dataset=bundle.dataset)
-        partition1 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=1)
-        partition2 = PartitionFactory(dataset=bundle.dataset, table=table1, segment=2)
-        bundle.wrap_partition(partition1)
-        bundle.wrap_partition(partition2)
+        bundle = library.bundle('build.example.com-generators')
+        bundle.ingest()
+        bundle.source_schema()
+        bundle.schema()
+        bundle.build()
+        partition1 = list(bundle.partitions)[0]
+        partition2 = list(bundle.partitions)[1]
+        self.assertTrue(os.path.exists(partition1.datafile.syspath))
+        self.assertTrue(os.path.exists(partition2.datafile.syspath))
 
         try:
-            partition1._datafile = _get_datafile(
-                bundle.build_fs, partition1.cache_key)
-            partition2._datafile = _get_datafile(
-                bundle.build_fs, partition2.cache_key, rows=[[3, 3], [4, 4]])
 
             # execute nested query.
             query = '''
@@ -220,93 +229,64 @@ class Mixin(object):
 
 class InMemorySQLiteTest(TestBase, Mixin):
 
-    def _get_config(self):
-        rc = TestBase.get_rc()
-        # use file database for library for that test case.
-        self.__class__._real_warehouse_database = rc.library.get('warehouse')
-        self.__class__._real_test_database = rc.library.database
-        rc.library.warehouse = 'sqlite://'
-        rc.library.database = 'sqlite://'
-        return rc
+    def setUp(self):
+        super(InMemorySQLiteTest, self).setUp()
+        if self._db_type != 'sqlite':
+            self.skipTest('SQLite tests are disabled.')
 
-    def _assert_is_indexed(self, warehouse, partition, column):
-        assert_sqlite_index(warehouse._backend._connection, partition, column)
+    def get_warehouse(self):
+        return self.library().warehouse(dsn='sqlite://')
+
+    def _assert_materialized(self, warehouse, partition):
+        # Drop partition datafile and check again. So the data can only come from materialization.
+        partition.datafile.remove()
+        self.assertFalse(partition.datafile.exists)
+        rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
+
+        self.assertEqual(0, rows[0][2])
+        self.assertEqual(1, rows[1][2])
+        self.assertEqual(2, rows[2][2])
 
 
 class FileSQLiteTest(TestBase, Mixin):
 
-    @classmethod
-    def setUpClass(cls):
-        TestBase.setUpClass()
-        cls._warehouse_db = 'sqlite:////tmp/test-warehouse-ambry-1.db'
-        try:
-            os.remove(cls._warehouse_db.replace('sqlite:///', ''))
-        except OSError:
-            pass
+    def setUp(self):
+        super(FileSQLiteTest, self).setUp()
+        if self._db_type != 'sqlite':
+            self.skipTest('SQLite tests are disabled.')
 
-    def tearDown(self):
-        super(self.__class__, self).tearDown()
-        os.remove(self._warehouse_db.replace('sqlite:///', ''))
+    def get_warehouse(self):
+        return self.library().warehouse()
 
-    def _get_config(self):
-        rc = TestBase.get_rc()
-        # use file database for library for that test case.
-        if not rc.library.warehouse == self._warehouse_db:
-            self.__class__._real_warehouse_database = rc.library.database
-            rc.library.warehouse = self._warehouse_db
-            rc.library.database = self._warehouse_db  # It's ok to use the same db file for that test case.
-        return rc
+    def _assert_materialized(self, warehouse, partition):
 
-    @classmethod
-    def tearDownClass(cls):
-        rc = TestBase.get_rc()
-        if rc.library.database != cls._real_warehouse_database:
-            # restore database
-            rc.library.database = cls._real_warehouse_database
+        # Re-open the database through SQLalchemy, which won't have the module installed,
+        # so the data can only come from materialization
 
-    def _get_test_library(self):
-        library = self.library()
+        rows = list(islice(warehouse.engine.execute('SELECT * FROM {};'.format(partition.vid)), None, 3))
 
-        # assert it is file database.
-        assert library.database.exists()
-        return library
-
-    def _assert_is_indexed(self, warehouse, partition, column):
-        assert_sqlite_index(warehouse._backend._connection, partition, column)
+        self.assertEqual(0, rows[0][2])
+        self.assertEqual(1, rows[1][2])
+        self.assertEqual(2, rows[2][2])
 
 
-class PostgreSQLTest(PostgreSQLTestBase, Mixin):
+class PostgreSQLTest(TestBase, Mixin):
 
-    def _get_config(self):
-        rc = TestBase.get_rc()
-        # replace database with postgres test database.
-        self.__class__._real_warehouse_database = rc.library.database
-        rc.library.warehouse = self.__class__.postgres_test_db_data['test_db_dsn']
-        rc.library.database = self.__class__.postgres_test_db_data['test_db_dsn']  # It's ok to use the same database.
-        return rc
+    def setUp(self):
+        super(PostgreSQLTest, self).setUp()
+        if self._db_type != 'postgres':
+            self.skipTest('PostgreSQL tests are disabled.')
 
-    @classmethod
-    def tearDownClass(cls):
-        rc = TestBase.get_rc()
-        real_warehouse_database = getattr(cls, '_real_warehouse_database', None)
-        if real_warehouse_database and rc.library.database != real_warehouse_database:
-            # restore database
-            rc.library.database = real_warehouse_database
-        PostgreSQLTestBase.tearDownClass()
+    def get_warehouse(self):
+        return self.library().warehouse()
 
-    def _assert_is_indexed(self, warehouse, partition, column):
-        table = postgres_med.table_name(partition.vid) + '_v'
-        with warehouse._backend._connection.cursor() as cursor:
-            # Sometimes postgres does not use index although index exists.
-            # See https://wiki.postgresql.org/wiki/FAQ#Why_are_my_queries_slow.3F_Why_don.27t_they_use_my_indexes.3F
-            # and http://stackoverflow.com/questions/9475778/postgresql-query-not-using-index-in-production
-            # for details.
-            # So, force postgres always to use existing indexes.
-            cursor.execute('SET enable_seqscan TO \'off\';')
-            query = 'EXPLAIN SELECT * FROM {} WHERE {} > 1 and {} < 3;'.format(table, column, column)
-            cursor.execute(query)
-            result = cursor.fetchall()
-            self.assertIn('Index Scan', result[0][0])
+    def _assert_materialized(self, warehouse, partition):
+        # Drop partition datafile and check again. So the data can only come from materialization.
+        rows = list(islice(warehouse.query('SELECT * FROM {};'.format(partition.vid)), None, 3))
+
+        self.assertEqual(0, rows[0][2])
+        self.assertEqual(1, rows[1][2])
+        self.assertEqual(2, rows[2][2])
 
 
 def assert_shares_group(user=''):
@@ -364,6 +344,90 @@ def _get_generator_source(rows=None):
         for row in rows:
             yield row
     return GeneratorSource(SourceSpec('foobar'), gen())
+
+
+class BundleWarehouse(TestBase):
+
+    def test_bundle_warehouse_install(self):
+
+        b = self.import_single_bundle('build.example.com/casters')
+        b.ingest()
+        b.source_schema()
+        b.schema()
+        b.build()
+
+        wh = b.warehouse('test')
+
+        wh.clean()
+
+        self.assertEqual(0, len(wh.list()))
+
+        self.assertEqual('p00casters004003', wh.install('build.example.com-casters-integers'))
+        self.assertEqual('p00casters002003', wh.install('build.example.com-casters-simple_stats'))
+        self.assertEqual('p00casters006003', wh.materialize('build.example.com-casters-simple'))
+
+        self.assertEqual(3, len(wh.list()))
+
+    def test_bundle_warehouse_query(self):
+        l = self.library()
+
+        b = self.import_single_bundle('build.example.com/casters')
+        b.ingest()
+        b.source_schema()
+        b.schema()
+        b.build()
+
+        wh = b.warehouse('test')
+        wh.clean()
+
+        self.assertEqual(0, len(wh.list()))
+
+        self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM p00casters004003;')))
+        self.assertEqual(6000, sum(1 for row in wh.query('SELECT * FROM p00casters006003;')))
+
+        p = l.partition('p00casters004003')
+
+        self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM {};'.format(p.vname))))
+        self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM {};'.format(p.name))))
+
+        self.assertEqual(3, len(wh.list()))
+
+    def test_library_warehouse_query(self):
+        l = self.library()
+
+        b = l.bundle('build.example.com-casters')
+        wh = l.warehouse()
+        wh.clean()
+
+        self.assertEqual(0, len(wh.list()))
+
+        self.assertEqual(20, sum(1 for row in wh.query('SELECT * FROM p00casters004003;')))
+        self.assertEqual(6000, sum(1 for row in wh.query('SELECT * FROM p00casters006003;')))
+        self.assertEqual(4000, sum(1 for row in wh.query('SELECT * FROM pERJQxWUVb005001;')))
+
+        self.assertEqual(3, len(wh.list()))
+
+    def test_library_build_from_sql(self):
+
+        l = self.library()
+
+        b = l.bundle('build.example.com-sql')
+        wh = l.warehouse()
+        wh.clean()
+
+        for source in ['use_select', 'use_view']:
+
+            b.ingest(sources=[source])
+
+            b.source_schema(sources=[source])
+
+            b.schema(sources=[source])
+
+            b.build(sources=[source])
+
+        self.assertEqual(20, sum(1 for _ in b.partition(table='use_select')))
+
+        self.assertEqual(20, sum(1 for _ in b.partition(table='use_view')))
 
 
 def _get_datafile(fs, path, rows=None):

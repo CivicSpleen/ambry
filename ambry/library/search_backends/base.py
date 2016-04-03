@@ -33,17 +33,23 @@ class DatasetSearchResult(object):
 
     @property
     def partition_records(self):
+        from ambry.orm.exc import NotFoundError
 
         assert bool(self.bundle)
 
-        for p in self.partitions:
-            yield self.bundle.partition(p)
+        for p_result in self.partitions:
+            try:
+                p = self.bundle.partition_by_vid(p_result.vid)
+                p.score = p_result.score
+                yield p
+            except (NotFoundError, AttributeError):
+                continue
 
     @property
     def score(self):
         """Compute a total score using the log of the partition score, to reduce the include of bundles
         with a lot of partitions """
-        return self.b_score + (log(self.p_score) if self.p_score else 0)
+        return self.b_score + self.p_score if self.p_score else 0
 
 
 class IdentifierSearchResult(object):
@@ -55,7 +61,6 @@ class IdentifierSearchResult(object):
         self.vid = vid
         self.type = type
         self.name = name
-
 
 class PartitionSearchResult(object):
     """ Search result of the partition search index. """
@@ -115,12 +120,12 @@ class Keyword(IndexField):
 
     Note:
         This type is indexed and searchable (and optionally stored). Used to search for exact match of any
-        keyword FIXME: is it really exact match?.
+        keyword.
 
     Examples:
         Whoosh - KEYWORD, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.KEYWORD
-        SQLite - FIXME:
-        PostgreSQL - FIXME:
+        SQLite - https://sqlite.org/fts3.html
+        PostgreSQL - http://www.postgresql.org/docs/8.3/static/textsearch.html
     """
 
 
@@ -132,8 +137,8 @@ class Text(IndexField):
 
     Examples:
         Whoosh - TEXT, http://pythonhosted.org/Whoosh/api/fields.html#whoosh.fields.TEXT
-        SQLite - FIXME:
-        PostgreSQL - FIXME:
+        SQLite - https://sqlite.org/fts3.html
+        PostgreSQL - http://www.postgresql.org/docs/8.3/static/textsearch.html
     """
     pass
 
@@ -265,8 +270,10 @@ class BaseIndex(object):
             self._index_document(doc, force=force)
             logger.debug('{} indexed as\n {}'.format(instance.__class__, pformat(doc)))
             return True
+
         logger.debug('{} already indexed.'.format(instance.__class__))
         return False
+
 
     def index_many(self, instances, tick_f=None):
         """ Index all given instances.
@@ -403,7 +410,8 @@ class BaseDatasetIndex(BaseIndex):
         return document
 
     def _expand_terms(self, terms):
-        """ Expands terms of the dataset to the appropriate fields.
+        """ Expands terms of the dataset to the appropriate fields. It will parse the search phrase
+         and return only the search term components that are applicable to a Dataset query.
 
         Args:
             terms (dict or str):
@@ -418,7 +426,7 @@ class BaseDatasetIndex(BaseIndex):
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
-            terms = stp.parse(terms, or_join=self.backend._or_join)
+            terms = stp.parse(terms, term_join=self.backend._and_join)
 
         if 'about' in terms:
             ret['doc'].append(terms['about'])
@@ -459,8 +467,10 @@ class BasePartitionIndex(BaseIndex):
         values = ''
 
         for stat in partition.stats:
-            if stat.uvalues:
-                values += ' '.join(stat.uvalues) + '\n'
+            if stat.uvalues :
+                # SOme geometry vlaues are super long. They should not be in uvbalues, but when they are,
+                # need to cut them down.
+                values += ' '.join(e[:200] for e in stat.uvalues) + '\n'
 
         # Re-calculate the summarization of grains, since the geoid 0.0.7 package had a bug where state level
         # summaries had the same value as state-level allvals
@@ -472,6 +482,7 @@ class BasePartitionIndex(BaseIndex):
             except ValueError:
                 logger.debug("Failed to parse gvid '{}' from partition '{}' grain coverage"
                              .format(g, partition.identity.vname))
+                return g
 
         keywords = (
             ' '.join(partition.space_coverage) + ' ' +
@@ -479,12 +490,20 @@ class BasePartitionIndex(BaseIndex):
             ' '.join(str(x) for x in partition.time_coverage)
         )
 
-        doc_field = u('{} {} {}').format(
-            values, schema, ' '.join([
+        doc_field = u('{} {} {} {} {} {}').format(
+            values,
+            schema,
+            ' '.join([
                 u('{}').format(partition.identity.vid),
                 u('{}').format(partition.identity.id_),
                 u('{}').format(partition.identity.name),
-                u('{}').format(partition.identity.vname)]))
+                u('{}').format(partition.identity.vname)]),
+            partition.display.title,
+            partition.display.description,
+            partition.display.sub_description,
+            partition.display.time_description,
+            partition.display.geo_description
+        )
 
         document = dict(
             vid=u('{}').format(partition.identity.vid),
@@ -512,7 +531,7 @@ class BasePartitionIndex(BaseIndex):
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
-            terms = stp.parse(terms, or_join=self.backend._or_join)
+            terms = stp.parse(terms, term_join=self.backend._and_join)
 
         if 'about' in terms:
             ret['doc'].append(terms['about'])
@@ -567,7 +586,7 @@ class BaseIdentifierIndex(BaseIndex):
 
     _schema = [
         Id('identifier'),  # Partition versioned id (partition vid)
-        Id('type'),  # Type. FIXME: What is type? Add examples.
+        Id('type'),  # Type.
         NGram('name'),
     ]
 
@@ -591,6 +610,7 @@ class BaseIdentifierIndex(BaseIndex):
 
 class SearchTermParser(object):
     """Decompose a search term in to conceptual parts, according to the Ambry search model."""
+
     TERM = 0
     QUOTEDTERM = 1
     LOGIC = 2
@@ -614,7 +634,8 @@ class SearchTermParser(object):
         'to': 'year',
         'source': 'source'}
 
-    by_terms = 'state county zip zcta tract block blockgroup place city cbsa msa'.split()
+    # Terms that can have more than one value/
+    multiterms=('about', )
 
     @staticmethod
     def s_quotedterm(scanner, token):
@@ -658,7 +679,20 @@ class SearchTermParser(object):
 
         self.stemmer = LancasterStemmer()
 
-        self.by_terms = [self.stem(x) for x in self.by_terms]
+        self.geograins = self._geograins()
+
+    def _geograins(self):
+        """Create a map geographic area terms to the geo grain GVid values """
+
+        from geoid.civick import GVid
+
+        geo_grains = {}
+
+        for sl, cls in GVid.sl_map.items():
+            if '_' not in cls.level:
+                geo_grains[self.stem(cls.level)] = str(cls.nullval().summarize())
+
+        return geo_grains
 
     def scan(self, s):
         s = ' '.join(s.splitlines())  # make a single line
@@ -668,19 +702,46 @@ class SearchTermParser(object):
     def stem(self, w):
         return self.stemmer.stem(w)
 
-    def parse(self, s, or_join=None):
-        """ FIXME: """
-        if not or_join:
-            or_join = lambda x: '(' + ' OR '.join(x) + ')'
+    def parse(self, s, term_join=None):
+        """ Parses search term to
+
+        Args:
+            s (str): string with search term.
+            or_join (callable): function to join 'OR' terms.
+
+        Returns:
+            dict: all of the terms grouped by marker. Key is a marker, value is a term.
+
+        Example:
+            >>> SearchTermParser().parse('table2 from 1978 to 1979 in california')
+            {'to': 1979, 'about': 'table2', 'from': 1978, 'in': 'california'}
+        """
+
+        if not term_join:
+            term_join = lambda x: '(' + ' OR '.join(x) + ')'
 
         toks = self.scan(s)
 
+        # Examples: starting with this query:
+        # diabetes from 2014 to 2016 source healthindicators.gov
+
         # Assume the first term is ABOUT, if it is not marked with a marker.
-        if toks[0][0] == self.TERM or toks[0][0] == self.QUOTEDTERM:
+        if toks and toks[0] and (toks[0][0] == self.TERM or toks[0][0] == self.QUOTEDTERM):
             toks = [(self.MARKER, 'about')] + toks
 
+
+        # The example query produces this list of tokens:
+        #[(3, 'about'),
+        # (0, 'diabetes'),
+        # (3, 'from'),
+        # (4, 2014),
+        # (3, 'to'),
+        # (4, 2016),
+        # (3, 'source'),
+        # (0, 'healthindicators.gov')]
+
         # Group the terms by their marker.
-        # last_marker = None
+
         bymarker = []
         for t in toks:
             if t[0] == self.MARKER:
@@ -688,12 +749,23 @@ class SearchTermParser(object):
             else:
                 bymarker[-1][1].append(t)
 
-        # Convert some of the markers based on their contents
+
+        # After grouping tokens by their markers
+        # [('about', [(0, 'diabetes')]),
+        # ('from', [(4, 2014)]),
+        # ('to', [(4, 2016)]),
+        # ('source', [(0, 'healthindicators.gov')])
+        # ]
+
+        # Convert some of the markers based on their contents. This just changes the marker type for keywords
+        # we'll do more adjustments later.
         comps = []
         for t in bymarker:
+
             t = list(t)
+
             if t[0] == 'in' and len(t[1]) == 1 and isinstance(t[1][0][1], string_types) and self.stem(
-                    t[1][0][1]) in self.by_terms:
+                    t[1][0][1]) in self.geograins.keys():
                 t[0] = 'by'
 
             # If the from term isn't an integer, then it is really a source.
@@ -702,11 +774,39 @@ class SearchTermParser(object):
 
             comps.append(t)
 
+        # After conversions
+        # [['about', [(0, 'diabetes')]],
+        #  ['from', [(4, 2014)]],
+        #  ['to', [(4, 2016)]],
+        #  ['source', [(0, 'healthindicators.gov')]]]
+
         # Join all of the terms into single marker groups
         groups = {marker: [] for marker, _ in comps}
 
         for marker, terms in comps:
             groups[marker] += [term for marker, term in terms]
+
+        # At this point, the groups dict is formed, but it will have a list
+        # for each marker that has multiple terms.
+
+        # Only a few of the markers should have more than one term, so move
+        # extras to the about group
+
+        for marker, group in groups.items():
+
+            if marker == 'about':
+                continue
+
+            if len(group) > 1 and marker not in self.multiterms:
+                groups[marker], extras = [group[0]], group[1:]
+
+                if not 'about' in groups:
+                    groups['about'] = extras
+                else:
+                    groups['about'] += extras
+
+            if marker == 'by':
+                groups['by'] = [ self.geograins.get(self.stem(e)) for e in group]
 
         for marker, terms in iteritems(groups):
 
@@ -714,10 +814,19 @@ class SearchTermParser(object):
                 if marker in 'in':
                     groups[marker] = ' '.join(terms)
                 else:
-                    groups[marker] = or_join(terms)
+                    groups[marker] = term_join(terms)
             elif len(terms) == 1:
                 groups[marker] = terms[0]
             else:
                 pass
+
+        # After grouping:
+        # {'to': 2016,
+        #  'about': 'diabetes',
+        #  'from': 2014,
+        #  'source': 'healthindicators.gov'}
+
+        # If there were any markers with multiple terms, they would be cast in the or_join form.
+
 
         return groups

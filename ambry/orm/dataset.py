@@ -41,13 +41,20 @@ class Dataset(Base):
     time_coverage = SAColumn('d_tcov', MutationList.as_mutable(JSONEncodedObj))
     grain_coverage = SAColumn('d_gcov', MutationList.as_mutable(JSONEncodedObj))
 
+    # Sequence IDs for various objects. We need records if these IDs to be able to
+    # construct objects in multi-process environments. The sequence numbers become part of the VIDs and must
+    # be unique
     p_sequence_id = SAColumn('d_p_sequence_id', Integer, default=1)
     t_sequence_id = SAColumn('d_t_sequence_id', Integer, default=1)
     st_sequence_id = SAColumn('d_st_sequence_id', Integer, default=1)
 
+    state = SAColumn('d_state', String(20), doc='Indicates last operation on the dataset') # Note! Different from Bundle.state!
+
+    upstream = SAColumn('d_upstream', String(200), doc='The URL of the upstream source')
+
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
-    path = None  # Set by the Library and other queries.
+    # ---- Relationships
 
     tables = relationship('Table', backref='dataset', cascade='all, delete-orphan')
 
@@ -65,9 +72,10 @@ class Dataset(Base):
 
     codes = relationship('Code', backref='dataset', cascade='all, delete-orphan')
 
+    path = None  # Set by the Library and other queries.
     _database = None  # Reference to the database, when dataset is retrieved from a database object
 
-    _sequence_ids = {}  # Cache of sequence numbers
+    _sequence_ids = {}  # Cache of sequence numbers ( Is this still used? )
 
     def __init__(self, *args, **kwargs):
 
@@ -106,6 +114,22 @@ class Dataset(Base):
             self.version = str(self.identity.version)
 
         assert self.vid[0] == 'd'
+
+    def incver(self):
+        """Increment all of the version numbers"""
+        d = {}
+        for p in self.__mapper__.attrs:
+            if p.key in ['vid','vname','fqname', 'version', 'cache_key']:
+                continue
+            if p.key == 'revision':
+                d[p.key] = self.revision + 1
+            else:
+                d[p.key] = getattr(self, p.key)
+
+        n =  Dataset(**d)
+
+        return n
+
 
     def commit(self):
         self._database.commit()
@@ -319,6 +343,7 @@ class Dataset(Base):
             **kwargs
         )
 
+
         p.update_id()
 
         return p
@@ -326,11 +351,13 @@ class Dataset(Base):
     def partition(self, ref=None, **kwargs):
         """ Returns partition by ref. """
         from .exc import NotFoundError
+        from six import text_type
 
         if ref:
 
-            for p in self.partitions:
-                if str(ref) == p.name or str(ref) == p.id or str(ref) == p.vid:
+            for p in self.partitions: # This is slow for large datasets, like Census years.
+                if (text_type(ref) == text_type(p.name) or text_type(ref) == text_type(p.id) or
+                            text_type(ref) == text_type(p.vid)):
                     return p
 
             raise NotFoundError("Failed to find partition for ref '{}' in dataset '{}'".format(ref, self.name))
@@ -439,6 +466,7 @@ class Dataset(Base):
 
         return source
 
+
     def source_file(self, name):
         from .source import DataSource
 
@@ -482,7 +510,6 @@ class Dataset(Base):
 
         assert table.sequence_id
 
-
         return table
 
     def source_table(self, name):
@@ -493,28 +520,50 @@ class Dataset(Base):
 
         return None
 
-    def bsfile(self, file_const):
+    def bsfile(self, path):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""
         from sqlalchemy.orm.exc import NoResultFound
-
-        assert file_const in list(File.path_map.keys())
+        from ambry.orm.exc import NotFoundError
 
         try:
-            fr = object_session(self)\
+
+            f =  object_session(self)\
                 .query(File)\
                 .filter(File.d_vid == self.vid)\
                 .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)\
-                .filter(File.minor_type == file_const)\
+                .filter(File.path == path)\
                 .one()
-        except NoResultFound:
-            fr = File(d_vid=self.vid,
-                      major_type=File.MAJOR_TYPE.BUILDSOURCE,
-                      minor_type=file_const,
-                      path=File.path_map[file_const],
-                      source='fs')
 
-            object_session(self).add(fr)
+            return f
+
+        except NoResultFound:
+            raise NotFoundError("Failed to find file for path '{}' ".format(path))
+
+    def new_bsfile(self, file_const, path):
+        import time
+
+        fr = File(d_vid=self.vid,
+                  major_type=File.MAJOR_TYPE.BUILDSOURCE,
+                  minor_type=file_const,
+                  path=path,
+                  #modified = int(time.time()), # In case content isn't set, which is where modified is set normally
+                  source='fs')
+
+        self.files.append(fr)
+        object_session(self).add(fr)
         return fr
+
+    def find_or_new_bsfile(self, file_const, path):
+        from ambry.orm.exc import NotFoundError
+        try:
+            return self.bsfile(path)
+        except NotFoundError:
+            import time
+            f = self.new_bsfile(file_const, path)
+            return f
+
+
+
 
     @property
     def dict(self):
@@ -533,6 +582,7 @@ class Dataset(Base):
             'bspace': self.bspace,
             'revision': self.revision,
             'version': self.version,
+            'upstream': self.upstream
         }
 
         if self.data:
@@ -566,32 +616,19 @@ class Dataset(Base):
             self.variation,
             self.revision)
 
-
 class ConfigAccessor(object):
 
     def __init__(self, dataset):
 
         self.dataset = dataset
 
-
     @property
     def metadata(self):
-        """Access process configuarion values as attributes. See self.process
-        for a usage example"""
+        """Access process configuarion values as attributes. """
         from ambry.metadata.schema import Top  # cross-module import
         top = Top()
         top.build_from_db(self.dataset)
         return top
-
-    @property
-    def build(self):
-        """Access build configuration values as attributes. See self.process
-            for a usage example"""
-        from .config import BuildConfigGroupAccessor
-
-        raise NotImplementedError('Use bundle.buildstate instead')
-
-        return BuildConfigGroupAccessor(self.dataset, 'buildstate')
 
     @property
     def sync(self):

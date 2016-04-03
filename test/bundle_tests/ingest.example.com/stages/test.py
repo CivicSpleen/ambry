@@ -64,15 +64,17 @@ class Test(BundleTest):
     def test_after_ingest_stage_1(self):
         print 'AFTER INGEST STAGE 1', self.bundle.identity
 
-        self.assertIn('stage1', [t.name for t in self.bundle.dataset.source_tables])
+    @after_ingest(stage=2)
+    def test_after_ingest_stage_2(self):
+        print 'AFTER INGEST STAGE 2', self.bundle.identity
+
+
+    @after_sourceschema()
+    def test_after_sourceschema(self):
+        print 'AFTER SOURCE SCHEMA', self.bundle.identity
 
         self.assertEquals([u'ones', u'tens', u'hundreds', u'thousands', u'sum'],
                           [c.source_header for c in self.bundle.source_table('stage1').columns])
-
-    @before_ingest(stage=2)
-    def test_before_ingest_stage_2(self):
-        print 'BEFORE INGEST STAGE 2', self.bundle.identity
-        pass
 
     @after_ingest(stage=2)
     def test_after_ingest_stage_2(self):
@@ -83,6 +85,9 @@ class Test(BundleTest):
     @before_build(stage=1)
     def test_before_build_stage_1(self):
         print 'BEFORE BUILD STAGE 1', self.bundle.identity
+
+        self.assertIn('stage1', [t.name for t in self.bundle.dataset.source_tables])
+
 
     @after_build(stage=1)
     def test_after_build_stage_1(self):

@@ -1,10 +1,13 @@
 
-from six import iterkeys, iteritems
+__all__ = ['command_name', 'make_parser', 'run_command']
+command_name = 'config'
+command_name = 'config'
 
+from six import iterkeys, iteritems
 from ..cli import prt, fatal, warn, err
 
 
-def config_parser(cmd):
+def make_parser(cmd):
     config_p = cmd.add_parser('config', help='Install or display the configuration')
     config_p.set_defaults(command='config')
 
@@ -44,13 +47,16 @@ def config_parser(cmd):
     sp.add_argument('-j', '--json', default=False, action='store_true', help="Load the edits as a JSON string")
     sp.add_argument('args', nargs='*', help='key=value entries, YAML or JSON')  # Get everything else.
 
-
     sp = asp.add_parser('dump', help='Dump the config file')
     sp.set_defaults(subcommand='dump')
     sp.add_argument('args', nargs='*', help='key=value entries')  # Get everything else.
 
+    sp = asp.add_parser('installcli', help='Install a CLI module')
+    sp.set_defaults(subcommand='installcli')
+    sp.add_argument('modules', nargs='*', help='Module names')  # Get everything else.
 
-def config_command(args, rc):
+
+def run_command(args, rc):
     from ..library import new_library
     from . import global_logger
 
@@ -127,40 +133,46 @@ def config_install(args, l, rc):
     from os.path import join, dirname
     import getpass
     import ambry.support
-    from ambry.run import ROOT_FILE, USER_FILE, BASE_FILE, USER_ACCOUNTS_FILE
+    from ambry.run import ROOT_DIR, USER_DIR, CONFIG_FILE, ACCOUNTS_FILE
     from ambry.util import AttrDict
 
     user = getpass.getuser()
 
-    default_config_file = join(dirname(ambry.support.__file__),
-                               'ambry-{}.yaml'.format(args.template))
+    default_config_file = join(dirname(ambry.support.__file__),'ambry-{}.yaml'.format(args.template))
 
     d = AttrDict().update_yaml(default_config_file)
 
+    user_config_dir = os.path.join(os.path.expanduser('~'), USER_DIR)
+
     if user == 'root': # Root user
-        install_file = ROOT_FILE
+        config_dir = ROOT_DIR
         default_root = d.library.filesystem_root
 
     elif os.getenv('VIRTUAL_ENV'):  # Special case for python virtual environments
-        install_file = os.path.join(os.getenv('VIRTUAL_ENV'), BASE_FILE)
+        config_dir = os.path.join(os.getenv('VIRTUAL_ENV'), USER_DIR)
         default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
 
     else: # Non-root user, outside of virtualenv
-        install_file = USER_FILE
+        config_dir = user_config_dir
         warn(("Installing as non-root, to '{}'\n" +
-              "Run as root to install for all users.").format(install_file))
+              "Run as root to install for all users.").format(config_dir))
         default_root = os.path.join(os.path.expanduser('~'), 'ambry')
 
     if args.root:
         default_root = args.root
 
-    if os.path.exists(install_file):
+    if not os.path.exists(user_config_dir):
+        os.makedirs(user_config_dir)
 
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir)
+
+    if os.path.exists(os.path.join(config_dir, CONFIG_FILE)):
         if args.force:
-            prt("File output file exists, overwriting: {}".format(install_file))
+            prt("File output file exists, overwriting: {}".format(config_dir))
 
         else:
-            fatal("Output file {} exists. Use  -f to overwrite".format(install_file))
+            fatal("Output file {} exists. Use  -f to overwrite".format(config_dir))
 
     d['library']['filesystem_root'] = default_root
 
@@ -171,28 +183,32 @@ def config_install(args, l, rc):
         return
 
     #Create an empty accounts file, if it does not exist
-    user_accounts_file = os.path.expanduser(USER_ACCOUNTS_FILE)
+    user_accounts_file =os.path.join(user_config_dir, ACCOUNTS_FILE)
 
     if not os.path.exists(user_accounts_file):
         with open(user_accounts_file, 'w') as f:
-            d = dict(accounts=dict(ambry=dict(name=None, email=None)))
+            from ambry.util import random_string
+            d = dict(accounts=dict(
+                        password=random_string(16),
+                        ambry=dict(
+                            name=None, email=None
+                        )
+                    )
+                )
 
             prt('Writing accounts file: {}'.format(user_accounts_file))
             f.write(yaml.dump(d, indent=4, default_flow_style=False))
 
-    dirname = os.path.dirname(install_file)
+    config_file = os.path.join(config_dir, CONFIG_FILE)
 
-    if not os.path.isdir(dirname):
-        os.makedirs(dirname)
-
-    with open(install_file, 'w') as f:
-        prt('Writing config file: {}'.format(install_file))
+    with open(config_file, 'w') as f:
+        prt('Writing config file: {}'.format(config_file))
         f.write(s)
 
     # Make the directories.
 
     from ..run import get_runconfig
-    rc = get_runconfig(install_file)
+    rc = get_runconfig(config_file)
 
     for name, v in iteritems(rc.filesystem):
         dr = v.format(root=rc.library.filesystem_root)
@@ -268,24 +284,43 @@ def config_dump(args, l, rc):
 
     print rc.dump()
 
-def config_password(args, l, rc):
-    """Set and delete passwords from the system keychain"""
-    from getpass import getpass
-    import keyring
 
-    if args.delete:
-        try:
-            keyring.delete_password(args.service[0], args.username[0])
-            prt("Password delete")
-        except keyring.errors.PasswordSetError as e:
-            fatal("Failed to delete password".format(e.message))
-    else:
+def config_installcli(args, l, rc):
 
-        p = getpass("Set password for service {}, user {} ".format(args.service[0], args.username[0]))
+    from ambry import config
+    from os.path import dirname, join, exists
+    import yaml
+    import sys
 
-        try:
-            keyring.set_password(args.service[0], args.username[0], p)
-            prt("Password stored sucessfully")
-        except keyring.errors.PasswordSetError as e:
-            fatal("Failed to store password".format(e.message))
 
+    try:
+        config_dir = dirname(rc.loaded[0])
+    except KeyError:
+        fatal("ERROR: Failed to properly load config")
+        sys.exit(1)
+
+    if not exists(config_dir):
+        fatal("ERROR: Failed to find config directory: {}".format(config_dir))
+        sys.exit(1)
+
+    cli_path = join(config_dir, 'cli.yaml')
+
+    try:
+        with open(cli_path, 'rt') as f:
+            clis = set(yaml.load(f))
+    except IOError:
+        clis = set()
+
+    for module_name in args.modules:
+
+
+        m = __import__(module_name)
+
+        for cmd in m.commands:
+            prt("Adding {} from {}".format(cmd, module_name))
+            clis.add(cmd)
+
+    with open(cli_path, 'wt') as f:
+        yaml.dump(list(clis), f, default_flow_style=False)
+
+    prt("Wrote updated cli config to: {}".format(cli_path))

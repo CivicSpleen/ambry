@@ -11,41 +11,16 @@ from ..util import memoize
 
 
 def install(install_dir, egg, url):
+    import subprocess
 
-    initial_args = ['install', '-U',
-        '--install-option=--install-purelib={}'.format(install_dir),
-        url]
+    initial_args = ['pip', 'install', '-U', '--install-option=--install-purelib={}'.format(install_dir), url]
 
-    try:
-        # This version works for Pip 6.
-        from pip.commands import InstallCommand
-
-        cmd_name, options = pip.parseopts(initial_args)
-
-        command = InstallCommand()
-
-        return command.main(options)
-
-    except:
-        pass
-
-    try:
-        # An earlier version of pip
-        cmd_name, options, args, parser = pip.parseopts(initial_args)
-
-        command = InstallCommand(parser)
-        return command.main(args[1:], options)
-
-    except ValueError:
-        from pip.commands import commands
-
-        cmd_name, cmd_args = pip.parseopts(initial_args)
-        command = commands[cmd_name]()
-
-        return command.main(cmd_args)
+    output = subprocess.check_output(initial_args)
 
 
 def uninstall(install_dir, egg):
+
+    raise NotImplementedError()
 
     from pip.commands import UninstallCommand
 

@@ -173,6 +173,8 @@ class Partitions(object):
             kwargs.update((k, str(v)) for k, v in iteritems(name.dict)
                           if k in name_parts)
 
+        assert 'table' in kwargs
+
         p = self.bundle.dataset.new_partition(data=data, **kwargs)
 
         # These are called from before_insert and before_update,
@@ -186,6 +188,7 @@ class Partitions(object):
 
         p = self.bundle.partitions.partition(pname)
         if not p:
+
             p = self.bundle.partitions.new_partition(pname, data=data, **kwargs)
             self.bundle.commit()
 
@@ -196,9 +199,10 @@ class Partitions(object):
     def __iter__(self):
         """Iterate over the type 'p' partitions, ignoring the 's' type. """
         from ambry.orm.partition import Partition
-        for p in self.bundle.dataset.partitions:
-            if p.type == Partition.TYPE.UNION:
-                yield self.bundle.wrap_partition(p)
+
+        for p in (self.bundle.dataset.session.query(Partition).filter(Partition.type==Partition.TYPE.UNION)
+                          .filter(Partition.d_vid == self.bundle.identity.vid).all()):
+            yield self.bundle.wrap_partition(p)
 
     def new_db_from_pandas(self, frame, table=None, data=None, load=True, **kwargs):
         """Create a new db partition from a pandas data frame.
@@ -242,4 +246,22 @@ class Partitions(object):
                     ins.insert(d)
         return p
 
+    def _repr_html_(self):
+        from tabulate import tabulate
+        from ambry.util import drop_empty
+
+        def record_gen():
+            for i, p in enumerate(self):
+                if i == 0:
+                    yield ['vid','vname','table','time','space','grain', 'description','sub-desc']
+                yield [
+                    p.vid, p.vname, p.table.name, p.time, p.space, p.grain, p.description,p.display.sub_description
+                ]
+
+        records = list(record_gen())
+
+        records = drop_empty(records)
+
+        return "<h2>Partitions in {} </h2>".format(self.bundle.identity.name) \
+               + tabulate(records[1:], headers=records[0], tablefmt="html")
 

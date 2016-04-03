@@ -4,7 +4,7 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
-from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend,PostgreSQLSearchBackend
+from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend, PostgreSQLSearchBackend
 
 # All backends.
 BACKENDS = {
@@ -25,7 +25,7 @@ class Search(object):
 
         if not backend:
             try:
-                backend_name = library.services['search']
+                backend_name = library.config.services.search
                 if not backend_name:
                     # config contains search key without value.
                     raise KeyError
@@ -43,7 +43,6 @@ class Search(object):
                     'Missing backend: ambry does not have {} search backend. Using whoosh search.'
                     .format(backend_name))
                 backend_name = 'whoosh'
-
 
             backend = BACKENDS[backend_name](library)
 
@@ -93,6 +92,7 @@ class Search(object):
                 tick_f('datasets: {} partitions: {}'.format(d, p))
 
         for dataset in self.library.datasets:
+
             if self.backend.dataset_index.index_one(dataset):
                 # dataset added to index
                 dataset_n += 1
@@ -113,19 +113,31 @@ class Search(object):
         """Search for datasets, and expand to database records"""
         from ambry.identity import ObjectNumber
         from ambry.orm.exc import NotFoundError
+        from ambry.library.search_backends.base import SearchTermParser
 
-        results = self.search_datasets(search_phrase, limit)
+        results = []
 
-        for r in results:
+        stp = SearchTermParser()
+
+        # Because of the split between searching for partitions and bundles, some terms don't behave right.
+        # The source term should be a limit on everything, but it isn't part of the partition doc,
+        # so we check for it here.
+        parsed_terms = stp.parse(search_phrase)
+
+        for r in self.search_datasets(search_phrase, limit):
             vid = r.vid or ObjectNumber.parse(next(iter(r.partitions))).as_dataset
 
             r.vid = vid
 
             try:
                 r.bundle = self.library.bundle(r.vid)
-                yield r
+
+                if 'source' not in parsed_terms or parsed_terms['source'] in r.bundle.dataset.source:
+                    results.append(r)
             except NotFoundError:
                 pass
+
+        return sorted(results, key=lambda r : r.score, reverse=True)
 
     def list_documents(self, limit=None):
         """
@@ -142,8 +154,13 @@ class Search(object):
     def get_parsed_query(self):
         """ Returns string with last query parsed. Assuming called after search_datasets."""
         return '{} OR {}'.format(
-            self.dataset_index.get_parsed_query(),
-            self.partition_index.get_parsed_query())
+            self.backend.dataset_index.get_parsed_query()[0],
+            self.backend.partition_index.get_parsed_query()[0])
+
+    def parse_search_terms(self, st):
+        from ambry.library.search_backends.base import SearchTermParser
+
+        return SearchTermParser().parse(st)
 
     def index_identifiers(self, identifiers):
         """ Adds given identifiers to the index. """

@@ -3,20 +3,15 @@ Created on Jul 6, 2013
 
 @author: eric
 """
-
+from unittest import TestCase
 from semantic_version import Version, Spec
 
 from ambry.identity import DatasetNumber, TableNumber, ObjectNumber, ColumnNumber, PartitionNumber,\
-    Name, NameQuery, PartitionName, PartitionNameQuery,\
+    Name, NameQuery, PartitionName, PartitionNameQuery, PartialPartitionName, \
     Identity, PartitionIdentity, NumberServer, GeneralNumber1
 
-from test.test_base import TestBase
 
-
-class Test(TestBase):
-
-    def tearDown(self):
-        pass
+class Test(TestCase):
 
     def test_id(self):
         dnn = 1000000
@@ -118,6 +113,27 @@ class Test(TestBase):
         self.assertEqual(
             'source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101-0.0.1',
             part_name.vname)
+
+        part_name = PartitionName(time='time',
+                                  space='space',
+                                  table='table',
+                                  grain='grain',
+                                  variant='variant',
+                                  segment=101,
+                                  **name.dict)
+
+        self.assertEqual(
+            'source.com-dataset-subset-type-part-variation-table-time-space-grain-variant-101',
+            str(part_name))
+
+        part_name =  PartialPartitionName(time='time',
+                             space='space',
+                             table='table',
+                             grain='grain',
+                             variant='variant',
+                             segment=101)
+
+        self.assertEqual('table-time-space-grain-variant-101',str(part_name))
 
         # Name Query
 
@@ -434,7 +450,6 @@ class Test(TestBase):
 
         ds_name = Name(source='source', dataset='dataset')
 
-        # TODO: What is testing here?
         for s in list(combinations(name_parts, 3)):
             p = PartialPartitionName(**dict(list(zip(s, s))))
             self.assertIn('name', p.promote(ds_name).dict)
@@ -466,5 +481,23 @@ class Test(TestBase):
 
         p = PartialPartitionName(time=10, space="CA", table='table', format='format')
 
-        print(p.promote(ds_name).cache_key)
-        # self.assertEquals('', p.promote(ds_name).cache_key)
+    def test_increment(self):
+
+        dnn = 1000000
+        rev = 100
+
+        dn = DatasetNumber(dnn, rev)
+        self.assertEqual('d000004c9201C', str(dn))
+
+        dn2 = ObjectNumber.increment(dn)
+        self.assertEqual(101, dn2.revision)
+
+        dn3 = ObjectNumber.increment(dn2)
+        self.assertEqual(102, dn3.revision)
+
+        tn = TableNumber(dn3, 1)
+        self.assertEqual(102, tn.revision)
+        self.assertEqual('t000004c920101E', str(tn))
+
+        tn2 = ObjectNumber.increment(tn)
+        self.assertEqual(103, tn2.revision)

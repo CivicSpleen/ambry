@@ -1,0 +1,35 @@
+about:
+    access: restricted
+    footnote: null
+    grain: null
+    groups: []
+    license: null
+    processed: null
+    remote: restricted
+    rights: null
+    source: null
+    space: null
+    subject: null
+    summary: Test of classification using HCI data.
+    tags: []
+    time: null
+    title: Classification Test
+contacts:
+    source:
+        email: HCIOHE@cdph.ca.gov
+        org: California Department of Public Health, Office of Health Equity
+    wrangler:
+        email: eric@civicknowledge.com
+        name: Eric Busboom
+        org: Civic Knowledge
+        url: http://civicknowledge.com
+dependencies: {}
+identity:
+    dataset: classify
+    id: d0classify
+    revision: 3
+    source: example.com
+    version: 0.0.3
+
+requirements: {}
+versions: {}

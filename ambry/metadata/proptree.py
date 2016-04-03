@@ -1206,7 +1206,8 @@ def get_or_create(session, model, **kwargs):
         return instance, False
     else:
         instance = model(**kwargs)
-        instance.update_sequence_id(session, kwargs['dataset'])
+        if 'dataset' in kwargs:
+            instance.update_sequence_id(session, kwargs['dataset'])
         session.add(instance)
         session.commit()
         return instance, True
