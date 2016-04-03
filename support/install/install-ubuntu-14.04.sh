@@ -77,25 +77,27 @@ ambry config installcli ambry_ui
 
 echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
 
+chown -R root.ambry  /var/ambry
+chmod g+rw /var/ambry
+
 # When this script is run for installing vagrant, also install 
 # runit and the runit services
 if [ -d ./vagrant/service ]; then
   $SUDO apt-get install -y runit
   $SUDO mkdir -p /etc/sv
   $SUDO cp -r ../vagrant/service/* /etc/sv
+  
+  mkdir -p /var/log/ambry/notebook
+  mkdir -p /var/log/ambry/ambryui
+
+  adduser log --system --disabled-password
+
+  chown log /var/log/ambry/ambryui
+  chown log /var/log/ambry/notebook
+
+  ln -s /etc/sv/ambryui /etc/service
+  ln -s /etc/sv/notebook /etc/service
+  
 fi
 
-mkdir -p /var/log/ambry/notebook
-mkdir -p /var/log/ambry/ambryui
-
-adduser log --system --disabled-password
-
-chown log /var/log/ambry/ambryui
-chown log /var/log/ambry/notebook
-
-ln -s /etc/sv/ambryui /etc/service
-ln -s /etc/sv/notebook /etc/service
-
-chown -R root.ambry  /var/ambry
-chmod g+rw /var/ambry
 
