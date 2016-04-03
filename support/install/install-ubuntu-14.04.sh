@@ -30,6 +30,9 @@ $SUDO apt-get clean && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 $SUDO pip install --upgrade pip && pip install --ignore-installed requests
 
+# Ambry needs a later version, but it gets installed with python 
+$SUDO pip install --upgrade setuptools
+
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
