@@ -71,6 +71,51 @@ class Table(Base, DictableMixin):
         except TypeError:
             raise TypeError('Not a valid type for name ' + str(type(name)))
 
+    @property
+    def primary_columns(self):
+        """Iterate over the primary columns, columns which do not have a parent"""
+        for c in self.columns:
+            if not c.parent:
+                yield c
+
+    @property
+    def dimensions(self):
+        """Iterate over the dimension columns, regardless of parent/child status
+
+        """
+        from ambry.valuetype.core import ROLE
+
+        for c in self.columns:
+
+            if c.role == ROLE.DIMENSION:
+                yield c
+
+    @property
+    def primary_dimensions(self):
+        """Iterate over the primary dimension columns, columns which do not have a parent
+
+        """
+        from ambry.valuetype.core import ROLE
+
+        for c in self.columns:
+
+            if not c.parent and c.role == ROLE.DIMENSION:
+                    yield c
+
+    @property
+    def primary_measures(self):
+        """Iterate over the primary columns, columns which do not have a parent
+
+        Also sets the property partition_stats to the stats collection for the partition and column.
+        """
+        from ambry.valuetype.core import ROLE
+
+        for c in self.columns:
+
+            if not c.parent and c.role == ROLE.MEASURE:
+                    yield c
+
+
     def column(self, ref):
         # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
         # so iterating over the collection only involves one SELECT.
@@ -274,8 +319,8 @@ class Table(Base, DictableMixin):
     def __str__(self):
         from tabulate import tabulate
 
-        headers = 'Seq Vid Name Datatype '.split()
-        rows = [(c.sequence_id, c.vid, c.name, c.datatype) for c in self.columns]
+        headers = 'Seq Vid Name Datatype ValueType'.split()
+        rows = [(c.sequence_id, c.vid, c.name, c.datatype, c.valuetype) for c in self.columns]
 
         return ('Dest Table: {}\n'.format(self.name)) + tabulate(rows, headers)
 

@@ -52,6 +52,8 @@ class PartitionDisplay(object):
         if not desc_used:
             self.description = self._p.description.strip('.') + '.' if self._p.description else ''
 
+
+
         self.notes = self._p.notes
 
     @property
@@ -758,135 +760,26 @@ class Partition(Base):
             for row in r:
                 yield row
 
-    def dataframe(self, predicate=None):
-        """Return the partition as a Pandas dataframe
 
-        :param predicate: If defined, a callable that is called for each row, and if it returns true, the
-        row is included in the output.
-
-        :return: Pandas dataframe
-
-
-        """
-
-        from ambry.pands import AmbryDataFrame
-
-        if predicate:
-            def yielder():
-                for row in self.reader:
-                    if predicate(row):
-                        yield row.dict
-
-            return AmbryDataFrame(self, yielder(), columns=self.table.header)
-
-
+    @property
+    def analysis(self):
+        """Return an AnalysisPartition prox, which wraps this partition to provide acess to
+        dataframes, shapely shapes and other analysis services"""
+        if isinstance(self, PartitionProxy):
+            return AnalysisPartition(self._obj)
         else:
-            return AmbryDataFrame(self, [row.values() for row in self.reader], columns=self.table.header)
+            return AnalysisPartition(self)
 
 
-    def geoframe(self, simplify=None, predicate=None, crs = None, epsg = None):
-        """
-        Return geopandas dataframe
+    @property
+    def measuredim(self):
+        """Return a MeasureDimension proxy, which wraps the partition to provide access to
+        columns in terms of measures and dimensions"""
 
-        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
-        :param predicate: A single-argument function to select which records to include in the output.
-        :param crs: Coordinate reference system information
-        :param epsg: Specifiy the CRS as an EPGS number.
-        :return: A Geopandas GeoDataFrame
-        """
-        import geopandas
-        from shapely.wkt import loads
-
-        from fiona.crs import from_epsg
-
-        if crs is None and epsg is None and self.epsg is not None:
-            epsg = self.epsg
-
-        if crs is None:
-            try:
-                crs = from_epsg(epsg)
-            except TypeError:
-                raise TypeError('Must set either crs or epsg for output.')
-
-        df = self.dataframe(predicate=predicate)
-        geometry = df['geometry']
-
-        if simplify:
-            s = geometry.apply(lambda x: loads(x).simplify(simplify))
+        if isinstance(self, PartitionProxy):
+            return MeasureDimensionPartition(self._obj)
         else:
-            s = geometry.apply(lambda x: loads(x))
-
-        df['geometry'] = geopandas.GeoSeries(s)
-
-        return geopandas.GeoDataFrame(df, crs=crs, geometry='geometry')
-
-    def shapes(self, simplify=None, predicate=None):
-        """
-        Return geodata as a list of Shapely shapes
-
-        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
-        :param predicate: A single-argument function to select which records to include in the output.
-
-        :return: A list of Shapely objects
-        """
-
-        from shapely.wkt import loads
-
-        if not predicate:
-            predicate = lambda row: True
-
-        if simplify:
-            return [ loads(row.geometry).simplify(simplify) for row in self if predicate(row) ]
-        else:
-            return [ loads(row.geometry) for row in self if predicate(row) ]
-
-    def patches(self, basemap, simplify=None, predicate=None, args_f=None, **kwargs):
-        """
-        Return geodata as a list of Matplotlib patches
-
-        :param basemap: A mpl_toolkits.basemap.Basemap
-        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
-        :param predicate: A single-argument function to select which records to include in the output.
-        :param args_f: A function that takes a row and returns a dict of additional args for the Patch constructor
-
-        :param kwargs: Additional args to be passed to the descartes Path constructor
-        :return: A list of patch objects
-        """
-        from descartes import PolygonPatch
-        from shapely.wkt import loads
-        from shapely.ops import transform
-
-        if not predicate:
-            predicate = lambda row: True
-
-
-        def map_xform(x, y, z=None):
-            return basemap(x, y)
-
-        def make_patch(shape, row):
-
-            args = dict(kwargs.items())
-
-            if args_f:
-                args.update(args_f(row))
-
-            return PolygonPatch(transform(map_xform, shape), **args)
-
-        def yield_patches(row):
-
-            if simplify:
-                shape = loads(row.geometry).simplify(simplify)
-            else:
-                shape = loads(row.geometry)
-
-            if shape.geom_type == 'MultiPolygon':
-                for subshape in shape.geoms:
-                    yield make_patch(subshape, row)
-            else:
-                yield make_patch(shape,row )
-
-        return [ patch for row in self if predicate(row)
-                       for patch in yield_patches(row) ]
+            return MeasureDimensionPartition(self)
 
 
     # ============================
@@ -968,3 +861,378 @@ class Partition(Base):
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
 event.listen(Partition, 'before_delete', Partition.before_delete)
+
+class PartitionProxy(object):
+    __slots__ = ["_obj", "__weakref__"]
+
+    def __init__(self, obj):
+        object.__setattr__(self, "_obj", obj)
+
+    #
+    # proxying (special cases)
+    #
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_obj"), name)
+
+    def __delattr__(self, name):
+        delattr(object.__getattribute__(self, "_obj"), name)
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, "_obj"), name, value)
+
+    def __nonzero__(self):
+        return bool(object.__getattribute__(self, "_obj"))
+
+    def __str__(self):
+        return str(object.__getattribute__(self, "_obj"))
+
+    def __repr__(self):
+        return repr(object.__getattribute__(self, "_obj"))
+
+    def __iter__(self):
+        return iter(object.__getattribute__(self, "_obj"))
+
+
+
+class AnalysisPartition(PartitionProxy):
+    """A subclass of Partition with methods designed for analysis with Pandas. It is produced from
+    the partitions analysis property"""
+
+
+    def dataframe(self, predicate=None, columns=None):
+        """Return the partition as a Pandas dataframe
+
+
+        :param predicate: If defined, a callable that is called for each row, and if it returns true, the
+        row is included in the output.
+        :param columns: A list or tuple of column names to return
+
+        :return: Pandas dataframe
+
+
+        """
+
+        from ambry.pands import AmbryDataFrame
+        from operator import itemgetter
+
+        if columns:
+            ig = itemgetter(*columns)
+        else:
+            ig = None
+            columns = self.table.header
+
+        if predicate:
+            def yielder():
+                for row in self.reader:
+                    if predicate(row):
+                        if ig:
+                            yield ig(row)
+                        else:
+                            yield row.dict
+
+            return AmbryDataFrame(yielder(), columns=columns, partition=self.measuredim)
+
+        else:
+
+            def yielder():
+                for row in self.reader:
+                    yield row.values()
+
+            return AmbryDataFrame(yielder(), columns=columns, partition=self.measuredim)
+
+    def geoframe(self, simplify=None, predicate=None, crs=None, epsg=None):
+        """
+        Return geopandas dataframe
+
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+        :param crs: Coordinate reference system information
+        :param epsg: Specifiy the CRS as an EPGS number.
+        :return: A Geopandas GeoDataFrame
+        """
+        import geopandas
+        from shapely.wkt import loads
+        from fiona.crs import from_epsg
+
+        if crs is None and epsg is None and self.epsg is not None:
+            epsg = self.epsg
+
+        if crs is None:
+            try:
+                crs = from_epsg(epsg)
+            except TypeError:
+                raise TypeError('Must set either crs or epsg for output.')
+
+        df = self.dataframe(predicate=predicate)
+        geometry = df['geometry']
+
+        if simplify:
+            s = geometry.apply(lambda x: loads(x).simplify(simplify))
+        else:
+            s = geometry.apply(lambda x: loads(x))
+
+        df['geometry'] = geopandas.GeoSeries(s)
+
+        return geopandas.GeoDataFrame(df, crs=crs, geometry='geometry')
+
+    def shapes(self, simplify=None, predicate=None):
+        """
+        Return geodata as a list of Shapely shapes
+
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+
+        :return: A list of Shapely objects
+        """
+
+        from shapely.wkt import loads
+
+        if not predicate:
+            predicate = lambda row: True
+
+        if simplify:
+            return [loads(row.geometry).simplify(simplify) for row in self if predicate(row)]
+        else:
+            return [loads(row.geometry) for row in self if predicate(row)]
+
+    def patches(self, basemap, simplify=None, predicate=None, args_f=None, **kwargs):
+        """
+        Return geodata as a list of Matplotlib patches
+
+        :param basemap: A mpl_toolkits.basemap.Basemap
+        :param simplify: Integer or None. Simplify the geometry to a tolerance, in the units of the geometry.
+        :param predicate: A single-argument function to select which records to include in the output.
+        :param args_f: A function that takes a row and returns a dict of additional args for the Patch constructor
+
+        :param kwargs: Additional args to be passed to the descartes Path constructor
+        :return: A list of patch objects
+        """
+        from descartes import PolygonPatch
+        from shapely.wkt import loads
+        from shapely.ops import transform
+
+        if not predicate:
+            predicate = lambda row: True
+
+        def map_xform(x, y, z=None):
+            return basemap(x, y)
+
+        def make_patch(shape, row):
+
+            args = dict(kwargs.items())
+
+            if args_f:
+                args.update(args_f(row))
+
+            return PolygonPatch(transform(map_xform, shape), **args)
+
+        def yield_patches(row):
+
+            if simplify:
+                shape = loads(row.geometry).simplify(simplify)
+            else:
+                shape = loads(row.geometry)
+
+            if shape.geom_type == 'MultiPolygon':
+                for subshape in shape.geoms:
+                    yield make_patch(subshape, row)
+            else:
+                yield make_patch(shape, row)
+
+        return [patch for row in self if predicate(row)
+                for patch in yield_patches(row)]
+
+class MeasureDimensionPartition(PartitionProxy):
+    """A partition proxy for accessing measure and dimensions. When returning a column, it returns
+    a PartitionColumn, which proxies the table column while adding partition specific functions. """
+
+    def column(self, c_name):
+
+        return PartitionColumn(self.table.column(c_name), self)
+
+    @property
+    def columns(self):
+        """Iterate over all columns"""
+
+        return [PartitionColumn(c, self) for c in self.table.columns]
+
+    @property
+    def primary_columns(self):
+        """Iterate over the primary columns, columns which do not have a parent"""
+
+        return [c for c in self.columns if not c.parent]
+
+    @property
+    def dimensions(self):
+        """Iterate over all dimensions"""
+        from ambry.valuetype.core import ROLE
+
+        return [c for c in self.columns if c.role == ROLE.DIMENSION]
+
+    @property
+    def primary_dimensions(self):
+        """Iterate over the primary columns, columns which do not have a parent and have a
+        cardinality greater than 1"""
+        from ambry.valuetype.core import ROLE
+
+        return [ c for c in self.columns if not c.parent and c.role == ROLE.DIMENSION and c.pstats.nuniques > 1 ]
+
+    @property
+    def measures(self):
+        """Iterate over all measures"""
+        from ambry.valuetype.core import ROLE
+
+        return [c for c in self.columns if c.role == ROLE.MEASURE]
+
+    @property
+    def primary_measures(self):
+        """Iterate over the primary measures, columns which do not have a parent"""
+
+        return [ c for c in self.measures if not c.parent ]
+
+
+    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={}, unstack=True ):
+        """
+        Yield rows in a reduced format, with one dimension as an index, one measure column per secondary dimension,
+        and all other dimensions filtered.
+
+        :param measure: The column names of one or more measures
+        :param p_dim: The primary dimension. This will be the index of the dataframe.
+        :param s_dim: a secondary dimension. The returned frame will be unstacked on this dimension
+        :param filtered_dims: A dict of dimension columns names that are filtered, mapped to the dimension value
+        to select.
+        :return:
+        """
+
+        from six import text_type
+
+        def maybe_quote(v):
+            from six import string_types
+            if isinstance(v, string_types):
+                return '"{}"'.format(v)
+            else:
+                return v
+
+        all_dims = [p_dim]+filtered_dims.keys()
+
+        if s_dim:
+            all_dims.append(s_dim)
+
+        all_dims = [text_type(c) for c in all_dims]
+
+        primary_dims = [text_type(c.name) for c in self.primary_dimensions]
+
+        if set(all_dims) != set(primary_dims):
+            raise ValueError("The primary secondary and filtered dimensions must cover all primary dimensions"+
+                             " {} != {}".format(sorted(all_dims), sorted(primary_dims)))
+
+        # Use dimension labels, if they exist
+        try:
+            p_dim = self.column(p_dim).label.name
+        except ValueError:
+            pass
+
+        if s_dim:
+
+            try:
+                s_dim = self.column(s_dim).label.name
+
+            except ValueError:
+                pass
+
+            columns = [p_dim, s_dim, measure]
+
+        else:
+            columns = [p_dim, measure]
+
+        # Create the predicate to filter out the filtered dimensions
+        code = ' and '.join("row.{} == {}".format(k,maybe_quote(v)) for k, v in filtered_dims.items())
+
+        predicate = eval('lambda row: {}'.format(code))
+
+        df = self.analysis.dataframe(predicate, columns=columns)
+
+        if s_dim:
+            df = df.set_index([p_dim, s_dim])
+
+            if unstack:
+                df = df.unstack()
+
+                df.columns = df.columns.get_level_values(1)  # [' '.join(col).strip() for col in df.columns.values]
+
+        else:
+            df = df.set_index(p_dim)
+
+        if 'plot_meta' not in df._metadata:
+            df._metadata.append('plot_meta')
+
+        df.plot_meta = {
+            'primary_dim': p_dim.name,
+            'secondary_dim': s_dim.name,
+            'filtered_dims': filtered_dims,
+            'measure': measure
+        }
+
+        return df
+
+
+
+class ColumnProxy(PartitionProxy):
+
+    def __init__(self, obj, partition):
+        object.__setattr__(self, "_obj", obj)
+        object.__setattr__(self, "_partition", partition)
+
+class PartitionColumn(ColumnProxy):
+    """A proxy on the Column that links a Column to a Partition, for direct access to the stats
+    and column labels"""
+
+    def __init__(self, obj, partition):
+        super(PartitionColumn, self).__init__(obj, partition)
+        object.__setattr__(self, "pstats", partition.stats_dict[obj.name])
+
+    @property
+    def children(self):
+        """"Return the table's other column that have this column as a parent, excluding labels"""
+        for child in self.children:
+            yield PartitionColumn(child, self._partition)
+
+
+    @property
+    def label(self):
+        """"Return first child that of the column that is marked as a label"""
+        for c in self.table.columns:
+            if c.parent == self.name and '/label' in c.valuetype:
+                return PartitionColumn(c, self._partition)
+
+    @property
+    def labels(self):
+        """Return a map of column code values mapped to labels, for columns that have a label column
+
+        If the column is not assocaited with a label column, it returns an identity map.
+        """
+
+        from operator import itemgetter
+
+        card = self.pstats.nuniques
+
+        if self.label:
+            ig = itemgetter(self.name, self.label.name)
+        else:
+            ig = itemgetter(self.name, self.name)
+
+        label_set = set()
+        for row in self._partition:
+            label_set.add(ig(row))
+
+            if len(label_set) >= card:
+                break
+
+        d = dict(label_set)
+
+        assert len(d) == len(label_set)  # Else the label set has multiple values per key
+
+        return d
+
+
+

@@ -1355,14 +1355,16 @@ class CastColumns(Pipe):
         self.row_processors = []
         self.orig_headers = None
         self.new_headers = None
-        self.row_proxy_1 = None
-        self.row_proxy_2 = None
+        self.row_proxy_1 = None # Row proxy with  source headers
+        self.row_proxy_2 = None # Row proxy with dest headers
 
         self.accumulator = {}
+        self.errors = None
 
         self.row_n = 0
 
     def process_header(self, headers):
+
 
         self.orig_headers = headers
         self.row_proxy_1 = RowProxy(self.orig_headers)
@@ -1379,27 +1381,59 @@ class CastColumns(Pipe):
 
         self.row_processors = self.bundle.build_caster_code(self.source, headers, pipe=self)
 
+        self.errors = {}
+
+        for h in self.orig_headers + self.new_headers:
+            self.errors[h] = set()
+
         return self.new_headers
 
     def process_body(self, row):
-        from ambry.valuetype.exceptions import CastingError
+        from ambry.valuetype.exceptions import CastingError, TooManyCastingErrors
 
-        self.row_n += 1
         scratch = {}
         errors = {}
 
+        # Start off the first processing with the source's source headers.
         rp = self.row_proxy_1
 
         try:
             for proc in self.row_processors:
-                row = proc(rp.set_row(row), self.row_n, errors, scratch, self.accumulator,
+                row = proc(rp.set_row(row), self.row_n, self.errors, scratch, self.accumulator,
                            self, self.bundle, self.source)
+
+                # After the first round, the row has the destinatino headers.
                 rp = self.row_proxy_2
         except CastingError as e:
             raise PipelineError(self, "Failed to cast column in table {}, row {}: {}"
                                 .format(self.source.dest_table.name, self.row_n, e))
+        except TooManyCastingErrors:
+            self.report_errors()
+
 
         return row
+
+    def report_errors(self):
+
+        from ambry.valuetype.exceptions import TooManyCastingErrors
+
+        if sum(len(e) for e in self.errors.values()) > 0:
+            for c, errors in self.errors.items():
+                for e in errors:
+                    self.bundle.error(u'Casting Error: {}'.format(e))
+
+            raise TooManyCastingErrors()
+
+
+
+    def finish(self):
+        super(CastColumns, self).finish()
+
+        self.report_errors()
+
+
+
+
 
     def __str__(self):
 

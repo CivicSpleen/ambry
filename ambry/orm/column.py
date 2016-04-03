@@ -47,6 +47,7 @@ class Column(Base):
     d_vid = SAColumn('c_d_vid', String(13), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     t_id = SAColumn('c_t_id', String(12))
 
+    #source_name = SAColumn('c_source_name', Text, index=True)
     name = SAColumn('c_name', Text, index=True)
     altname = SAColumn('c_altname', Text)
     datatype = SAColumn('c_datatype', Text)
@@ -69,6 +70,7 @@ class Column(Base):
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
 
+    parent = SAColumn('c_parent', Text)
     derivedfrom = SAColumn('c_derivedfrom', Text)
     numerator = SAColumn('c_numerator', String(20))
     denominator = SAColumn('c_denominator', String(20))
@@ -182,29 +184,83 @@ class Column(Base):
     @property
     def valuetype_class(self):
         """Return the valuetype class, if one is defined, or a built-in type if it isn't"""
-        from ambry.valuetype import import_valuetype
 
-        assert self.datatype, 'No datatype value for column {}.{}'.format(self.table.name, self.name)
+        from ambry.valuetype import resolve_value_type
 
-        try:
-            return import_valuetype(self.datatype)
-        except AttributeError as e:
-            try:
-                return self.types[self.datatype][1]
-            except KeyError:
-                raise KeyError('Failed to find type {} in column {}.{}'
-                               .format(self.datatype, self.table.name, self.name))
+        if self.valuetype:
+            return resolve_value_type(self.valuetype)
+
+        else:
+            return resolve_value_type(self.datatype)
+
+    @property
+    def valuetype_description(self):
+        """Return the valuetype class, if one is defined, or a built-in type if it isn't"""
+
+        from ambry.valuetype import resolve_value_type
+
+        return self.valuetype_class.desc
 
     @property
     def python_type(self):
         """Return the python type for the row, possibly getting it from a valuetype reference """
 
-        from ambry.valuetype import python_type as vl_pt
+        from ambry.valuetype import resolve_value_type
 
-        try:
+        if self.valuetype:
+            return resolve_value_type(self.valuetype)._pythontype
+
+        elif self.datatype:
             return self.types[self.datatype][1]
-        except KeyError:
-            return vl_pt(self.datatype)
+
+        else:
+            from ambry.exc import ConfigurationError
+            raise ConfigurationError("Can't get python_type: neither datatype of valuetype is defined")
+
+    @property
+    def role(self):
+        '''Return the code for the role,  measure, dimension or error'''
+        from ambry.valuetype.core import role_descriptions, ROLE
+
+        if not self.valuetype_class:
+            return ''
+
+        role = self.valuetype_class.role
+
+        if role == ROLE.UNKNOWN:
+            vt_code = self.valuetype_class.vt_code
+
+            if len(vt_code) == 1 or vt_code[1] == '/':
+                return vt_code[0]
+            else:
+                return ''
+
+        return role
+
+    @property
+    def role_description(self):
+        from ambry.valuetype.core import role_descriptions
+        return role_descriptions.get(self.role,'')
+
+
+    @property
+    def has_nulls(self):
+        """Return True if the datatype allows for null values ( it is specified with a '?' at the end ) """
+        return self.valuetype.endswith('?')
+
+    @property
+    def children(self):
+        """"Return the table's other column that have this column as a parent, excluding labels"""
+        for c in self.table.columns:
+            if c.parent == self.name and '/label' not in c.valuetype:
+                yield c
+
+    @property
+    def label(self):
+        """"Return first child that of the column that is marked as a label"""
+        for c in self.table.columns:
+            if c.parent == self.name and '/label' in c.valuetype:
+                return c
 
     def python_cast(self, v):
         """Cast a value to the type of the column.
@@ -416,39 +472,6 @@ class Column(Base):
             'column': column
         }
 
-    @property
-    def expanded_transform(self):
-        """Expands the transform string into segments """
-
-        segments = self._expand_transform(self.transform)
-
-        if not segments:
-            return [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
-
-        segments[0]['datatype'] = self.valuetype_class
-
-        for s in segments:
-            s['column'] = self
-
-        return segments
-
-    @staticmethod
-    def clean_transform(transform):
-
-        segments = Column._expand_transform(transform)
-
-        def pipeify_seg(seg):
-
-            o = []
-
-            seg['init'] and o.append('^' + seg['init'])
-            o += seg['transforms']
-            seg['exception'] and o.append('!' + seg['exception'])
-
-            return '|'.join(o)
-
-        return '||'.join(pipeify_seg(seg) for seg in segments)
-
     @staticmethod
     def _expand_transform(transform):
         from ambry.dbexceptions import ConfigurationError
@@ -488,6 +511,47 @@ class Column(Base):
         return segments
 
     @property
+    def expanded_transform(self):
+        """Expands the transform string into segments """
+
+        segments = self._expand_transform(self.transform)
+
+        if segments:
+
+            segments[0]['datatype'] = self.valuetype_class
+
+            for s in segments:
+                s['column'] = self
+
+        else:
+
+            segments = [self.make_xform_seg(datatype=self.valuetype_class, column=self)]
+
+        # If we want to add the find datatype cast to a transform.
+        #segments.append(self.make_xform_seg(transforms=["cast_"+self.datatype], column=self))
+
+        return segments
+
+    @staticmethod
+    def clean_transform(transform):
+
+        segments = Column._expand_transform(transform)
+
+        def pipeify_seg(seg):
+
+            o = []
+
+            seg['init'] and o.append('^' + seg['init'])
+            o += seg['transforms']
+            seg['exception'] and o.append('!' + seg['exception'])
+
+            return '|'.join(o)
+
+        return '||'.join(pipeify_seg(seg) for seg in segments)
+
+
+
+    @property
     def row(self):
         from collections import OrderedDict
 
@@ -523,6 +587,16 @@ class Column(Base):
         return '<column: {}, {}>'.format(self.name, self.vid)
 
     @staticmethod
+    def update_number(target):
+
+        ton = ObjectNumber.parse(target.t_vid)
+        con = ColumnNumber(ton, target.sequence_id)
+        target.id = str(ton.rev(None))
+        target.vid = str(con)
+        target.id = str(con.rev(None))
+        target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
+
+    @staticmethod
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the seqience_id for this
         object and create an ObjectNumber value for the id_"""
@@ -544,14 +618,11 @@ class Column(Base):
         """Set the column id number based on the table number and the sequence
         id for the column."""
 
+        assert target.datatype or target.valuetype
+
         target.name = Column.mangle_name(target.name)
 
-        ton = ObjectNumber.parse(target.t_vid)
-        con = ColumnNumber(ton, target.sequence_id)
-        target.id = str(ton.rev(None))
-        target.vid = str(con)
-        target.id = str(con.rev(None))
-        target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
+        Column.update_number(target)
 
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)

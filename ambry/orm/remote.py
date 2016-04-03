@@ -8,6 +8,7 @@ from sqlalchemy import Column as SAColumn, Integer
 from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy import event
 import os.path
+import ssl
 
 from . import Base, MutationDict, JSONEncodedObj
 
@@ -15,6 +16,23 @@ import logging
 from ambry.util import get_logger
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
+
+
+def patch_match_hostname():
+    """Fixes https://github.com/boto/boto/issues/2836"""
+
+
+    _old_match_hostname = ssl.match_hostname
+
+    def _new_match_hostname(cert, hostname):
+        if hostname.endswith('.s3.amazonaws.com'):
+            pos = hostname.find('.s3.amazonaws.com')
+            hostname = hostname[:pos].replace('.', '') + hostname[pos:]
+        return _old_match_hostname(cert, hostname)
+
+    ssl.match_hostname = _new_match_hostname
+
+patch_match_hostname()
 
 
 class RemoteAccessError(Exception):
@@ -456,17 +474,6 @@ class Remote(Base):
         import ssl
 
 
-
-        _old_match_hostname = ssl.match_hostname
-
-        def _new_match_hostname(cert, hostname):
-            if hostname.endswith('.s3.amazonaws.com'):
-                pos = hostname.find('.s3.amazonaws.com')
-                hostname = hostname[:pos].replace('.', '') + hostname[pos:]
-            return _old_match_hostname(cert, hostname)
-
-        ssl.match_hostname = _new_match_hostname
-
         pd = parse_url_to_dict(url)
 
         if account_acessor:
@@ -491,8 +498,6 @@ class Remote(Base):
             aws_secret_key=aws_secret_key,
 
         )
-
-        # ssl.match_hostname = _old_match_hostname
 
         return s3
 

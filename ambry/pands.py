@@ -11,27 +11,21 @@ import numpy as np
 from six import string_types
 
 
-
 class AmbrySeries(Series):
 
-    def m90(self):
-        raise NotImplementedError()
-
-    def se(self):
-        """Return a standard error series"""
-        raise NotImplementedError()
-
-    def m95(self):
-        """Return the 95% margins as an AmbrySeries"""
-        raise NotImplementedError()
-
-
-    def m99(self):
-        """Return the 99% margins, as an AmbrySeries"""
-        raise NotImplementedError()
+    _metadata = ['partition', 'name'] # Name is defined in the parent
 
     @property
-    def ambry_column(self):
+    def _constructor(self):
+        return AmbrySeries
+
+    @property
+    def _constructor_expanddim(self):
+        return AmbryDataFrame
+
+    @property
+    def column(self):
+        """Return the ambry column"""
         from ambry.orm.exc import NotFoundError
 
         if not hasattr(self, 'partition'):
@@ -41,42 +35,47 @@ class AmbrySeries(Series):
             return None
 
         try:
-            return self.partition.table.column(self.name)
+            try:
+                return self.partition.column(self.name)
+            except AttributeError:
+                return self.partition.table.column(self.name)
         except NotFoundError:
             return None
 
 
 class AmbryDataFrame(DataFrame):
 
-    def __init__(self, partition, *args, **kwargs):
+    _metadata = ['partition']
 
-        super(AmbryDataFrame, self).__init__(*args, **kwargs)
-
-        self.partition = partition
-
-    @classmethod
-    def subclass(cls, o, partition=None):
-        """Change the class of a dataframe to An AmbryDataFrame and set the partition. """
-        o.__class__ == cls
+    def __init__(self, data=None, index=None, columns=None, dtype=None, copy=False, partition=None):
+        from ambry.orm import Partition
 
         if partition:
-            o.partition = partition
+            self.partition = partition
 
-        return o
+        super(AmbryDataFrame, self).__init__(data, index, columns, dtype, copy)
 
-    def __getitem__(self, key):
-        """
+    @property
+    def _constructor(self):
 
-        """
-        result = super(AmbryDataFrame, self).__getitem__(key)
+        return AmbryDataFrame
 
-        if isinstance(result, DataFrame):
-            result.__class__ = AmbryDataFrame
-            result.partition = self.partition
+    @property
+    def _constructor_sliced(self):
+        return AmbrySeries
 
-        elif isinstance(result, Series):
-            result.__class__ = AmbrySeries
-            result._dataframe = self
-            result.partition = self.partition
+    def _getitem_column(self, key):
+        c = super(AmbryDataFrame, self)._getitem_column(key)
+        c.partition = self.partition
+        return c
 
-        return result
+    @property
+    def rows(self):
+        """Yield rows like a partition does, with a header first, then rows. """
+
+        yield [self.index.name] + list(self.columns)
+
+        for t in self.itertuples():
+            yield list(t)
+
+

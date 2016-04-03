@@ -112,7 +112,7 @@ def clean_int(v):
 
 
 #
-# Casters that retiurn a default valur
+# Casters that return a default value
 #
 def int_d(v, default=None):
     """Cast to int, or on failure, return a default Value"""

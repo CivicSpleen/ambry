@@ -1,4 +1,4 @@
-"table","column","datatype","transform"
+"table","column","valuetype","transform"
 ,,,
 "simple","id","int",
 "simple","uuid","str",
@@ -11,7 +11,7 @@
 "simple","month","int","||row.date.month"
 "simple","year","int","||row.date.year"
 "simple","removecodes","int","^remove_codes"
-"simple","keepcodes","types.IntOrCode",
+"simple","keepcodes","int?",
 "simple","recode","int","^bundle.recode(row.removecodes)"
 "simple","codes","str","||row.keepcodes.code"
 ,,,
@@ -29,12 +29,12 @@
 ,,,
 "simple_stats","id","int","^row_number"
 "simple_stats","float_a","float","cst_double"
-"simple_stats","float_b","float","cst_double|cst_double"
+"simple_stats","float_b","float?","cst_double|cst_double"
 "simple_stats","float_c","float","!ignore||cst_double|cst_double||cst_double|cst_double"
 "simple_stats","int_a","int",
-"simple_stats","int_b","int","!capture_error"
-"simple_stats","int_b_codes","str","^error_from('int_b')"
+"simple_stats","int_b","int?",
+"simple_stats","int_b_codes","str","||row.int_b.failed_value"
 "simple_stats","str_a","str","upper"
-"simple_stats","str_b","str","title|v.replace('w','X')|!ignore"
-"simple_stats","state","fips.State","^row.int_a|!ignore"
+"simple_stats","str_b","str","title|v.replace('A','X')|!ignore"
+"simple_stats","state","d/geo/fips/state","^row.int_a|!ignore"
 "simple_stats","state_name","str","||row.state.name|!ignore"

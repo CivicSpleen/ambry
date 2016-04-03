@@ -323,6 +323,10 @@ class BuildSourceFile(object):
 
         return sio.getvalue()
 
+    def get_string_io(self):
+        from cStringIO import StringIO
+        return StringIO(self.getcontent())
+
     def list_files(self):
         """Return a list of the file name for this file type. Usuall, this will be just one,
         ( multiplicity == '1' ) but may be more when multiplicity = 'n' )"""
@@ -448,11 +452,8 @@ class DictBuildSourceFile(BuildSourceFile):
         fr.synced_fs = self.fs_modtime
         fr.modified = self.fs_modtime
 
-
-
     def set_dict(self, d):
         self.record.update_contents(msgpack.packb(d), 'application/msgpack')
-
 
     def record_to_fh(self, f):
         """Write the record, in filesystem format, to a file handle or file object"""
@@ -581,7 +582,6 @@ class MetadataFile(DictBuildSourceFile):
 
         self.set_object(o)
 
-
     def record_to_fh(self, f):
 
         fr = self.record
@@ -621,7 +621,6 @@ class MetadataFile(DictBuildSourceFile):
         d['names'] = self._dataset.identity.names_dict
 
         fr.update_contents(msgpack.packb(d), 'application/msgpack')
-
 
     def get_object(self):
         """Return contents in object form, an AttrDict"""
@@ -991,12 +990,27 @@ class SchemaFile(RowBuildSourceFile):
 
             if not row.get('column', False):
                 raise ConfigurationError('Row error: no column on line {}'.format(line_no))
+
             if not row.get('table', False):
                 raise ConfigurationError('Row error: no table on line {}'.format(line_no))
-            if not row.get('datatype', False):
+
+            if not row.get('datatype', False) and not row.get('valuetype', False):
                 raise ConfigurationError('Row error: no type on line {}'.format(line_no))
 
-            row['datatype'] = old_types_map.get(row['datatype'].lower(), row['datatype'])
+            value_type = row.get('valuetype', '').strip() if row.get('valuetype', False) else None
+            data_type = row.get('datatype', '').strip() if row.get('datatype', False) else None
+
+            if value_type and not data_type:
+                from ambry.valuetype import resolve_value_type
+                vt_class = resolve_value_type(row['valuetype'])
+                if not vt_class:
+                    raise ConfigurationError("Row error: unknown valuetype '{}'".format(row['valuetype']))
+                data_type = vt_class.python_type().__name__
+
+            elif data_type and not value_type:
+                value_type = data_type
+
+            data_type = old_types_map.get(data_type.lower(), data_type)
 
             table_name = row['table']
 
@@ -1023,7 +1037,9 @@ class SchemaFile(RowBuildSourceFile):
                 row['column'],
                 fk_vid=row['is_fk'] if row.get('is_fk', False) else None,
                 description=(row.get('description', '') or '').strip(),
-                datatype=row['datatype'].strip().lower() if '.' not in row['datatype'] else row['datatype'],
+                datatype=data_type,
+                valuetype=value_type,
+                parent=row.get('parent'),
                 proto_vid=row.get('proto_vid'),
                 size=_clean_int(row.get('size', None)),
                 width=_clean_int(row.get('width', None)),
@@ -1307,7 +1323,6 @@ class BuildSourceFileAccessor(object):
         s = self._dataset._database.session
 
         return s.query(File).filter(File.d_vid == self._dataset.vid).filter(File.id == id).one()
-
 
     def record_to_objects(self, preference=None):
         """Create objects from files, or merge the files into the objects. """

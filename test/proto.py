@@ -419,6 +419,8 @@ class TestBase(unittest.TestCase):
 
     def import_single_bundle(self, cache_path, clean=True):
         from test import bundle_tests
+        import fs
+        from fs.opener import fsopendir
 
         l = self.library(use_proto=False)
 
@@ -432,6 +434,29 @@ class TestBase(unittest.TestCase):
         b = next(b for b in l.bundles).cast_to_subclass()
         b.clean()
         b.sync_in(force=True)
+
+        if os.path.exists(os.path.join(orig_source, 'data')):
+            source = fsopendir(os.path.join(orig_source, 'data'))
+            b.source_fs.makedir('data',allow_recreate=True)
+
+            dest = b.source_fs.opendir('data')
+
+            for d, files in source.walk('/'):
+                if d.startswith('.'):
+                    continue
+
+                dest.makedir(d,recursive=True, allow_recreate=True)
+
+                for f in files:
+                    if f.startswith('.'):
+                        continue
+
+                    path = d+'/'+f
+
+                    dest.setcontents(path, source.getcontents(path) )
+
+
+
         return b
 
     def library(self, use_proto=True):

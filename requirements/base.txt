@@ -6,6 +6,7 @@ beautifulsoup4==4.3.2
 ckanapi==3.5
 decorator>=4
 isodate==0.5.1
+aniso8601>=1.1.0
 itsdangerous==0.24
 lockfile==0.10.2
 Markdown==2.6.2

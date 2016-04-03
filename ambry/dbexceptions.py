@@ -105,7 +105,10 @@ class GeoError(Exception):
 
     """General error doing geographic processing."""
 
+
+
 class PhaseError(Exception):
+
     def __init__(self, *args, **kwargs):
         """General error while running a pipeline phase."""
         super(PhaseError, self).__init__(*args, **kwargs)
@@ -132,4 +135,6 @@ class AccessError(PhaseError):
 class TestError(PhaseError):
 
     """Error or failure in built in tests"""
+
+
 

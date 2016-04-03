@@ -624,8 +624,7 @@ class ConfigAccessor(object):
 
     @property
     def metadata(self):
-        """Access process configuarion values as attributes. See self.process
-        for a usage example"""
+        """Access process configuarion values as attributes. """
         from ambry.metadata.schema import Top  # cross-module import
         top = Top()
         top.build_from_db(self.dataset)

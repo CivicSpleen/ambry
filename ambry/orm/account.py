@@ -113,7 +113,10 @@ class Account(Base):
             return None  # These can't be decrypted, only tested.
 
         if password:
-            return self.sym_decrypt(password, self.encrypted_secret)
+            try:
+                return self.sym_decrypt(password, self.encrypted_secret)
+            except AccountDecryptionError as e:
+                raise AccountDecryptionError("Decryption error for account '{}': {}".format(self.account_id, e))
         else:
             raise MissingPasswordError('Must have a password to get or set the secret')
 

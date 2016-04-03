@@ -356,7 +356,18 @@ class Bundle(object):
         # Return the documentation as a scalar term, which has .text() and .html methods to do
         # metadata substitution using Jinja
 
-        return self.metadata.scalar_term(self.build_source_files.documentation.record_content)
+        s = ''
+
+        rc = self.build_source_files.documentation.record_content
+
+        if rc:
+            s += rc
+
+        for k, v in  self.metadata.documentation.items():
+            if  v:
+                s += '\n### {}\n{}'.format(k.title(), v)
+
+        return self.metadata.scalar_term(s)
 
     @property
     def progress(self):
@@ -386,10 +397,13 @@ class Bundle(object):
             return None
 
         if ref:
+            for p in self.partitions:
+                if ref == p.name or ref == p.vname or ref == p.vid or ref == p.id:
+                  p._bundle = self
+                  return p
 
-            p = self.library.partition(ref)
-            p._bundle = self
-            return p
+            raise NotFoundError("No partition found for '{}' (a)".format(ref))
+
         elif kwargs:
             from ..identity import PartitionNameQuery
             pnq = PartitionNameQuery(**kwargs)
@@ -1003,7 +1017,7 @@ Caster Code
 
         s = None
 
-        source.reftype = source.reftype.strip()
+        source.reftype = source.reftype.strip() if source.reftype else None
 
         if source.reftype == 'partition':
             sp = PartitionSourcePipe(self, source, source.partition)
@@ -1015,8 +1029,6 @@ Caster Code
                 sql_text = source.ref.strip().strip(';')+';'
                 table = None
                 warehouse_name = source.vid
-
-
 
             else:
                 # References a SQL file
@@ -1096,6 +1108,7 @@ Caster Code
 
         elif source.is_downloadable:
 
+
             @call_interval(5)
             def progress(read_len, total_len):
                 if ps:
@@ -1108,9 +1121,8 @@ Caster Code
                         state='downloading')
             try:
 
-                s = get_source(
-                    source.spec, self.library.download_cache,
-                    account_accessor=self.library.account_accessor, callback=progress)
+                s = self.get_source(source, callback = progress)
+
 
             except MissingCredentials as exc:
                 from ambry.dbexceptions import ConfigurationError
@@ -1136,6 +1148,111 @@ Caster Code
             raise Exception("Don't know what to do with source: {}".format(source.name))
 
         return s, sp
+
+    def get_source(self, source, clean=False,  callback=None):
+        """
+        Download a file from a URL and return it wrapped in a row-generating acessor object.
+
+        :param spec: A SourceSpec that describes the source to fetch.
+        :param account_accessor: A callable to return the username and password to use for access FTP and S3 URLs.
+        :param clean: Delete files in cache and re-download.
+        :param callback: A callback, called while reading files in download. signatire is f(read_len, total_len)
+
+        :return: a SourceFile object.
+        """
+        from fs.zipfs import ZipOpenError
+        import os
+        from ambry_sources.sources import ( GoogleSource, CsvSource, TsvSource, FixedSource,
+                                            ExcelSource, PartitionSource, SourceError, DelayedOpen,
+                                            DelayedDownload, ShapefileSource, SocrataSource )
+        from ambry_sources import extract_file_from_zip
+
+
+        spec = source.spec
+        cache_fs = self.library.download_cache
+        account_accessor = self.library.account_accessor
+
+        # FIXME. urltype should be moved to reftype.
+        url_type = spec.get_urltype()
+
+        def do_download():
+            from ambry_sources.fetch import download
+
+            return download(spec.url, cache_fs, account_accessor, clean=clean,
+                            logger=self.logger, callback=callback)
+
+        if url_type == 'file':
+
+            from fs.opener import fsopen
+
+            syspath = spec.url.replace('file://', '')
+
+            contents = self.source_fs.getcontents(syspath)
+            cache_path = syspath
+            cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate = True)
+            cache_fs.setcontents(cache_path, contents)
+
+        elif url_type not in ('gs', 'socrata'):  # FIXME. Need to clean up the logic for gs types.
+            try:
+                cache_path, download_time = do_download()
+                spec.download_time = download_time
+            except Exception as e:
+                from ambry_sources.exceptions import DownloadError
+                raise DownloadError("Failed to download {}; {}".format(spec.url, e))
+        else:
+            cache_path, download_time = None, None
+
+
+
+        if url_type == 'zip':
+            try:
+                fstor = extract_file_from_zip(cache_fs, cache_path, spec.url, spec.file)
+            except ZipOpenError:
+                # Try it again
+                cache_fs.remove(cache_path)
+                cache_path, spec.download_time = do_download()
+                fstor = extract_file_from_zip(cache_fs, cache_path, spec.url, spec.file)
+
+            file_type = spec.get_filetype(fstor.path)
+
+        elif url_type == 'gs':
+            fstor = get_gs(spec.url, spec.segment, account_accessor)
+            file_type = 'gs'
+
+        elif url_type == 'socrata':
+            spec.encoding = 'utf8'
+            spec.header_lines = [0]
+            spec.start_line = 1
+            url = SocrataSource.download_url(spec)
+            fstor = DelayedDownload(url, cache_fs)
+            file_type = 'socrata'
+
+        else:
+            fstor = DelayedOpen(cache_fs, cache_path, 'rb')
+            file_type = spec.get_filetype(fstor.path)
+
+        spec.filetype = file_type
+
+        TYPE_TO_SOURCE_MAP = {
+            'gs': GoogleSource,
+            'csv': CsvSource,
+            'tsv': TsvSource,
+            'fixed': FixedSource,
+            'txt': FixedSource,
+            'xls': ExcelSource,
+            'xlsx': ExcelSource,
+            'partition': PartitionSource,
+            'shape': ShapefileSource,
+            'socrata': SocrataSource
+        }
+
+        cls = TYPE_TO_SOURCE_MAP.get(file_type)
+        if cls is None:
+            raise SourceError(
+                "Failed to determine file type for source '{}'; unknown type '{}' "
+                    .format(spec.name, file_type))
+
+        return cls(spec, fstor)
 
     #
     # States
@@ -1812,6 +1929,10 @@ Caster Code
                                       limit=500 if self.limited_run else None,
                                       intuit_type=True, run_stats=False)
 
+            if source.datafile.meta['warnings']:
+                for w in source.datafile.meta['warnings']:
+                    self.error("Ingestion error: {}".format(w))
+
             ps.update(message='Ingested to {}'.format(source.datafile.syspath))
 
             ps.update(message='Updating tables and specs for {}'.format(source.name))
@@ -1934,6 +2055,8 @@ Caster Code
                 # with the header, then sort on the postition. This will produce a stream of header names
                 # that may have duplicates, but which is generally in the order the headers appear in the
                 # sources. The duplicates are properly handled when we add the columns in add_column()
+
+                self.commit()
 
                 def source_cols(source):
                     if source.is_partition and not source.source_table_exists:
@@ -2399,10 +2522,12 @@ Caster Code
         from ambry.valuetype.types import parse_date, parse_time, parse_datetime
         import ambry.valuetype.types
         import ambry.valuetype.math
-        import ambry.valuetype.string
         import ambry.valuetype.number
         import ambry.valuetype.exceptions
         import ambry.valuetype.test
+        import ambry.valuetype.string
+        import ambry.valuetype
+
 
         def set_from(f, frm):
             try:
@@ -2420,7 +2545,7 @@ Caster Code
             parse_time=parse_time,
             parse_datetime=parse_datetime,
             partial=partial,
-            bundle=self,
+            bundle=self
         )
 
         test_env.update(kwargs)
@@ -2433,6 +2558,9 @@ Caster Code
         test_env.update(ambry.valuetype.types.__dict__)
         test_env.update(ambry.valuetype.exceptions.__dict__)
         test_env.update(ambry.valuetype.test.__dict__)
+        test_env.update(ambry.valuetype.__dict__)
+
+
 
         localvars = {}
 
@@ -2493,8 +2621,6 @@ Caster Code
         env_dict['bundle'] = self
         env_dict['source'] = source
         env_dict['pipe'] = pipe
-
-        assert not pipe or (pipe.source is source and pipe.bundle is self)
 
         exec (compile(code, abs_path, 'exec'), env_dict)
 
@@ -2791,6 +2917,7 @@ Caster Code
 
     def checkin(self, no_partitions=False, remote_name=None, source_only=False, force=False, cb=None):
         from ambry.bundle.process import call_interval
+        from requests.exceptions import HTTPError
 
         package = self.package(source_only=source_only)
 
@@ -2806,7 +2933,12 @@ Caster Code
 
         remote.account_accessor = self.library.account_accessor
 
-        remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)
+        try:
+            remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)
+        except HTTPError as e:
+            self.error("HTTP Error: {}".format(e))
+
+            return None, None
 
         self.dataset.upstream = remote.url
 
