@@ -21,7 +21,6 @@ $SUDO apt-get install -y python python-dev python-pip libffi-dev sqlite3 libpq-d
 $SUDO apt-get install -y python libgdal-dev gdal-bin python-gdal python-numpy python-scipy
 $SUDO apt-get install -y libsqlite3-dev libspatialite5 libspatialite-dev spatialite-bin libspatialindex-dev
 $SUDO apt-get install -y libhdf5-7 libhdf5-dev
-#$SUDO apt-get install -y runit
 $SUDO apt-get clean && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 # Fixes security warnings in later pip installs. The --ignore-installed bit is requred
@@ -75,9 +74,13 @@ ambry config installcli ambry_ui
 
 echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
 
-
-mkdir -p /etc/sv
-cp -r ../vagrant/service/* /etc/sv
+# When this script is run for installing vagrant, also install 
+# runit and the runit services
+if [ -d ./vagrant/service ]; then
+  $SUDO apt-get install -y runit
+  $SUDO mkdir -p /etc/sv
+  $SUDO cp -r ../vagrant/service/* /etc/sv
+fi
 
 mkdir -p /var/log/ambry/notebook
 mkdir -p /var/log/ambry/ambryui
