@@ -59,7 +59,7 @@ To run the automated installer, execute this line from a Terminal:
 
 .. code-block:: bash
 
-    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-osx.sh)"
+    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install/install-osx.sh)"
 
 When it detects a missing packages that you have to install manually, the script will pause and open a web browser for you. If those external installs have any hickups, you may have to run the installer script more than once. 
 
@@ -82,14 +82,14 @@ For Ubuntu 13.04 through 14.04, use this script to install the dependencies and 
 
 .. code-block:: bash
 
-    $ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
+    $ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install/install-ubuntu-14.04.sh)"
 
 If you've created a fresh Ubuntu install, you'll probably also have to update and install curl. Here's one line that will take care of everything.  
 
 .. code-block:: bash
 
     $ apt-get update && apt-get install -y curl && \
-    sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
+    sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install/install-ubuntu-14.04.sh)"
 
 
 Follow up with `Post Install`_ to create your configuration files and check the integrity of the installation. 

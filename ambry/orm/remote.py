@@ -17,6 +17,27 @@ from ambry.util import get_logger
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 
+from fs.opener import Opener, opener
+
+class HTTPSOpener(Opener):
+    names = ['https']
+    desc = """HTTPS file opener. HTTPS only supports reading files, and not much else.
+
+example:
+* https://www.example.org/index.html"""
+
+    @classmethod
+    def get_fs(cls, registry, fs_name, fs_name_params, fs_path, writeable, create_dir):
+        from fs.httpfs import HTTPFS
+        if '/' in fs_path:
+            dirname, resourcename = fs_path.rsplit('/', 1)
+        else:
+            dirname = fs_path
+            resourcename = ''
+        fs = HTTPFS('https://' + dirname)
+        return fs, resourcename
+
+opener.add(HTTPSOpener)
 
 def patch_match_hostname():
     """Fixes https://github.com/boto/boto/issues/2836"""
@@ -184,8 +205,24 @@ class Remote(Base):
 
         remote = self._fs_remote(self.url)
 
+        # HTTP can't list, so we have to use a cached collection of list entries.
+        # Use 'ambry remote <remote> update-listing' to create the cache
+
+        if self.url.startswith('http'):
+            try:
+                for e in  loads(remote.getcontents(os.path.join('_meta', 'list.json'))):
+                    if full:
+                        yield (e['vname'], e)
+                    else:
+                        yield e['vname']
+
+
+            except ResourceNotFoundError:
+                return
+
         try:
             for e in remote.listdir('_meta/vname'):
+
                 if full:
                     r = loads(remote.getcontents(join('_meta/vname', e)))
                     yield (e, r)
@@ -200,6 +237,18 @@ class Remote(Base):
                 else:
                     # Isn't any support for this
                     yield (this_name, None)
+
+    def _update_fs_list(self):
+        """Cache the full list for http access. This creates a meta file that can be read all at once,
+        rather than requiring a list operation like S3 access does"""
+        from json import dumps
+
+        full_list = [ e[1] for e in self._list_fs(full=True) ]
+
+        remote = self._fs_remote(self.url)
+
+        remote.setcontents(os.path.join('_meta', 'list.json'), dumps(full_list, indent = 4))
+
 
     def _list_api(self, full=False):
 
