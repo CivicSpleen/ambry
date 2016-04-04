@@ -394,7 +394,6 @@ class Partition(Base):
 
         self.grain_coverage = sorted(str(g) for g in grains if g)
 
-
     @property
     def dict(self):
         """A dict that holds key/values for all of the properties in the
@@ -592,6 +591,23 @@ class Partition(Base):
                 'Could not locate data file for partition {} (local)'.format(self.identity.fqname))
 
     @property
+    def remote(self):
+        """
+        Return the remote for this partition
+
+        :return:
+
+        """
+        from ambry.exc import  NotFoundError
+
+        ds = self.dataset
+
+        if 'remote_name' not in ds.data:
+            raise NotFoundError('Could not determine remote for partition: {}'.format(self.identity.fqname))
+
+        return self._bundle.library.remote(ds.data['remote_name'])
+
+    @property
     def remote_datafile(self):
 
         from fs.errors import ResourceNotFoundError
@@ -602,14 +618,7 @@ class Partition(Base):
 
             from ambry_sources import MPRowsFile
 
-            ds = self.dataset
-
-            if 'remote_name' not in ds.data:
-
-                raise NotFoundError('Failed to find both local and remote file for partition: {}'
-                                    .format(self.identity.fqname))
-
-            remote = self._bundle.library.remote(ds.data['remote_name'])
+            remote = self.remote
 
             datafile = MPRowsFile(remote.fs, self.cache_key)
 
@@ -625,6 +634,7 @@ class Partition(Base):
             # HACK. It looks like we get the response error with an access problem when
             # we have access to S3, but the file doesn't exist.
             raise NotFoundError("Can't access MPR file for {} in remote {}".format(self.cache_key, remote.fs))
+
 
         return datafile
 

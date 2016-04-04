@@ -726,13 +726,16 @@ class Library(object):
             raise NotFoundError("Empty remote name")
 
         try:
-            r = self.database.session.query(Remote).filter(Remote.short_name == name).one()
+            try:
+                r = self.database.session.query(Remote).filter(Remote.short_name == name).one()
+            except NoResultFound as e:
+                r = None
 
             if not r:
                 r = self.database.session.query(Remote).filter(Remote.url == name).one()
 
         except NoResultFound as e:
-            raise NotFoundError(str(e))
+            raise NotFoundError(str(e)+'; '+name)
         except MultipleResultsFound as e:
             self.logger.error("Got multiple results for search for remote '{}': {}".format(name, e))
             return None
@@ -751,7 +754,11 @@ class Library(object):
             try:
                 if name_or_bundle.dstate != Bundle.STATES.BUILDING:
                     r = self._remote(name_or_bundle.dataset.upstream)
-            except (NotFoundError, AttributeError, KeyError):
+            except NotFoundError as e:
+                raise
+                r = None
+            except (NotFoundError, AttributeError, KeyError) as e:
+
                 r = None
 
         if not isinstance(name_or_bundle, Bundle): # It is a remote short_name
