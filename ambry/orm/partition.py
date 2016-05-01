@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
-from ambry.pands import AmbryDataFrame
+
 
 class PartitionDisplay(object):
     """Helper object to select what to display for titles and descriptions"""
@@ -925,6 +925,7 @@ class AnalysisPartition(PartitionProxy):
         """
 
         from operator import itemgetter
+        from ambry.pands import AmbryDataFrame
 
         df_class = df_class or AmbryDataFrame
 
