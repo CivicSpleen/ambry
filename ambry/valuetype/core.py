@@ -66,6 +66,27 @@ def cast_int(v, header_d, clear_errors, errors):
             errors[header_d].add(u"Failed to cast '{}' ( {} ) to int in '{}': {}".format(v,type(v),header_d,e))
             count_errors(errors)
 
+cast_id = cast_int
+
+def cast_long(v, header_d, clear_errors, errors):
+
+    if isinstance(v, FailedValue):
+        if clear_errors:
+            return None
+        else:
+            errors[header_d].add(u"Failed to cast '{}' ({}) to long in '{}': {}".format(v,type(v), header_d, v.exc))
+            count_errors(errors)
+
+    if v != 0 and not bool(v):
+        return None
+    else:
+        try:
+            return long(v)
+        except Exception as e:
+            errors[header_d].add(u"Failed to cast '{}' ( {} ) to long in '{}': {}".format(v,type(v),header_d,e))
+            count_errors(errors)
+
+
 def cast_float(v, header_d, clear_errors, errors):
 
     if isinstance(v, FailedValue):
@@ -253,6 +274,17 @@ class IntValue(int, ValueType):
     def __new__(cls, v):
         try:
             return int.__new__(cls, v)
+        except Exception as e:
+            return FailedValue(v, e)
+
+class LongValue(long, ValueType):
+    _pythontype = long
+    desc = 'Long'
+    vt_code = 'long'
+
+    def __new__(cls, v):
+        try:
+            return long.__new__(cls, v)
         except Exception as e:
             return FailedValue(v, e)
 

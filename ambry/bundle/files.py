@@ -694,10 +694,7 @@ class NotebookFile(StringSourceFile):
 
         script, resources = export_script(notebook)
 
-
         env_dict = {}
-
-
 
         exec (compile(script.replace('# coding: utf-8', ''), 'script', 'exec'), env_dict)
 
@@ -896,7 +893,13 @@ class SourcesFile(RowBuildSourceFile):
                     name = d['name']
                     del d['name']
 
-                    ds = self._dataset.new_source(name, **d)
+                    try:
+                        ds = self._dataset.new_source(name, **d)
+                    except:
+                        print(name, d)
+                        import pprint
+                        pprint.pprint(d)
+                        raise
                 except:  # Odd error with 'none' in keys for d
                     print('!!!', header)
                     print('!!!', row)
@@ -1003,6 +1006,7 @@ class SchemaFile(RowBuildSourceFile):
             if value_type and not data_type:
                 from ambry.valuetype import resolve_value_type
                 vt_class = resolve_value_type(row['valuetype'])
+
                 if not vt_class:
                     raise ConfigurationError("Row error: unknown valuetype '{}'".format(row['valuetype']))
                 data_type = vt_class.python_type().__name__

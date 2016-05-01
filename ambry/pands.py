@@ -52,6 +52,8 @@ class AmbryDataFrame(DataFrame):
 
         if partition:
             self.partition = partition
+        else:
+            self.partition = None
 
         super(AmbryDataFrame, self).__init__(data, index, columns, dtype, copy)
 

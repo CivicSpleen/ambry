@@ -211,7 +211,10 @@ class Column(Base):
             return resolve_value_type(self.valuetype)._pythontype
 
         elif self.datatype:
-            return self.types[self.datatype][1]
+            try:
+                return self.types[self.datatype][1]
+            except KeyError:
+                return resolve_value_type(self.datatype)._pythontype
 
         else:
             from ambry.exc import ConfigurationError

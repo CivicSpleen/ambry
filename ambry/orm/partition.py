@@ -31,6 +31,7 @@ logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
+from ambry.pands import AmbryDataFrame
 
 class PartitionDisplay(object):
     """Helper object to select what to display for titles and descriptions"""
@@ -51,7 +52,6 @@ class PartitionDisplay(object):
 
         if not desc_used:
             self.description = self._p.description.strip('.') + '.' if self._p.description else ''
-
 
 
         self.notes = self._p.notes
@@ -112,6 +112,7 @@ class PartitionDisplay(object):
             return '{}. {} Rows.'.format(td, self._p.count)
         else:
             return '{} Rows.'.format(self._p.count)
+
 
 
 class Partition(Base):
@@ -356,7 +357,11 @@ class Partition(Base):
                     scov.add(self.parse_gvid_or_place(source['space']))
 
         if self.identity.space:  # And from the partition name
-            scov.add(self.parse_gvid_or_place(self.identity.space))
+            try:
+                scov.add(self.parse_gvid_or_place(self.identity.space))
+            except ValueError:
+                # Couldn't parse the space as a GVid
+                pass
 
         # For geo_coverage, only includes the higher level summary levels, counties, states,
         # places and urban areas.
@@ -517,6 +522,7 @@ class Partition(Base):
         if self.type == self.TYPE.UNION:
             ps.update('Running stats ', state='running')
             stats = self.datafile.run_stats()
+
             self.set_stats(stats)
             self.set_coverage(stats)
 
@@ -524,7 +530,6 @@ class Partition(Base):
 
         self.title = PartitionDisplay(self).title
         self.description = PartitionDisplay(self).description
-
 
         self.state = self.STATES.FINALIZED
 
@@ -573,8 +578,6 @@ class Partition(Base):
                 # If the remote doesnt exist, return the local, so the caller can call  exists() on it,
                 # get its path, etc.
                 return self.local_datafile
-
-
 
     @property
     def local_datafile(self):
@@ -770,7 +773,6 @@ class Partition(Base):
             for row in r:
                 yield row
 
-
     @property
     def analysis(self):
         """Return an AnalysisPartition prox, which wraps this partition to provide acess to
@@ -909,7 +911,7 @@ class AnalysisPartition(PartitionProxy):
     the partitions analysis property"""
 
 
-    def dataframe(self, predicate=None, columns=None):
+    def dataframe(self, predicate=None, columns=None, df_class=None):
         """Return the partition as a Pandas dataframe
 
 
@@ -922,8 +924,9 @@ class AnalysisPartition(PartitionProxy):
 
         """
 
-        from ambry.pands import AmbryDataFrame
         from operator import itemgetter
+
+        df_class = df_class or AmbryDataFrame
 
         if columns:
             ig = itemgetter(*columns)
@@ -940,7 +943,7 @@ class AnalysisPartition(PartitionProxy):
                         else:
                             yield row.dict
 
-            return AmbryDataFrame(yielder(), columns=columns, partition=self.measuredim)
+            return df_class(yielder(), columns=columns, partition=self.measuredim)
 
         else:
 
@@ -948,7 +951,7 @@ class AnalysisPartition(PartitionProxy):
                 for row in self.reader:
                     yield row.values()
 
-            return AmbryDataFrame(yielder(), columns=columns, partition=self.measuredim)
+            return df_class(yielder(), columns=columns, partition=self.measuredim)
 
     def geoframe(self, simplify=None, predicate=None, crs=None, epsg=None):
         """
@@ -1101,7 +1104,7 @@ class MeasureDimensionPartition(PartitionProxy):
         return [ c for c in self.measures if not c.parent ]
 
 
-    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={}, unstack=True ):
+    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={}, unstack=True, df_class=None ):
         """
         Yield rows in a reduced format, with one dimension as an index, one measure column per secondary dimension,
         and all other dimensions filtered.
@@ -1160,7 +1163,7 @@ class MeasureDimensionPartition(PartitionProxy):
 
         predicate = eval('lambda row: {}'.format(code))
 
-        df = self.analysis.dataframe(predicate, columns=columns)
+        df = self.analysis.dataframe(predicate, columns=columns, df_class=df_class)
 
         if s_dim:
             df = df.set_index([p_dim, s_dim])
@@ -1184,7 +1187,6 @@ class MeasureDimensionPartition(PartitionProxy):
         }
 
         return df
-
 
 
 class ColumnProxy(PartitionProxy):

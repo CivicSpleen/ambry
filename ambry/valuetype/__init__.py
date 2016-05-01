@@ -20,6 +20,7 @@ from errors import *
 
 value_types = {
     "int": IntValue,
+    "long": LongValue,
     "str": TextValue,
     "float": FloatValue
 }

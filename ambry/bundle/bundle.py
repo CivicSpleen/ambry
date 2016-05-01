@@ -845,6 +845,14 @@ Caster Code
         else:
             self.build_fs.setcontents(path, v, encoding='utf8')
 
+    def _find_pipeline(self, source, phase='build'):
+        for name in self.phase_search_names(source, phase):
+            if name in self.metadata.pipelines:
+                return name, self.metadata.pipelines[name]
+
+        return None, None
+
+
     def pipeline(self, source=None, phase='build', ps=None):
         """
         Construct the ETL pipeline for all phases. Segments that are not used for the current phase
@@ -862,6 +870,7 @@ Caster Code
             source = None
 
         sf, sp = self.source_pipe(source, ps) if source else (None, None)
+
 
         pl = Pipeline(self, source=sp)
 
@@ -885,12 +894,7 @@ Caster Code
                 raise ConfigurationError("Pipeline '{}' declared in source '{}', but not found in metadata"
                                          .format(source.pipeline, source.name))
         else:
-
-            for name in self.phase_search_names(source, phase):
-                if name in self.metadata.pipelines:
-                    pipe_config = self.metadata.pipelines[name]
-                    pipe_name = name
-                    break
+            pipe_name, pipe_config = self._find_pipeline(source, phase)
 
         if pipe_name:
             pl.name = pipe_name
@@ -1004,6 +1008,9 @@ Caster Code
         source._bundle = self
 
         iter_source, source_pipe = self._iterable_source(source, ps)
+
+        if self.limited_run:
+            source_pipe.limit = 500
 
         return iter_source, source_pipe
 
@@ -1146,6 +1153,8 @@ Caster Code
 
         else:
             raise Exception("Don't know what to do with source: {}".format(source.name))
+
+
 
         return s, sp
 
@@ -1545,6 +1554,13 @@ Caster Code
                 synced += 1
 
         return synced
+
+    def update_schema(self):
+        """Propagate schema object changes to file records"""
+
+        self.commit()
+        self.build_source_files.schema.objects_to_record()
+        self.commit()
 
     #
     # Clean
@@ -2346,12 +2362,14 @@ Caster Code
             source_name = source.name  # In case the source drops out of the session, which is does.
             s_vid = source.vid
 
+            ps.update(message='Running pipeline {}'.format(pl.name), s_vid=s_vid, item_type='rows', item_count=0)
+
             @call_interval(5)
             def run_progress_f(sink_pipe, rows):
                 (n_records, rate) = sink_pipe.report_progress()
                 if n_records > 0:
                     ps.update(message='Running pipeline {}: rate: {}'
-                              .format(source_name, rate),
+                              .format(pl.name, rate),
                               s_vid=s_vid, item_type='rows', item_count=n_records)
 
             pl.run(callback=run_progress_f)

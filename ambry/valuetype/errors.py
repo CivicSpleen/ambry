@@ -140,8 +140,8 @@ class RelativeStandardErrorVT(FloatValue):
 
 error_value_types = {
     "e": ErrorVT,
-    "e/m": MarginOfErrorVT,
-    "e/ci": ConfidenceIntervalHalfVT,
+    "e/m": MarginOfErrorVT, # m90, m95, m99
+    "e/ci": ConfidenceIntervalHalfVT, #ci90u, ci90l, ci95u, ci95l, ci99u, ci99l
     "e/se": StandardErrorVT,
     "e/rse": RelativeStandardErrorVT,
 }

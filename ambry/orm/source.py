@@ -276,7 +276,8 @@ class DataSourceBase(object):
 
         if self.reftype == 'partition':
             for c in self.partition.table.columns:
-                st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name, datatype=c.datatype)
+                st.add_column(c.sequence_id, source_header=c.name, dest_header=c.name,
+                              datatype=c.datatype, description = c.description)
 
         elif self.datafile.exists:
             with self.datafile.reader as r:
@@ -324,11 +325,14 @@ class DataSourceBase(object):
     def abbrev_url(self):
         from ..util import parse_url_to_dict, unparse_url_dict
 
-        d = parse_url_to_dict(self.url)
+        if self.url and len(self.url) > 100:
+            d = parse_url_to_dict(self.url)
 
-        d['path'] = '/.../' + d['path'].split('/').pop()
+            d['path'] = '/.../' + d['path'].split('/').pop()
 
-        return unparse_url_dict(d)
+            return unparse_url_dict(d)
+        else:
+            return self.url
 
 
 class DataSource(DataSourceBase, Base, DictableMixin):

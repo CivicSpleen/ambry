@@ -72,6 +72,7 @@ class Geoid(TextValue):
     def tiger(self):
         return self.geoid.convert(geoid.tiger.TigerGeoid)
 
+
 class GeoVT(TextValue):
     role = ROLE.DIMENSION
     vt_code = 'd/geo'
@@ -155,18 +156,34 @@ class GeoStusabVT(TextValue):
     desc = 'USPS State Code'
     vt_code = 'd/geo/usps/state'
 
+    def __new__(cls, v):
+
+        if v is None:
+            return NoneValue
+
+        try:
+            return text_type.__new__(cls, str(v).lower())
+        except Exception as e:
+            return FailedValue(v, e)
+
 geo_value_types = {
     "d/geo": GeoVT,
     "d/geo/label": GeoLabelVT,
-    "d/geo/acs": GeoAcsVT,
-    "d/geo/tiger": GeoTigerVT,
-    "d/geo/census": GeoCensusVT,
+    "d/geo/geoid": GeoAcsVT,  # acs_geoid
+    "d/geo/acs": GeoAcsVT, # acs_geoid
+    "d/geo/tiger": GeoTigerVT, # tiger_geoid
+    "d/geo/census": GeoCensusVT, # census_geoid
     'd/geo/census/tract': GeoCensusTractVT,
     "d/geo/gvid": GeoGvidVT,
-    "d/geo/fips": GeoCensusVT,
-    "d/geo/fips/state": GeoCensusVT,
-    "d/geo/fips/county": GeoCensusVT,
+    "d/geo/int": IntValue,
+    "d/geo/fips": IntValue,
+    "d/geo/fips/state": IntValue,  # fips_state
+    "d/geo/fips/county": IntValue, #fips_
+    "d/geo/ansi": IntValue,
+    "d/geo/ce": IntValue, # Census specific int code, like FIPS and ANSI, but for tracts, blockgroups and blocks
     "d/geo/name": GeoNameVT,
-    "d/geo/usps/zip": GeoZipVT,
-    "d/geo/usps/state": GeoStusabVT,
+    "d/geo/usps/zip": GeoZipVT, # zip
+    "d/geo/usps/state": GeoStusabVT, # stusab
+    "d/geo/lat/ddeg": FloatValue, # Decimal degrees
+    "d/geo/lon/ddeg": FloatValue,  # Decimal degrees
 }

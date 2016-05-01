@@ -117,7 +117,7 @@ class Pipe(object):
     segment = None  # Set to the name of the segment
     pipeline = None  # Set to the name of the segment
     headers = None
-
+    limit = None
     indent = '    '  # For __str__ formatting
 
     scratch = {}  # Data area for the casters and derived values to use.
@@ -213,6 +213,9 @@ class RowProxyPipe(Pipe):
         from ambry_sources.sources.util import RowProxy
         rg = iter(self._source_pipe)
 
+        if self.limit:
+            raise NotImplementedError()
+
         self.headers = self.process_header(next(rg))
 
         yield self.headers
@@ -251,6 +254,9 @@ class DatafileSourcePipe(Pipe):
     def __iter__(self):
 
         self.start()
+
+        if self.limit:
+            raise NotImplementedError()
 
         with self._datafile.reader as r:
 
@@ -328,12 +334,28 @@ class SourceFileSourcePipe(Pipe):
 
         yield self.headers
 
-        if self._source.end_line:
-            for i in range(start_line, self._source.end_line):
-                yield next(itr)
+        if self.limit:
+
+            if self._source.end_line:
+                for i in range(start_line, self._source.end_line):
+                    if i > self.limit:
+                        break
+                    yield next(itr)
+            else:
+                for i, row in enumerate(itr):
+                    if i > self.limit:
+                        break
+                    yield row
+
+
         else:
-            for row in itr:
-                yield row
+
+            if self._source.end_line:
+                for i in range(start_line, self._source.end_line):
+                    yield next(itr)
+            else:
+                for row in itr:
+                    yield row
 
         self.finish()
 
@@ -411,6 +433,9 @@ class PartitionSourcePipe(Pipe):
 
         self.start()
 
+        if self.limit:
+            raise NotImplementedError()
+
         yield [c.name for c in self._partition.table.columns]
 
         for row in iter(self._partition):
@@ -439,7 +464,7 @@ class Sink(Pipe):
         self.i = 0
         self._start_time = None
 
-    def run(self, count=None, *args, **kwargs):
+    def run(self, count=None,  *args, **kwargs):
         from time import time
 
         self._start_time = time()
@@ -455,6 +480,8 @@ class Sink(Pipe):
                 cb_count = self._callback_freq
                 self._callback(self, i)
             cb_count -= 1
+
+
 
     def report_progress(self):
         """
@@ -1491,13 +1518,11 @@ class RemoveBlankColumns(Pipe):
 class Skip(Pipe):
     """Skip rows of a table that match a predicate """
 
-    def __init__(self, pred, table=None, use_dict=True):
+    def __init__(self, pred, table=None):
         """
 
-        :param add: List of blank columns to add, by header name, or dict of headers and functions
-            to create the column value
-        :param delete: List of headers names of columns to delete
-        :param edit: Dict of header names and functions to alter the value.
+        :param pred:
+        :param table:
         :return:
         """
 
@@ -1508,7 +1533,6 @@ class Skip(Pipe):
         except AttributeError:
             self.table = table
 
-        self._use_dict = use_dict
         self._check = False
 
         self.skipped = 0
@@ -1522,12 +1546,13 @@ class Skip(Pipe):
 
         self.env = self.bundle.exec_context(source=self.source, pipe=self)
 
+
         if self.pred in self.env:
-            self.code = 'lambda row: {}'.format(calling_code(self.env[self.pred], self.pred))
+            self.code = 'lambda pipe, bundle, source, row: {}'.format(calling_code(self.env[self.pred], self.pred))
             self.pred = eval(self.code, self.env)
 
         elif not callable(self.pred):
-            self.code = 'lambda row: {}'.format(self.pred)
+            self.code = 'lambda pipe, bundle, source, row: {}'.format(self.pred)
             self.pred = eval(self.code, self.env)
 
         else:
@@ -1554,7 +1579,7 @@ class Skip(Pipe):
             if not self._check:
                 self.ignored += 1
                 return row
-            elif self.pred(self.row_proxy.set_row(row)):
+            elif self.pred(self, self.bundle, self.source, self.row_proxy.set_row(row)):
                 self.skipped += 1
                 return None
             else:
@@ -1876,8 +1901,9 @@ class WriteToPartition(Pipe, PartitionWriter):
         if 'description' not in kwargs:
             kwargs['description'] = self.source.description
 
-
-        return self.bundle.partitions.new_partition(pname, type=type_, **kwargs)
+        p = self.bundle.partitions.new_partition(pname, type=type_, **kwargs)
+        self.bundle.logger.info('Creating new partition: {}'.format(p.name))
+        return p
 
     def process_body(self, row):
         from ambry.orm.exc import NotFoundError
@@ -2276,7 +2302,7 @@ class Pipeline(OrderedDict):
 
         return chain, last
 
-    def run(self, count=None, source_pipes=None, callback=None):
+    def run(self, count=None, source_pipes=None, callback=None, limit = None):
 
         try:
 
@@ -2295,14 +2321,14 @@ class Pipeline(OrderedDict):
 
                     self.sink.set_source_pipe(last)
 
-                    self.sink.run()
+                    self.sink.run(limit=limit)
 
             else:
                 chain, last = self._collect()
 
                 self.sink.set_source_pipe(last)
 
-                self.sink.run()
+                self.sink.run(limit=limit)
 
         except StopPipe:
             super(Pipeline, self).__setattr__('stopped', True)

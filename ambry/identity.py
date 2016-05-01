@@ -1757,8 +1757,9 @@ class NumberServer(object):
         else:
             params = dict()
 
-        r = requests.get(
-            'http://{}{}/next'.format(self.host, self.port_str), params=params)
+        url = 'http://{}{}/next'.format(self.host, self.port_str)
+
+        r = requests.get(url, params=params)
 
         r.raise_for_status()
 

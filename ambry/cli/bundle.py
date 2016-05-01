@@ -1250,7 +1250,6 @@ def bundle_dump(args, l, rc):
 
         records = []
 
-
         for i, row in enumerate(b.sources):
 
             if not records:
@@ -1344,16 +1343,25 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'pipes':
         terms = args.ref
-
         b.import_lib()
 
+        headers = 'Source Pipe'.split()
+        records = []
 
+        for i, source in enumerate(b.sources):
 
-        pl = b.pipeline(terms)
+            if source.is_processable:
+                pipe_name, pipe_config = b._find_pipeline(source, 'build')
 
-        print(pl)
+                records.append([source.name, pipe_name])
 
-        records = None
+        #records = drop_empty(records)
+
+        records = sorted(records, key=lambda row: (row[0]))
+
+        #pl = b.pipeline(terms)
+        #print(pl)
+
 
     elif args.table == 'ingested':
         from fs.errors import ResourceNotFoundError

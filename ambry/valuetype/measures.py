@@ -126,5 +126,6 @@ measure_value_types = {
     "m/rate": RateVT,
     "m/pro": ProportionVT,
     "m/pct": PercentageVT,
-    "m/pctl": PercentileVT
+    "m/pctl": PercentileVT,
+    "m/geo/wkt": StrValue # WKT Geometry String
 }

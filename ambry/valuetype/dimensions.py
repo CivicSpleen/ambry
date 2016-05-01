@@ -200,6 +200,6 @@ dimension_value_types = {
     "d/raceth/omb": RaceEthOmbVT,
     "d/raceth/civick": RaceEthReidVT,
     "d/age": AgeVT,
-    "d/age/range": AgeRangeVT,
-    "d/decile": DecileVT
+    "d/age/range": AgeRangeVT, #age_range
+    "d/decile": DecileVT, # quartile, quintile
 }
