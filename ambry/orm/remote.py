@@ -538,7 +538,6 @@ class Remote(Base):
         assert access, url
         assert secret, url
 
-        logger.debug("Creating s3 access = {} secret = {} ".format(aws_access_key, aws_secret_key))
 
         s3 = S3FS(
             bucket=pd['netloc'],
