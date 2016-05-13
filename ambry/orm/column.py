@@ -229,7 +229,6 @@ class Column(Base):
             return ''
 
         role = self.valuetype_class.role
-
         if role == ROLE.UNKNOWN:
             vt_code = self.valuetype_class.vt_code
 
@@ -486,7 +485,7 @@ class Column(Base):
 
         segments = []
 
-        for i, seg_str in enumerate(transform.split('||')):
+        for i, seg_str in enumerate(transform.split(';')):
             pipes = seg_str.split('|')
 
             d = Column.make_xform_seg()
@@ -550,7 +549,7 @@ class Column(Base):
 
             return '|'.join(o)
 
-        return '||'.join(pipeify_seg(seg) for seg in segments)
+        return ';'.join(pipeify_seg(seg) for seg in segments)
 
 
 

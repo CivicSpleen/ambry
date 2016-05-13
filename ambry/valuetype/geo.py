@@ -9,21 +9,19 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from core import *
 import six
 import re
-
 import geoid.census
 import geoid.acs
 import geoid.civick
 import geoid.tiger
-
 from ambry.valuetype import TextValue, FailedValue
-
+from ambry.valuetype.dimensions import StrDimension
 
 class FailedGeoid(FailedValue):
-
     def __str__(self):
         return 'invalid'
 
-class Geoid(TextValue):
+
+class Geoid(StrDimension):
     """General Geoid """
     desc = 'Census Geoid'
     parser = None
@@ -37,12 +35,12 @@ class Geoid(TextValue):
             return None
 
         if isinstance(v, geoid.Geoid):
-            o = TextValue.__new__(cls, str(v))
+            o = StrDimension.__new__(cls, str(v))
             o.geoid = v
             return o
 
         try:
-            o = TextValue.__new__(cls, *args, **kwargs)
+            o = StrDimension.__new__(cls, *args, **kwargs)
             o.geoid = cls.parser(args[0])
             return o
         except ValueError as e:
@@ -54,7 +52,6 @@ class Geoid(TextValue):
             return getattr(self.geoid, item)
         except AttributeError:
             return object.__getattribute__(self, item)
-
 
     @property
     def acs(self):
@@ -73,34 +70,29 @@ class Geoid(TextValue):
         return self.geoid.convert(geoid.tiger.TigerGeoid)
 
 
-class GeoVT(TextValue):
+class GeoLabel(LabelValue):
     role = ROLE.DIMENSION
-    vt_code = 'd/geo'
-    desc = 'Geographic Identifier'
-
-class GeoLabelVT(TextValue):
-    role = ROLE.DIMENSION
-    vt_code = 'd/geo/label'
+    vt_code = 'geo/label'
     desc = 'Geographic Identifier Label'
-
 
 
 class GeoAcsVT(Geoid):
     role = ROLE.DIMENSION
-    vt_code = 'd/geo/acs'
+    vt_code = 'geo/acs'
     desc = 'ACS Geoid'
     parser = geoid.acs.AcsGeoid.parse
 
+
 class GeoTigerVT(Geoid):
     role = ROLE.DIMENSION
-    vt_code = 'd/geo/tiger'
+    vt_code = 'geo/tiger'
     desc = 'Tigerline Geoid'
     parser = geoid.tiger.TigerGeoid.parse
 
 
 class GeoCensusVT(Geoid):
     role = ROLE.DIMENSION
-    vt_code = 'd/geo/census'
+    vt_code = 'geo/census'
     desc = 'Census Geoid'
     parser = geoid.census.CensusGeoid.parse
 
@@ -118,9 +110,9 @@ class GeoCensusVT(Geoid):
 
         return cls
 
-class GeoCensusTractVT(GeoCensusVT):
 
-    vt_code = 'd/geo/census/tract'
+class GeoCensusTractVT(GeoCensusVT):
+    vt_code = 'geo/census/tract'
     desc = 'Census Tract Geoid'
     parser = geoid.census.Tract.parse
 
@@ -128,33 +120,27 @@ class GeoCensusTractVT(GeoCensusVT):
     def dotted(self):
         """Return just the tract number, excluding the state and county, in the dotted format"""
         v = str(self.geoid.tract).zfill(6)
-        return v[0:4]+'.'+v[4:]
+        return v[0:4] + '.' + v[4:]
 
 
 class GeoGvidVT(Geoid):
     role = ROLE.DIMENSION
-    vt_code = 'd/geo/gvid'
+    vt_code = 'geo/gvid'
     desc = 'CK Geoid'
     parser = geoid.civick.GVid.parse
 
 
-class GeoNameVT(TextValue):
-    role = ROLE.DIMENSION
-    desc = 'Geographic Name'
-    vt_code = 'd/geo/name'
-
-class GeoZipVT(IntValue):
+class GeoZipVT(IntDimension):
     """A ZIP code"""
-    role = ROLE.DIMENSION
+
     desc = 'ZIP Code'
-    vt_code = 'd/geo/usps/zip'
+    vt_code = 'geo/usps/zip'
 
 
-class GeoStusabVT(TextValue):
+class GeoStusabVT(StrDimension):
     """A 2 character state abbreviation"""
-    role = ROLE.DIMENSION
     desc = 'USPS State Code'
-    vt_code = 'd/geo/usps/state'
+    vt_code = 'geo/usps/state'
 
     def __new__(cls, v):
 
@@ -162,28 +148,57 @@ class GeoStusabVT(TextValue):
             return NoneValue
 
         try:
-            return text_type.__new__(cls, str(v).lower())
+            return str.__new__(cls, str(v).lower())
         except Exception as e:
             return FailedValue(v, e)
 
+class FipsValue(IntDimension):
+    """A FIPS Code"""
+    role = ROLE.DIMENSION
+    desc = 'Fips Code'
+    vt_code = 'fips'
+
+class GnisValue(IntDimension):
+    """An ANSI geographic code"""
+    role = ROLE.DIMENSION
+    desc = 'US Geographic Names Information System  Code'
+    vt_code = 'gnis'
+
+class CensusValue(IntDimension):
+    """An geographic code defined by the census"""
+    role = ROLE.DIMENSION
+    desc = 'Census Geographic Code'
+    vt_code = 'geo/census'
+
+
+class WellKnownTextValue(IntDimension):
+    """Geographic shape in Well Known Text format"""
+    role = ROLE.DIMENSION
+    desc = 'Well Known Text'
+    vt_code = 'wkt'
+
+
+class DecimalDegreesValue(FloatDimension):
+    """An geographic code defined by the census"""
+    role = ROLE.DIMENSION
+    desc = 'Geographic coordinate in decimal degrees'
+
+
 geo_value_types = {
-    "d/geo": GeoVT,
-    "d/geo/label": GeoLabelVT,
-    "d/geo/geoid": GeoAcsVT,  # acs_geoid
-    "d/geo/acs": GeoAcsVT, # acs_geoid
-    "d/geo/tiger": GeoTigerVT, # tiger_geoid
-    "d/geo/census": GeoCensusVT, # census_geoid
-    'd/geo/census/tract': GeoCensusTractVT,
-    "d/geo/gvid": GeoGvidVT,
-    "d/geo/int": IntValue,
-    "d/geo/fips": IntValue,
-    "d/geo/fips/state": IntValue,  # fips_state
-    "d/geo/fips/county": IntValue, #fips_
-    "d/geo/ansi": IntValue,
-    "d/geo/ce": IntValue, # Census specific int code, like FIPS and ANSI, but for tracts, blockgroups and blocks
-    "d/geo/name": GeoNameVT,
-    "d/geo/usps/zip": GeoZipVT, # zip
-    "d/geo/usps/state": GeoStusabVT, # stusab
-    "d/geo/lat/ddeg": FloatValue, # Decimal degrees
-    "d/geo/lon/ddeg": FloatValue,  # Decimal degrees
+    "label/geo": GeoLabel,
+    "geoid": GeoAcsVT,  # acs_geoid
+    "geoid/tiger": GeoAcsVT,  # acs_geoid
+    "geoid/census": GeoAcsVT,  # acs_geoid
+    "gvid": GeoGvidVT,
+    "fips": FipsValue,
+    "fips/state": FipsValue,  # fips_state
+    "fips/county": FipsValue,  # fips_
+    "gnis": GnisValue,
+    "census": CensusValue,  # Census specific int code, like FIPS and ANSI, but for tracts, blockgroups and blocks
+    "zip": GeoZipVT,  # zip
+    "zcta": GeoZipVT,  # zip
+    "stusab": GeoStusabVT,  # stusab
+    "lat": DecimalDegreesValue,  # Decimal degrees
+    "lon": DecimalDegreesValue,  # Decimal degrees
+    "wkt": WellKnownTextValue  # WKT Geometry String
 }

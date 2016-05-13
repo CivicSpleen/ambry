@@ -17,7 +17,7 @@ class ErrorVT(ValueType):
 
 class MarginOfErrorVT(FloatValue):
     role = ROLE.ERROR
-    vt_code = 'e/m'
+    vt_code = 'm'
 
     def __init__(self,v):
         pass
@@ -83,7 +83,7 @@ class MarginOfErrorVT(FloatValue):
 class ConfidenceIntervalHalfVT(FloatValue):
     """An upper or lower half of a confidence interval"""
     role = ROLE.ERROR
-    vt_code = 'e/ci'
+    vt_code = 'ci'
 
     def __init__(self,v):
         pass
@@ -96,7 +96,7 @@ class ConfidenceIntervalHalfVT(FloatValue):
 class StandardErrorVT(FloatValue):
     """A standard error"""
     role = ROLE.ERROR
-    vt_code = 'e/se'
+    vt_code = 'se'
 
     @property
     def m90(self):
@@ -135,13 +135,12 @@ class StandardErrorVT(FloatValue):
 
 class RelativeStandardErrorVT(FloatValue):
     role = ROLE.ERROR
-    vt_code = 'e/rse'
+    vt_code = 'rse'
 
 
 error_value_types = {
-    "e": ErrorVT,
-    "e/m": MarginOfErrorVT, # m90, m95, m99
-    "e/ci": ConfidenceIntervalHalfVT, #ci90u, ci90l, ci95u, ci95l, ci99u, ci99l
-    "e/se": StandardErrorVT,
-    "e/rse": RelativeStandardErrorVT,
+    "margin": MarginOfErrorVT, # m90, m95, m99
+    "ci": ConfidenceIntervalHalfVT, #ci90u, ci90l, ci95u, ci95l, ci99u, ci99l
+    "se": StandardErrorVT,
+    "rse": RelativeStandardErrorVT,
 }

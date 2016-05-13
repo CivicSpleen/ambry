@@ -12,6 +12,7 @@ from six import string_types
 
 from geoid.util import isimplify
 from geoid.civick import GVid
+from geoid import parse_to_gvid
 
 from dateutil import parser
 
@@ -60,22 +61,21 @@ class PartitionDisplay(object):
     def geo_description(self):
         """Return a description of the geographic extents, using the largest scale
         space and grain coverages"""
-        from geoid.civick import GVid
 
         sc = self._p.space_coverage
         gc = self._p.grain_coverage
 
         if sc and gc:
-            if GVid.parse(gc[0]).level == 'state' and GVid.parse(sc[0]).level == 'state':
-                return GVid.parse(sc[0]).geo_name
+            if parse_to_gvid(gc[0]).level == 'state' and parse_to_gvid(sc[0]).level == 'state':
+                return parse_to_gvid(sc[0]).geo_name
             else:
                 return ("{} in {}".format(
-                    GVid.parse(gc[0]).level_plural.title(),
-                    GVid.parse(sc[0]).geo_name))
+                    parse_to_gvid(gc[0]).level_plural.title(),
+                    parse_to_gvid(sc[0]).geo_name))
         elif sc:
-            return GVid.parse(sc[0]).geo_name.title()
+            return parse_to_gvid(sc[0]).geo_name.title()
         elif sc:
-            return GVid.parse(gc[0]).level_plural.title()
+            return parse_to_gvid(gc[0]).level_plural.title()
         else:
             return ''
 
@@ -273,7 +273,7 @@ class Partition(Base):
 
     def parse_gvid_or_place(self, gvid_or_place):
         try:
-            return GVid.parse(gvid_or_place)
+            return parse_to_gvid(gvid_or_place)
         except KeyError:
 
             places = list(self._bundle._library.search.search_identifiers(gvid_or_place))
@@ -285,7 +285,7 @@ class Partition(Base):
                 self._bundle.error(err_msg)
                 return None
 
-            return GVid.parse(places[0].vid)
+            return parse_to_gvid(places[0].vid)
 
     def set_coverage(self, stats):
         """"Extract time space and grain coverage from the stats and store them in the partition"""
@@ -297,7 +297,7 @@ class Partition(Base):
 
         def summarize_maybe(gvid):
             try:
-                return GVid.parse(gvid).summarize()
+                return parse_to_gvid(gvid).summarize()
             except:
                 return None
 
@@ -310,7 +310,7 @@ class Partition(Base):
                 if gvid is None or gvid == 'None':
                     continue
                 try:
-                    parsed.append(GVid.parse(gvid))
+                    parsed.append(parse_to_gvid(gvid))
                 except ValueError as e:
                     if self._bundle:
                         self._bundle.error("Failed to parse gvid '{}' in {}.{}: {}"
@@ -333,7 +333,7 @@ class Partition(Base):
                 continue
 
             try:
-                if stats[c.name].is_gvid:
+                if stats[c.name].is_gvid or stats[c.name].is_geoid:
                     scov |= set(x for x in simplifiy_maybe(stats[c.name].uniques, c))
                     grains |= set(summarize_maybe(gvid) for gvid in stats[c.name].uniques)
 
@@ -342,7 +342,10 @@ class Partition(Base):
 
                 elif stats[c.name].is_date:
                     # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
-                    tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, string_types) else x.year for x in stats[c.name].uniques)
+                    try:
+                        tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, string_types) else x.year for x in stats[c.name].uniques)
+                    except ValueError:
+                        pass
 
             except Exception as e:
                 self._bundle.error("Failed to set coverage for column '{}', partition '{}': {}"
@@ -775,7 +778,7 @@ class Partition(Base):
 
     @property
     def analysis(self):
-        """Return an AnalysisPartition prox, which wraps this partition to provide acess to
+        """Return an AnalysisPartition proxy, which wraps this partition to provide acess to
         dataframes, shapely shapes and other analysis services"""
         if isinstance(self, PartitionProxy):
             return AnalysisPartition(self._obj)
@@ -928,6 +931,7 @@ class AnalysisPartition(PartitionProxy):
         from ambry.pands import AmbryDataFrame
 
         df_class = df_class or AmbryDataFrame
+
 
         if columns:
             ig = itemgetter(*columns)

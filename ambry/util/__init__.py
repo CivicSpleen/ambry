@@ -664,6 +664,7 @@ def make_acro(past, prefix, s):  # pragma: no cover
     """
 
     def _make_acro(s, t=0):
+        """Make an acronym of s for trial t"""
 
         # Really should cache these ...
         v = ['a', 'e', 'i', 'o', 'u', 'y']
@@ -701,6 +702,9 @@ def make_acro(past, prefix, s):  # pragma: no cover
             return cx[0] + vx[0] + vx[1]
         if t < 6:
             return cx[0] + cx[1] + cx[-1]
+
+        # These are punts; just take a substring
+
         if t < 7:
             return s[0:3]
         if t < 8:
@@ -712,7 +716,7 @@ def make_acro(past, prefix, s):  # pragma: no cover
 
         return None
 
-    for t in six_xrange(11):
+    for t in six_xrange(11): # Try multiple forms until one isn't in the past acronyms
 
         try:
             a = _make_acro(s, t)

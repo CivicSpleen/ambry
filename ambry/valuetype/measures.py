@@ -8,43 +8,48 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 from core import *
 
+class MeasureMixin(object):
+    pass
 
-class MeasureVT(FloatValue):
+
+class IntMeasure(IntValue, MeasureMixin):
     role = ROLE.MEASURE
-    vt_code = 'm'
+    vt_code = 'measure/int'
+
+class LongMeasure(LongValue, MeasureMixin):
+    role = ROLE.MEASURE
+    vt_code = 'mmeasure/long'
+
+class FloatMeasure(FloatValue, MeasureMixin):
+    role = ROLE.MEASURE
+    vt_code = 'measure'
 
 
-
-class ZScoreVT(FloatValue):
+class ZScoreVT(FloatMeasure):
     """A Z score"""
     desc = 'Z Score'
-    role = ROLE.MEASURE
-    vt_code = 'm/z'
+    vt_code = 'z'
 
-class ArealDensityVT(FloatValue):
+class ArealDensityVT(FloatMeasure):
     """A general areal density"""
-    role = ROLE.MEASURE
-    desc = 'Areal Density'
-    vt_code = 'm/den'
+    desc = 'Density'
+    vt_code = 'density'
 
 
-class CountVT(IntValue):
-    role = ROLE.MEASURE
-    vt_code = 'm/count'
+class CountVT(IntMeasure):
+    vt_code = 'count'
     desc = 'Count'
     def __init__(self,v):
         pass
 
-class RatioVT(FloatValue):
+class RatioVT(FloatMeasure):
     """A general ratio, with values that may exceed 1"""
-    role = ROLE.MEASURE
-    vt_code = 'm/ratio'
+    vt_code = 'ratio'
     desc = 'Ratio'
 
-class ProportionVT(RatioVT):
+class ProportionVT(FloatMeasure):
     """A general ratio of two other values, from 0 to 1"""
-    role = ROLE.MEASURE
-    vt_code = 'm/pro'
+    vt_code = 'pro'
     desc = 'Proportion'
 
     def __new__(cls, v):
@@ -66,14 +71,12 @@ class ProportionVT(RatioVT):
 
 class RateVT(ProportionVT):
     """A general ratio of two other values, from 0 to 1"""
-    role = ROLE.MEASURE
-    vt_code = 'm/rate'
+    vt_code = 'rate'
     desc = 'Rate, 0->1'
 
-class PercentageVT(FloatValue):
+class PercentageVT(FloatMeasure):
     """Percentage, expressed as 0 to 100. """
-    role = ROLE.MEASURE
-    vt_code = 'm/pct'
+    vt_code = 'pct'
     desc = 'Percentage 0->100'
 
     def __new__(cls, v):
@@ -94,38 +97,20 @@ class PercentageVT(FloatValue):
     def percent(self):
         return self
 
-class PercentileVT(FloatValue):
-    """Percentile ranking, 0 to 100 """
-    role = ROLE.MEASURE
-    vt_code = 'm/pctl'
-    desc = 'Percentile Rank'
 
-    def __new__(cls, v):
-
-        if isinstance(v,text_type) and '%' in v:
-            v = v.strip('%')
-
-        return FloatValue.__new__(cls, v)
-
-
-    @property
-    def rate(self):
-        return ProportionVT(self / 100.0)
 
 
 
 measure_value_types = {
-    "m/int": IntValue,
-    "m/str": TextValue,
-    "m/float": FloatValue,
-    "m": MeasureVT,
-    "m/z": ZScoreVT,
-    "m/den": ArealDensityVT,
-    "m/count": CountVT,
-    "m/ratio": RatioVT,
-    "m/rate": RateVT,
-    "m/pro": ProportionVT,
-    "m/pct": PercentageVT,
-    "m/pctl": PercentileVT,
-    "m/geo/wkt": StrValue # WKT Geometry String
+    "measure": FloatMeasure,
+    "measure/int": IntMeasure,
+    "measure/long": LongMeasure,
+    "density": ArealDensityVT,
+    "count": CountVT,
+    "ratio": RatioVT,
+    "rate": RateVT,
+    "proportion": ProportionVT,
+    "pct": PercentageVT,
+    "percent": PercentageVT,
+    "z": ZScoreVT,
 }

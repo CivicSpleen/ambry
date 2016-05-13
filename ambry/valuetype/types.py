@@ -1,17 +1,13 @@
 """Math functions available for use in derivedfrom columns
 
-
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
 import datetime
-
 import dateutil.parser as dp
-
 import six
-
 from . import IntValue, FloatValue, DateValue
 from .exceptions import CastingError
 
@@ -42,43 +38,6 @@ def is_transform_generator(fn):
         return False
 
 
-@transform_generator
-def join(source_name, foreign_column, join_key, bundle):
-    """
-    Join the local table to a foreign partition.
-
-    This transform generator produces a transform function that will join foreign rows on the current column
-    value and store the row in the scratch. The value passes through unchanged.
-
-    :param source_name:
-    :param foreign_column:
-    :param bundle:
-    :param f_name: Name of the transform function, for use as a scratch array key
-    :return:
-    """
-    from operator import itemgetter
-
-    fig = itemgetter(foreign_column)
-
-    with bundle.dep(source_name).datafile.reader as r:
-        id_map = {fig(row): row.copy() for row in r}
-
-    def _joins(v, scratch, **kwargs):  # kwargs needed to suck up superflous args in call.
-        scratch[join_key] = id_map.get(v)
-        return v
-
-    return _joins
-
-
-@transform_generator
-def joined(join_key, foreign_col):
-
-    def _joined(scratch, **kwargs):  # kwargs needed to suck up superflous args in call.
-        return scratch[join_key][foreign_col]
-
-    return _joined
-
-
 def row_number(row_n):
     return row_n
 
@@ -94,13 +53,15 @@ def nullify(v):
     else:
         return v
 
+
 def clean_float(v):
     """Remove commas from a float"""
 
     if v is None or not str(v).strip():
         return None
 
-    return float(str(v).replace(',',''))
+    return float(str(v).replace(',', ''))
+
 
 def clean_int(v):
     """Remove commas from a float"""
@@ -108,7 +69,7 @@ def clean_int(v):
     if v is None or not str(v).strip():
         return None
 
-    return int(str(v).replace(',',''))
+    return int(str(v).replace(',', ''))
 
 
 #
@@ -179,7 +140,7 @@ def parse_int(v, header_d):
         raise CastingError(int, header_d, v, 'Failed to cast to integer')
 
 
-def parse_float(v,  header_d):
+def parse_float(v, header_d):
     v = nullify(v)
 
     if v is None:
@@ -191,7 +152,7 @@ def parse_float(v,  header_d):
         raise CastingError(float, header_d, v, str(e))
 
 
-def parse_str(v,  header_d):
+def parse_str(v, header_d):
     # TODO: It's so complicated while py2/py3 work because str is binary for py2, but unicode for py3.
 
     # This is often a no-op, but it ocassionally converts numbers into strings
@@ -216,8 +177,7 @@ def parse_unicode(v, header_d):
     return _parse_text(v, header_d)
 
 
-def parse_type(type_, v,  header_d):
-
+def parse_type(type_, v, header_d):
     v = nullify(v)
 
     if v is None:
@@ -230,7 +190,6 @@ def parse_type(type_, v,  header_d):
 
 
 def parse_date(v, header_d):
-
     v = nullify(v)
 
     if v is None:
@@ -239,7 +198,7 @@ def parse_date(v, header_d):
     if isinstance(v, six.string_types):
         try:
             return dp.parse(v).date()
-        except (ValueError,  TypeError) as e:
+        except (ValueError, TypeError) as e:
             raise CastingError(datetime.date, header_d, v, str(e))
 
     elif isinstance(v, datetime.date):
@@ -248,8 +207,7 @@ def parse_date(v, header_d):
         raise CastingError(int, header_d, v, "Expected datetime.date or basestring, got '{}'".format(type(v)))
 
 
-def parse_time(v,  header_d):
-
+def parse_time(v, header_d):
     v = nullify(v)
 
     if v is None:
@@ -267,8 +225,7 @@ def parse_time(v,  header_d):
         raise CastingError(int, header_d, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
 
 
-def parse_datetime(v,  header_d):
-
+def parse_datetime(v, header_d):
     v = nullify(v)
 
     if v is None:
@@ -345,6 +302,7 @@ class FloatOrCode(FloatValue):
             o.code = v
         return o
 
+
 class DateOrCode(DateValue):
     "An Integer value that stores values that fail to convert in the 'code' property"
     _pythontype = datetime.date
@@ -358,7 +316,6 @@ class DateOrCode(DateValue):
             o = super(DateOrCode, cls).__new__(cls, None)
             o.code = v
         return o
-
 
 
 class ForeignKey(IntValue):
@@ -429,16 +386,18 @@ def excel_dt_1900(v):
     """Convert a float that representes a date in an excel file into a datetime. The float
     is assumed to have a basis of 1900"""
 
-    from xlrd.xldate import  xldate_as_datetime
+    from xlrd.xldate import xldate_as_datetime
     return xldate_as_datetime(v, 0)
+
 
 def excel_dt_1904(v):
     """Convert a float that representes a date in an excel file into a datetime. The float
     is assumed to have a basis of 1904"""
 
-    from xlrd.xldate import  xldate_as_datetime
+    from xlrd.xldate import xldate_as_datetime
     return xldate_as_datetime(v, 0)
 
-def date(v):
-    """Convert a date to a datetime"""
-    return v.date()
+
+#def date(v):
+#    """Convert a date to a datetime"""
+#    return v.date()

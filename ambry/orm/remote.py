@@ -522,7 +522,6 @@ class Remote(Base):
         from ambry.util import parse_url_to_dict
         import ssl
 
-
         pd = parse_url_to_dict(url)
 
         if account_acessor:

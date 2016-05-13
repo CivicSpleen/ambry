@@ -41,6 +41,8 @@ class ColumnStat(Base):
     max = SAColumn('cs_max', Float)
     nuniques = SAColumn('cs_nuniques', BigIntegerType)
 
+    width = SAColumn('cs_width', Integer)
+
     skewness = SAColumn('cs_skewness', Float)
     kurtosis = SAColumn('cs_kurtosis', Float)
 

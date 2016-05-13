@@ -19,10 +19,12 @@ from measures import *
 from errors import *
 
 value_types = {
-    "int": IntValue,
-    "long": LongValue,
-    "str": TextValue,
-    "float": FloatValue
+    "int": IntMeasure,
+    "long": LongMeasure,
+    "float": FloatMeasure,
+    "text": TextDimension,
+    "str": StrDimension,
+    "unicode": TextDimension
 }
 
 value_types.update(geo_value_types)
@@ -49,6 +51,7 @@ def resolve_value_type(vt_code):
         parts = vt_code.split('/')
         args = []
         while len(parts):
+
             args.append(parts.pop())
 
             try:

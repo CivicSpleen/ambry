@@ -2106,14 +2106,6 @@ Caster Code
 
                     c = t.add_column(**kwds)
 
-                    if has_codes:
-                        c.datatype = 'types.{}OrCode'.format(datatype.title())
-
-                        c = t.add_column(name=name + '_codes',
-                                         datatype='str',
-                                         description='Codes for: ' + (desc if desc else name),
-                                         transform='||row.{}.code'.format(name),
-                                         update_existing=True)
 
                 final_count = len(t.columns)
 
@@ -2539,11 +2531,8 @@ Caster Code
         from functools import partial
         from ambry.valuetype.types import parse_date, parse_time, parse_datetime
         import ambry.valuetype.types
-        import ambry.valuetype.math
-        import ambry.valuetype.number
         import ambry.valuetype.exceptions
         import ambry.valuetype.test
-        import ambry.valuetype.string
         import ambry.valuetype
 
 
@@ -2570,9 +2559,7 @@ Caster Code
         test_env.update(dateutil.parser.__dict__)
         test_env.update(datetime.__dict__)
         test_env.update(random.__dict__)
-        test_env.update(ambry.valuetype.math.__dict__)
-        test_env.update(ambry.valuetype.string.__dict__)
-        test_env.update(ambry.valuetype.number.__dict__)
+        test_env.update(ambry.valuetype.core.__dict__)
         test_env.update(ambry.valuetype.types.__dict__)
         test_env.update(ambry.valuetype.exceptions.__dict__)
         test_env.update(ambry.valuetype.test.__dict__)

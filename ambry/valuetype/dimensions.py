@@ -10,31 +10,8 @@ from core import *
 import re
 
 
-class KeyVT(IntValue):
-    role = ROLE.KEY
-    vt_code = 'k'
 
-class IdentifierVT(IntValue):
-    role = ROLE.IDENTIFIER
-    vt_code = 'i'
-
-class DimensionMixin(object):
-    pass
-
-
-class IntDimensionVT(IntValue, DimensionMixin):
-    role = ROLE.DIMENSION
-    vt_code = 'd'
-
-class FloatDimensionVT(FloatValue, DimensionMixin):
-    role = ROLE.DIMENSION
-    vt_code = 'd'
-
-class TextDimensionVT(TextValue, DimensionMixin):
-    role = ROLE.DIMENSION
-    vt_code = 'd'
-
-class RaceEthVT(IntDimensionVT):
+class RaceEthVT(IntDimension):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth'
     low = LOM.NOMINAL
@@ -57,7 +34,7 @@ class RaceEthVT(IntDimensionVT):
     def __init__(self, v):
         pass
 
-class RaceEthCodeHCI(IntDimensionVT):
+class RaceEthCodeHCI(IntDimension):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/hci'
     low = LOM.ORDINAL
@@ -103,13 +80,13 @@ class RaceEthCivickNameVT(TextValue):
     low = LOM.NOMINAL
 
 
-class AgeVT(IntDimensionVT):
+class AgeVT(IntDimension):
     """A single-year age"""
     role = ROLE.DIMENSION
     vt_code = 'd/age'
     low = LOM.ORDINAL
 
-class AgeRangeVT(TextDimensionVT):
+class AgeRangeVT(StrDimension):
     """An age range, between two years. The range is half-open. """
     role = ROLE.DIMENSION
     vt_code = 'd/age/range'
@@ -133,7 +110,7 @@ class AgeRangeVT(TextDimensionVT):
         parts = v.split('-')
         self.from_year, self.to_year = int(parts[0]), int(parts[1])
 
-class AgeRangeCensus(TextDimensionVT):
+class AgeRangeCensus(StrDimension):
     """Age ranges that appear in census column titles"""
     role = ROLE.DIMENSION
     vt_code = 'd/age/range/census'
@@ -178,28 +155,67 @@ class AgeRangeCensus(TextDimensionVT):
     def __str__(self):
         return "{:02d}-{:02d}".format(self.from_year, self.to_year)
 
-class DecileVT(IntDimensionVT):
+class Decile(IntDimension):
     """A Decile Ranking, from 1 to 10"""
     role = ROLE.DIMENSION
     vt_code = 'd'
     desc = "Decile ranking"
     low = LOM.ORDINAL
 
+class Quartile(IntDimension):
+    """A Quartile Ranking, from 1 to 4"""
+    role = ROLE.DIMENSION
+    vt_code = 'd'
+    desc = "Quartile ranking"
+    low = LOM.ORDINAL
+
+class Quintile(IntDimension):
+    """A Decile Ranking, from 1 to 10"""
+    role = ROLE.DIMENSION
+    vt_code = 'd'
+    desc = "Quintile ranking"
+    low = LOM.ORDINAL
+
+class PercentileVT(FloatDimension):
+    """Percentile ranking, 0 to 100 """
+    role = ROLE.MEASURE
+    vt_code = 'pctl'
+    desc = 'Percentile Rank'
+
+    def __new__(cls, v):
+
+        if isinstance(v,text_type) and '%' in v:
+            v = v.strip('%')
+
+        return FloatDimension.__new__(cls, v)
+
+    @property
+    def rate(self):
+        return float(self) / 100.0
+
+
 dimension_value_types = {
     "key": KeyVT,
     "id": IdentifierVT,
-    "d": TextDimensionVT,
-    "d/label": TextDimensionVT,
-    "d/float": FloatDimensionVT,
-    "d/int": IntDimensionVT,
-    "d/str": TextDimensionVT,
-    "d/raceth": RaceEthVT,
-    "d/raceth/hci": RaceEthCodeHCI,
-    "d/raceth/cen00": RaceEthCen00VT,
-    "d/raceth/cen10": RaceEthCen10VT,
-    "d/raceth/omb": RaceEthOmbVT,
-    "d/raceth/civick": RaceEthReidVT,
-    "d/age": AgeVT,
-    "d/age/range": AgeRangeVT, #age_range
-    "d/decile": DecileVT, # quartile, quintile
+    'dimension': StrDimension,
+    'dimension/str': StrDimension,
+    'dimension/text': TextDimension,
+    'dimension/int': IntDimension,
+    'label': LabelValue,
+    'name/first': StrDimension,
+    'name/last': StrDimension,
+    'name/middle': StrDimension,
+    "raceth": RaceEthVT,
+    "raceth/hci": RaceEthCodeHCI,
+    "raceth/cen00": RaceEthCen00VT,
+    "raceth/cen10": RaceEthCen10VT,
+    "raceth/omb": RaceEthOmbVT,
+    "raceth/civick": RaceEthReidVT,
+    "age": AgeVT,
+    "age/range": AgeRangeVT, #age_range
+    "decile": Decile,
+    'quartile': Quartile,
+    'quintile': Quintile,
+    "pctl": PercentileVT,
+    "percentile": PercentileVT
 }

@@ -1003,17 +1003,25 @@ class SchemaFile(RowBuildSourceFile):
             value_type = row.get('valuetype', '').strip() if row.get('valuetype', False) else None
             data_type = row.get('datatype', '').strip() if row.get('datatype', False) else None
 
-            if value_type and not data_type:
+            def resolve_data_type(value_type):
                 from ambry.valuetype import resolve_value_type
-                vt_class = resolve_value_type(row['valuetype'])
+                vt_class = resolve_value_type(value_type)
 
                 if not vt_class:
-                    raise ConfigurationError("Row error: unknown valuetype '{}'".format(row['valuetype']))
-                data_type = vt_class.python_type().__name__
+                    raise ConfigurationError("Row error: unknown valuetype '{}'".format(value_type))
+
+                return vt_class.python_type().__name__
+
+            # If we have a value type field, and not the datatype,
+            # the value type is as specified, and the data type is derived from it.
+            if value_type and not data_type:
+                data_type = resolve_data_type(value_type)
 
             elif data_type and not value_type:
                 value_type = data_type
+                data_type = resolve_data_type(value_type)
 
+            # There are still some old data types hanging around
             data_type = old_types_map.get(data_type.lower(), data_type)
 
             table_name = row['table']
