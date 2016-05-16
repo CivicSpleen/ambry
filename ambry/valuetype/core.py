@@ -112,7 +112,6 @@ class _NoneValue(object):
     def failed_value(self):
         return None
 
-
     def __bool__(self):
         return False
 
@@ -123,6 +122,7 @@ class _NoneValue(object):
         return False
 
     def __getattr__(self, item):
+        """All properties of NoneValue are also NoneValues"""
         return self
 
     def __repr__(self):
@@ -231,7 +231,7 @@ def cast_str(v, header_d, errors):
             errors[header_d].add(u"Failed to cast '{}' ( {} )  to str in '{}': {}".format(v,type(v),header_d,e))
             count_errors(errors)
 
-def cast_unicode(v, header_d,  errors):
+def cast_text(v, header_d,  errors):
 
     if isinstance(v, FailedValue):
         errors[header_d].add(u"Failed to cast '{}' ({}) to unicode in '{}': {}".format(v,type(v), header_d, v.exc))
@@ -246,6 +246,7 @@ def cast_unicode(v, header_d,  errors):
             errors[header_d].add(u"Failed to cast '{}' ( {} )  to unicode in '{}': {}".format(v,type(v),header_d,e))
             count_errors(errors)
 
+cast_unicode = cast_text
 
 class StrValue(str, ValueType):
     _pythontype = str
@@ -266,7 +267,7 @@ class StrValue(str, ValueType):
 class TextValue(text_type, ValueType):
     _pythontype = text_type
     desc = 'Text String'
-    vt_code = 'unicode'
+    vt_code = 'text'
     low = LOM.NOMINAL
 
     def __new__(cls, v):

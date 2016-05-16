@@ -19,7 +19,8 @@ class BundleTest(unittest.TestCase):
 
     def setUp(self):
         # noinspection PyUnresolvedReferences
-        from ambry.build import bundle, library # From the codes loaded in the bundles test.py file
+
+        from ambry.build.test import bundle, library # From the codes loaded in the bundles test.py file
 
         self.bundle = bundle()
         self.library = library()

@@ -4,6 +4,7 @@
 from ambry.bundle.test import BundleTest
 from ambry.bundle.events import *
 
+
 class Test(BundleTest):
 
     @before_ingest()
@@ -16,6 +17,10 @@ class Test(BundleTest):
 
     @after_ingest()
     def test_after_ingest(self):
+        pass
+
+
+        print '!!! test_after_ingest'
         self.assertInDatafileHeaders('simple', [u'id', u'uuid', u'int', u'float'])
 
     @after_run

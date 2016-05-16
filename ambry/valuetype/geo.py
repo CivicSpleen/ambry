@@ -9,6 +9,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from core import *
 import six
 import re
+import geoid
 import geoid.census
 import geoid.acs
 import geoid.civick
@@ -24,15 +25,16 @@ class FailedGeoid(FailedValue):
 class Geoid(StrDimension):
     """General Geoid """
     desc = 'Census Geoid'
-    parser = None
+    geoid_cls = None
     geoid = None
 
     def __new__(cls, *args, **kwargs):
+        import geoid
 
         v = args[0]
 
         if v is None or (isinstance(v, string_types) and v.strip() == ''):
-            return None
+            return NoneValue
 
         if isinstance(v, geoid.Geoid):
             o = StrDimension.__new__(cls, str(v))
@@ -40,9 +42,17 @@ class Geoid(StrDimension):
             return o
 
         try:
-            o = StrDimension.__new__(cls, *args, **kwargs)
-            o.geoid = cls.parser(args[0])
+
+            if len(args) < 2: # Parse a string
+                _geoid = cls.geoid_cls.parse(v)
+            else: # construct from individual state, county, etc, values
+                _geoid = cls.geoid_cls(*args, **kwargs)
+
+            o = StrDimension.__new__(cls, str(_geoid))
+            o.geoid = _geoid
+
             return o
+
         except ValueError as e:
             return FailedValue(args[0], e)
 
@@ -78,23 +88,32 @@ class GeoLabel(LabelValue):
 
 class GeoAcsVT(Geoid):
     role = ROLE.DIMENSION
-    vt_code = 'geo/acs'
+    vt_code = 'geoid'
     desc = 'ACS Geoid'
-    parser = geoid.acs.AcsGeoid.parse
+    geoid_cls = geoid.acs.AcsGeoid
+
+
+class CountyGeoid(GeoAcsVT):
+    """An ACS Geoid for Counties """
+    desc = 'County ACS geoid'
+    geoid_cls = geoid.acs.County
+
+def county(state, county):
+    return CountyGeoid(state, county)
 
 
 class GeoTigerVT(Geoid):
     role = ROLE.DIMENSION
     vt_code = 'geo/tiger'
     desc = 'Tigerline Geoid'
-    parser = geoid.tiger.TigerGeoid.parse
+    geoid_cls = geoid.tiger.TigerGeoid
 
 
 class GeoCensusVT(Geoid):
     role = ROLE.DIMENSION
-    vt_code = 'geo/census'
+    vt_code = 'geoid/census'
     desc = 'Census Geoid'
-    parser = geoid.census.CensusGeoid.parse
+    geoid_cls = geoid.census.CensusGeoid
 
     @classmethod
     def subclass(cls, vt_code, vt_args):
@@ -114,7 +133,7 @@ class GeoCensusVT(Geoid):
 class GeoCensusTractVT(GeoCensusVT):
     vt_code = 'geo/census/tract'
     desc = 'Census Tract Geoid'
-    parser = geoid.census.Tract.parse
+    geoid_cls = geoid.census.Tract
 
     @property
     def dotted(self):
@@ -127,7 +146,7 @@ class GeoGvidVT(Geoid):
     role = ROLE.DIMENSION
     vt_code = 'geo/gvid'
     desc = 'CK Geoid'
-    parser = geoid.civick.GVid.parse
+    geoid_cls = geoid.civick.GVid
 
 
 class GeoZipVT(IntDimension):
@@ -152,11 +171,27 @@ class GeoStusabVT(StrDimension):
         except Exception as e:
             return FailedValue(v, e)
 
-class FipsValue(IntDimension):
+class Fips(IntDimension):
     """A FIPS Code"""
     role = ROLE.DIMENSION
     desc = 'Fips Code'
     vt_code = 'fips'
+
+
+class FipsState(IntDimension):
+    """A FIPS Code"""
+    role = ROLE.DIMENSION
+    desc = 'Fips State Code'
+    vt_code = 'fips/state'
+
+    @property
+    def geoid(self):
+        import geoid.census
+        v = geoid.census.State(int(self))
+        if not v:
+            return NoneValue
+        else:
+            return v
 
 class GnisValue(IntDimension):
     """An ANSI geographic code"""
@@ -189,10 +224,11 @@ geo_value_types = {
     "geoid": GeoAcsVT,  # acs_geoid
     "geoid/tiger": GeoAcsVT,  # acs_geoid
     "geoid/census": GeoAcsVT,  # acs_geoid
+    "geoid/county": CountyGeoid,  # acs_geoid
     "gvid": GeoGvidVT,
-    "fips": FipsValue,
-    "fips/state": FipsValue,  # fips_state
-    "fips/county": FipsValue,  # fips_
+    "fips": Fips,
+    "fips/state": FipsState,  # fips_state
+    "fips/county": Fips,  # fips_
     "gnis": GnisValue,
     "census": CensusValue,  # Census specific int code, like FIPS and ANSI, but for tracts, blockgroups and blocks
     "zip": GeoZipVT,  # zip

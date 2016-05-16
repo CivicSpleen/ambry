@@ -21,31 +21,44 @@ class Test(TestBase):
     def test_ingest_basic(self):
         bundle = self._my_import('ingest.example.com/basic')
         bundle.ingest()
+        bundle.close()
 
     def test_ingest_stages(self):
         bundle = self._my_import('ingest.example.com/stages')
         bundle.ingest()
+        bundle.close()
 
     def test_ingest_headerstypes(self):
         bundle = self._my_import('ingest.example.com/headerstypes')
         bundle.ingest()
+        bundle.close()
 
     def test_ingest_variety(self):
         bundle = self._my_import('ingest.example.com/variety')
         bundle.ingest()
+        bundle.close()
 
     def test_build_generators(self):
         bundle = self._my_import('build.example.com/generators')
         bundle.run()
+        bundle.close()
 
     def test_build_casters(self):
         bundle = self._my_import('build.example.com/casters')
-        bundle.run()
+
+        #for k, v in  bundle.exec_context().items():
+        #    print k, v
+
+        #bundle.run()
+        #bundle.close()
 
     def test_build_coverage(self):
         bundle = self._my_import('build.example.com/coverage')
         bundle.run()
+        bundle.close()
 
     def test_pipes_geoid(self):
         bundle = self._my_import('pipes.example.com/geoidpipes')
-        bundle.run()
+
+        bundle.build()
+        bundle.close()

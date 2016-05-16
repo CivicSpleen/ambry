@@ -1,4 +1,0 @@
-name,title,dest_table_name,time,space,grain,description,reftype,ref
-from_table1,from_table1,from_table1,1000,california,numbers,Data from table defined in bundle.sql,sql,table1
-from_materialized_view1,from_materialized_view1,from_materialized_view1,1000,california,numbers,Data from materialized view defined in bundle.sql,sql,materialized_view1
-from_view1,from_view1,from_view1,1000,california,numbers,Data from view defined in bundle.sql,sql,view1

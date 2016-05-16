@@ -716,7 +716,7 @@ class PythonSourceFile(StringSourceFile):
             with self._fs.open(self.file_name, 'w', encoding='utf-8') as f:
                 self.record_to_fh(f)
 
-    def import_module(self, **kwargs):
+    def import_module(self, module_path = 'ambry.build', **kwargs):
         """
         Import the contents of the file into the ambry.build module
 
@@ -725,12 +725,11 @@ class PythonSourceFile(StringSourceFile):
         """
         from fs.errors import NoSysPathError
 
-        try:
-            import ambry.build
-            module = sys.modules['ambry.build']
-        except ImportError:
-            module = imp.new_module('ambry.build')
-            sys.modules['ambry.build'] = module
+        if module_path in sys.modules:
+            module = sys.modules[module_path]
+        else:
+            module = imp.new_module(module_path)
+            sys.modules[module_path] = module
 
         bf = self.record
 

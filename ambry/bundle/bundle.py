@@ -191,7 +191,6 @@ class Bundle(object):
 
         :return:
         """
-
         self.import_lib()
         self.load_requirements()
 
@@ -215,6 +214,7 @@ class Bundle(object):
         b.limited_run = self.limited_run
         b.capture_exceptions = self.capture_exceptions
         b.multi = self.multi
+
 
         return b
 
@@ -244,6 +244,8 @@ class Bundle(object):
     def close(self):
         self.progress.close()
         self.dataset.close()
+
+
 
     def close_session(self):
         return self.dataset.close_session()
@@ -2220,7 +2222,6 @@ Caster Code
 
         resolved_sources = SourceSet(self, self._resolve_sources(sources, tables, stage=stage,
                                                                  predicate=lambda s: s.is_processable))
-
         with self.progress.start('build', stage, item_total=len(resolved_sources)) as ps:
 
             if len(resolved_sources) == 0:
@@ -2294,6 +2295,7 @@ Caster Code
                     for i, source in enumerate(stage_sources):
                         id_ = ps.add(message='Running source {}'.format(source.name),
                                      source=source, item_count=i, state='running')
+
                         self.build_source(stage, source, ps, force=force)
 
                         ps.update(message='Finished processing source', state='done')
@@ -2363,6 +2365,7 @@ Caster Code
                     ps.update(message='Running pipeline {}: rate: {}'
                               .format(pl.name, rate),
                               s_vid=s_vid, item_type='rows', item_count=n_records)
+
 
             pl.run(callback=run_progress_f)
 
@@ -2565,8 +2568,6 @@ Caster Code
         test_env.update(ambry.valuetype.test.__dict__)
         test_env.update(ambry.valuetype.__dict__)
 
-
-
         localvars = {}
 
         for f_name, func in test_env.items():
@@ -2594,7 +2595,10 @@ Caster Code
             localvars.update({f_name: set_from(func.__get__(self), 'bundle') for f_name, func in (mine - base)})
 
         # Bundle module functions
+
         module_entries = inspect.getmembers(sys.modules['ambry.build'], predicate=inspect.isfunction)
+
+
         localvars.update({f_name: set_from(func, 'module') for f_name, func in module_entries})
 
         return localvars
@@ -2742,9 +2746,10 @@ Caster Code
         return True
 
     def import_tests(self):
+
         bsf = self.build_source_files.file(File.BSFILE.TEST)
-        module = bsf.import_module(library=lambda: self.library,
-                                   bundle=lambda: self)
+
+        module = bsf.import_module(module_path = 'ambry.build.test', library=lambda: self.library, bundle=lambda: self)
 
         try:
             return module.Test
@@ -2755,25 +2760,32 @@ Caster Code
         """Run the unit tests in the test.py file"""
 
         import unittest
+        from ambry.util import delete_module
 
-        if not self.test_class:
-            self.test_class = self.import_tests()
+        test_class = self.import_tests()
 
         if tests:
             suite = unittest.TestSuite()
             for test in tests:
-                suite.addTest(self.test_class(test))
+                suite.addTest(test_class(test))
 
             unittest.TextTestRunner(verbosity=2).run(suite)
         else:
-            suite = unittest.TestLoader().loadTestsFromTestCase(self.test_class)
+            suite = unittest.TestLoader().loadTestsFromTestCase(test_class)
             unittest.TextTestRunner(verbosity=2).run(suite)
+
+        # Delete the Test class, because  otherwise in test suites it can get run
+        # by a subsequent bundle.
+
+        try:
+            delete_module('ambry.build.test')
+        except ValueError:
+            pass
 
     def _run_events(self, tag, stage=None):
         """Run tests marked with a particular tag and stage"""
 
         self._run_event_methods(tag, stage)
-
         self._run_tests(tag, stage)
 
     def _run_event_methods(self, tag, stage=None):
@@ -2796,19 +2808,20 @@ Caster Code
         import unittest
         from ambry.bundle.events import _runable_for_event
         import StringIO
+        from ambry.util import delete_module
 
         suite = unittest.TestSuite()
 
-        if not self.test_class:
-            self.test_class = self.import_tests()
+        test_class = self.import_tests()
 
-        funcs = inspect.getmembers(self.test_class, predicate=inspect.ismethod)
+        funcs = inspect.getmembers(test_class, predicate=inspect.ismethod)
 
         tests = []
 
         for func_name, f in funcs:
             if _runable_for_event(f, tag, stage):
-                tests.append(self.test_class(f.__name__))
+                tests.append(test_class(f.__name__))
+
 
         if tests:
             suite.addTests(tests)
@@ -2837,6 +2850,16 @@ Caster Code
                     ]
                 raise TestError('Failed tests: {}'
                                 .format(', '.join([str(test) for test, trc in r.failures + r.errors])))
+
+        # Delete the Test class, because  otherwise in test suites it can get run
+        # by a subsequent bundle.
+
+
+        try:
+            delete_module('ambry.build.test')
+        except ValueError:
+            pass
+
 
     #
     # Check in to remote

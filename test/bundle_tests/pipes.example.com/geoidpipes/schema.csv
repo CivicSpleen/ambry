@@ -1,17 +1,17 @@
 "table","column","datatype","transform"
 ,,,
 "counties","id","int",
-"counties","state","fips.State",
-"counties","county","fips.County",
-"counties","geoid","census.AcsGeoid",
-"counties","name","str",
-"counties","abr1","str","||row.state.usps"
-"counties","name1","str","||row.state.name"
-"counties","geoid2","str","||row.county.set_state(row.state).gvid"
-"counties","geoid3","str","||row.county.set_state(row.state).acs"
-"counties","name2","str","||row.county.set_state(row.state).name[0]"
-"counties","percent","float","||percent(row.state,row.county)"
-"counties","rate","float","||rate(row.state,row.county)"
+"counties","state","fips/state",
+"counties","county","fips/county",
+"counties","geoid","geoid",
+"counties","name","text",
+"counties","abr1","str",";row.state.geoid.stusab"
+"counties","name1","text",";row.state.geoid.state_name"
+"counties","geoid2","str",";county(row.state, row.county).gvid"
+"counties","geoid3","str",";county(row.state, row.county).acs"
+"counties","name2","text",";county(row.state, row.county).county_name"
+"counties","percent","float",";row.state/row.county"
+"counties","rate","float",";row.state/row.county"
 "counties","rand","int","randint(0,1000)"
 ,,,
 "integers","id","int",
@@ -26,4 +26,4 @@
 "integers","i","int",
 "integers","j","int",
 "integers","one","int","return1"
-"integers","percent","int","percent(int_n(row.c), int_n(row.e))"
+"integers","percent","int","int_n(row.c)/int_n(row.e)"

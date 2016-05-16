@@ -556,9 +556,12 @@ def get_bundle_ref(args, l, use_history=False):
         if os.path.exists(cwd_bundle):
 
             with open(cwd_bundle) as f:
+                from ambry.identity import Identity
+
                 config = yaml.load(f)
                 try:
-                    return (config['names']['vid'], 'directory')
+                    ident = Identity.from_dict(config['identity'])
+                    return (ident.vid, 'directory')
                 except KeyError:
                     pass
 

@@ -1451,14 +1451,10 @@ class CastColumns(Pipe):
 
             raise TooManyCastingErrors()
 
-
-
     def finish(self):
         super(CastColumns, self).finish()
 
         self.report_errors()
-
-
 
 
 

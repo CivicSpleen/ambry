@@ -262,6 +262,8 @@ def make_stack(env, stage, segment):
 
         else:  # A transform generator, or python code.
 
+            assert 'cst_double' in env
+
             rnd = (''.join(random.choice(string.ascii_lowercase) for _ in range(6)))
 
             name = 'tg_{}_{}_{}'.format(column.name, stage, rnd)
