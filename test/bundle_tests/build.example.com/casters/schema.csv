@@ -11,8 +11,8 @@
 "simple","month","int",";row.date.month",
 "simple","year","int",";row.date.year",
 "simple","removecodes","int","^remove_codes",
-"simple","keepcodes","int?",,
-"simple","recode","int?","^bundle.recode(row.removecodes)",
+"simple","keepcodes","int","^star_is_none",
+"simple","recode","int","^bundle.recode(row.removecodes)",
 "simple","codes","str",";row.keepcodes.failed_value",
 ,,,,
 "integers","id","int",,"Boring INtegers"

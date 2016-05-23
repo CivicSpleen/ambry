@@ -247,6 +247,8 @@ def update_config(config, use_environ=True):
         _ = config.accounts
     except KeyError:
         config.accounts = AttrDict()
+
+    if not config.accounts.get('loaded'):
         config.accounts.loaded = [None, 0]
 
     try:
@@ -258,6 +260,8 @@ def update_config(config, use_environ=True):
         _ = config.remotes
     except KeyError:
         config.remotes = AttrDict()  # Default empty
+
+    if not config.remotes.get('loaded'):
         config.remotes.loaded = [None, 0]
 
     if use_environ:
@@ -297,7 +301,6 @@ def update_config(config, use_environ=True):
         pass
 
 
-
     # Set a default for the library database
     try:
         _ = config.library.database
@@ -321,7 +324,6 @@ def update_config(config, use_environ=True):
     for k, v in filesystem_defaults.items():
         if k not in config.filesystem:
             config.filesystem[k] = v
-
 
     config.modtime = max(config.loaded[1], config.remotes.loaded[1], config.accounts.loaded[1])
 

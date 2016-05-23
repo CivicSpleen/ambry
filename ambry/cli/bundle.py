@@ -1804,7 +1804,7 @@ def bundle_notebook(args, l, rc):
     try:
         import ambry_ui
     except ImportError:
-        fatal("ambry-ui package note installed, or not importable")
+        fatal("ambry-ui package not installed, or not importable")
 
     try:
         from notebook.notebookapp import NotebookApp

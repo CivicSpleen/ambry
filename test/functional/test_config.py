@@ -225,7 +225,7 @@ class MetadataTest(TestBaseProto):
 
         l = self.library()
 
-        b = l.bundle('build.example.com-casters')
+        b = self.import_single_bundle('build.example.com/casters')
 
         v = 'Packaged for [Ambry](http://ambry.io) by {{contact_bundle.creator.org}}'
 

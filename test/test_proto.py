@@ -11,6 +11,8 @@ class TestProto(unittest.TestCase):
 
         l = pl.init_library()
 
+        print l.dsn
+
         self.assertTrue(len(list(l.bundles)) >= 4)
         self.assertEqual('ingested', l.bundle('ingest.example.com-basic').state)
         self.assertEqual('finalized', l.bundle('build.example.com-coverage').state)

@@ -98,6 +98,23 @@ class CountyGeoid(GeoAcsVT):
     desc = 'County ACS geoid'
     geoid_cls = geoid.acs.County
 
+class TractGeoid(GeoAcsVT):
+    """An ACS Geoid for Counties """
+    desc = 'Tract ACS geoid'
+    geoid_cls = geoid.acs.Tract
+
+class CensusTractGeoid(Geoid):
+    """A Census Geoid for Counties """
+    desc = 'Census Tract  geoid'
+    geoid_cls = geoid.census.Tract
+
+    @property
+    def dotted(self):
+        """Return just the tract number, excluding the state and county, in the dotted format"""
+        v = str(self.geoid.tract).zfill(6)
+        return v[0:4] + '.' + v[4:]
+
+
 def county(state, county):
     return CountyGeoid(state, county)
 
@@ -130,16 +147,6 @@ class GeoCensusVT(Geoid):
         return cls
 
 
-class GeoCensusTractVT(GeoCensusVT):
-    vt_code = 'geo/census/tract'
-    desc = 'Census Tract Geoid'
-    geoid_cls = geoid.census.Tract
-
-    @property
-    def dotted(self):
-        """Return just the tract number, excluding the state and county, in the dotted format"""
-        v = str(self.geoid.tract).zfill(6)
-        return v[0:4] + '.' + v[4:]
 
 
 class GeoGvidVT(Geoid):
@@ -225,6 +232,8 @@ geo_value_types = {
     "geoid/tiger": GeoAcsVT,  # acs_geoid
     "geoid/census": GeoAcsVT,  # acs_geoid
     "geoid/county": CountyGeoid,  # acs_geoid
+    "geoid/census/tract": CensusTractGeoid,
+    "geoid/tract": TractGeoid,
     "gvid": GeoGvidVT,
     "fips": Fips,
     "fips/state": FipsState,  # fips_state

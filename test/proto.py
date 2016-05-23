@@ -68,11 +68,11 @@ class ProtoLibrary(object):
             if dsn.startswith('post'):
                 # postgres case.
                 p = parse_url_to_dict(dsn)
-                parsed_library = dict(p, path=p['path'] + '-test1k')
+                parsed_library = dict(p, path=p['path'] )
             elif dsn.startswith('sqlite'):
                 # sqlite case
                 p = parse_url_to_dict(dsn)
-                parsed_library = dict(p, path=p['path'].replace('.db', '') + '-test1k.db')
+                parsed_library = dict(p, path=p['path'] )
             library_dsn = unparse_url_dict(parsed_library)
 
         if library_dsn.startswith('post'):
@@ -80,10 +80,11 @@ class ProtoLibrary(object):
             p = parse_url_to_dict(library_dsn)
             parsed_proto = dict(p, path=p['path'] + '-proto')
             proto_dsn = unparse_url_dict(parsed_proto)
+
         elif library_dsn.startswith('sqlite'):
             self._db_type = 'sqlite'
             p = parse_url_to_dict(library_dsn)
-            parsed_proto = dict(p, path=p['path'].replace('.db', '') + '-proto.db')
+            parsed_proto = dict(p, path=p['path'] )
             proto_dsn = unparse_url_dict(parsed_proto)
         else:
             raise Exception('Do not know how to process {} database.'.format(library_dsn))
@@ -105,6 +106,7 @@ proto-dsn: {}
             os.makedirs(dir)
 
     def proto_dir(self, *args):
+        """Directory where the prototype library is built, and copied from each run """
 
         base = os.path.join(self._root, 'proto')
 
@@ -149,13 +151,14 @@ proto-dsn: {}
         shutil.rmtree(self.proto_dir())
 
     def build_proto(self):
-        """Builds the prototype library, by building or injesting any bundles that doin't
+        """Builds the prototype library, by building or injesting any bundles that don't
         exist in it yet. """
 
         from ambry.orm.exc import NotFoundError
 
         config = self.config.clone()
         self.proto_dir()  # Make sure it exists
+        config.library.filesystem_root = self.proto_dir()
         config.library.database = self.proto_dsn
 
         l = Library(config)
@@ -231,6 +234,8 @@ proto-dsn: {}
         import shutil
 
         shutil.rmtree(self.sqlite_dir())
+
+        self.config.library.filesystem_root = self.sqlite_dir(create=False)
 
         if use_proto:
             self.build_proto()

@@ -16,26 +16,26 @@ class Test(TestBase):
         self.assertEqual('^init|t1|t2|t3|t4|!except',
                          ct('!except|t1|t2|t3|t4|^init'))
 
-        self.assertEqual('^init|t1|t2|t3|t4|!except||t1|t2|t3|t4|!except',
-                         ct('t1|^init|t2|!except|t3|t4||t1|t2|!except|t3|t4'))
+        self.assertEqual('^init|t1|t2|t3|t4|!except;t1|t2|t3|t4|!except',
+                         ct('t1|^init|t2|!except|t3|t4;t1|t2|!except|t3|t4'))
 
-        self.assertEqual('^init|t1|t2|t3|t4|!except||t4',
-                         ct('t1|^init|t2|!except|t3|t4||t4'))
+        self.assertEqual('^init|t1|t2|t3|t4|!except;t4',
+                         ct('t1|^init|t2|!except|t3|t4;t4'))
 
-        self.assertEqual('^init|t1|t2|t3|t4|!except',
-                         ct('t1|^init|t2|!except|t3|t4||||'))
+        self.assertEqual('^init|t1|t2|t3|t4|!except;;',
+                         ct('t1|^init|t2|!except|t3|t4;;'))
 
-        self.assertEqual('^init|t1|t2|t3|t4|!except',
-                         ct('|t1|^init|t2|!except|t3|t4||||'))
+        self.assertEqual('^init|t1|t2|t3|t4|!except;;',
+                         ct('|t1|^init|t2|!except|t3|t4;;'))
 
         self.assertEqual('^init', ct('^init'))
 
         self.assertEqual('!except', ct('!except'))
 
-        self.assertEqual(ct('||transform2'), '||transform2')
+        self.assertEqual(ct(';transform2'), ';transform2')
 
         with self.assertRaises(ConfigurationError):  # Init in second  segment
-            ct('t1|^init|t2|!except|t3|t4||t1|^init|t2|!except|t3|t4')
+            ct('t1|^init|t2|!except|t3|t4;t1|^init|t2|!except|t3|t4')
 
         with self.assertRaises(ConfigurationError):  # Two excepts in a segment
             ct('t1|^init|t2|!except|t3|t4||!except1|!except2')
@@ -115,10 +115,10 @@ class Test(TestBase):
 
         from ambry.valuetype import TextValue, cast_str, NoneValue
 
-        x = cast_str(TextValue(None), 'foobar', True, {})
+        x = cast_str(TextValue(None), 'foobar', {})
         self.assertEqual(None, x)
 
-        print cast_str(TextValue(None), 'foobar', False, {})
+        print cast_str(TextValue(None), 'foobar', {})
 
     def test_time(self):
 
@@ -189,17 +189,15 @@ class Test(TestBase):
         self.assertEqual('Alameda County, California',  resolve_value_type('gvid')('0O0601').acs.geo_name)
 
         # Check that adding a parameter to the vt code will select a new parser.
-        cls = resolve_value_type('geo/census/tract')
+        cls = resolve_value_type('geoid/census/tract')
 
         self.assertTrue(bool(cls))
-
-        self.assertEqual(402600, cls.parser('06001402600').tract)
 
         self.assertEqual(402600, cls('06001402600').tract)
 
         self.assertEquals('4026.00', cls('06001402600').dotted)
 
-        self.assertEquals('4002.00',cast_unicode(cls('06001400200').dotted, 'tract', False, {}))
+        self.assertEquals('4002.00',cast_unicode(cls('06001400200').dotted, 'tract', {}))
 
     def test_numbers(self):
         from collections import defaultdict
