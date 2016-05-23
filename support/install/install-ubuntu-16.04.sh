@@ -17,7 +17,7 @@ SUDO=
 
 $SUDO apt-get update
 $SUDO apt-get install -y language-pack-en build-essential make gcc wget curl git
-$SUDO apt-get install -y python python-dev python-pip libffi-dev sqlite3 libpq-dev
+$SUDO apt-get install -y python python-dev python-pip libffi-dev sqlite3 libsqlite3-dev libpq-dev
 $SUDO apt-get install -y python python-numpy python-scipy
 $SUDO apt-get clean && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
@@ -33,8 +33,8 @@ $SUDO pip install --upgrade setuptools
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
-$SUDO locale-gen en_US.UTF-8
-$SUDO dpkg-reconfigure locales
+#$SUDO locale-gen en_US.UTF-8
+#$SUDO dpkg-reconfigure locales
 
 if [ $(getent group ambry) ]; then
   echo "group ambry exists."
