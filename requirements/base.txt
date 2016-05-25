@@ -38,4 +38,4 @@ simple-crypt==4.1.7
 docker-py>=1.6.0
 git+https://github.com/CivicKnowledge/ambry_sources.git#egg=ambry_sources
 git+https://github.com/CivicKnowledge/geoid.git#egg=geoid
-psutil>=3.3.0 # For managing the docker db tunnel process
+git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
