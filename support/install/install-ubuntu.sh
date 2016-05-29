@@ -45,7 +45,7 @@ mkdir -p /opt/ambry
 cd /opt/ambry
 
 # If /tmp/ambry exists, it is the development directory, mapped from 
-# the host
+# the host, such as for docker or Vagrant.
 if [ -d /tmp/ambry ]; then
     cd /tmp/ambry
 else

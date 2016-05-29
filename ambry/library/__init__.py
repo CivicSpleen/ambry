@@ -494,6 +494,10 @@ class Library(object):
         db = Database('sqlite:///{}'.format(db_path))
         db.open()
 
+        if len(db.datasets) == 0:
+            raise NotFoundError("Did not get a dataset in the {} bundle".format(db_path))
+
+
         ds = db.dataset(db.datasets[0].vid)  # There should only be one
 
         assert ds is not None
@@ -530,6 +534,8 @@ class Library(object):
         :param b: The bundle
         :return:
         """
+
+        raise DeprecationWarning("Don't use any more?")
 
         from ambry.bundle.process import call_interval
 

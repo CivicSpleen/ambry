@@ -221,6 +221,7 @@ class Remote(Base):
                 return
 
         try:
+
             for e in remote.listdir('_meta/vname'):
 
                 if full:
@@ -230,6 +231,7 @@ class Remote(Base):
                     yield e
         except ResourceNotFoundError:
             # An old repo, doesn't have the meta/name values.
+
             for fn in remote.walkfiles(wildcard='*.db'):
                 this_name = fn.strip('/').replace('/', '.').replace('.db', '')
                 if full:
@@ -361,11 +363,10 @@ class Remote(Base):
 
         return c.library.checkin(package, force=force, cb=cb)
 
-    def _put_metadata(self, fs_remote, ds):
-        """Store metadata on a pyfs remote"""
+    @staticmethod
+    def _meta_infos(ds):
+
         import json
-        from six import text_type
-        from fs.errors import ResourceNotFoundError
 
         identity = ds.identity
         d = identity.dict
@@ -375,15 +376,39 @@ class Remote(Base):
 
         ident = json.dumps(d)
 
+        return (
+            (os.path.join('_meta', 'vid', identity.vid), ident),
+            (os.path.join('_meta', 'id', identity.id_), ident),
+            (os.path.join('_meta', 'vname', text_type(identity.vname)), ident),
+            (os.path.join('_meta', 'name', text_type(identity.name)), ident)
+        )
+
+
+    def _put_metadata(self, fs_remote, ds):
+        """Store metadata on a pyfs remote"""
+
+        from six import text_type
+        from fs.errors import ResourceNotFoundError
+
+
+        identity = ds.identity
+        d = identity.dict
+
+        d['summary'] = ds.config.metadata.about.summary
+        d['title'] = ds.config.metadata.about.title
+
+        meta_stack = self._meta_infos(ds)
+
         def do_metadata():
-            fs_remote.setcontents(os.path.join('_meta', 'vid', identity.vid), ident)
-            fs_remote.setcontents(os.path.join('_meta', 'id', identity.id_), ident)
-            fs_remote.setcontents(os.path.join('_meta', 'vname', text_type(identity.vname)), ident)
-            fs_remote.setcontents(os.path.join('_meta', 'name', text_type(identity.name)), ident)
+            for path, ident in meta_stack:
+                fs_remote.setcontents(path, ident)
+
 
         try:
+            # Assume the directories already exist
             do_metadata()
         except ResourceNotFoundError:
+            # Nope, make them and try again.
             parts = ['vid', 'id', 'vname', 'name']
             for p in parts:
                 dirname = os.path.join('_meta', p)
@@ -518,7 +543,7 @@ class Remote(Base):
 
     def s3(self, url, account_acessor=None, access=None, secret=None):
         """Setup an S3 pyfs, with account credentials, fixing an ssl matching problem"""
-        from fs.s3fs import S3FS
+        from ambry.util.ambrys3 import AmbryS3FS
         from ambry.util import parse_url_to_dict
         import ssl
 
@@ -537,10 +562,9 @@ class Remote(Base):
         assert access, url
         assert secret, url
 
-
-        s3 = S3FS(
+        s3 = AmbryS3FS(
             bucket=pd['netloc'],
-            prefix=pd['path'],
+            prefix=pd['path'].strip('/')+'/',
             aws_access_key=aws_access_key,
             aws_secret_key=aws_secret_key,
 

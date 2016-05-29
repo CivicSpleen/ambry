@@ -1848,6 +1848,7 @@ def bundle_ui(args, l, rc):
         l.root.config.library.ui.url = app.connection_url = "http://{}:{}".format(host, args.port)
         l.commit()
         app.run(host=host, port=int(args.port), debug=args.debug)
+
     except socket.error as e:
         warn("Failed to start ui: {}".format(e))
 

@@ -899,14 +899,13 @@ class PartitionProxy(object):
         return bool(object.__getattribute__(self, "_obj"))
 
     def __str__(self):
-        return str(object.__getattribute__(self, "_obj"))
+        return "<{}: {}>".format(type(self), str(object.__getattribute__(self, "_obj")))
 
     def __repr__(self):
-        return repr(object.__getattribute__(self, "_obj"))
+        return "<{}: {}>".format(type(self), repr(object.__getattribute__(self, "_obj")))
 
     def __iter__(self):
         return iter(object.__getattribute__(self, "_obj"))
-
 
 
 class AnalysisPartition(PartitionProxy):
@@ -1102,25 +1101,35 @@ class MeasureDimensionPartition(PartitionProxy):
 
         return [c for c in self.columns if c.role == ROLE.MEASURE]
 
+    def measure(self, vid):
+        """Return a measure, given it's vid"""
+        return PartitionColumn(self.table.column(vid), self)
+
     @property
     def primary_measures(self):
         """Iterate over the primary measures, columns which do not have a parent"""
 
         return [ c for c in self.measures if not c.parent ]
 
-
-    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={}, unstack=True, df_class=None ):
+    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={}, unstack=False, df_class=None ):
         """
         Yield rows in a reduced format, with one dimension as an index, one measure column per secondary dimension,
         and all other dimensions filtered.
 
+
         :param measure: The column names of one or more measures
         :param p_dim: The primary dimension. This will be the index of the dataframe.
         :param s_dim: a secondary dimension. The returned frame will be unstacked on this dimension
+        :param unstack:
         :param filtered_dims: A dict of dimension columns names that are filtered, mapped to the dimension value
         to select.
         :return:
         """
+
+        measure = self.table.column(measure)
+        p_dim = self.table.column(p_dim)
+        if s_dim:
+            s_dim = self.table.column(s_dim)
 
         from six import text_type
 
@@ -1131,55 +1140,59 @@ class MeasureDimensionPartition(PartitionProxy):
             else:
                 return v
 
-        all_dims = [p_dim]+filtered_dims.keys()
+        all_dims = [p_dim.name]+filtered_dims.keys()
 
         if s_dim:
-            all_dims.append(s_dim)
+            all_dims.append(s_dim.name)
 
         all_dims = [text_type(c) for c in all_dims]
 
         primary_dims = [text_type(c.name) for c in self.primary_dimensions]
 
         if set(all_dims) != set(primary_dims):
-            raise ValueError("The primary secondary and filtered dimensions must cover all primary dimensions"+
+            raise ValueError("The primary, secondary and filtered dimensions must cover all dimensions"+
                              " {} != {}".format(sorted(all_dims), sorted(primary_dims)))
 
         # Use dimension labels, if they exist
         try:
-            p_dim = self.column(p_dim).label.name
+            p_dim = self.column(p_dim.name).label
         except ValueError:
             pass
 
         if s_dim:
 
             try:
-                s_dim = self.column(s_dim).label.name
+                s_dim = self.column(s_dim.name).label
 
             except ValueError:
                 pass
 
-            columns = [p_dim, s_dim, measure]
+            columns = [p_dim.name, s_dim.name, measure.name]
 
         else:
-            columns = [p_dim, measure]
+            columns = [p_dim.name, measure.name]
 
         # Create the predicate to filter out the filtered dimensions
-        code = ' and '.join("row.{} == {}".format(k,maybe_quote(v)) for k, v in filtered_dims.items())
+        if filtered_dims:
+            code = ' and '.join("row.{} == {}".format(k,maybe_quote(v)) for k, v in filtered_dims.items())
 
-        predicate = eval('lambda row: {}'.format(code))
+            predicate = eval('lambda row: {}'.format(code))
+        else:
+            predicate = lambda row: True
 
         df = self.analysis.dataframe(predicate, columns=columns, df_class=df_class)
 
         if s_dim:
-            df = df.set_index([p_dim, s_dim])
+            # Need to set the s_dim in the index to get a hierarchical index, required for unstacking.
+            # The final df will have only the p_dim as an index.
 
             if unstack:
+                df = df.set_index([p_dim.name, s_dim.name])
                 df = df.unstack()
 
                 df.columns = df.columns.get_level_values(1)  # [' '.join(col).strip() for col in df.columns.values]
 
-        else:
-            df = df.set_index(p_dim)
+                df.reset_index()
 
         if 'plot_meta' not in df._metadata:
             df._metadata.append('plot_meta')
@@ -1188,7 +1201,7 @@ class MeasureDimensionPartition(PartitionProxy):
             'primary_dim': p_dim.name,
             'secondary_dim': s_dim.name,
             'filtered_dims': filtered_dims,
-            'measure': measure
+            'measure': measure.name
         }
 
         return df
@@ -1219,7 +1232,7 @@ class PartitionColumn(ColumnProxy):
     def label(self):
         """"Return first child that of the column that is marked as a label"""
         for c in self.table.columns:
-            if c.parent == self.name and '/label' in c.valuetype:
+            if c.parent == self.name and 'label' in c.valuetype:
                 return PartitionColumn(c, self._partition)
 
     @property
@@ -1236,7 +1249,8 @@ class PartitionColumn(ColumnProxy):
         if self.label:
             ig = itemgetter(self.name, self.label.name)
         else:
-            ig = itemgetter(self.name, self.name)
+            return {}
+            #ig = itemgetter(self.name, self.name)
 
         label_set = set()
         for row in self._partition:

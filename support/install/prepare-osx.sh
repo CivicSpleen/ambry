@@ -1,8 +1,12 @@
 #!/bin/bash 
 
-echo "--- Installing base packages. May need to ask for root password"
+which clang > /dev/null
 
-sudo echo
+if [ $? -ne 0 ]; then
+    echo
+    echo "ERROR: First, install XCode and the command line tools to get the C compiler. "
+    exit 1
+fi
 
 #
 # Install scikit, scipy, numpy and others, on Mac OS X
@@ -28,19 +32,12 @@ if [ $? -ne 0 ]; then
 fi
 
 
-which clang > /dev/null
-
-if [ $? -ne 0 ]; then
-    echo
-    echo "ERROR: First, install XCode and the command line tools to get the C compiler. "
-    exit 1	
-fi	
-
 ##
 ## Install packages with brew that are required to build python packages.
 ##
+
 # To deal with recent changes in clang.
-export ARCHFLAGS="-Wno-error=unused-command-line-argument-hard-error-in-future"
+#export ARCHFLAGS="-Wno-error=unused-command-line-argument-hard-error-in-future"
 
 echo "--- Installing packages with Homebrew"
 
@@ -65,7 +62,7 @@ curl  https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py | sudo pyt
 
 sudo easy_install pip
 
-# The ARCHFLAGS bit handles an change to Apple's clang compiler, affecting many packages in fall 2013 to Sprintg 2014
+# The ARCHFLAGS bit handles an change to Apple's clang compiler, affecting many packages in fall 2013 to Spring 2014
 sudo ARCHFLAGS="-Wno-error=unused-command-line-argument-hard-error-in-future" \
 pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/requirements.txt
 
