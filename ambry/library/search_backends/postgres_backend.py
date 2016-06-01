@@ -159,6 +159,12 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex,PostgresExecMixin):
         if self.has_table('dataset_index'):
             return
 
+        self.execute('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
+
+        # Prevents error:   operator class "gist_trgm_ops" does not exist for access method "gist"
+        self.execute("alter extension pg_trgm set schema pg_catalog;" )
+
+
         logger.debug('Creating dataset FTS table and index.')
 
         query = """\

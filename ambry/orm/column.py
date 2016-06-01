@@ -254,14 +254,14 @@ class Column(Base):
     def children(self):
         """"Return the table's other column that have this column as a parent, excluding labels"""
         for c in self.table.columns:
-            if c.parent == self.name and '/label' not in c.valuetype:
+            if c.parent == self.name and  not c.valuetype_class.is_label():
                 yield c
 
     @property
     def label(self):
         """"Return first child that of the column that is marked as a label"""
         for c in self.table.columns:
-            if c.parent == self.name and '/label' in c.valuetype:
+            if c.parent == self.name and  c.valuetype_class.is_label():
                 return c
 
     def python_cast(self, v):

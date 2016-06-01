@@ -17,12 +17,13 @@ import geoid.tiger
 from ambry.valuetype import TextValue, FailedValue
 from ambry.valuetype.dimensions import StrDimension
 
+
 class FailedGeoid(FailedValue):
     def __str__(self):
         return 'invalid'
 
 
-class Geoid(StrDimension):
+class Geoid(StrDimension, GeoMixin):
     """General Geoid """
     desc = 'Census Geoid'
     geoid_cls = None
@@ -43,9 +44,9 @@ class Geoid(StrDimension):
 
         try:
 
-            if len(args) < 2: # Parse a string
+            if len(args) < 2:  # Parse a string
                 _geoid = cls.geoid_cls.parse(v)
-            else: # construct from individual state, county, etc, values
+            else:  # construct from individual state, county, etc, values
                 _geoid = cls.geoid_cls(*args, **kwargs)
 
             o = StrDimension.__new__(cls, str(_geoid))
@@ -80,7 +81,7 @@ class Geoid(StrDimension):
         return self.geoid.convert(geoid.tiger.TigerGeoid)
 
 
-class GeoLabel(LabelValue):
+class GeoLabel(LabelValue, GeoMixin):
     role = ROLE.DIMENSION
     vt_code = 'geo/label'
     desc = 'Geographic Identifier Label'
@@ -98,10 +99,12 @@ class CountyGeoid(GeoAcsVT):
     desc = 'County ACS geoid'
     geoid_cls = geoid.acs.County
 
+
 class TractGeoid(GeoAcsVT):
     """An ACS Geoid for Counties """
     desc = 'Tract ACS geoid'
     geoid_cls = geoid.acs.Tract
+
 
 class CensusTractGeoid(Geoid):
     """A Census Geoid for Counties """
@@ -147,8 +150,6 @@ class GeoCensusVT(Geoid):
         return cls
 
 
-
-
 class GeoGvidVT(Geoid):
     role = ROLE.DIMENSION
     vt_code = 'geo/gvid'
@@ -156,14 +157,14 @@ class GeoGvidVT(Geoid):
     geoid_cls = geoid.civick.GVid
 
 
-class GeoZipVT(IntDimension):
+class GeoZipVT(IntDimension, GeoMixin):
     """A ZIP code"""
 
     desc = 'ZIP Code'
     vt_code = 'geo/usps/zip'
 
 
-class GeoStusabVT(StrDimension):
+class GeoStusabVT(StrDimension, GeoMixin):
     """A 2 character state abbreviation"""
     desc = 'USPS State Code'
     vt_code = 'geo/usps/state'
@@ -178,14 +179,15 @@ class GeoStusabVT(StrDimension):
         except Exception as e:
             return FailedValue(v, e)
 
-class Fips(IntDimension):
+
+class Fips(IntDimension, GeoMixin):
     """A FIPS Code"""
     role = ROLE.DIMENSION
     desc = 'Fips Code'
     vt_code = 'fips'
 
 
-class FipsState(IntDimension):
+class FipsState(IntDimension, GeoMixin):
     """A FIPS Code"""
     role = ROLE.DIMENSION
     desc = 'Fips State Code'
@@ -200,27 +202,29 @@ class FipsState(IntDimension):
         else:
             return v
 
-class GnisValue(IntDimension):
+
+class GnisValue(IntDimension, GeoMixin):
     """An ANSI geographic code"""
     role = ROLE.DIMENSION
     desc = 'US Geographic Names Information System  Code'
     vt_code = 'gnis'
 
-class CensusValue(IntDimension):
+
+class CensusValue(IntDimension, GeoMixin):
     """An geographic code defined by the census"""
     role = ROLE.DIMENSION
     desc = 'Census Geographic Code'
     vt_code = 'geo/census'
 
 
-class WellKnownTextValue(IntDimension):
+class WellKnownTextValue(IntDimension, GeoMixin):
     """Geographic shape in Well Known Text format"""
     role = ROLE.DIMENSION
     desc = 'Well Known Text'
     vt_code = 'wkt'
 
 
-class DecimalDegreesValue(FloatDimension):
+class DecimalDegreesValue(FloatDimension, GeoMixin):
     """An geographic code defined by the census"""
     role = ROLE.DIMENSION
     desc = 'Geographic coordinate in decimal degrees'

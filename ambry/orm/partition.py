@@ -1102,7 +1102,11 @@ class MeasureDimensionPartition(PartitionProxy):
         return [c for c in self.columns if c.role == ROLE.MEASURE]
 
     def measure(self, vid):
-        """Return a measure, given it's vid"""
+        """Return a measure, given its vid or another reference"""
+        return PartitionColumn(self.table.column(vid), self)
+
+    def dimension(self, vid):
+        """Return a dimention, given its vid or another reference"""
         return PartitionColumn(self.table.column(vid), self)
 
     @property
@@ -1128,6 +1132,10 @@ class MeasureDimensionPartition(PartitionProxy):
 
         measure = self.table.column(measure)
         p_dim = self.table.column(p_dim)
+
+        assert measure
+        assert p_dim
+
         if s_dim:
             s_dim = self.table.column(s_dim)
 
@@ -1145,6 +1153,9 @@ class MeasureDimensionPartition(PartitionProxy):
         if s_dim:
             all_dims.append(s_dim.name)
 
+        if filtered_dims:
+            all_dims += filtered_dims.keys()
+
         all_dims = [text_type(c) for c in all_dims]
 
         primary_dims = [text_type(c.name) for c in self.primary_dimensions]
@@ -1153,24 +1164,26 @@ class MeasureDimensionPartition(PartitionProxy):
             raise ValueError("The primary, secondary and filtered dimensions must cover all dimensions"+
                              " {} != {}".format(sorted(all_dims), sorted(primary_dims)))
 
-        # Use dimension labels, if they exist
-        try:
-            p_dim = self.column(p_dim.name).label
-        except ValueError:
-            pass
+        columns = []
+
+        p_dim_label = None
+        s_dim_label = None
+
+        if p_dim.label:
+            p_dim = p_dim_label = p_dim.label
+            columns.append(p_dim_label.name)
+        else:
+            columns.append(p_dim.name)
 
         if s_dim:
 
-            try:
-                s_dim = self.column(s_dim.name).label
+            if s_dim.label:
+                s_dim = s_dim_label = s_dim.label
+                columns.append(s_dim_label.name)
+            else:
+                columns.append(s_dim.name)
 
-            except ValueError:
-                pass
-
-            columns = [p_dim.name, s_dim.name, measure.name]
-
-        else:
-            columns = [p_dim.name, measure.name]
+        columns.append(measure.name)
 
         # Create the predicate to filter out the filtered dimensions
         if filtered_dims:
@@ -1194,15 +1207,17 @@ class MeasureDimensionPartition(PartitionProxy):
 
                 df.reset_index()
 
-        if 'plot_meta' not in df._metadata:
-            df._metadata.append('plot_meta')
+        #if 'plot_meta' not in df._metadata:
+        #    df._metadata.append('plot_meta')
 
-        df.plot_meta = {
-            'primary_dim': p_dim.name,
-            'secondary_dim': s_dim.name,
-            'filtered_dims': filtered_dims,
-            'measure': measure.name
-        }
+        #df.plot_meta = {
+        #    'primary_dim': p_dim.name,
+        #    'primary_dim_labels': p_dim_label.name if p_dim_label else None,
+        #    'secondary_dim': s_dim.name if s_dim else None,
+        #    'secondary_dim_labels': s_dim_label.name if s_dim_label else None,
+        #    'filtered_dims': filtered_dims,
+        #    'measure': measure.name
+        #}
 
         return df
 
@@ -1212,6 +1227,8 @@ class ColumnProxy(PartitionProxy):
     def __init__(self, obj, partition):
         object.__setattr__(self, "_obj", obj)
         object.__setattr__(self, "_partition", partition)
+
+MAX_LABELS = 50 # Maximum number of uniques recirds before it's assume that the values aren't valid labels
 
 class PartitionColumn(ColumnProxy):
     """A proxy on the Column that links a Column to a Partition, for direct access to the stats
@@ -1246,11 +1263,14 @@ class PartitionColumn(ColumnProxy):
 
         card = self.pstats.nuniques
 
+
+
         if self.label:
             ig = itemgetter(self.name, self.label.name)
+        elif self.pstats.nuniques < MAX_LABELS:
+            ig = itemgetter(self.name, self.name)
         else:
             return {}
-            #ig = itemgetter(self.name, self.name)
 
         label_set = set()
         for row in self._partition:

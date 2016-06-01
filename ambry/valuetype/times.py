@@ -11,8 +11,7 @@ import re
 from datetime import date, time, datetime
 
 
-def cast_date(v, header_d,  errors):
-
+def cast_date(v, header_d, errors):
     if v is None or v is NoneValue or v == '':
         return None
     elif isinstance(v, date):
@@ -26,7 +25,6 @@ def cast_date(v, header_d,  errors):
 
 
 def cast_datetime(v, header_d, errors):
-
     if v is None or v is NoneValue or v == '':
         return None
     elif isinstance(v, datetime):
@@ -38,8 +36,8 @@ def cast_datetime(v, header_d, errors):
     count_errors(errors)
     return None
 
-def cast_time(v, header_d, errors):
 
+def cast_time(v, header_d, errors):
     if v is None or v is NoneValue or v == '':
         return None
     elif isinstance(v, time):
@@ -53,14 +51,14 @@ def cast_time(v, header_d, errors):
 
 
 
-class TimeVT(TimeValue):
+class TimeVT(TimeValue, TimeMixin):
     role = ROLE.DIMENSION
     vt_code = 'dt/time'
     desc = 'Time'
     lom = LOM.ORDINAL
 
 
-class DateVT(DateValue):
+class DateVT(DateValue, TimeMixin):
     role = ROLE.DIMENSION
     vt_code = 'dt/date'
     desc = 'Date'
@@ -70,14 +68,14 @@ class DateVT(DateValue):
         super(DateVT, self).__init__(v)
 
 
-class DateTimeVT(DateTimeValue):
+class DateTimeVT(DateTimeValue, TimeMixin):
     role = ROLE.DIMENSION
     vt_code = 'dt/datetime'
     desc = 'Date and time'
     lom = LOM.ORDINAL
 
 
-class YearValue(IntValue):
+class YearValue(IntValue, TimeMixin):
     """Time interval of a single year"""
     role = ROLE.DIMENSION
     vt_code = 'year'
@@ -98,10 +96,10 @@ class YearValue(IntValue):
 
     @property
     def end(self):
-        return int(self)+1
+        return int(self) + 1
 
 
-class YearRangeValue(StrDimension):
+class YearRangeValue(StrDimension, TimeMixin):
     """A half-open time interval between two years"""
 
     vt_code = 'year/range'
@@ -158,7 +156,7 @@ class YearRangeValue(StrDimension):
         return str(self.y1) + '/' + str(self.y2)
 
 
-class IntervalValue(StrDimension):
+class IntervalValue(StrDimension, TimeMixin):
     """A generic time interval. A single year, year range, or an ISO Interval"""
     vt_code = 'interval'
     desc = 'Time interval'
@@ -174,7 +172,7 @@ class IntervalValue(StrDimension):
         # P1Y1D: This is probably
 
         if isinstance(v, (int, float)):
-            return IntervalIsoVT('{}/{}'.format(int(v), int(v)+1))
+            return IntervalIsoVT('{}/{}'.format(int(v), int(v) + 1))
 
         if isinstance(v, string_types):
             v = v.strip()
@@ -182,7 +180,7 @@ class IntervalValue(StrDimension):
         m = YearValue.year_re.match(v)
 
         if m:
-            return IntervalIsoVT('{}/{}'.format(int(m.group(1)),int(m.group(1))+1))
+            return IntervalIsoVT('{}/{}'.format(int(m.group(1)), int(m.group(1)) + 1))
 
         m = cls.year_range_re.match(v)
 
@@ -192,7 +190,7 @@ class IntervalValue(StrDimension):
         return IntervalIsoVT(v)
 
 
-class IntervalIsoVT(StrValue):
+class IntervalIsoVT(StrValue, TimeMixin):
     role = ROLE.DIMENSION
     vt_code = 'duration/iso'
     desc = 'ISO FOrmat Interval'

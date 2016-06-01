@@ -8,7 +8,6 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from __future__ import print_function
 from six import text_type
 from six import string_types
-
 from datetime import date, time, datetime
 from decorator import decorator
 from ambry.util import Constant
@@ -22,6 +21,7 @@ ROLE.ERROR = 'e'
 ROLE.KEY = 'k'
 ROLE.IDENTIFIER = 'i'
 ROLE.UNKNOWN = 'u'
+ROLE.OTHER = 'u'
 
 role_descriptions = {
     ROLE.DIMENSION: 'dimension',
@@ -30,7 +30,8 @@ role_descriptions = {
     ROLE.ERROR: 'error',
     ROLE.KEY: 'key',
     ROLE.IDENTIFIER: 'identifier',
-    ROLE.UNKNOWN: 'unknown'
+    ROLE.UNKNOWN: 'unknown',
+    ROLE.OTHER: 'other'
 }
 
 # Levels of Measurement
@@ -41,14 +42,31 @@ LOM.ORDINAL = 'o'
 LOM.INTERVAL = 'i'
 LOM.RATIO = 'r'
 
+
 @decorator
 def valuetype(func, *args, **kw):
     return func(*args, **kw)
 
-def count_errors(errors):
-    if sum(len(e) for e in errors.values()) > 50 :
 
+def count_errors(errors):
+    if sum(len(e) for e in errors.values()) > 50:
         raise TooManyCastingErrors("Too many casting errors")
+
+
+class TimeMixin(object):
+    pass
+
+
+class GeoMixin(object):
+    pass
+
+
+class DimensionMixin(object):
+    pass
+
+
+class LabelMixin(object):
+    pass
 
 
 class ValueType(object):
@@ -92,6 +110,19 @@ class ValueType(object):
         """
         return type(vt_code.replace('/', '_'), (cls,), {'vt_code': vt_code, 'vt_args': vt_args})
 
+    @classmethod
+    def is_time(cls):
+        return issubclass(cls, TimeMixin)
+
+    @classmethod
+    def is_geo(cls):
+        return issubclass(cls, GeoMixin)
+
+
+    @classmethod
+    def is_label(cls):
+        return issubclass(cls, LabelMixin)
+
 class _NoneValue(object):
     """Represent None as a ValueType"""
 
@@ -128,7 +159,9 @@ class _NoneValue(object):
     def __repr__(self):
         return "NoneValue"
 
+
 NoneValue = _NoneValue()
+
 
 class FailedValue(str, ValueType):
     """When ValueTypes fail to convert, the __new__ returns an object of this type,
@@ -138,7 +171,7 @@ class FailedValue(str, ValueType):
     exc = None
 
     def __new__(cls, *args, **kwargs):
-        o = str.__new__(cls,args[0])
+        o = str.__new__(cls, args[0])
         return o
 
     def __init__(self, v, exc=None):
@@ -166,9 +199,8 @@ class FailedValue(str, ValueType):
 
 
 def cast_int(v, header_d, errors):
-
     if isinstance(v, FailedValue):
-        errors[header_d].add(u"Failed to cast '{}' ({}) to int in '{}': {}".format(v,type(v), header_d, v.exc))
+        errors[header_d].add(u"Failed to cast '{}' ({}) to int in '{}': {}".format(v, type(v), header_d, v.exc))
         count_errors(errors)
         return None
 
@@ -178,15 +210,16 @@ def cast_int(v, header_d, errors):
         try:
             return int(v)
         except Exception as e:
-            errors[header_d].add(u"Failed to cast '{}' ( {} ) to int in '{}': {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} ) to int in '{}': {}".format(v, type(v), header_d, e))
             count_errors(errors)
+
 
 cast_id = cast_int
 
-def cast_long(v, header_d,  errors):
 
+def cast_long(v, header_d, errors):
     if isinstance(v, FailedValue):
-        errors[header_d].add(u"Failed to cast '{}' ({}) to long in '{}': {}".format(v,type(v), header_d, v.exc))
+        errors[header_d].add(u"Failed to cast '{}' ({}) to long in '{}': {}".format(v, type(v), header_d, v.exc))
         count_errors(errors)
         return None
 
@@ -196,14 +229,13 @@ def cast_long(v, header_d,  errors):
         try:
             return long(v)
         except Exception as e:
-            errors[header_d].add(u"Failed to cast '{}' ( {} ) to long in '{}': {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} ) to long in '{}': {}".format(v, type(v), header_d, e))
             count_errors(errors)
 
 
 def cast_float(v, header_d, errors):
-
     if isinstance(v, FailedValue):
-        errors[header_d].add(u"Failed to cast '{}' ({}) to float in '{}': {}".format(v,type(v), header_d, v.exc))
+        errors[header_d].add(u"Failed to cast '{}' ({}) to float in '{}': {}".format(v, type(v), header_d, v.exc))
         count_errors(errors)
         return None
 
@@ -213,11 +245,11 @@ def cast_float(v, header_d, errors):
         try:
             return float(v)
         except Exception as e:
-            errors[header_d].add(u"Failed to cast '{}' ( {} )  to float in '{}': {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} )  to float in '{}': {}".format(v, type(v), header_d, e))
             count_errors(errors)
 
-def cast_str(v, header_d, errors):
 
+def cast_str(v, header_d, errors):
     if isinstance(v, FailedValue):
         errors[header_d].add(u"Uncleared errors on value '{}' in '{}': {}".format(v, header_d, str(v.exc)))
         count_errors(errors)
@@ -228,13 +260,13 @@ def cast_str(v, header_d, errors):
         try:
             return str(v)
         except Exception as e:
-            errors[header_d].add(u"Failed to cast '{}' ( {} )  to str in '{}': {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} )  to str in '{}': {}".format(v, type(v), header_d, e))
             count_errors(errors)
 
-def cast_text(v, header_d,  errors):
 
+def cast_text(v, header_d, errors):
     if isinstance(v, FailedValue):
-        errors[header_d].add(u"Failed to cast '{}' ({}) to unicode in '{}': {}".format(v,type(v), header_d, v.exc))
+        errors[header_d].add(u"Failed to cast '{}' ({}) to unicode in '{}': {}".format(v, type(v), header_d, v.exc))
         count_errors(errors)
 
     if v != 0 and not bool(v):
@@ -243,10 +275,12 @@ def cast_text(v, header_d,  errors):
         try:
             return unicode(v)
         except Exception as e:
-            errors[header_d].add(u"Failed to cast '{}' ( {} )  to unicode in '{}': {}".format(v,type(v),header_d,e))
+            errors[header_d].add(u"Failed to cast '{}' ( {} )  to unicode in '{}': {}".format(v, type(v), header_d, e))
             count_errors(errors)
 
+
 cast_unicode = cast_text
+
 
 class StrValue(str, ValueType):
     _pythontype = str
@@ -264,6 +298,7 @@ class StrValue(str, ValueType):
         except Exception as e:
             return FailedValue(v, e)
 
+
 class TextValue(text_type, ValueType):
     _pythontype = text_type
     desc = 'Text String'
@@ -279,6 +314,7 @@ class TextValue(text_type, ValueType):
             return text_type.__new__(cls, v)
         except Exception as e:
             return FailedValue(v, e)
+
 
 class IntValue(int, ValueType):
     _pythontype = int
@@ -296,6 +332,7 @@ class IntValue(int, ValueType):
 
             return FailedValue(v, e)
 
+
 class LongValue(long, ValueType):
     _pythontype = long
     desc = 'Long'
@@ -310,6 +347,7 @@ class LongValue(long, ValueType):
                 return NoneValue
 
             return FailedValue(v, e)
+
 
 class FloatValue(float, ValueType):
     _pythontype = float
@@ -326,6 +364,7 @@ class FloatValue(float, ValueType):
                 return NoneValue
 
             return FailedValue(v, e)
+
 
 class DateValue(date, ValueType):
     _pythontype = date
@@ -348,12 +387,13 @@ class DateValue(date, ValueType):
 
             return super(DateValue, cls).__new__(cls, d.year, d.month, d.day)
         except TypeError:
-            if str(v) == 'NaT': # THe Pandas "Not A Time" value
+            if str(v) == 'NaT':  # THe Pandas "Not A Time" value
                 return NoneValue
             raise
 
     def __init__(self, v):
         pass
+
 
 class TimeValue(time, ValueType):
     _pythontype = time
@@ -374,6 +414,7 @@ class TimeValue(time, ValueType):
             if str(v) == 'NaT':  # THe Pandas "Not A Time" value
                 return NoneValue
             raise
+
 
 class DateTimeValue(datetime, ValueType):
     _pythontype = datetime
@@ -396,18 +437,17 @@ class DateTimeValue(datetime, ValueType):
                 return NoneValue
             raise
 
+
 class KeyVT(IntValue):
     role = ROLE.KEY
     lom = LOM.ORDINAL
     vt_code = 'k'
 
+
 class IdentifierVT(IntValue):
     role = ROLE.IDENTIFIER
     lom = LOM.ORDINAL
     vt_code = 'i'
-
-class DimensionMixin(object):
-    pass
 
 
 class IntDimension(IntValue, DimensionMixin):
@@ -415,32 +455,36 @@ class IntDimension(IntValue, DimensionMixin):
     lom = LOM.ORDINAL
     vt_code = 'dimension/int'
 
+
 class FloatDimension(FloatValue, DimensionMixin):
     role = ROLE.DIMENSION
     lom = LOM.ORDINAL
     vt_code = 'dimension/float'
+
 
 class TextDimension(TextValue, DimensionMixin):
     role = ROLE.DIMENSION
     lom = LOM.NOMINAL
     vt_code = 'dimension/text'
 
+
 class StrDimension(StrValue, DimensionMixin):
     role = ROLE.DIMENSION
     lom = LOM.NOMINAL
     vt_code = 'dimension'
 
-class LabelValue(TextDimension):
+
+class LabelValue(TextDimension, LabelMixin):
     desc = 'Value Label'
     vt_code = 'label'
 
 
 def upper(v):
-
     if isinstance(v, (FailedValue, _NoneValue)):
         return v
 
     return v.upper()
+
 
 def lower(v):
     if isinstance(v, (FailedValue, _NoneValue)):
@@ -448,11 +492,13 @@ def lower(v):
 
     return v.lower()
 
+
 def title(v):
     if isinstance(v, (FailedValue, _NoneValue)):
         return v
 
     return v.title()
+
 
 def robust_int(v):
     """Parse an int robustly, ignoring commas and other cruft. """
@@ -463,12 +509,13 @@ def robust_int(v):
     if isinstance(v, float):
         return int(v)
 
-    v = str(v).replace(',','')
+    v = str(v).replace(',', '')
 
     if not v:
         return None
 
     return int(v)
+
 
 def print_value(row_n, header_d, v):
     print("print_value {}: {} = {}".format(row_n, header_d, v))

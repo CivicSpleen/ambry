@@ -17,6 +17,7 @@ from geo import *
 from dimensions import *
 from measures import *
 from errors import *
+from other import *
 
 value_types = {
     "int": IntMeasure,
@@ -32,6 +33,7 @@ value_types.update(times_value_types)
 value_types.update(dimension_value_types)
 value_types.update(error_value_types)
 value_types.update(measure_value_types)
+value_types.update(other_value_types)
 
 @memoize
 def resolve_value_type(vt_code):
