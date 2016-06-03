@@ -67,6 +67,7 @@ ambry config installcli ambry_ui
 
 echo 'source /usr/local/bin/ambry-aliases.sh' >> /root/.bashrc
 
+mkdir -p /var/ambry
 chown -R root.ambry  /var/ambry
 chmod -R g+rw /var/ambry
 
