@@ -42,7 +42,7 @@ fi
 mkdir -p /opt/ambry
 
 [ -d /opt/ambry ] || mkdir -p /opt/ambry
-cd /opt/ambry
+
 
 # If /tmp/ambry exists, it is the development directory, mapped from 
 # the host, such as for docker or Vagrant.
@@ -50,6 +50,7 @@ if [ -d /tmp/ambry ]; then
     cd /tmp/ambry
 else
     git clone https://github.com/CivicKnowledge/ambry.git
+    cd /opt/ambry
     cd ambry
 fi
 

@@ -367,6 +367,7 @@ class Remote(Base):
     def _meta_infos(ds):
 
         import json
+        from six import text_type
 
         identity = ds.identity
         d = identity.dict

@@ -207,7 +207,7 @@ class Column(Base):
 
         from ambry.valuetype import resolve_value_type
 
-        if self.valuetype:
+        if self.valuetype and resolve_value_type(self.valuetype):
             return resolve_value_type(self.valuetype)._pythontype
 
         elif self.datatype:
@@ -485,8 +485,8 @@ class Column(Base):
 
         segments = []
 
-        for i, seg_str in enumerate(transform.split(';')):
-            pipes = seg_str.split('|')
+        for i, seg_str in enumerate(transform.split(';')): #';' seperates pipe stages
+            pipes = seg_str.split('|') # eperates pipes in each stage.
 
             d = Column.make_xform_seg()
 

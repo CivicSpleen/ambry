@@ -202,6 +202,12 @@ class FipsState(IntDimension, GeoMixin):
         else:
             return v
 
+class GeoInt(IntDimension, GeoMixin):
+    """General integer Geo identifier"""
+    role = ROLE.DIMENSION
+    desc = 'General integer Geo identifier'
+    vt_code = 'geo/int'
+
 
 class GnisValue(IntDimension, GeoMixin):
     """An ANSI geographic code"""
@@ -242,6 +248,7 @@ geo_value_types = {
     "fips": Fips,
     "fips/state": FipsState,  # fips_state
     "fips/county": Fips,  # fips_
+    "geo/int": GeoInt,
     "gnis": GnisValue,
     "census": CensusValue,  # Census specific int code, like FIPS and ANSI, but for tracts, blockgroups and blocks
     "zip": GeoZipVT,  # zip
