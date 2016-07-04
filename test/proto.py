@@ -205,6 +205,14 @@ proto-dsn: {}
             b.close()
 
         try:
+            b = l.bundle('build.example.com-plot')
+        except NotFoundError:
+            b = self.import_bundle(l, 'build.example.com/plot')
+            b.run()
+            b.finalize()
+            b.close()
+
+        try:
             b = l.bundle('build.example.com-casters')
         except NotFoundError:
             b = self.import_bundle(l, 'build.example.com/casters')
@@ -421,6 +429,9 @@ class TestBase(unittest.TestCase):
 
     def tearDown(self):
         pass
+
+    def clean_proto(self):
+        self._proto.clean_proto()
 
     def import_single_bundle(self, cache_path, clean=True):
         from test import bundle_tests

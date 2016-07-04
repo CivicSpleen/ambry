@@ -99,6 +99,13 @@ class YearValue(IntValue, TimeMixin):
         return int(self) + 1
 
 
+class MonthValue(IntValue, TimeMixin):
+    """A month"""
+    role = ROLE.DIMENSION
+    vt_code = 'month'
+    desc = 'A month'
+    lom = LOM.ORDINAL
+
 class YearRangeValue(StrDimension, TimeMixin):
     """A half-open time interval between two years"""
 
@@ -228,6 +235,7 @@ times_value_types = {
     'datetime': DateTimeVT,
     'time': TimeVT,
     'year': YearValue,
+    'month': MonthValue,
     'year/range': YearRangeValue,
     "interval": IntervalValue,
     "interval/iso": IntervalIsoVT,

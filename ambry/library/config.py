@@ -84,7 +84,11 @@ class LibraryConfigSyncProxy(object):
             remote = self.library.find_or_new_remote(name)
 
             for k, v in r.items():
-                setattr(remote, k, v)
+                if hasattr(remote, k):
+                    setattr(remote, k, v)
+                else:
+                    if cb:
+                        cb("Ignored unknown property {}={} in remote {}".format(k,v,remote.short_name))
 
             if cb:
                 cb("Loaded remote: {}".format(remote.short_name))

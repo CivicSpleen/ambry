@@ -806,6 +806,7 @@ class Library(object):
                 assert name == kwargs['short_name']
                 del kwargs['short_name']
             r = Remote(short_name=name, **kwargs)
+
             self.database.session.add(r)
 
         return r

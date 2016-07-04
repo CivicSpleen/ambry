@@ -1,0 +1,11 @@
+"table","sequence_id","column","parent","datatype","description"
+,,,,,
+"plotdata",1,"id",,"int","id"
+"plotdata",3,"index",,"dimension/int","index"
+"plotdata",4,"color",,"dimension/int","Color code"
+"plotdata",5,"color_name","color","label","Color name"
+"plotdata",6,"side",,"str","Side, Left or Right"
+"plotdata",7,"gausspdf",,"measure","Gaussian probability density function"
+"plotdata",8,"gauss",,"measure","Gaussian random vcariable"
+"plotdata",9,"rayleigh",,"measure","Rayleigh random variable"
+"plotdata",10,"raypdf",,"measure/int","Rayleigh probability density function"

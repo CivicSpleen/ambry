@@ -9,5 +9,12 @@ class Test(TestBase):
 
     def test_basic(self):
 
-        pass
+
+        l = self.library()
+
+        b = l.bundle('build.example.com-plot')
+
+        p = b.partition(table='plotdata')
+
+        from ambry.orm import Plot
 

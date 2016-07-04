@@ -15,7 +15,7 @@ from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, Co
 
 from ambry.util import get_logger, parse_url_to_dict
 from . import Column, Partition, Table, Dataset, Config, File,\
-    Code, ColumnStat, DataSource, SourceColumn, SourceTable
+    Code, ColumnStat, DataSource, SourceColumn, SourceTable, Plot
 from ambry.orm.remote import Remote
 from ambry.orm.account import Account
 from ambry.orm.process import Process
@@ -24,13 +24,17 @@ import logging
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 126
+SCHEMA_VERSION = 128
 
 # Note: If you are going to change POSTGRES_SCHEMA_NAME do not forget to change docs:
 #   1. README.rst (search for 'Install pg_trgm extension')
 #   2. doc/README.testing.md (search for 'Install multicorn and pg_trgm extensions')
 POSTGRES_SCHEMA_NAME = 'ambrylib'  # schema for ambry library
 POSTGRES_PARTITION_SCHEMA_NAME = 'partitions'  # schema for mpr files
+
+ALL_TABLES = [
+    Dataset, Config, Table, Column, Partition, File, Code,
+    ColumnStat, SourceTable, SourceColumn, DataSource, Account, Process, Remote, Plot]
 
 # Database connection information
 Dbci = namedtuple('Dbc', 'dsn_template sql')
@@ -375,16 +379,13 @@ class Database(object):
     def clone(self):
         return self.__class__(self.dsn)
 
-    def create_table(self, table):
-        pass
+
 
     def create_tables(self):
 
         from sqlalchemy.exc import OperationalError
 
-        tables = [
-            Dataset, Config, Table, Column, Partition, File, Code,
-            ColumnStat, SourceTable, SourceColumn, DataSource, Account, Process, Remote]
+        tables = ALL_TABLES
 
         try:
             self.drop()
@@ -415,6 +416,8 @@ class Database(object):
                 it.schema = orig_schema
 
         self._add_config_root()
+
+
 
     def _add_config_root(self):
         """ Adds the root dataset, which holds configuration values for the database. """
@@ -788,6 +791,32 @@ class BaseMigration(object):
         else:
             raise DatabaseMissingError(
                 'Do not know how to migrate {} engine.'.format(self.connection))
+
+    @staticmethod
+    def create_table(table, connection, schema=None):
+        """Create a single table, primarily used din migrations"""
+
+        orig_schemas = {}
+
+        # These schema shenanigans are almost certainly wrong.
+        # But they are expedient. For Postgres, it puts the library
+        # tables in the Library schema. We need to change the schema for all tables in case
+        # the table we are creating references another table
+        if schema:
+            connection.execute("SET search_path TO {}".format(schema))
+
+            for table in ALL_TABLES:
+                orig_schemas[table.__table__] = table.__table__.schema
+                table.__table__.schema = schema
+
+        table.__table__.create(bind=connection.engine)
+
+        # We have to put the schemas back because when installing to a warehouse.
+        # the same library classes can be used to access a Sqlite database, which
+        # does not handle schemas.
+        if schema:
+            for it, orig_schema in list(orig_schemas.items()):
+                it.schema = orig_schema
 
     def _migrate_sqlite(self, connection):
         raise NotImplementedError(

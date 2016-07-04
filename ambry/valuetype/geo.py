@@ -157,12 +157,18 @@ class GeoGvidVT(Geoid):
     geoid_cls = geoid.civick.GVid
 
 
-class GeoZipVT(IntDimension, GeoMixin):
+class ZipCode(IntDimension, GeoMixin):
     """A ZIP code"""
 
     desc = 'ZIP Code'
-    vt_code = 'geo/usps/zip'
+    vt_code = 'zip'
 
+
+class ZipCodePlusFour(StrDimension, GeoMixin):
+    """A ZIP code"""
+
+    desc = 'ZIP Code with 4 digit extension'
+    vt_code = 'zipp4'
 
 class GeoStusabVT(StrDimension, GeoMixin):
     """A 2 character state abbreviation"""
@@ -251,8 +257,9 @@ geo_value_types = {
     "geo/int": GeoInt,
     "gnis": GnisValue,
     "census": CensusValue,  # Census specific int code, like FIPS and ANSI, but for tracts, blockgroups and blocks
-    "zip": GeoZipVT,  # zip
-    "zcta": GeoZipVT,  # zip
+    "zip": ZipCode,  # zip
+    "zipp4": ZipCodePlusFour,  # zip
+    "zcta": ZipCode,  # zip
     "stusab": GeoStusabVT,  # stusab
     "lat": DecimalDegreesValue,  # Decimal degrees
     "lon": DecimalDegreesValue,  # Decimal degrees

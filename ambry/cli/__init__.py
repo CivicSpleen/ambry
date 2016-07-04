@@ -122,8 +122,9 @@ def get_extra_commands():
 
     return cli_modules
 
+56
 
-def get_commands(extra_commands=[]):
+def get_commands(extra_commands=[], exceptions=False):
     from ambry.dbexceptions import ConfigurationError
 
     commands = {}
@@ -134,12 +135,12 @@ def get_commands(extra_commands=[]):
             m = __import__(module_name, fromlist=['command_name', 'make_parser', 'run_command'])
 
             commands[m.command_name] = (m.run_command, m.make_parser)
-        except ImportError as e:
-            warn("Failed to import CLI module '{}'. Ignoring it. ({}) ".format(module_name, e))
+        except (ImportError,AttributeError) as e:
+            if exceptions:
+                raise
+            else:
+                warn("Failed to import CLI module '{}'. Ignoring it. ({}) ".format(module_name, e))
 
-        except AttributeError as e:
-            warn("Failed to import CLI module '{}'. Ignoring it. ({}) ".format(module_name, e))
-            pass
 
     return commands
 
@@ -153,7 +154,8 @@ def main(argsv=None, ext_logger=None):
 
     extras = get_extra_commands()
 
-    commands =  get_commands(extras)
+    # We haven't parsed the args yet, so we have to check for the exceptions arg a different way
+    commands =  get_commands(extras, exceptions=('-E' in argsv or '--exceptions' in argsv))
 
     parser = get_parser(commands)
 

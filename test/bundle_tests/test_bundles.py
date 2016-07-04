@@ -46,19 +46,28 @@ class Test(TestBase):
     def test_build_casters(self):
         bundle = self._my_import('build.example.com/casters')
 
-        #for k, v in  bundle.exec_context().items():
-        #    print k, v
-
-        #bundle.run()
-        #bundle.close()
+        bundle.run()
+        bundle.close()
 
     def test_build_coverage(self):
         bundle = self._my_import('build.example.com/coverage')
         bundle.run()
         bundle.close()
 
+    def test_plots(self):
+        bundle = self._my_import('build.example.com/plot')
+
+        bundle.build()
+        bundle.close()
+
     def test_pipes_geoid(self):
         bundle = self._my_import('pipes.example.com/geoidpipes')
+
+        bundle.build()
+        bundle.close()
+
+    def test_notebooks(self):
+        bundle = self._my_import('misc.example.com/notebooks')
 
         bundle.build()
         bundle.close()

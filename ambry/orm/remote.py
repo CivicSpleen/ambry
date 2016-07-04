@@ -22,7 +22,6 @@ from fs.opener import Opener, opener
 class HTTPSOpener(Opener):
     names = ['https']
     desc = """HTTPS file opener. HTTPS only supports reading files, and not much else.
-
 example:
 * https://www.example.org/index.html"""
 
@@ -75,6 +74,8 @@ class Remote(Base):
 
     d_vid = SAColumn('rm_d_vid', String(20), ForeignKey('datasets.d_vid'),  index=True)
 
+    username = SAColumn('rm_username', Text, doc='Account username, the ARN for S3')
+
     access = SAColumn('rm_access', Text, doc='Access key or username')
     secret = SAColumn('rm_secret', Text, doc='Secret key or password')
 
@@ -100,6 +101,11 @@ class Remote(Base):
     @property
     def api_token(self):  # old name
         return self.jwt_secret
+
+    @property
+    def access_key(self):  #Synonym, to have same name as in account record
+        return self.access
+
 
     @property
     def is_api(self):
@@ -144,6 +150,10 @@ class Remote(Base):
         d = parse_url_to_dict(self.db_dsn)
 
         return d['hostname']
+
+    @property
+    def admin_pw(self):
+        return self.data.get('admin_pw') # Set in dockr.py in the ambry_admin module
 
     def _api_client(self):
         from ambry_client import Client

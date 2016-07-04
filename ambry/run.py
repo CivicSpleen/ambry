@@ -77,6 +77,7 @@ filesystem_defaults = {
     'build': '{root}/build',
     'documentation': '{root}/doc',
     'downloads': '{root}/downloads',
+    'cache': '{root}/cache',
     'extracts': '{root}/extracts',
     'logs': '{root}/logs',
     'python': '{root}/python',

@@ -56,6 +56,9 @@ class LibraryFilesystem(object):
     def downloads(self, *args):
         return self._compose('downloads',args)
 
+    def cache(self, *args):
+        return self._compose('cache',args)
+
     def extracts(self, *args):
         return self._compose('extracts',args)
 

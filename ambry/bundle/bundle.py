@@ -2946,13 +2946,9 @@ Caster Code
     def checkin(self, no_partitions=False, remote_name=None, source_only=False, force=False, cb=None):
         from ambry.bundle.process import call_interval
         from requests.exceptions import HTTPError
+        from ambry.orm.exc import NotFoundError, ConflictError
+        from ambry.dbexceptions import RemoteError
 
-        package = self.package(source_only=source_only)
-
-        if not cb:
-            #@call_interval(10)
-            def cb(message, bytes):
-                self.log("{}; {} bytes".format(message, bytes))
 
         if remote_name:
             remote = self.library.remote(remote_name)
@@ -2960,6 +2956,49 @@ Caster Code
             remote = self.library.remote(self)
 
         remote.account_accessor = self.library.account_accessor
+
+        if not force:
+            try:
+                extant = remote.find(self.identity.vid)
+                raise ConflictError("Package with vid of '{}' already exists on remote '{}'"
+                                    .format(self.identity.vid, remote.short_name))
+            except NotFoundError as e:
+                pass # Not finding it is good, unless there is a later version
+
+                try:
+                    extant = remote.find(self.identity.id_)
+
+                    print '!!!', extant.keys()
+                    print '!!!', self.identity
+
+                    if 'revision' in extant:
+
+                        revision = int(extant.get('revision'))
+
+                    elif 'version' in extant: # Horror! All of the ermote entries should have the revision
+                        from semantic_version import Version
+
+                        v = Version(extant.get('version'))
+
+                        revision = v.patch
+
+                    else:
+                        raise RemoteError("Failed to get 'reveision' or 'versin' attribute from remote")
+
+                    if revision >= self.identity.rev:
+                        raise ConflictError("Package with a later or equal revision ( vid: {} ) exists on remote '{}'"
+                                            .format(extant.get('vid'), remote.short_name))
+
+
+                except NotFoundError as e:
+                    pass # Great, no earlier version
+
+        package = self.package(source_only=source_only)
+
+        if not cb:
+            @call_interval(10)
+            def cb(message, bytes):
+                self.log("{}; {} bytes".format(message, bytes))
 
         try:
             remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)

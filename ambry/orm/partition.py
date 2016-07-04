@@ -1115,10 +1115,11 @@ class MeasureDimensionPartition(PartitionProxy):
 
         return [ c for c in self.measures if not c.parent ]
 
-    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={}, unstack=False, df_class=None ):
+    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={},
+                 unstack=False, df_class=None, add_code=False ):
         """
-        Yield rows in a reduced format, with one dimension as an index, one measure column per secondary dimension,
-        and all other dimensions filtered.
+        Yield rows in a reduced format, with one dimension as an index, one measure column per
+        secondary dimension, and all other dimensions filtered.
 
 
         :param measure: The column names of one or more measures
@@ -1127,6 +1128,7 @@ class MeasureDimensionPartition(PartitionProxy):
         :param unstack:
         :param filtered_dims: A dict of dimension columns names that are filtered, mapped to the dimension value
         to select.
+        :param add_code: When substitution a label for a column, also add the code value.
         :return:
         """
 
@@ -1158,6 +1160,8 @@ class MeasureDimensionPartition(PartitionProxy):
 
         all_dims = [text_type(c) for c in all_dims]
 
+        # "primary_dimensions" means something different here, all of the dimensions in the
+        # dataset that do not have children.
         primary_dims = [text_type(c.name) for c in self.primary_dimensions]
 
         if set(all_dims) != set(primary_dims):
@@ -1170,8 +1174,16 @@ class MeasureDimensionPartition(PartitionProxy):
         s_dim_label = None
 
         if p_dim.label:
+
+            # For geographic datasets, also need the gvid
+            if p_dim.type_is_gvid:
+                columns.append(p_dim.name)
+
             p_dim = p_dim_label = p_dim.label
             columns.append(p_dim_label.name)
+
+
+
         else:
             columns.append(p_dim.name)
 
@@ -1195,29 +1207,24 @@ class MeasureDimensionPartition(PartitionProxy):
 
         df = self.analysis.dataframe(predicate, columns=columns, df_class=df_class)
 
-        if s_dim:
+        if unstack:
             # Need to set the s_dim in the index to get a hierarchical index, required for unstacking.
             # The final df will have only the p_dim as an index.
 
-            if unstack:
+            if s_dim:
                 df = df.set_index([p_dim.name, s_dim.name])
+
                 df = df.unstack()
 
                 df.columns = df.columns.get_level_values(1)  # [' '.join(col).strip() for col in df.columns.values]
 
-                df.reset_index()
+            else:
+                # Can't actually unstack without a second dimension.
+                df = df.set_index(p_dim.name)
 
-        #if 'plot_meta' not in df._metadata:
-        #    df._metadata.append('plot_meta')
 
-        #df.plot_meta = {
-        #    'primary_dim': p_dim.name,
-        #    'primary_dim_labels': p_dim_label.name if p_dim_label else None,
-        #    'secondary_dim': s_dim.name if s_dim else None,
-        #    'secondary_dim_labels': s_dim_label.name if s_dim_label else None,
-        #    'filtered_dims': filtered_dims,
-        #    'measure': measure.name
-        #}
+            df.reset_index()
+
 
         return df
 
