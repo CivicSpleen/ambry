@@ -150,18 +150,28 @@ proto-dsn: {}
         import shutil
         shutil.rmtree(self.proto_dir())
 
+    def _proto_config(self):
+        config = self.config.clone()
+        self.proto_dir()  # Make sure it exists
+        config.library.filesystem_root = self.proto_dir()
+        config.library.database = self.proto_dsn
+        return config
+
+    def remove(self, ref):
+
+        l = Library(self._proto_config())
+
+        l.remove(ref)
+
+
     def build_proto(self):
         """Builds the prototype library, by building or injesting any bundles that don't
         exist in it yet. """
 
         from ambry.orm.exc import NotFoundError
 
-        config = self.config.clone()
-        self.proto_dir()  # Make sure it exists
-        config.library.filesystem_root = self.proto_dir()
-        config.library.database = self.proto_dsn
+        l = Library(self._proto_config())
 
-        l = Library(config)
 
         try:
             b = l.bundle('ingest.example.com-headerstypes')
@@ -208,7 +218,7 @@ proto-dsn: {}
             b = l.bundle('build.example.com-plot')
         except NotFoundError:
             b = self.import_bundle(l, 'build.example.com/plot')
-            b.run()
+            b.build()
             b.finalize()
             b.close()
 

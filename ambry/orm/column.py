@@ -223,7 +223,7 @@ class Column(Base):
     @property
     def role(self):
         '''Return the code for the role,  measure, dimension or error'''
-        from ambry.valuetype.core import role_descriptions, ROLE
+        from ambry.valuetype.core import ROLE
 
         if not self.valuetype_class:
             return ''
@@ -238,6 +238,30 @@ class Column(Base):
                 return ''
 
         return role
+
+    @property
+    def is_dimension(self):
+        """Return true if the colum is a dimension"""
+        from ambry.valuetype.core import ROLE
+        return self.role == ROLE.DIMENSION
+
+    @property
+    def is_measure(self):
+        """Return true if the colum is a dimension"""
+        from ambry.valuetype.core import ROLE
+        return self.role == ROLE.MEASURE
+
+    @property
+    def is_label(self):
+        """Return true if the colum is a dimension"""
+        from ambry.valuetype.core import ROLE
+        return self.role == ROLE.LABEL
+
+    @property
+    def is_error(self):
+        """Return true if the colum is a dimension"""
+        from ambry.valuetype.core import ROLE
+        return self.role == ROLE.ERROR
 
     @property
     def role_description(self):
@@ -259,9 +283,36 @@ class Column(Base):
 
     @property
     def label(self):
-        """"Return first child that of the column that is marked as a label"""
+        """"Return first child of the column that is marked as a label. Returns self if the column is a label"""
+
+        if self.valuetype_class.is_label():
+            return self
+
         for c in self.table.columns:
             if c.parent == self.name and  c.valuetype_class.is_label():
+                return c
+
+        return None
+
+    @property
+    def label_or_self(self):
+        """List label(), but also returns self is there is no label"""
+        l = self.label
+
+        if not l:
+            return self
+
+        return l
+
+    @property
+    def geoid(self):
+        """"Return first child of the column, or self that is marked as a geographic identifier"""
+
+        if self.valuetype_class.is_geoid():
+            return self
+
+        for c in self.table.columns:
+            if c.parent == self.name and  c.valuetype_class.is_geoid():
                 return c
 
     def python_cast(self, v):

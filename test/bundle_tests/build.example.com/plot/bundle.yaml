@@ -11,10 +11,10 @@ about:
     source: ''
     space: ''
     subject: ''
-    summary: Dataset Summary
+    summary: Tests of creating partition extracts for plots.
     tags: []
     time: ''
-    title: Dataset Title
+    title: Plot Test
 contacts:
     wrangler:
         email: eric@civicknowledge.com

@@ -118,6 +118,11 @@ class ValueType(object):
     def is_geo(cls):
         return issubclass(cls, GeoMixin)
 
+    @classmethod
+    def is_geoid(cls):
+        from ambry.valuetype import Geoid
+        return issubclass(cls, Geoid)
+
 
     @classmethod
     def is_label(cls):
