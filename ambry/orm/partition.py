@@ -1169,14 +1169,12 @@ class MeasureDimensionPartition(PartitionProxy):
 
         d = self.detail_dict
 
-        try:
-            d['dimension_sets'] = self.enumerate_dimension_sets()
-        except Exception as e:
-            print "XXXXXX", e
+
+        d['dimension_sets'] = self.enumerate_dimension_sets()
 
         return d
 
-    def dataframe(self, measure, p_dim, s_dim=None, filters={}, df_class=None, chart_type=None):
+    def dataframe(self, measure, p_dim, s_dim=None, filters={}, df_class=None):
         """
         Return a dataframe with a sumse of the columns of the partition, including a measure and one
         or two dimensions. FOr dimensions that have labels, the labels are included
@@ -1356,10 +1354,10 @@ class MeasureDimensionPartition(PartitionProxy):
         extant.add(key)
 
         filtered = {}
+
         for d in dimensions:
             if d != p_dim and d != s_dim:
-                if len(d.value_labels) > 0:
-                    filtered[d.name] = d.value_labels
+                filtered[d.name] = d.pstats.uvalues.keys()
 
         if p_dim.valuetype_class.is_time():
             value_type = 'time'
@@ -1390,12 +1388,18 @@ class MeasureDimensionPartition(PartitionProxy):
         extant = set()
 
         for d1 in dimensions:
+
             ds = self.dimension_set(d1, None, dimensions, extant)
 
             if ds:
                 dimension_sets[ds['key']] = ds
 
+        for d1 in dimensions:
             for d2 in dimensions:
+
+                if d2.cardinality >= d1.cardinality:
+                    d1, d2 = d2, d1
+
                 ds = self.dimension_set(d1, d2, dimensions, extant)
 
                 if ds:
@@ -1410,7 +1414,7 @@ class ColumnProxy(PartitionProxy):
         object.__setattr__(self, "_partition", partition)
 
 
-MAX_LABELS = 50  # Maximum number of uniques recirds before it's assume that the values aren't valid labels
+MAX_LABELS = 75  # Maximum number of uniques records before it's assume that the values aren't valid labels
 
 
 class PartitionColumn(ColumnProxy):
@@ -1439,6 +1443,9 @@ class PartitionColumn(ColumnProxy):
         """Return a map of column code values mapped to labels, for columns that have a label column
 
         If the column is not assocaited with a label column, it returns an identity map.
+
+        WARNING! This reads the whole partition, so it is really slow
+
         """
 
         from operator import itemgetter
