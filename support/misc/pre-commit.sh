@@ -9,4 +9,3 @@ perl -pe "s/^__version__\s*=\s*'(\d+)\.(\d+).*/__version__ = '\1.\2.$COUNT'/" > 
 
 mv $DIR/ambry/_meta.py.new $DIR/ambry/_meta.py
 git add $DIR/ambry/_meta.py
-
