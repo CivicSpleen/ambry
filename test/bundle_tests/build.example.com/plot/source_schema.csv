@@ -1,0 +1,15 @@
+table,position,source_header,dest_header,datatype,valuetype,has_codes,start,width,size,summary,description
+plotdata,1,id,id,int,,False,,,,,id
+plotdata,2,index,index,int,,False,,,,,index
+plotdata,3,color,color,int,,False,,,,,color
+plotdata,4,color_name,color_name,str,,False,,,,,color_name
+plotdata,5,group,group,int,,False,,,,,group
+plotdata,6,group_name,group_name,str,,False,,,,,group_name
+plotdata,7,side,side,str,,False,,,,,side
+plotdata,8,two_codes,two_codes,str,,False,,,,,two_codes
+plotdata,9,gauss,gauss,float,,False,,,,,gauss
+plotdata,10,gausspdf,gausspdf,float,,False,,,,,gausspdf
+plotdata,11,rayleigh,rayleigh,float,,False,,,,,rayleigh
+plotdata,12,raypdf,raypdf,int,,False,,,,,raypdf
+plotdata,13,color_group,color_group,int,,False,,,,,color_group
+plotdata,14,color_side,color_side,int,,False,,,,,color_side
