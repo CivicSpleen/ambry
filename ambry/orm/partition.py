@@ -1377,7 +1377,8 @@ class MeasureDimensionPartition(PartitionProxy):
             s_dim=s_dim.name if s_dim else None,
             s_label=s_dim.label_or_self.name if s_dim else None,
             filters=filtered,
-            chart_type=chart_type)
+            chart_type=chart_type
+        )
 
     def enumerate_dimension_sets(self):
 
