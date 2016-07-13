@@ -1254,6 +1254,7 @@ class MeasureDimensionPartition(PartitionProxy):
             def predicate(row):
                 return True
 
+
         df = self.analysis.dataframe(predicate, columns=columns, df_class=df_class)
 
         if df is None or df.empty or len(df) == 0:
@@ -1320,6 +1321,8 @@ class MeasureDimensionPartition(PartitionProxy):
         # Really should not do this, but I don't want to re-build the dataframe with another
         # class
         df.__class__.rows = property(rows)
+
+
 
         return df
 
