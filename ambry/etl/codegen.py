@@ -127,7 +127,8 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
             exception = (exception if exception else
                                   ('raise ValueError("Failed to cast column \'{}\', in '
-                                   'function {}, value \'{}\': {}".format(header_d,"') + f_name + '", v, exc) ) ')
+                                   'function {}, value \'{}\': {}".format(header_d,"') + f_name +
+                                  '", v.encode(\'ascii\', \'replace\'), exc) ) ')
 
             try:
                 i_s = source_headers.index(column.name)

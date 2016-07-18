@@ -305,7 +305,8 @@ class Partition(Base):
                     parsed.append(parse_to_gvid(gvid))
                 except ValueError as e:
                     if self._bundle:
-                        self._bundle.error("Failed to parse gvid '{}' in {}.{}: {}"
+                        self._bundle.warn("While analyzing geo coverage in final partition stage, " +
+                                           "Failed to parse gvid '{}' in {}.{}: {}"
                                            .format(str(gvid), column.table.name, column.name, e))
 
             try:
