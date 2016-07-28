@@ -1,13 +1,14 @@
 ---
-layout: default
-title: 'Ambry: Comprehensive Data Package Management'
+layout: archive
+author_profile: true
 ---
 
-<!-- Main jumbotron for a primary marketing message or call to action -->
-<div class="jumbotron">
-  <div class="container">
-    <h1>Rigorously Manage Research Data</h1>
-    <p>Ambry is an open source package manager for data that makes it easier to find data and immediately begin analyzing it, eliminating the costs of finding, cleaning and preparing data.</p>
-    <p><a class="btn btn-primary btn-lg" role="button" href="http://docs.ambry.io" >Documentation &raquo;</a></p>
-  </div>
-</div>
+{% include base_path %}
+
+<h3 class="archive__subtitle">{{ site.data.ui-text[site.locale].recent_posts }}</h3>
+
+{% for post in paginator.posts %}
+  {% include archive-single.html %}
+{% endfor %}
+
+{% include paginator.html %}
