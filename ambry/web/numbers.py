@@ -49,17 +49,13 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from six import string_types
-
 from bottle import error, hook, get, request, response  # , redirect, put, post
 from bottle import HTTPResponse, install  # , static_file, url
 from bottle import run  # , debug  # @UnresolvedImport
 from decorator import decorator  # @UnresolvedImport
 import logging
 
-import ambry.util
-
-global_logger = ambry.util.get_logger(__name__)
-global_logger.setLevel(logging.DEBUG)
+logging.setLevel(logging.DEBUG)
 
 # Alternative number spaces, mostly for manifests and databases
 # The main number space for datasets is 'd'
@@ -69,17 +65,20 @@ NUMBER_SPACES = ('m', 'x', 'b')
 class NotFound(Exception):
     pass
 
+
 class InternalError(Exception):
     pass
+
 
 class NotAuthorized(Exception):
     pass
 
+
 class TooManyRequests(Exception):
     pass
 
-def capture_return_exception(e):
 
+def capture_return_exception(e):
     import sys
     import traceback
 
@@ -96,7 +95,6 @@ def capture_return_exception(e):
 
 class RedisPlugin(object):
     def __init__(self, pool, keyword='redis'):
-
         self.pool = pool
         self.keyword = keyword
 
@@ -119,7 +117,6 @@ class RedisPlugin(object):
             return callback
 
         def wrapper(*args, **kwargs):
-
             kwargs[keyword] = rds.Redis(connection_pool=self.pool)
 
             rv = callback(*args, **kwargs)
@@ -153,7 +150,6 @@ def CaptureException(f, *args, **kwargs):
 
 
 class AllJSONPlugin(object):
-
     """A copy of the bottle JSONPlugin, but this one tries to convert all
     objects to json."""
 
@@ -190,7 +186,9 @@ class AllJSONPlugin(object):
             # Set content type only if serialization succesful
             response.content_type = 'application/json'
             return json_response
+
         return wrapper
+
 
 install(AllJSONPlugin())
 
@@ -213,7 +211,6 @@ def enable_cors():
 
 @get('/')
 def get_root(redis):
-
     return []
 
 
@@ -327,9 +324,9 @@ def get_next(redis, assignment_class=None, space=''):
         redis.set(next_key, nxt)
         redis.set(delay_key, delay)
 
-    log_msg = 'ip={} ok={} since={} nxt={} delay={} wait={} safe={}'\
+    log_msg = 'ip={} ok={} since={} nxt={} delay={} wait={} safe={}' \
         .format(ip, ok, since, nxt, delay, wait, safe)
-    global_logger.info(log_msg)
+    logging.info(log_msg)
 
     if ok:
         number = redis.incr(number_key)
@@ -357,7 +354,6 @@ def get_next(redis, assignment_class=None, space=''):
 @get('/next/<space>')
 @CaptureException
 def get_next_space(redis, assignment_class=None, space=''):
-
     if space not in NUMBER_SPACES:
         raise NotFound('Invalid number space: {}'.format(space))
 
@@ -365,7 +361,7 @@ def get_next_space(redis, assignment_class=None, space=''):
 
 
 @get('/find/<name>')
-def get_echo_term(name, redis):
+def get_find_term(name, redis):
     """Return an existing number for a bundle name, or return a new one."""
 
     nk = 'name:' + name
@@ -423,12 +419,13 @@ def _run(host, port, redis, unregistered_key, reloader=False, **kwargs):
 
     return run(host=host, port=port, reloader=reloader, server='paste')
 
+
 if __name__ == '__main__':
     import argparse
     import os
-
     from ..util import print_yaml
 
+    # Env vars set by docker when a link is made.
     docker_host = os.getenv('REDIS_PORT_6379_TCP_ADDR')
     docker_port = os.getenv('REDIS_PORT_6379_TCP_PORT', 6379)
 
@@ -446,12 +443,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='python -mambry.server.numbers',
                                      description='Run an Ambry numbers server')
 
-    parser.add_argument('-H','--server-host',default=None,help="Server host. ")
+    parser.add_argument('-H', '--server-host', default=None, help="Server host. ")
 
-    parser.add_argument('-p','--server-port',default=80,help="Server port.")
-    parser.add_argument('-R','--redis-host',default=docker_host,help="Redis host.")
-    parser.add_argument('-r','--redis-port',default=docker_port,help="Redis port.")
-    parser.add_argument('-u','--unregistered-key',default=None,help="access_key value for unregistered access")
+    parser.add_argument('-p', '--server-port', default=80, help="Server port.")
+    parser.add_argument('-R', '--redis-host', default=docker_host, help="Redis host.")
+    parser.add_argument('-r', '--redis-port', default=docker_port, help="Redis port.")
+    parser.add_argument('-u', '--unregistered-key', default=None, help="access_key value for unregistered access")
 
     args = parser.parse_args()
 

@@ -13,7 +13,7 @@ import re
 class RaceEthVT(IntDimension):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth'
-    low = LOM.NOMINAL
+    lom = LOM.NOMINAL
 
     # Civick Numeric, Civick, Census, HCI Name, HCI Code, Description
     re_codes = [
@@ -36,7 +36,7 @@ class RaceEthVT(IntDimension):
 class RaceEthCodeHCI(IntDimension):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/hci'
-    low = LOM.ORDINAL
+    lom = LOM.ORDINAL
 
     hci_map = {e[4]: e[0] for e in RaceEthVT.re_codes if e[4] is not None}
 
@@ -64,7 +64,7 @@ class RaceEthOmbVT(RaceEthVT):
 class RaceEthReidVT(IntValue):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/civick'
-    low = LOM.NOMINAL
+    lom = LOM.NOMINAL
 
     @property
     def name(self):
@@ -76,20 +76,20 @@ class RaceEthReidVT(IntValue):
 class RaceEthCivickNameVT(TextValue):
     role = ROLE.DIMENSION
     vt_code = 'd/raceth/civick/name'
-    low = LOM.NOMINAL
+    lom = LOM.NOMINAL
 
 
 class AgeVT(IntDimension):
     """A single-year age"""
     role = ROLE.DIMENSION
     vt_code = 'd/age'
-    low = LOM.ORDINAL
+    lom = LOM.ORDINAL
 
 class AgeRangeVT(StrDimension):
     """An age range, between two years. The range is half-open. """
     role = ROLE.DIMENSION
     vt_code = 'd/age/range'
-    low = LOM.ORDINAL
+    lom = LOM.ORDINAL
 
     # Standard age ranges
     ranges = [
@@ -113,7 +113,7 @@ class AgeRangeCensus(StrDimension):
     """Age ranges that appear in census column titles"""
     role = ROLE.DIMENSION
     vt_code = 'd/age/range/census'
-    low = LOM.ORDINAL
+    lom = LOM.ORDINAL
 
     under = re.compile('[Uu]nder (?P<to>\d+)')
     over = re.compile('(?P<from>\d+) years and over')
@@ -159,25 +159,23 @@ class Decile(IntDimension):
     role = ROLE.DIMENSION
     vt_code = 'd'
     desc = "Decile ranking"
-    low = LOM.ORDINAL
+    lom = LOM.ORDINAL
 
 class Quartile(IntDimension):
     """A Quartile Ranking, from 1 to 4"""
     role = ROLE.DIMENSION
     vt_code = 'd'
     desc = "Quartile ranking"
-    low = LOM.ORDINAL
+    lom = LOM.ORDINAL
 
 class Quintile(IntDimension):
     """A Decile Ranking, from 1 to 10"""
-    role = ROLE.DIMENSION
     vt_code = 'd'
     desc = "Quintile ranking"
-    low = LOM.ORDINAL
+    lom = LOM.ORDINAL
 
 class PercentileVT(FloatDimension):
     """Percentile ranking, 0 to 100 """
-    role = ROLE.MEASURE
     vt_code = 'pctl'
     desc = 'Percentile Rank'
 

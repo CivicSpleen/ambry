@@ -82,7 +82,7 @@ class Geoid(StrDimension, GeoMixin):
 
 
 class GeoLabel(LabelValue, GeoMixin):
-    role = ROLE.DIMENSION
+    role = ROLE.LABEL
     vt_code = 'geo/label'
     desc = 'Geographic Identifier Label'
 

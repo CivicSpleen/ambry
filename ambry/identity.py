@@ -677,6 +677,7 @@ class ObjectNumber(object):
     DLEN = Constant()
 
     # Number of digits in each assignment class
+    # TODO: Add a 22 digit version for UUIDs ( 2^128 ~= 62^22 )
     DLEN.DATASET = (3, 5, 7, 9)
     DLEN.DATASET_CLASSES = dict(
         authoritative=DLEN.DATASET[0],  # Datasets registered by number authority .
@@ -693,7 +694,7 @@ class ObjectNumber(object):
 
     # Because the dataset number can be 3, 5, 7 or 9 characters,
     # And the revision is optional, the datasets ( and thus all
-    # other objects ) , can have several differnt lengths. We
+    # other objects ) , can have several different lengths. We
     # Use these different lengths to determine what kinds of
     # fields to parse
     # 's'-> short dataset, 'l'->long dataset, 'r' -> has revision

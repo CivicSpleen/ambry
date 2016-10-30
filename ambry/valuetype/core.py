@@ -15,8 +15,8 @@ from ambry.valuetype.exceptions import TooManyCastingErrors
 
 ROLE = Constant()
 ROLE.DIMENSION = 'd'
-ROLE.CATEGORY = 'c'
 ROLE.MEASURE = 'm'
+ROLE.LABEL = 'e'
 ROLE.ERROR = 'e'
 ROLE.KEY = 'k'
 ROLE.IDENTIFIER = 'i'
@@ -25,7 +25,6 @@ ROLE.OTHER = 'u'
 
 role_descriptions = {
     ROLE.DIMENSION: 'dimension',
-    ROLE.CATEGORY: 'category',
     ROLE.MEASURE: 'measure',
     ROLE.ERROR: 'error',
     ROLE.KEY: 'key',
@@ -482,6 +481,7 @@ class StrDimension(StrValue, DimensionMixin):
 class LabelValue(TextDimension, LabelMixin):
     desc = 'Value Label'
     vt_code = 'label'
+    role = ROLE.DIMENSION
 
 
 def upper(v):
