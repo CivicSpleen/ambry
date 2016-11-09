@@ -1198,10 +1198,15 @@ Caster Code
 
             syspath = spec.url.replace('file://', '')
 
-            contents = self.source_fs.getcontents(syspath)
-            cache_path = syspath
-            cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate = True)
-            cache_fs.setcontents(cache_path, contents)
+            cache_path = syspath.strip('/')
+            cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate=True)
+
+            if os.path.isabs(syspath):
+                # FIXME! Probably should not be
+                with open(syspath) as f:
+                    cache_fs.setcontents(cache_path, f)
+            else:
+                cache_fs.setcontents(cache_path, self.source_fs.getcontents(syspath))
 
         elif url_type not in ('gs', 'socrata'):  # FIXME. Need to clean up the logic for gs types.
             try:

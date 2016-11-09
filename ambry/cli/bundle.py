@@ -1287,7 +1287,6 @@ def bundle_dump(args, l, rc):
             records = drop_empty(records)
 
 
-
         else:
 
             records = [['vid','name']]
