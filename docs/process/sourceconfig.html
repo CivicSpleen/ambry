@@ -1,0 +1,491 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>3.2. Configuring Sources &mdash; Ambry 0.3.2049 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Ambry 0.3.2049 documentation" href="../index.html"/>
+        <link rel="up" title="3. Process Reference" href="index.html"/>
+        <link rel="next" title="3.3. Source Schemas" href="source_schema.html"/>
+        <link rel="prev" title="3.1. The Bundle Class" href="bundle.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Ambry
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.2049
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../install_config/index.html">1. Install and Configure Ambry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorial/index.html">2. Tutorial</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">3. Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="bundle.html">3.1. The Bundle Class</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">3.2. Configuring Sources</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#source-configuration">3.2.1. Source Configuration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#primary-references">3.2.1.1. Primary References</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#table-time-space-and-grain">3.2.1.2. Table, Time, Space and Grain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#row-classification">3.2.1.3. Row Classification</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#multi-file-archives-zip-and-excel">3.2.1.4. Multi-file archives: Zip and Excel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fixed-width-files">3.2.1.5. Fixed Width Files</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#column-names-from-headers">3.2.2. Column Names From Headers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ingesting">3.2.3. Ingesting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#row-and-type-intuition">3.2.4. Row and Type Intuition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#viewing-ingested-files">3.2.5. Viewing Ingested Files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#types-of-sources">3.2.6. Types of Sources</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#file-sources">3.2.6.1. File Sources</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#generator-sources">3.2.6.2. Generator Sources</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#sql-sources">3.2.6.3. SQL Sources</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#notes">3.2.7. Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="source_schema.html">3.3. Source Schemas</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dest_schema.html">3.4. Destination Schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipelines.html">3.5. Row Pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="transforms.html">3.6. Column Transforms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="library.html">3.7. The Library</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remotes.html">3.8. Remote Libraries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="webui.html">3.9. Web User Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">3.10. Web API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="docker.html">3.11. Running With Docker</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tips.html">3.12. Tips</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../cli/index.html">4. Command Line Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview.html">5. Concepts and Design Overview</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Ambry</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">3. Process Reference</a> &raquo;</li>
+      
+    <li>3.2. Configuring Sources</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/process/sourceconfig.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="configuring-sources">
+<h1>3.2. Configuring Sources<a class="headerlink" href="#configuring-sources" title="Permalink to this headline">¶</a></h1>
+<p>Topics</p>
+<ul>
+<li><p class="first">Basic Ingestion</p>
+</li>
+<li><p class="first">Source parameters.</p>
+</li>
+<li><p class="first">Fixed Width</p>
+</li>
+<li><p class="first">Excel</p>
+</li>
+<li><p class="first">Complex headers</p>
+</li>
+<li><p class="first">Types of sources</p>
+<blockquote>
+<div><ul class="simple">
+<li>File soruces</li>
+<li>Generator soruces</li>
+<li>SQL Sources</li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+<p>Ingestion load the exernal source files into local files in the build directory. The local build files are
+a special format for row data that are easier to read and process than the wide collection of source files.</p>
+<p>First, set up the sources.csv file</p>
+<p>bambry ingest</p>
+<div class="section" id="source-configuration">
+<h2>3.2.1. Source Configuration<a class="headerlink" href="#source-configuration" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>name. Name of the source record. Required, and must be unique.</li>
+<li>title. Optional title. Used as the title of the destination table.</li>
+<li>source_table. Optional source table name. If not supplied, the name of the source is assumed.</li>
+<li>dest_table. Optional destination table name. If not supplied, the name of the source is assumed.</li>
+<li>segment. For Excel files, the number of the spreadsheet to use within the workbook.</li>
+<li>file. For ZIP files, a regualr expression specifying the file to extract</li>
+<li>filetype. For files that don&#8217;t have an informative extension this value gives the assumed extension, such as &#8216;tsv&#8217;,&#8217;csv&#8217;, or &#8216;xls&#8217;</li>
+<li>encoding. The file encoding name, such as &#8216;latin1&#8217; or &#8216;uft8&#8217;. UTF8 is assumed.</li>
+<li>time. A year or other time specifier to distinguish the source. May be used in the partition name.</li>
+<li>space. A geo region name, like a county or state. May be used in the partition name.</li>
+<li>grain. An aggregation grain. May be used in the partition name.</li>
+<li>start_line. The integer, zero-indexed row that the is first row with data.</li>
+<li>end_line. The intger, zero-index row that is the last row with data.</li>
+<li>comment_lines. A List of zero-index rows that are comments.</li>
+<li>header_lines. A List of zero-index row numbers that are headers. These rows will be coalesced into column names.</li>
+<li>description. An optional description</li>
+<li>reftype. A type code for the value in <cite>ref</cite>. The value is unconstrained, but these values have special meaning: &#8216;ref&#8217;, &#8216;partition&#8217;, &#8216;generator&#8217;, &#8216;sql&#8217;, &#8216;template&#8217;</li>
+<li>ref. A url or code object name.</li>
+</ul>
+<div class="section" id="primary-references">
+<h3>3.2.1.1. Primary References<a class="headerlink" href="#primary-references" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li>reftype. A type code for the value in <cite>ref</cite>. The value is unconstrained, but these values have special meaning: &#8216;ref&#8217;, &#8216;partition&#8217;, &#8216;generator&#8217;, &#8216;sql&#8217;, &#8216;template&#8217;</li>
+<li>ref. A url or code object name.</li>
+</ul>
+</div>
+<div class="section" id="table-time-space-and-grain">
+<h3>3.2.1.2. Table, Time, Space and Grain<a class="headerlink" href="#table-time-space-and-grain" title="Permalink to this headline">¶</a></h3>
+<p>These values specify the four common categorization dimension, which are part of every bundle and partition name.</p>
+<ul class="simple">
+<li>dest_table. Optional destination table name. If not supplied, the name of the source is assumed.</li>
+<li>time. A year or other time specifier to distinguish the source. May be used in the partition name.</li>
+<li>space. A geo region name, like a county or state. May be used in the partition name.</li>
+<li>grain. An aggregation grain. May be used in the partition name.</li>
+</ul>
+</div>
+<div class="section" id="row-classification">
+<h3>3.2.1.3. Row Classification<a class="headerlink" href="#row-classification" title="Permalink to this headline">¶</a></h3>
+<p>Four values indicate the classification of rows in the source file:</p>
+<ul class="simple">
+<li>start_line. The integer, zero-indexed row that the is first row with data.</li>
+<li>end_line. The intger, zero-index row that is the last row with data.</li>
+<li>comment_lines. A List of zero-index rows that are comments.</li>
+<li>header_lines. A List of zero-index row numbers that are headers. These rows will be coalesced into column names.</li>
+</ul>
+</div>
+<div class="section" id="multi-file-archives-zip-and-excel">
+<h3>3.2.1.4. Multi-file archives: Zip and Excel<a class="headerlink" href="#multi-file-archives-zip-and-excel" title="Permalink to this headline">¶</a></h3>
+<p>Some types of sources have multiple files in them, such as Excel files, with multiple worksheets in a workbook, or a ZIP archive.</p>
+<ul class="simple">
+<li>segment. For Excel files, the number of the spreadsheet to use within the workbook.</li>
+<li>file. For ZIP files, a regualr expression specifying the file to extract</li>
+</ul>
+</div>
+<div class="section" id="fixed-width-files">
+<h3>3.2.1.5. Fixed Width Files<a class="headerlink" href="#fixed-width-files" title="Permalink to this headline">¶</a></h3>
+<p>For fixed with files, create a source schema that has the column names for the file, including colum positions and widths.</p>
+</div>
+</div>
+<div class="section" id="column-names-from-headers">
+<h2>3.2.2. Column Names From Headers<a class="headerlink" href="#column-names-from-headers" title="Permalink to this headline">¶</a></h2>
+<p>When a source file has a header row, the row names are namgled to create column names. Mangling involves:</p>
+<ul class="simple">
+<li>Convert Non-alphanumeric characters to underscores</li>
+<li>Lowercasing</li>
+<li>Stripping leading and trailing underscores</li>
+</ul>
+<p>The code is:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">return</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s1">&#39;_+&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s1">&#39;[^\w_]&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If the file doesn&#8217;t have a header &#8211; the <cite>start_line</cite> is 0 &#8211; the columns are named <cite>col&lt;n&gt;</cite> for column in position <cite>&lt;n&gt;</cite>.</p>
+<p>If there are multiple row numbers in the <cite>header_lines</cite> value, the column names are created by:</p>
+<ul class="simple">
+<li>For each row, if a column is blank, ( space or null) copy into it the value to the left. ( Column copy-forward)</li>
+<li>When all header rows have values, concatenate all of the rows by column into a single concatenated row.</li>
+<li>Apply name mangling to all of the columns.</li>
+</ul>
+<p>Note that the column copy-forward only applies to the first header row.</p>
+<p>For instance, if the source file header has this structure:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>a</td>
+<td>&nbsp;</td>
+<td>b</td>
+<td>&nbsp;</td>
+<td>c</td>
+</tr>
+<tr class="row-even"><td>1!</td>
+<td>2#</td>
+<td>3$</td>
+<td>4%</td>
+<td>5&amp;</td>
+</tr>
+<tr class="row-odd"><td>1</td>
+<td>2</td>
+<td>3</td>
+<td>4</td>
+<td>5</td>
+</tr>
+</tbody>
+</table>
+<p>The column copy operation would transform it to:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>a</td>
+<td>a</td>
+<td>b</td>
+<td>b</td>
+<td>c</td>
+</tr>
+<tr class="row-even"><td>1!</td>
+<td>2#</td>
+<td>3$</td>
+<td>4%</td>
+<td>5&amp;</td>
+</tr>
+<tr class="row-odd"><td>1</td>
+<td>2</td>
+<td>3</td>
+<td>4</td>
+<td>5</td>
+</tr>
+</tbody>
+</table>
+<p>After coalescing the result is:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+<col width="20%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>a 1! 1</td>
+<td>a 2# 2</td>
+<td>b 3$ 3</td>
+<td>b 4% 4</td>
+<td>c 5&amp; 5</td>
+</tr>
+</tbody>
+</table>
+<p>And after name mangling:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="24%" />
+<col width="14%" />
+<col width="24%" />
+<col width="14%" />
+<col width="24%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>1_a_1</td>
+<td>2_2</td>
+<td>3_b_3</td>
+<td>4_4</td>
+<td>5_c_5</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="ingesting">
+<h2>3.2.3. Ingesting<a class="headerlink" href="#ingesting" title="Permalink to this headline">¶</a></h2>
+<p>Topics</p>
+<ul class="simple">
+<li>Ingesting single sources</li>
+<li>Ingesting Tables</li>
+<li>Ingest everything</li>
+</ul>
+</div>
+<div class="section" id="row-and-type-intuition">
+<h2>3.2.4. Row and Type Intuition<a class="headerlink" href="#row-and-type-intuition" title="Permalink to this headline">¶</a></h2>
+<p>When a source is ingested two Intuiters are run, the Type Intuiter and the Row Intuiter.  The Type Intuiter tries to determine the datatype for each column.</p>
+</div>
+<div class="section" id="viewing-ingested-files">
+<h2>3.2.5. Viewing Ingested Files<a class="headerlink" href="#viewing-ingested-files" title="Permalink to this headline">¶</a></h2>
+<p>Topics</p>
+<ul class="simple">
+<li>Basic info</li>
+<li>Schema</li>
+<li>Types</li>
+</ul>
+</div>
+<div class="section" id="types-of-sources">
+<h2>3.2.6. Types of Sources<a class="headerlink" href="#types-of-sources" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="file-sources">
+<h3>3.2.6.1. File Sources<a class="headerlink" href="#file-sources" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="generator-sources">
+<h3>3.2.6.2. Generator Sources<a class="headerlink" href="#generator-sources" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="sql-sources">
+<h3>3.2.6.3. SQL Sources<a class="headerlink" href="#sql-sources" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="notes">
+<h2>3.2.7. Notes<a class="headerlink" href="#notes" title="Permalink to this headline">¶</a></h2>
+<p>Ingesting excel files with dates can be troublesome.</p>
+<p>If you change the sources.csv.</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="source_schema.html" class="btn btn-neutral float-right" title="3.3. Source Schemas" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="bundle.html" class="btn btn-neutral" title="3.1. The Bundle Class" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Civic Knowledge.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.3.2049',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

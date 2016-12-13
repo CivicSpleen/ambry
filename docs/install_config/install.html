@@ -1,0 +1,304 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>1.1. Installing Ambry &mdash; Ambry 0.3.2049 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Ambry 0.3.2049 documentation" href="../index.html"/>
+        <link rel="up" title="1. Installing Ambry" href="index.html"/>
+        <link rel="next" title="1.2. Configuration" href="configuration.html"/>
+        <link rel="prev" title="1. Installing Ambry" href="index.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Ambry
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.2049
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">1. Install and Configure Ambry</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">1.1. Installing Ambry</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#virtual-environment">1.1.1. Virtual environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#mac-os-x">1.1.2. Mac OS X</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#removing-anaconda">1.1.2.1. Removing Anaconda</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#linux-ubuntu">1.1.3. Linux, Ubuntu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#post-install">1.1.4. Post Install</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">1.2. Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorial/index.html">2. Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../process/index.html">3. Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cli/index.html">4. Command Line Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview.html">5. Concepts and Design Overview</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Ambry</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">1. Installing Ambry</a> &raquo;</li>
+      
+    <li>1.1. Installing Ambry</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/install_config/install.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="installing-ambry">
+<span id="install"></span><h1>1.1. Installing Ambry<a class="headerlink" href="#installing-ambry" title="Permalink to this headline">¶</a></h1>
+<p>Ambry is a complex package that has dependencies on a lot of other code, some of which are hard to build from source,
+so there are a few different ways to install it. Note that, unless you are installing a dedicated machine, or using a
+seperate python installation like Anaconda, you should install Ambry in a virtual environment.</p>
+<ul class="simple">
+<li><a class="reference internal" href="#mac-os-x">Mac OS X</a></li>
+<li><a class="reference internal" href="#linux-ubuntu">Linux, Ubuntu</a></li>
+</ul>
+<div class="section" id="virtual-environment">
+<h2>1.1.1. Virtual environment<a class="headerlink" href="#virtual-environment" title="Permalink to this headline">¶</a></h2>
+<p>To use a virtual environment, install the Python virtualenv module. The virtualenv <a class="reference external" href="https://virtualenv.pypa.io/en/latest/installation/">website has complete instructions</a>, but generally it is as easy as:</p>
+<p>First, if you haven&#8217;t worked in python before, you should install <cite>pip</cite>:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ easy_install pip
+</pre></div>
+</div>
+<p>Then, install the virtualenv package to create virtual environments.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$  pip install virtualenv
+</pre></div>
+</div>
+<p>Create the virtualenv and activate it:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ virtualenv ambry
+$ <span class="nb">source</span> ambry/bin/activate
+</pre></div>
+</div>
+<p>Setting up and running virtual environments requires remembering a few special commands, so it&#8217;s more convenient
+to use <cite>virtualenvwrapper</cite>, which provides the <strong class="command">workon</strong> command to make using virtualenvironments easier.
+See the <a class="reference external" href="http://virtualenvwrapper.readthedocs.io/en/latest/install.html">documentation for complete instructions</a>.</p>
+</div>
+<div class="section" id="mac-os-x">
+<h2>1.1.2. Mac OS X<a class="headerlink" href="#mac-os-x" title="Permalink to this headline">¶</a></h2>
+<p>Although it doesn&#8217;t need to use it to run in all cases, the Ambry imports Postgres modules, so you have to install the
+Postgres binaries. On Mac OS X, There are a few ways to do that:</p>
+<ul class="simple">
+<li>Install Postgres via Anaconda</li>
+<li>Install Postgres via Homebrew, which also requires XCode to be installed</li>
+</ul>
+<p>The easiest way is to get postgres is to install Anaconda, although this will also install a new Python binary.  (
+Use Homebrew if you want to avoid using the Anaconda version of Python. ) Visit the <cite>Continuum Analytics downloads page
+&lt;http://continuum.io/downloads&gt;</cite> and install it. After installing Anaconda, open a new Terminal window
+( an old one won&#8217;t have the path set correctly. ) In the new terminal window, you should now be running the
+python included with Anaconda, which you can check with:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ which python
+/Users/eric/anaconda/bin/python
+</pre></div>
+</div>
+<p>Since the Anaconda python is seperate from the main system Python, you don&#8217;t really need to create a virtual environment,
+if you are only using Anaconda for Ambry.</p>
+<p>Install the psycopg2 package via <strong class="command">conda</strong>, which will also install the postgres binary libraries.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ conda install psycopg2
+</pre></div>
+</div>
+<p>After installing Postgres, you can install Ambry.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>pip install ambry
+</pre></div>
+</div>
+<div class="section" id="removing-anaconda">
+<h3>1.1.2.1. Removing Anaconda<a class="headerlink" href="#removing-anaconda" title="Permalink to this headline">¶</a></h3>
+<p>Anaconda alters your shell path by adding to the <code class="file docutils literal"><span class="pre">~/.bash_profile</span></code> file. If you edit the file to
+remove the statements that Anaconda added, future shells will use the default python.</p>
+</div>
+</div>
+<div class="section" id="linux-ubuntu">
+<h2>1.1.3. Linux, Ubuntu<a class="headerlink" href="#linux-ubuntu" title="Permalink to this headline">¶</a></h2>
+<p>For Ubuntu 14.04 or later,  use this script to install the dependencies and the Ambry package.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ sudo bash -c <span class="s2">&quot;</span><span class="k">$(</span>curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install/install-ubuntu.sh<span class="k">)</span><span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>If you&#8217;ve created a fresh Ubuntu install, you&#8217;ll probably also have to update and install curl. Here&#8217;s one line that will take care of everything.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ apt-get update <span class="o">&amp;&amp;</span> apt-get install -y curl <span class="o">&amp;&amp;</span> <span class="se">\</span>
+sudo bash -c <span class="s2">&quot;</span><span class="k">$(</span>curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install/install-ubuntu.sh<span class="k">)</span><span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Follow up with <a class="reference internal" href="#post-install">Post Install</a> to create your configuration files and check the integrity of the installation.</p>
+</div>
+<div class="section" id="post-install">
+<h2>1.1.4. Post Install<a class="headerlink" href="#post-install" title="Permalink to this headline">¶</a></h2>
+<p>After installing Ambry and its dependencies, you can create a default configuration file and check that the installation
+worked correctly.</p>
+<p>After installation, you can customize the configuation. See: <a class="reference internal" href="configuration.html#configuration"><span class="std std-ref">Configuration</span></a></p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="configuration.html" class="btn btn-neutral float-right" title="1.2. Configuration" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="index.html" class="btn btn-neutral" title="1. Installing Ambry" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Civic Knowledge.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.3.2049',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

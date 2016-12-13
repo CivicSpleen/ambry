@@ -1,0 +1,449 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>5. Concepts &mdash; Ambry 0.3.2049 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="Ambry 0.3.2049 documentation" href="index.html"/>
+        <link rel="prev" title="4.1. Bambry Command" href="cli/bambry.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> Ambry
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.2049
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install_config/index.html">1. Install and Configure Ambry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial/index.html">2. Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="process/index.html">3. Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli/index.html">4. Command Line Interface</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">5. Concepts and Design Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#conceptual-model">5.1. Conceptual Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#bundles">5.2. Bundles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#partitions">5.3. Partitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#object-numbering">5.4. Object Numbering</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#object-names">5.5. Object Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fully-qualified-names-and-identities">5.6. Fully Qualified Names and Identities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#bundling-a-bundle">5.7. Bundling a Bundle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-bundles-build">5.8. How Bundles Build</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-pipeline">5.9. The Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#process-summary">5.10. Process Summary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#file-locations">5.11. File Locations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#object-model">5.12. Object Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#meta-phase">5.13. Meta Phase</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Ambry</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+      
+    <li>5. Concepts</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="_sources/overview.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="concepts">
+<span id="overview"></span><h1>5. Concepts<a class="headerlink" href="#concepts" title="Permalink to this headline">¶</a></h1>
+<p>The conceptual model for Ambry is centered on the method of breaking datasets into parts, a division which is composed of two levels, the <code class="docutils literal"><span class="pre">Bundle</span></code> and the <code class="docutils literal"><span class="pre">Partition</span></code>. A <code class="docutils literal"><span class="pre">Partition</span></code> is seperable part of a dataset, such as a single table, or a year&#8217;s worth of records. A <code class="docutils literal"><span class="pre">Bundle</span></code> is the collection of all partitions that make up a dataset.</p>
+<p>Both bundles and partitions are differentiated on one or more of several dimensions, such as time, space or table. This document will describe the components and how they fit together.</p>
+<div class="section" id="conceptual-model">
+<h2>5.1. Conceptual Model<a class="headerlink" href="#conceptual-model" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference internal" href="#about-bundles"><span class="std std-ref">Bundles</span></a>. A synonym for a dataset, a collection of one or more partitions of data, representing a cohesive dataset released by an upstream source.</li>
+<li><a class="reference internal" href="#about-partitions"><span class="std std-ref">Partitions</span></a>. A collection of related records that are part of a bundle. Partitions are differentiated from other parttions in the same dataset along one or more dimensions.</li>
+<li><em>Table</em>, a collection of columns, similar to a Table in SQL.</li>
+<li><em>Column</em>, the name and type for a series of data, similar to a Column in SQL.</li>
+</ul>
+<p>A complete library will typically have hundreds of thousands of these objects, and each object may have multiple versions, so naming an numbering is one of the most important parts of Ambry.</p>
+<ul class="simple">
+<li><em>Identity</em>. The unique name and number for a partition or a bundle. The identity holds an object number and a name.</li>
+<li><em>Name</em>. Bundle and partition names are concatenations of dimensions.</li>
+<li><em>Dimension</em>. A component of a name, such as the source of the dataset, a time range, the geographic extent of the data, or other distinguishing factors.</li>
+<li><em>Object Number</em>. a unique, structured number that distinguishes bundles, partitions, tables and columns.</li>
+</ul>
+<p>For the details of numbering and naming, see <a class="reference internal" href="#about-numbering"><span class="std std-ref">Object Numbering</span></a>.</p>
+</div>
+<div class="section" id="bundles">
+<span id="about-bundles"></span><h2>5.2. Bundles<a class="headerlink" href="#bundles" title="Permalink to this headline">¶</a></h2>
+<p>A <code class="docutils literal"><span class="pre">Bundle</span></code> stores a complete dataset, combining multiple datafiles with documentation. While many datasets are provided by the upstream source as a single CSV file, there are also datasets that are composed of hundreds or thousands of files. An Ambry Bundle is designed to handle datasets ranging from a list of counties to the US Decennial Census.</p>
+<p>The primary division in storing data is the``Partition``. Every bundle must have one partition, but may have hundreds or thousands. Bundles also hold <code class="docutils literal"><span class="pre">Tables</span></code>, which are linked to <code class="docutils literal"><span class="pre">Partitions</span></code></p>
+<p>Besides the data, one of the most important parts of the biundle it&#8217;s metadata, which include information that defines how to build the bundle, as well as documentation, tables schemas, contact information for getting help with the data, URLs to data dictionaries, and much more.</p>
+</div>
+<div class="section" id="partitions">
+<span id="about-partitions"></span><h2>5.3. Partitions<a class="headerlink" href="#partitions" title="Permalink to this headline">¶</a></h2>
+<p>A <code class="docutils literal"><span class="pre">Partition</span></code> is a container for data. Small Bundles, with only one table, less than 5M rows and no conceptual divisions, will be stored in a single partition. The US Census, on the other hand, has one partition per state and per table, for a total of several thousand partitions.</p>
+<p>Partitions are organized according to a natural divisions in the data. For a state dataset that is updated per year, there is likely to be one partition per year. For a national dataset with multiple tables, but which never updated after release, the division may be by state.</p>
+<p>The dimensions along which partitions may be divided are:</p>
+<ul class="simple">
+<li>Time. A time period, expressed in ISO format.</li>
+<li>Space. A Census geoid or other formal identifier for a political area.</li>
+<li>Grain. A name for the smallest unit of aggregation, such as &#8220;Tract&#8221; or &#8220;School&#8221;</li>
+<li>Segment. A sequential number, for when large tables are broken into multiple partitions.</li>
+<li>Table. The name of the primary table stored in the partitions.</li>
+</ul>
+</div>
+<div class="section" id="object-numbering">
+<span id="about-numbering"></span><h2>5.4. Object Numbering<a class="headerlink" href="#object-numbering" title="Permalink to this headline">¶</a></h2>
+<p>As with any system that stores a lot of objects, a well-defined naming system is critical to data management systems. Ambry uses a naming system that employees unique id number as well as human-readable names.</p>
+<p>Ambry uses structured Base-62 strings to uniquely identify objects in the system. These numbers frequently appear as prefixes to table names and similar places, so it is important to keep them short; a typical UUID would have been too long. Because the numbers are short, there is a more limited space for allocation, which requires a centralized number server, although there is an alternative that allows users to generate longer numbers without the central authority.</p>
+<p>Here are a few examples of Ambry object numbers:
+* d00B001 A Dataset
+* pHSyDm4MNR001001 A partition within a dataset
+* c00H02001002 A column identifier, with a version number</p>
+<p>The objects that Ambry enumerates are:</p>
+<ul class="simple">
+<li>Bundles, also called Datasets. Prefix is &#8216;d&#8217;</li>
+<li>Partitions, a part of a Bundle. Prefix is &#8216;p&#8217;</li>
+<li>Tables, a part of a Bundle. Prefix is &#8216;t&#8217;</li>
+<li>Columns, a part of a Table. Prefix is &#8216;c&#8217;</li>
+</ul>
+<p>Because all of these objects are related, the partitions, Tables and Columns all have numbers that are based on the number of the BUndle the object is part of.</p>
+<p>All of the numbers are integers expressed in Base-62, which uses only digits and numbers. Using Base-62, rather than Base-64, makes it easier to use the numbers in URLs without encoding.</p>
+<blockquote>
+<div><p>bdigit            = ALPHA / DIGIT</p>
+<p>bundle_seq        = ( 3bdigit / 5bdigit / 7bdigit / 9bdigit )</p>
+<p>bundle_number     = &#8220;d&#8221; bundle_seq</p>
+<p>partition_seq     = 3bdigit</p>
+<p>partition_number  = &#8220;p&#8221; bundle_seq partition_seq</p>
+<p>table_seq         = 2bdigit</p>
+<p>table_number      = &#8220;t&#8221; bundle_seq table_seq</p>
+<p>column_seq        = 3bdigit</p>
+<p>column_number     = &#8220;c&#8221; bundle_seq table_seq column_seq</p>
+<p>revision          = 3bdigit</p>
+<dl class="docutils">
+<dt>object_number     = ( bundle_number / partition_number / column_number</dt>
+<dd>table_number ) [revision]</dd>
+</dl>
+</div></blockquote>
+<p>There are four lengths for the bundle sequence: 3,5,7 or 9 digits, one for each &#8216;registration class&#8217;. The registration class is roughly the level of acess a user has to a central numbering authority.</p>
+<ul class="simple">
+<li>authoritative. 3 Characters. Reseved for a designated registration authority.</li>
+<li>registered. 5 characters. For users that have created an account at the numbering server.</li>
+<li>unregistered. 7 Characters. For users that use the registration authority, but havent&#8217; created an daccount.</li>
+<li>self. 9 Characters. A random number assigned locally.</li>
+</ul>
+<p>The 3, 5 and 7 digit numbers are assigned by a central authority, so the number space is dense. ( 5 Base-62 digits is approximately 1 billion numbers. ) The 9 digit numbers are self assigned and are chosen randomly.</p>
+<p>All bundles have a revision, and the bundle&#8217;s revision number is used for all of the Bundle&#8217;s objects. However, the revision is optional in many cases, such as when referencing an object with respect to a specific bundle, or when only one version of a bundle is installed in a database.</p>
+<p>Because of these variations, object numbers can have a variety of lengths. Bundle numbers, for instance, can have lengths generated by : 1 + ( 3 | 5 | 7 | 9) + ( 0 | 3)  = 4, 6, 7, 8, 9, 10, 11 or 13 characters. The base set of lengths, (3, 5, 7, 9) were chosen to ensure that all of the permutations of lengths are unique, allowing the type of number to be determined from the length without knowing beforehand whether the number has a version or not.</p>
+</div>
+<div class="section" id="object-names">
+<h2>5.5. Object Names<a class="headerlink" href="#object-names" title="Permalink to this headline">¶</a></h2>
+<p>Names are human-readable strings that are composed of individual components, called Dimensions. The dimensions are stored seperately in the bundle&#8217;s configuration. The names for these dimensions are:</p>
+<ul class="simple">
+<li>source. The Domain name of the origin of the datafile</li>
+<li>dataset. A name for the dataset</li>
+<li>subset. A name for a sub-component of the dataset</li>
+<li>bspace. A name for the geographic region that encompases the data. ( The name differentiates if from  the _space_ component of partitions )</li>
+<li>btime. An ISO designator for the time interval of the dataset. ( The name differentiates if from  the _time_ component of partitions )</li>
+<li>variation. A name for a variant of an earlier dataset. The value &#8216;orig&#8217; means that the bundle is the first import of the data from the source.</li>
+<li>version. A semantic version number</li>
+</ul>
+<p>The _btime_ component should be formated according to ISO8601, with one variation. For instance:</p>
+<ul class="simple">
+<li>&#8220;2005&#8221;. All data is for the year 2005.</li>
+<li>&#8220;200610&#8221;. All data is for the month of October, 2006.</li>
+<li>&#8220;200601P3M&#8221;. The first quarter of 2006.</li>
+<li>&#8220;P5YE2010&#8221;. The 5 year period ending in 2010. ( The &#8216;E&#8217; is a non-standard substitution for &#8216;/&#8217;)</li>
+</ul>
+<p>Some examples of names include:</p>
+<ul class="simple">
+<li>cccco.edu-wageoutcomes-summary</li>
+<li>census.gov-2010_population-geo-orig-0.1.6</li>
+<li>census.gov-2010_population-geo-orig-geofile-50</li>
+</ul>
+</div>
+<div class="section" id="fully-qualified-names-and-identities">
+<h2>5.6. Fully Qualified Names and Identities<a class="headerlink" href="#fully-qualified-names-and-identities" title="Permalink to this headline">¶</a></h2>
+<p>Names and Numbers are occasionally seen combined in an <code class="docutils literal"><span class="pre">fqname</span></code>, a Fully Qualified name. These are simply a versioned name and the object number of a dataset, combined with a &#8216;~&#8217; character:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">cccco</span><span class="o">.</span><span class="n">edu</span><span class="o">-</span><span class="n">wageoutcomes</span><span class="o">-</span><span class="mf">0.0</span><span class="o">.</span><span class="mi">1</span><span class="o">~</span><span class="n">d02l001</span>
+</pre></div>
+</div>
+<p>An <code class="docutils literal"><span class="pre">Identity</span></code> is a code object that combines all of the individual components of the name and number, for bundles and partitions, and permits them to be manipulated.</p>
+</div>
+<div class="section" id="bundling-a-bundle">
+<span id="building-overview"></span><h2>5.7. Bundling a Bundle<a class="headerlink" href="#bundling-a-bundle" title="Permalink to this headline">¶</a></h2>
+<p>Building a new bundle can be very simple, but bundle development nearly always invovles multiple steps that are organized around the major development phases. There are a set of steps that are only executed once, when the bundle is being constructed ( The meta phase ) and steps that are executed whenever the bundle build process is being run.</p>
+<p>The meta phase involves:</p>
+<blockquote>
+<div><ul class="simple">
+<li>Create a new bundle in the library</li>
+<li>Setup and ingest sources</li>
+<li>Create source and destination Schemas</li>
+</ul>
+</div></blockquote>
+<p>The build phase has one cannonical step, running the build, but in practice, it involved debugging the configuration and maching changes to improve the quality of the bundle.</p>
+<p>After the bundle is built, you can use it, or check it into a library for other people to use.</p>
+<p>Most of the effort is in the meta phase; if the bundle is constructed properly, the build phase runs  without intervention.</p>
+</div>
+<div class="section" id="how-bundles-build">
+<h2>5.8. How Bundles Build<a class="headerlink" href="#how-bundles-build" title="Permalink to this headline">¶</a></h2>
+<p>To understand how to construct a bundle, you should first understand how the build process works.</p>
+<p>The goal of the build process is to construct a partition file, a file that hold a portion of the data in the dataset. Each partition is created from upstream source data, which is defined in the <code class="file docutils literal"><span class="pre">sources.csv</span></code> file. The sources are usually downloadable files, but also can be python code or SQL queries.</p>
+<p>So, at the top level, data flows from the upstream source to a partition.</p>
+<p>However, the mapping is not direct; one upstream source can feed into multiple partitions, and multiple sources can feed into a single partition. The build runs through each upstream source, selects all or just some of the rows in the source, and puts them into a partition segment file. Then, at the end of the process, the segment files are coalesced into a partition.</p>
+<p>For example, if you have these sources:</p>
+<ul class="simple">
+<li>source1</li>
+<li>source2</li>
+</ul>
+<p>And the selection process splits them into even and odd rows, the middle stage of the process would result in these partition segments:</p>
+<ul class="simple">
+<li>partition-even-source1</li>
+<li>partition-odd-source2</li>
+<li>partition-even-source1</li>
+<li>partition-odd-source2</li>
+</ul>
+<p>Then, after the segments are coalesced:</p>
+<ul class="simple">
+<li>partition-even</li>
+<li>partition-odd</li>
+</ul>
+<p>The source files all have a schema, metadata that describes the column names and their data types. Since most source files are CSV or fixed with, the type information must be inferred, so the source schem can take some effort to construct. However, it is vital to do so, because the column names in the source files must match with column names in the destination schemas in the partitions.</p>
+<p>Each source file has its own source schema, so in our example, there would be source tables for <code class="docutils literal"><span class="pre">source`</span></code> and <code class="docutils literal"><span class="pre">source2</span></code>. Partitions, however, may not have unique destination schemas &#8211; they can all be associated with the same destination table. In our example, both the even and odd partitions may use the same destination table format.</p>
+<p>It is very common to have multiple source files that all feed into the same table. For instance, a multi-year dataset may have one file per year, so while each of the source files will have its own source schema, there would be only one destination schema. Unfortunately, its also common for the source files to have differences in their schemas, such as column names that have changed or which are named with the year in the them, In these cases, the source schema column must be mapped to a new name that will be the same for all of the files.</p>
+<p>The need to map column names is why there are two schemas, one for the source and one for the destination table that the partition uses. The source schema has two names for each column, an soruce name and a destination name, so the column names can be changed as the source is processed.</p>
+</div>
+<div class="section" id="the-pipeline">
+<h2>5.9. The Pipeline<a class="headerlink" href="#the-pipeline" title="Permalink to this headline">¶</a></h2>
+<p>The whole process works something like this:</p>
+<ul class="simple">
+<li>Read the upstream source file</li>
+<li>Possibly map the source column names to new names</li>
+<li>Select a partition to write each row to. Write the row to a segment file for the partition</li>
+<li>For each partition, create the partition by coalescing the segment files.</li>
+</ul>
+<p>This process is controlled by the Pipeline. The pipeline consists of a series of pipe, each of which has one function to process a dataset&#8217;s header, and another to process each of the rows. The pipes are connected so that the upsream source is fed into the source end of the pipe, and the final pipe stage writes rows to the segment files. The source file header is fed in first, then each of the rows.</p>
+<p>Each pipe in the pipeline is a subclass of <code class="xref py py-class docutils literal"><span class="pre">ambry.etl.Pipe</span></code>. The default pipeline is:</p>
+<ul class="simple">
+<li>Source pipe, dependent on type of source</li>
+<li><code class="xref py py-class docutils literal"><span class="pre">ambry.etl.MapSourceHeaders</span></code>. Applies the output column names to the upstream source</li>
+<li><code class="xref py py-class docutils literal"><span class="pre">ambry.etl.CastColumns</span></code>. Applied colum value transformations, casting to final datatypes</li>
+<li><code class="xref py py-class docutils literal"><span class="pre">ambry.etl.SelectPartition</span></code>. Determines which segment partition row should be written to</li>
+<li><code class="xref py py-class docutils literal"><span class="pre">ambry.etl.WriteToPartition</span></code>. Writes rows to a segment file.</li>
+</ul>
+<p>After all of the segments have been written for a partition, the partition is coalesced, outside of the pipeline.</p>
+</div>
+<div class="section" id="process-summary">
+<h2>5.10. Process Summary<a class="headerlink" href="#process-summary" title="Permalink to this headline">¶</a></h2>
+<p>To control this process, bundle wranglers will create a set of build files in the bundle directory. These files are:</p>
+<ul class="simple">
+<li><code class="file docutils literal"><span class="pre">sources.csv</span></code>. Specified the URL, encoding and format for each of the upstream sources</li>
+<li><code class="file docutils literal"><span class="pre">source_schema.csv</span></code>. Schema for the soruce files. Usually generated automatically, but occasinoally hand edited</li>
+<li><code class="file docutils literal"><span class="pre">schema.csv</span></code>. The destination schema for each of the destination tables.</li>
+</ul>
+<p>Additional meta data and process information is stored in:
+- <code class="file docutils literal"><span class="pre">bundle.yaml</span></code>. The main configuration file, which may include modifications to the pipeline
+- <code class="file docutils literal"><span class="pre">bundle.py</span></code>. Primary bundle class, which may include transformation functions for editing rows during processing.</p>
+</div>
+<div class="section" id="file-locations">
+<span id="id1"></span><h2>5.11. File Locations<a class="headerlink" href="#file-locations" title="Permalink to this headline">¶</a></h2>
+<p>When working with these build files, it is important to know that there are three states or locations for the information in the files:</p>
+<ul class="simple">
+<li>On the file system. The file&#8217;s information can be in a normal file in the file system.</li>
+<li>In a file record. When files are synced in, they are copied into a database recordss in the bundle.</li>
+<li>As objects. The file records are turned into collections of objects, such as tables, columns or partitions. see the <a class="reference internal" href="#object-model">Object Model</a> section for a descriptino of these  database objects.</li>
+</ul>
+<p>The build configuration is broken into these three levels to allow for maintaining the fidelity of  build source files &#8211; ensuring that errors in the files don&#8217;t result in them being deleted if there are errors &#8211; while also allowing for bundles to be constructed entirely programatically, without files at all.</p>
+<p>An important implication of this structure is that you will frequently sync in and sync out build source files, either by using the <strong class="command">bambry sync</strong> command, or by using the <cite>-y</cite> option to <strong class="command">bambry clean</strong></p>
+</div>
+<div class="section" id="object-model">
+<h2>5.12. Object Model<a class="headerlink" href="#object-model" title="Permalink to this headline">¶</a></h2>
+<p>There are many objects stored in the database for a bundle; these are the most important:</p>
+<ul class="simple">
+<li>Dataset. The main database records for a bundle</li>
+<li>Partition. A collection of data rows, roughly corresponding to a single CSV file when extracted, although the Partition object only records the identity of the partition.</li>
+<li>Table. A collection of columns that define the structure of data in a partition.</li>
+<li>Column. A single column in a table.</li>
+<li>Source. A record of the location and type of a source input file, including its URL, encoding, number of header rows, and other important information.</li>
+<li>Source Table. A simpler version of the Table object, for describing the structure of an input source file. Every Source has a Source Table.</li>
+<li>Source Column. A column in a soruce Table.</li>
+</ul>
+</div>
+<div class="section" id="meta-phase">
+<h2>5.13. Meta Phase<a class="headerlink" href="#meta-phase" title="Permalink to this headline">¶</a></h2>
+<p>In the meta phase, you will create the new bundle and configure the files. The steps in this phase are usually:</p>
+<ul class="simple">
+<li>Create the new bundle with <strong class="command">bambry new</strong>, then export the files to a directory</li>
+<li>Edit the <code class="file docutils literal"><span class="pre">sources.csv</span></code> to refer to the input source files.</li>
+<li>Ingest the files with <strong class="command">bambry ingest</strong>, edit <code class="file docutils literal"><span class="pre">sources.csv</span></code> until ingestion runs smoothly.</li>
+<li>From the ingested files, create the source schema with <strong class="command">bambry schema -s</strong></li>
+<li>Possibly edit the schemas to alter column names</li>
+<li>Create the destination schemas with <strong class="command">bambry schema -d</strong></li>
+<li>Edit the destination schemas so the source files build properly</li>
+</ul>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="cli/bambry.html" class="btn btn-neutral" title="4.1. Bambry Command" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Civic Knowledge.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.3.2049',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
