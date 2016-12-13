@@ -76,7 +76,8 @@ Most of the tests should be functional tests, implemented as bundle tests. Bundl
 bundles. See the `ambry/test/bundle_tests/ingest.example.com/stages` bundle as an example. The test file is `test.py`, 
 and it is a normal python `uittest` test class, with annotations to mark tests for specific parts of the build process:
 
-```class Test(BundleTest):
+```
+class Test(BundleTest):
 
     @before_run
     def test_before_run(self):
