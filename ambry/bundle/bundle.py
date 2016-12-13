@@ -191,7 +191,6 @@ class Bundle(object):
 
         :return:
         """
-
         self.import_lib()
         self.load_requirements()
 
@@ -215,6 +214,7 @@ class Bundle(object):
         b.limited_run = self.limited_run
         b.capture_exceptions = self.capture_exceptions
         b.multi = self.multi
+
 
         return b
 
@@ -244,6 +244,8 @@ class Bundle(object):
     def close(self):
         self.progress.close()
         self.dataset.close()
+
+
 
     def close_session(self):
         return self.dataset.close_session()
@@ -845,6 +847,14 @@ Caster Code
         else:
             self.build_fs.setcontents(path, v, encoding='utf8')
 
+    def _find_pipeline(self, source, phase='build'):
+        for name in self.phase_search_names(source, phase):
+            if name in self.metadata.pipelines:
+                return name, self.metadata.pipelines[name]
+
+        return None, None
+
+
     def pipeline(self, source=None, phase='build', ps=None):
         """
         Construct the ETL pipeline for all phases. Segments that are not used for the current phase
@@ -862,6 +872,7 @@ Caster Code
             source = None
 
         sf, sp = self.source_pipe(source, ps) if source else (None, None)
+
 
         pl = Pipeline(self, source=sp)
 
@@ -885,12 +896,7 @@ Caster Code
                 raise ConfigurationError("Pipeline '{}' declared in source '{}', but not found in metadata"
                                          .format(source.pipeline, source.name))
         else:
-
-            for name in self.phase_search_names(source, phase):
-                if name in self.metadata.pipelines:
-                    pipe_config = self.metadata.pipelines[name]
-                    pipe_name = name
-                    break
+            pipe_name, pipe_config = self._find_pipeline(source, phase)
 
         if pipe_name:
             pl.name = pipe_name
@@ -1004,6 +1010,9 @@ Caster Code
         source._bundle = self
 
         iter_source, source_pipe = self._iterable_source(source, ps)
+
+        if self.limited_run:
+            source_pipe.limit = 500
 
         return iter_source, source_pipe
 
@@ -1147,6 +1156,8 @@ Caster Code
         else:
             raise Exception("Don't know what to do with source: {}".format(source.name))
 
+
+
         return s, sp
 
     def get_source(self, source, clean=False,  callback=None):
@@ -1187,13 +1198,20 @@ Caster Code
 
             syspath = spec.url.replace('file://', '')
 
-            contents = self.source_fs.getcontents(syspath)
-            cache_path = syspath
-            cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate = True)
-            cache_fs.setcontents(cache_path, contents)
+            cache_path = syspath.strip('/')
+            cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate=True)
+
+            if os.path.isabs(syspath):
+                # FIXME! Probably should not be
+                with open(syspath) as f:
+                    cache_fs.setcontents(cache_path, f)
+            else:
+                cache_fs.setcontents(cache_path, self.source_fs.getcontents(syspath))
 
         elif url_type not in ('gs', 'socrata'):  # FIXME. Need to clean up the logic for gs types.
+
             try:
+
                 cache_path, download_time = do_download()
                 spec.download_time = download_time
             except Exception as e:
@@ -1545,6 +1563,13 @@ Caster Code
                 synced += 1
 
         return synced
+
+    def update_schema(self):
+        """Propagate schema object changes to file records"""
+
+        self.commit()
+        self.build_source_files.schema.objects_to_record()
+        self.commit()
 
     #
     # Clean
@@ -2090,14 +2115,6 @@ Caster Code
 
                     c = t.add_column(**kwds)
 
-                    if has_codes:
-                        c.datatype = 'types.{}OrCode'.format(datatype.title())
-
-                        c = t.add_column(name=name + '_codes',
-                                         datatype='str',
-                                         description='Codes for: ' + (desc if desc else name),
-                                         transform='||row.{}.code'.format(name),
-                                         update_existing=True)
 
                 final_count = len(t.columns)
 
@@ -2212,7 +2229,6 @@ Caster Code
 
         resolved_sources = SourceSet(self, self._resolve_sources(sources, tables, stage=stage,
                                                                  predicate=lambda s: s.is_processable))
-
         with self.progress.start('build', stage, item_total=len(resolved_sources)) as ps:
 
             if len(resolved_sources) == 0:
@@ -2286,6 +2302,7 @@ Caster Code
                     for i, source in enumerate(stage_sources):
                         id_ = ps.add(message='Running source {}'.format(source.name),
                                      source=source, item_count=i, state='running')
+
                         self.build_source(stage, source, ps, force=force)
 
                         ps.update(message='Finished processing source', state='done')
@@ -2346,13 +2363,16 @@ Caster Code
             source_name = source.name  # In case the source drops out of the session, which is does.
             s_vid = source.vid
 
+            ps.update(message='Running pipeline {}'.format(pl.name), s_vid=s_vid, item_type='rows', item_count=0)
+
             @call_interval(5)
             def run_progress_f(sink_pipe, rows):
                 (n_records, rate) = sink_pipe.report_progress()
                 if n_records > 0:
                     ps.update(message='Running pipeline {}: rate: {}'
-                              .format(source_name, rate),
+                              .format(pl.name, rate),
                               s_vid=s_vid, item_type='rows', item_count=n_records)
+
 
             pl.run(callback=run_progress_f)
 
@@ -2521,11 +2541,8 @@ Caster Code
         from functools import partial
         from ambry.valuetype.types import parse_date, parse_time, parse_datetime
         import ambry.valuetype.types
-        import ambry.valuetype.math
-        import ambry.valuetype.number
         import ambry.valuetype.exceptions
         import ambry.valuetype.test
-        import ambry.valuetype.string
         import ambry.valuetype
 
 
@@ -2552,15 +2569,11 @@ Caster Code
         test_env.update(dateutil.parser.__dict__)
         test_env.update(datetime.__dict__)
         test_env.update(random.__dict__)
-        test_env.update(ambry.valuetype.math.__dict__)
-        test_env.update(ambry.valuetype.string.__dict__)
-        test_env.update(ambry.valuetype.number.__dict__)
+        test_env.update(ambry.valuetype.core.__dict__)
         test_env.update(ambry.valuetype.types.__dict__)
         test_env.update(ambry.valuetype.exceptions.__dict__)
         test_env.update(ambry.valuetype.test.__dict__)
         test_env.update(ambry.valuetype.__dict__)
-
-
 
         localvars = {}
 
@@ -2589,7 +2602,10 @@ Caster Code
             localvars.update({f_name: set_from(func.__get__(self), 'bundle') for f_name, func in (mine - base)})
 
         # Bundle module functions
+
         module_entries = inspect.getmembers(sys.modules['ambry.build'], predicate=inspect.isfunction)
+
+
         localvars.update({f_name: set_from(func, 'module') for f_name, func in module_entries})
 
         return localvars
@@ -2737,9 +2753,10 @@ Caster Code
         return True
 
     def import_tests(self):
+
         bsf = self.build_source_files.file(File.BSFILE.TEST)
-        module = bsf.import_module(library=lambda: self.library,
-                                   bundle=lambda: self)
+
+        module = bsf.import_module(module_path = 'ambry.build.test', library=lambda: self.library, bundle=lambda: self)
 
         try:
             return module.Test
@@ -2750,25 +2767,32 @@ Caster Code
         """Run the unit tests in the test.py file"""
 
         import unittest
+        from ambry.util import delete_module
 
-        if not self.test_class:
-            self.test_class = self.import_tests()
+        test_class = self.import_tests()
 
         if tests:
             suite = unittest.TestSuite()
             for test in tests:
-                suite.addTest(self.test_class(test))
+                suite.addTest(test_class(test))
 
             unittest.TextTestRunner(verbosity=2).run(suite)
         else:
-            suite = unittest.TestLoader().loadTestsFromTestCase(self.test_class)
+            suite = unittest.TestLoader().loadTestsFromTestCase(test_class)
             unittest.TextTestRunner(verbosity=2).run(suite)
+
+        # Delete the Test class, because  otherwise in test suites it can get run
+        # by a subsequent bundle.
+
+        try:
+            delete_module('ambry.build.test')
+        except ValueError:
+            pass
 
     def _run_events(self, tag, stage=None):
         """Run tests marked with a particular tag and stage"""
 
         self._run_event_methods(tag, stage)
-
         self._run_tests(tag, stage)
 
     def _run_event_methods(self, tag, stage=None):
@@ -2791,19 +2815,20 @@ Caster Code
         import unittest
         from ambry.bundle.events import _runable_for_event
         import StringIO
+        from ambry.util import delete_module
 
         suite = unittest.TestSuite()
 
-        if not self.test_class:
-            self.test_class = self.import_tests()
+        test_class = self.import_tests()
 
-        funcs = inspect.getmembers(self.test_class, predicate=inspect.ismethod)
+        funcs = inspect.getmembers(test_class, predicate=inspect.ismethod)
 
         tests = []
 
         for func_name, f in funcs:
             if _runable_for_event(f, tag, stage):
-                tests.append(self.test_class(f.__name__))
+                tests.append(test_class(f.__name__))
+
 
         if tests:
             suite.addTests(tests)
@@ -2832,6 +2857,16 @@ Caster Code
                     ]
                 raise TestError('Failed tests: {}'
                                 .format(', '.join([str(test) for test, trc in r.failures + r.errors])))
+
+        # Delete the Test class, because  otherwise in test suites it can get run
+        # by a subsequent bundle.
+
+
+        try:
+            delete_module('ambry.build.test')
+        except ValueError:
+            pass
+
 
     #
     # Check in to remote
@@ -2918,13 +2953,9 @@ Caster Code
     def checkin(self, no_partitions=False, remote_name=None, source_only=False, force=False, cb=None):
         from ambry.bundle.process import call_interval
         from requests.exceptions import HTTPError
+        from ambry.orm.exc import NotFoundError, ConflictError
+        from ambry.dbexceptions import RemoteError
 
-        package = self.package(source_only=source_only)
-
-        if not cb:
-            #@call_interval(10)
-            def cb(message, bytes):
-                self.log("{}; {} bytes".format(message, bytes))
 
         if remote_name:
             remote = self.library.remote(remote_name)
@@ -2932,6 +2963,49 @@ Caster Code
             remote = self.library.remote(self)
 
         remote.account_accessor = self.library.account_accessor
+
+        if not force:
+            try:
+                extant = remote.find(self.identity.vid)
+                raise ConflictError("Package with vid of '{}' already exists on remote '{}'"
+                                    .format(self.identity.vid, remote.short_name))
+            except NotFoundError as e:
+                pass # Not finding it is good, unless there is a later version
+
+                try:
+                    extant = remote.find(self.identity.id_)
+
+                    print '!!!', extant.keys()
+                    print '!!!', self.identity
+
+                    if 'revision' in extant:
+
+                        revision = int(extant.get('revision'))
+
+                    elif 'version' in extant: # Horror! All of the ermote entries should have the revision
+                        from semantic_version import Version
+
+                        v = Version(extant.get('version'))
+
+                        revision = v.patch
+
+                    else:
+                        raise RemoteError("Failed to get 'reveision' or 'versin' attribute from remote")
+
+                    if revision >= self.identity.rev:
+                        raise ConflictError("Package with a later or equal revision ( vid: {} ) exists on remote '{}'"
+                                            .format(extant.get('vid'), remote.short_name))
+
+
+                except NotFoundError as e:
+                    pass # Great, no earlier version
+
+        package = self.package(source_only=source_only)
+
+        if not cb:
+            @call_interval(10)
+            def cb(message, bytes):
+                self.log("{}; {} bytes".format(message, bytes))
 
         try:
             remote_instance, path = remote.checkin(package, no_partitions=no_partitions, force=force, cb=cb)

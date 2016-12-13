@@ -149,6 +149,7 @@ class Account(Base):
     def test(self, v):
         """Test the password against a value"""
         from passlib.hash import pbkdf2_sha512
+        assert self.encrypted_password is not None
         return pbkdf2_sha512.verify(v, self.encrypted_password)
 
     @staticmethod

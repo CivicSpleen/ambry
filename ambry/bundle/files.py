@@ -694,10 +694,7 @@ class NotebookFile(StringSourceFile):
 
         script, resources = export_script(notebook)
 
-
         env_dict = {}
-
-
 
         exec (compile(script.replace('# coding: utf-8', ''), 'script', 'exec'), env_dict)
 
@@ -719,7 +716,7 @@ class PythonSourceFile(StringSourceFile):
             with self._fs.open(self.file_name, 'w', encoding='utf-8') as f:
                 self.record_to_fh(f)
 
-    def import_module(self, **kwargs):
+    def import_module(self, module_path = 'ambry.build', **kwargs):
         """
         Import the contents of the file into the ambry.build module
 
@@ -728,12 +725,11 @@ class PythonSourceFile(StringSourceFile):
         """
         from fs.errors import NoSysPathError
 
-        try:
-            import ambry.build
-            module = sys.modules['ambry.build']
-        except ImportError:
-            module = imp.new_module('ambry.build')
-            sys.modules['ambry.build'] = module
+        if module_path in sys.modules:
+            module = sys.modules[module_path]
+        else:
+            module = imp.new_module(module_path)
+            sys.modules[module_path] = module
 
         bf = self.record
 
@@ -896,7 +892,13 @@ class SourcesFile(RowBuildSourceFile):
                     name = d['name']
                     del d['name']
 
-                    ds = self._dataset.new_source(name, **d)
+                    try:
+                        ds = self._dataset.new_source(name, **d)
+                    except:
+                        print(name, d)
+                        import pprint
+                        pprint.pprint(d)
+                        raise
                 except:  # Odd error with 'none' in keys for d
                     print('!!!', header)
                     print('!!!', row)
@@ -1000,16 +1002,25 @@ class SchemaFile(RowBuildSourceFile):
             value_type = row.get('valuetype', '').strip() if row.get('valuetype', False) else None
             data_type = row.get('datatype', '').strip() if row.get('datatype', False) else None
 
-            if value_type and not data_type:
+            def resolve_data_type(value_type):
                 from ambry.valuetype import resolve_value_type
-                vt_class = resolve_value_type(row['valuetype'])
+                vt_class = resolve_value_type(value_type)
+
                 if not vt_class:
-                    raise ConfigurationError("Row error: unknown valuetype '{}'".format(row['valuetype']))
-                data_type = vt_class.python_type().__name__
+                    raise ConfigurationError("Row error: unknown valuetype '{}'".format(value_type))
+
+                return vt_class.python_type().__name__
+
+            # If we have a value type field, and not the datatype,
+            # the value type is as specified, and the data type is derived from it.
+            if value_type and not data_type:
+                data_type = resolve_data_type(value_type)
 
             elif data_type and not value_type:
                 value_type = data_type
+                data_type = resolve_data_type(value_type)
 
+            # There are still some old data types hanging around
             data_type = old_types_map.get(data_type.lower(), data_type)
 
             table_name = row['table']

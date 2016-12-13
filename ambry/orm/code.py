@@ -18,7 +18,6 @@ from . import Base, MutationDict, JSONEncodedObj
 
 
 class Code(Base):
-
     """Code entries for variables."""
     __tablename__ = 'codes'
 

@@ -17,6 +17,26 @@ from ambry.util import get_logger
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 
+from fs.opener import Opener, opener
+
+class HTTPSOpener(Opener):
+    names = ['https']
+    desc = """HTTPS file opener. HTTPS only supports reading files, and not much else.
+example:
+* https://www.example.org/index.html"""
+
+    @classmethod
+    def get_fs(cls, registry, fs_name, fs_name_params, fs_path, writeable, create_dir):
+        from fs.httpfs import HTTPFS
+        if '/' in fs_path:
+            dirname, resourcename = fs_path.rsplit('/', 1)
+        else:
+            dirname = fs_path
+            resourcename = ''
+        fs = HTTPFS('https://' + dirname)
+        return fs, resourcename
+
+opener.add(HTTPSOpener)
 
 def patch_match_hostname():
     """Fixes https://github.com/boto/boto/issues/2836"""
@@ -54,6 +74,8 @@ class Remote(Base):
 
     d_vid = SAColumn('rm_d_vid', String(20), ForeignKey('datasets.d_vid'),  index=True)
 
+    username = SAColumn('rm_username', Text, doc='Account username, the ARN for S3')
+
     access = SAColumn('rm_access', Text, doc='Access key or username')
     secret = SAColumn('rm_secret', Text, doc='Secret key or password')
 
@@ -79,6 +101,11 @@ class Remote(Base):
     @property
     def api_token(self):  # old name
         return self.jwt_secret
+
+    @property
+    def access_key(self):  #Synonym, to have same name as in account record
+        return self.access
+
 
     @property
     def is_api(self):
@@ -123,6 +150,10 @@ class Remote(Base):
         d = parse_url_to_dict(self.db_dsn)
 
         return d['hostname']
+
+    @property
+    def admin_pw(self):
+        return self.data.get('admin_pw') # Set in dockr.py in the ambry_admin module
 
     def _api_client(self):
         from ambry_client import Client
@@ -184,8 +215,25 @@ class Remote(Base):
 
         remote = self._fs_remote(self.url)
 
+        # HTTP can't list, so we have to use a cached collection of list entries.
+        # Use 'ambry remote <remote> update-listing' to create the cache
+
+        if self.url.startswith('http'):
+            try:
+                for e in  loads(remote.getcontents(os.path.join('_meta', 'list.json'))):
+                    if full:
+                        yield (e['vname'], e)
+                    else:
+                        yield e['vname']
+
+
+            except ResourceNotFoundError:
+                return
+
         try:
+
             for e in remote.listdir('_meta/vname'):
+
                 if full:
                     r = loads(remote.getcontents(join('_meta/vname', e)))
                     yield (e, r)
@@ -193,6 +241,7 @@ class Remote(Base):
                     yield e
         except ResourceNotFoundError:
             # An old repo, doesn't have the meta/name values.
+
             for fn in remote.walkfiles(wildcard='*.db'):
                 this_name = fn.strip('/').replace('/', '.').replace('.db', '')
                 if full:
@@ -200,6 +249,18 @@ class Remote(Base):
                 else:
                     # Isn't any support for this
                     yield (this_name, None)
+
+    def _update_fs_list(self):
+        """Cache the full list for http access. This creates a meta file that can be read all at once,
+        rather than requiring a list operation like S3 access does"""
+        from json import dumps
+
+        full_list = [ e[1] for e in self._list_fs(full=True) ]
+
+        remote = self._fs_remote(self.url)
+
+        remote.setcontents(os.path.join('_meta', 'list.json'), dumps(full_list, indent = 4))
+
 
     def _list_api(self, full=False):
 
@@ -312,11 +373,11 @@ class Remote(Base):
 
         return c.library.checkin(package, force=force, cb=cb)
 
-    def _put_metadata(self, fs_remote, ds):
-        """Store metadata on a pyfs remote"""
+    @staticmethod
+    def _meta_infos(ds):
+
         import json
         from six import text_type
-        from fs.errors import ResourceNotFoundError
 
         identity = ds.identity
         d = identity.dict
@@ -326,15 +387,39 @@ class Remote(Base):
 
         ident = json.dumps(d)
 
+        return (
+            (os.path.join('_meta', 'vid', identity.vid), ident),
+            (os.path.join('_meta', 'id', identity.id_), ident),
+            (os.path.join('_meta', 'vname', text_type(identity.vname)), ident),
+            (os.path.join('_meta', 'name', text_type(identity.name)), ident)
+        )
+
+
+    def _put_metadata(self, fs_remote, ds):
+        """Store metadata on a pyfs remote"""
+
+        from six import text_type
+        from fs.errors import ResourceNotFoundError
+
+
+        identity = ds.identity
+        d = identity.dict
+
+        d['summary'] = ds.config.metadata.about.summary
+        d['title'] = ds.config.metadata.about.title
+
+        meta_stack = self._meta_infos(ds)
+
         def do_metadata():
-            fs_remote.setcontents(os.path.join('_meta', 'vid', identity.vid), ident)
-            fs_remote.setcontents(os.path.join('_meta', 'id', identity.id_), ident)
-            fs_remote.setcontents(os.path.join('_meta', 'vname', text_type(identity.vname)), ident)
-            fs_remote.setcontents(os.path.join('_meta', 'name', text_type(identity.name)), ident)
+            for path, ident in meta_stack:
+                fs_remote.setcontents(path, ident)
+
 
         try:
+            # Assume the directories already exist
             do_metadata()
         except ResourceNotFoundError:
+            # Nope, make them and try again.
             parts = ['vid', 'id', 'vname', 'name']
             for p in parts:
                 dirname = os.path.join('_meta', p)
@@ -469,10 +554,9 @@ class Remote(Base):
 
     def s3(self, url, account_acessor=None, access=None, secret=None):
         """Setup an S3 pyfs, with account credentials, fixing an ssl matching problem"""
-        from fs.s3fs import S3FS
+        from ambry.util.ambrys3 import AmbryS3FS
         from ambry.util import parse_url_to_dict
         import ssl
-
 
         pd = parse_url_to_dict(url)
 
@@ -489,11 +573,9 @@ class Remote(Base):
         assert access, url
         assert secret, url
 
-        logger.debug("Creating s3 access = {} secret = {} ".format(aws_access_key, aws_secret_key))
-
-        s3 = S3FS(
+        s3 = AmbryS3FS(
             bucket=pd['netloc'],
-            prefix=pd['path'],
+            prefix=pd['path'].strip('/')+'/',
             aws_access_key=aws_access_key,
             aws_secret_key=aws_secret_key,
 

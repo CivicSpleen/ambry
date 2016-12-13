@@ -39,7 +39,7 @@ def make_parser(cmd):
 
     # makemigration command
     #
-    sp = asp.add_parser('makemigration', help='Create empty migration (for developers only).')
+    sp = asp.add_parser('migrate', help='Create empty migration (for developers only).')
     sp.set_defaults(subcommand='makemigration')
     sp.add_argument('migration_name', type=str, help='Name of the migration')
 

@@ -1,0 +1,513 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>2.1. Create a New Bundle &mdash; Ambry 0.3.2049 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Ambry 0.3.2049 documentation" href="../index.html"/>
+        <link rel="up" title="2. Tutorials" href="index.html"/>
+        <link rel="next" title="2.2. Building the Example Bundles" href="example_bundles.html"/>
+        <link rel="prev" title="2. Tutorials" href="index.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Ambry
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.2049
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../install_config/index.html">1. Install and Configure Ambry</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">2. Tutorial</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">2.1. Basic bundle creation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">2.1.1. Create a new bundle</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-and-ingesting-sources">2.1.2. Adding and Ingesting Sources</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#additional-source-configuration">2.1.2.1. Additional Source Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#creating-schemas">2.1.3. Creating Schemas</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#building-the-bundle">2.1.4. Building the Bundle</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#improving-the-output">2.1.5. Improving the Output</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#examining-the-file">2.1.5.1. Examining the file</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="example_bundles.html">2.2. Building the example bundles</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../process/index.html">3. Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cli/index.html">4. Command Line Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview.html">5. Concepts and Design Overview</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Ambry</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">2. Tutorials</a> &raquo;</li>
+      
+    <li>2.1. Create a New Bundle</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/tutorial/create_bundle.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="create-a-new-bundle">
+<h1>2.1. Create a New Bundle<a class="headerlink" href="#create-a-new-bundle" title="Permalink to this headline">¶</a></h1>
+<p>Creating a new bundle involves two phases, the meta phase and the build phase. The meta phase is usually only run once, while the bundle is being configured. The Build phase actually creates the bundle partitions, and can be run by others, on other machines, after the bundle is configured.</p>
+<p>In this tutorial, we will create a new bundle, using the <a class="reference external" href="http://public.source.civicknowledge.com/usda.gov/farmers-markets.csv">USDA Farmer&#8217;s Market list</a>.</p>
+<p>In the meta phase, you will create the new bundle and configure the files. The steps in this phase are usually:</p>
+<ul class="simple">
+<li>Create the new bundle with <strong class="command">bambry new</strong>, then export the files to a directory</li>
+<li>Edit the <code class="file docutils literal"><span class="pre">sources.csv</span></code> to refer to the input source files.</li>
+<li>Ingest the files with <strong class="command">bambry ingest</strong>, edit <code class="file docutils literal"><span class="pre">sources.csv</span></code> until ingestion runs smoothly.</li>
+<li>From the ingested files, create the source schema with <strong class="command">bambry schema -s</strong></li>
+<li>Possibly edit the schemas to alter column names</li>
+<li>Create the destination schemas with <strong class="command">bambry schema -d</strong></li>
+<li>Edit the destination schemas so the source files build properly</li>
+</ul>
+<p>After configuring the bundle, you can build it to generate the data partitions.</p>
+<div class="section" id="id1">
+<h2>2.1.1. Create a new bundle<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<p>Use the <strong class="command">bambry new</strong> command to create a new bundle, then export the bundle files to your working directory.  To export a new bundle, the <strong class="command">bambry export</strong> command works like <strong class="command">bambry sync -o</strong>, but can also create directories and set the bundles source directory.</p>
+<div class="admonition seealso">
+<p class="first admonition-title">See also</p>
+<dl class="last docutils">
+<dt><a class="reference internal" href="../overview.html#file-locations"><span class="std std-ref">Overview of files and objects</span></a></dt>
+<dd>For an explaination about why you have to sync files out.</dd>
+</dl>
+</div>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry new -s usda.gov -d farmers_markets
+usda.gov-farmers_markets-0.0.1~dQH4kt5xlf001
+</pre></div>
+</div>
+<p>The command will create a new bundle in your library, and print out the fully-qualified name, which includes the version number and vid. Run <strong class="command">ambry list</strong> to verify that the bundle was created.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ ambry list farmers
+vid            vname                           dstate    bstate    about.title
+-------------  ------------------------------  --------  --------  -------------
+dQH4kt5xlf001  usda.gov-farmers_markets-0.0.1  new       new
+</pre></div>
+</div>
+<p>You can add any word to <strong class="command">ambry list</strong> and it will work like <strong class="command">grep</strong>, returning only the bundles that have that word in their names.</p>
+<p>If your current directory is not in another bundle directory, the command will also have set the working bundle. Run <strong class="command">bambry info -w</strong> to see what bundle this is:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry info -w
+Will use bundle ref dQH4kt5xlf001, usda.gov-farmers_markets-0.0.1, referenced from <span class="nb">history</span>
+</pre></div>
+</div>
+<p>When the working bundle is set, you can run <strong class="command">bambrycd</strong> to cd to the bundle&#8217;s build directory, or if the working bundle is not set, use a bundle reference, such as the vid. In our case, that&#8217;s <strong class="command">bambrycd dQH4kt5xlf001</strong></p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambrycd dQH4kt5xlf001
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>When you specify a reference to a bundle, you can use one of several differnt forms, including the id, vid, name or vname. For <strong class="command">bambrycd</strong>, these are all equivalent:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambrycd dQH4kt5xlf001
+$ bambrycd dQH4kt5xlf
+$ bambrycd usda.gov-farmers_markets-0.0.1
+$ bambrycd usda.gov-farmers_markets
+</pre></div>
+</div>
+<p class="last">Unversioned references are resolved to the latest version, so in this case, <cite>dQH4kt5xlf</cite> will resolve to <cite>dQH4kt5xlf001</cite></p>
+</div>
+<p>If you list the contents of this directory, you&#8217;ll notice that it is empty. That&#8217;s because we have not synced the files out. There are two ways to sync out. When you&#8217;ve created a new bundle, you&#8217;ll want to use <strong class="command">bambry export</strong>:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry <span class="nb">export</span>
+Using bundle ref dQH4kt5xlf001, referenced from <span class="nb">history</span>
+INFO dQH4kt5xlf001 ---- Sync Out ----
+INFO dQH4kt5xlf001 Sync: sources.csv
+INFO dQH4kt5xlf001 Sync: bundle.py
+INFO dQH4kt5xlf001 Sync: source_schema.csv
+INFO dQH4kt5xlf001 Sync: lib.py
+INFO dQH4kt5xlf001 Sync: test.py
+INFO dQH4kt5xlf001 Sync: bundle.yaml
+INFO dQH4kt5xlf001 Sync: schema.csv
+</pre></div>
+</div>
+<p>The unadorned <strong class="command">bambry export</strong> works well when you are writing the bundle into the default source directly, but if you have a specific location to export to, such as a git repository, you will want to specify a specific directory and maybe add the <cite>-a</cite> option. The <cite>-a</cite> option will use the standard source naming scheme.</p>
+<p>So, <strong class="command">bambry export /tmp/foo</strong> would write the bundle build files to :file::<cite>/tmp/foo</cite>, while <strong class="command">bambry export -a /tmp/foo</strong> would write to <code class="file docutils literal"><span class="pre">/tmp/foo/usda.gov/farmers_markets</span></code>.</p>
+<div class="admonition caution">
+<p class="first admonition-title">Caution</p>
+<p>Running <strong class="command">bambry export</strong> with a destination directory will set your bundle&#8217;s build directory, so future file operations will go to that directory. You can check this with <strong class="command">bambry info -s</strong>:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry info -s
+/tmp/foo/usda.gov/farmers_markets/
+</pre></div>
+</div>
+<p class="last">To set the source directory back, you can export again, or cd to the directory you want and run <strong class="command">bambry set -S</strong></p>
+</div>
+<p>You should now have all of the default files in your bundle&#8217;s source directory.</p>
+</div>
+<div class="section" id="adding-and-ingesting-sources">
+<h2>2.1.2. Adding and Ingesting Sources<a class="headerlink" href="#adding-and-ingesting-sources" title="Permalink to this headline">¶</a></h2>
+<p>Open the <code class="file docutils literal"><span class="pre">sources.csv</span></code> file in a spreadsheet editor and add  a new row with these values:</p>
+<ul class="simple">
+<li>name: farmers_markets</li>
+<li>ref: <a class="reference external" href="http://public.source.civicknowledge.com/usda.gov/farmers-markets.csv">http://public.source.civicknowledge.com/usda.gov/farmers-markets.csv</a></li>
+</ul>
+<p>After you save the file, you can load it into the library with <strong class="command">bambry sync -i</strong>, then verify that it was loaded by dumping the sources with <strong class="command">bambry dump -s</strong>:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry sync -i
+Using bundle ref dQH4kt5xlf001, referenced from directory
+Sync in
+INFO dQH4kt5xlf001 ---- Sync In ----
+INFO dQH4kt5xlf001 Sync: sources.csv
+INFO dQH4kt5xlf001 Sync: source_schema.csv
+INFO dQH4kt5xlf001 Sync: schema.csv
+$ bambry dump -s
+Dumping datasources <span class="k">for</span> usda.gov-farmers_markets-0.0.1~dQH4kt5xlf001
+
+vid                    ref               state
+-----------------  ... ------------ ...  -------
+SQH4kt5xlf0001001      http://publi ...  synced
+</pre></div>
+</div>
+<p>Now you can ingest the file. Ingesting loads the source file into an MPR file, a custom data file format that allows for quick access for additional analysis, including inferring data types, categorizing rows, and computing statistics.  The <strong class="command">bambry ingest</strong> command, without additional arguments, will ingest all of the source files, of which we have only one. However, with many files, you&#8217;ll want to ingest them seperately. We&#8217;ll use the <code class="xref std std-option docutils literal"><span class="pre">-s</span></code> option to specify a single source file.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry ingest -s farmers_markets
+Using bundle ref dQH4kt5xlf001, referenced from directory
+INFO dQH4kt5xlf001 ---- Ingesting ----
+INFO dQH4kt5xlf001 ingest:1 &gt; Ingesting SP processed <span class="m">1</span> of <span class="m">1</span> <span class="nb">source</span>
+INFO dQH4kt5xlf001 ingest:1 + SQH4kt5xlf0001001 Ingesting <span class="nb">source</span> <span class="c1">#1, farmers_markets</span>
+INFO dQH4kt5xlf001 ingest:1 . SQH4kt5xlf0001001 Source farmers_markets already ingested, skipping
+INFO dQH4kt5xlf001 ingest:1 &lt; Successful context <span class="nb">exit</span>
+INFO dQH4kt5xlf001 Ingested <span class="m">1</span> sources
+</pre></div>
+</div>
+<p>To verify that the file was loaded, run <strong class="command">bambry dump -i</strong> to see the ingested files. Then, you can run <strong class="command">bambry view</strong> to see the file.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry view farmers_markets
+Using bundle ref dQH4kt5xlf001, referenced from directory
+MPR File    : .../build/usda.gov/farmers_markets/ingest/farmers_markets.mpr
+Created     : 2016-01-18 12:40:08.159477
+version     : 1
+rows        : 8501
+cols        : 59
+header_rows : <span class="o">[</span>0<span class="o">]</span>
+data_row    : 1
+end_row     : 8501
+URL         : http://public.source.civicknowledge.com/usda.gov/farmers-markets.csv
+</pre></div>
+</div>
+<p>Review this information to see if Ambry loaded the file as you expect. In particular, check that <cite>rows</cite> and <cite>cols</cite> seem like the right number of rows and columns in the file. Then look at <cite>header_rows</cite> and <cite>data_row.</cite> The <cite>header_rows</cite> value is a list of the rows that contain the names of the columns. It should be just the first row for CSV files, but for excel files, there may be multiple rows that have the column headers. The <cite>data_row</cite> value is the row number of the first data row.</p>
+<p>With additional options, the <strong class="command">bambry view</strong> command can show you other information about the file:</p>
+<ul class="simple">
+<li><code class="xref std std-option docutils literal"><span class="pre">-H</span></code> prints the first 10 rows and leftmost 10 columns, to see if the structure of the file looks corrrect.</li>
+<li><code class="xref std std-option docutils literal"><span class="pre">-s</span></code> prints the schema of the file, including the column names and a guess at the data type of the column.</li>
+<li><code class="xref std std-option docutils literal"><span class="pre">-t</span></code> shows the counts of each datatype for each column, so you can see how the Type Intuiter made its guesses about the column dat types.</li>
+</ul>
+<p>View the file with some of the other options to check if it looks right.</p>
+<p>Ingesting the file will also update the source records, which you can export to the <code class="file docutils literal"><span class="pre">source.csv</span></code> file. This will add to values for <cite>start_line</cite>, which is important, and <cite>end_line</cite>, which is usually just informative.  You can verify that the source now has the values from the ingestion process by running <strong class="command">bambry dump -s</strong> and looking for the <code class="docutils literal"><span class="pre">start_line</span></code> and <code class="docutils literal"><span class="pre">end_line</span></code> values.</p>
+<p>Then sync out to get the updates to the sources into the <code class="file docutils literal"><span class="pre">source.csv</span></code> file.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry sync -o
+</pre></div>
+</div>
+<div class="admonition caution">
+<p class="first admonition-title">Caution</p>
+<p class="last">If you don&#8217;t sync out the updates to sources, or manually set the start_line in the <code class="file docutils literal"><span class="pre">source.csv</span></code> file, you may get an error in the build process when Ambry tries to load the first ( 0&#8217;th ) row as a data row.</p>
+</div>
+<div class="section" id="additional-source-configuration">
+<h3>2.1.2.1. Additional Source Configuration<a class="headerlink" href="#additional-source-configuration" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="file docutils literal"><span class="pre">sources.csv</span></code> file has a lot of specification values to configure a source, which are (will, TBD) covered in another documentation section. But to briefly note, some of the things you can specify are:</p>
+<ul class="simple">
+<li>Encoding, usually <cite>latin1</cite> or <cite>utf-8</cite>, but all common character encodings are supported.</li>
+<li>Different file formats, including Excel, fixed width, tab delimited and Shapefiles.</li>
+<li>Non standard start lines, so header and comment rows in Excel files can be ignored</li>
+</ul>
+</div>
+</div>
+<div class="section" id="creating-schemas">
+<h2>2.1.3. Creating Schemas<a class="headerlink" href="#creating-schemas" title="Permalink to this headline">¶</a></h2>
+<p>After ingesting the source files, you can create the source and destination schemas. The source schema defines the column names and data types for each source file. It&#8217;s basically what you see when you run <strong class="command">bambry view -s</strong> on an ingested source. The destination schema is also a declaration of column names and types, but it is for the output, and is attached to the partitions.</p>
+<p>Creating a source schema is easy: run <strong class="command">bambry schema</strong> to build all of the source schemas, or <strong class="command">bambry schema -s &lt;sourcename&gt;</strong> to build for a specific source. After building the source schema, you can check it was created with <strong class="command">bambry dump -T</strong> and write it back to the <code class="file docutils literal"><span class="pre">source_schema.csv</span></code> file with <strong class="command">bambry sync -o</strong></p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry schema -s farmers_markets
+Using bundle ref dQH4kt5xlf001, referenced from directory
+INFO dQH4kt5xlf001 Creating <span class="nb">source</span> schema <span class="k">for</span>: farmers_markets<span class="p">;</span> <span class="m">59</span> columns
+Created <span class="nb">source</span> schema
+$ bambry dump -T
+Dumping sourcetables <span class="k">for</span> usda.gov-farmers_markets-0.0.1~dQH4kt5xlf001
+
+vid                    table              position  source_header    ...
+---------------------  ---------------  ----------  ---------------  ...
+CQH4kt5xlf00010001001  farmers_markets           <span class="m">1</span>  fmid             ...
+CQH4kt5xlf00010002001  farmers_markets           <span class="m">2</span>  marketname       ...
+CQH4kt5xlf00010003001  farmers_markets           <span class="m">3</span>  website          ...
+CQH4kt5xlf00010004001  farmers_markets           <span class="m">4</span>  facebook         ...
+$ bambry sync -o
+Using bundle ref dQH4kt5xlf001, referenced from directory
+Sync out
+INFO dQH4kt5xlf001 ---- Sync Out ----
+INFO dQH4kt5xlf001 Sync: source_schema.csv
+</pre></div>
+</div>
+<div class="admonition hint">
+<p class="first admonition-title">Hint</p>
+<p class="last">If your bundle database state gets corrupt or diverged from what is defined in the build files, you can clean out the bundle with <strong class="command">bambry clean</strong>, then load the files back in with <strong class="command">bambry sync -i</strong>, or do both in one command with <strong class="command">bambry clean -y</strong></p>
+</div>
+<p>After creating the source schema, you can create the destination schema, which is the description of the table that will be included in the output partitions. To create a destination schema, run <strong class="command">bambry schema -d</strong> and then sync out the <code class="file docutils literal"><span class="pre">schema.csv</span></code> with the <strong class="command">bambry sync -o</strong> command. You can verify that the schema was created with <strong class="command">bambry dump -t</strong> to view the table, and <strong class="command">bambry dump -C</strong> to view the columns.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry schema -d
+Using bundle ref dQH4kt5xlf001, referenced from directory
+INFO dQH4kt5xlf001 ---- Schema ----
+INFO dQH4kt5xlf001 Populated destination table <span class="s1">&#39;farmers_markets&#39;</span> from <span class="nb">source</span> table <span class="s1">&#39;farmers_markets&#39;</span> with <span class="m">61</span> columns
+Created destination schema
+$ bambry dump -t
+Dumping tables <span class="k">for</span> usda.gov-farmers_markets-0.0.1~dQH4kt5xlf001
+
+vid                sequence_id  name               c_sequence_id
+---------------  -------------  ---------------  ---------------
+tQH4kt5xlf02001              <span class="m">2</span>  farmers_markets                1
+$ bambry dump -C <span class="p">|</span> wc
+      <span class="m">67</span>     <span class="m">332</span>    5110
+$ bambry sync -o
+</pre></div>
+</div>
+</div>
+<div class="section" id="building-the-bundle">
+<h2>2.1.4. Building the Bundle<a class="headerlink" href="#building-the-bundle" title="Permalink to this headline">¶</a></h2>
+<p>Build the bundle with: <strong class="command">bambry build</strong>. It should build cleanly:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry build
+Using bundle ref dQH4kt5xlf001, referenced from directory
+INFO <span class="nv">dQH4kt5xlf001</span> <span class="o">====</span> <span class="nv">Building</span> <span class="o">====</span>
+INFO dQH4kt5xlf001 build &gt;
+INFO dQH4kt5xlf001 Processing <span class="m">1</span> sources, stage <span class="m">0</span> <span class="p">;</span> first 10: <span class="o">[</span>u<span class="s1">&#39;farmers_markets&#39;</span><span class="o">]</span>
+INFO dQH4kt5xlf001 build + SQH4kt5xlf0001001 Running <span class="nb">source</span> farmers_markets
+INFO dQH4kt5xlf001 build . SQH4kt5xlf0001001 Running pipeline farmers_markets: rate: 1059.34 processed <span class="m">6000</span> rows
+INFO dQH4kt5xlf001 build . SQH4kt5xlf0001001 Finished building <span class="nb">source</span> processed <span class="m">6000</span> rows
+INFO dQH4kt5xlf001 build . SQH4kt5xlf0001001 Finalizing segment partition
+INFO dQH4kt5xlf001 build . SQH4kt5xlf0001001 Finalizing segment partition usda.gov-farmers_markets-farmers_markets-1
+INFO dQH4kt5xlf001 build . SQH4kt5xlf0001001 Finished processing <span class="nb">source</span>
+INFO dQH4kt5xlf001 coalesce &gt; Coalescing partition segments
+INFO dQH4kt5xlf001 coalesce + Colescing partition usda.gov-farmers_markets-farmers_markets processed <span class="m">1</span> partitions
+INFO dQH4kt5xlf001 coalesce . Coalescing single partition usda.gov-farmers_markets-farmers_markets-1  processed <span class="m">1</span> partitions
+INFO dQH4kt5xlf001 coalesce . Running stats  processed <span class="m">1</span> partitions
+INFO dQH4kt5xlf001 coalesce &lt; Successful context <span class="nb">exit</span>
+INFO dQH4kt5xlf001 build &lt; Successful context <span class="nb">exit</span>
+INFO <span class="nv">dQH4kt5xlf001</span> <span class="o">====</span> Done <span class="nv">Building</span> <span class="o">====</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="improving-the-output">
+<h2>2.1.5. Improving the Output<a class="headerlink" href="#improving-the-output" title="Permalink to this headline">¶</a></h2>
+<p>Now it is time to build the bundle. Run the <strong class="command">bambry build</strong> command. Unfortunately, this bundle has some problems. You should see the start of the build process, then a detailed &#8220;Pipeline Exception&#8221;</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry build
+Using bundle ref dQH4kt5xlf001, referenced from directory
+INFO <span class="nv">dQH4kt5xlf001</span> <span class="o">====</span> <span class="nv">Building</span> <span class="o">====</span>
+INFO dQH4kt5xlf001 build &gt;
+INFO dQH4kt5xlf001 Processing <span class="m">1</span> sources, stage <span class="m">0</span> <span class="p">;</span> first 10: <span class="o">[</span>u<span class="s1">&#39;farmers_markets&#39;</span><span class="o">]</span>
+INFO dQH4kt5xlf001 build + SQH4kt5xlf0001001 Running <span class="nb">source</span> farmers_markets
+INFO dQH4kt5xlf001 build +
+<span class="o">======================================</span>
+Pipeline Exception: ambry.etl.pipeline.PipelineError
+Message:         Failed to cast column in table farmers_markets: Failed to cast column <span class="s1">&#39;fmid&#39;</span> <span class="nv">value</span><span class="o">=</span><span class="s1">&#39;FMID&#39;</span> to <span class="s1">&#39;&lt;type &#39;</span>int<span class="s1">&#39;&gt;&#39;</span>: Failed to cast to integer
+Pipeline:        build
+Pipe:            ambry.etl.pipeline.CastColumns
+Source:          farmers_markets, SQH4kt5xlf0001001
+Segment Headers: <span class="o">[</span>u<span class="s1">&#39;id&#39;</span>, u<span class="s1">&#39;fmid&#39;</span>, u<span class="s1">&#39;marketname&#39;</span>, u<span class="s1">&#39;website&#39;</span>, u<span class="s1">&#39;facebook&#39;</span>, u<span class="s1">&#39;twitter&#39;</span>, u<span class="s1">&#39;youtube&#39;</span>, u<span class="s1">&#39;othermedia&#39;</span>, u<span class="s1">&#39;street&#39;</span>, u<span class="s1">&#39;city&#39;</span>, u<span class="s1">&#39;county&#39;</span>, u<span class="s1">&#39;state&#39;</span>, u<span class="s1">&#39;zip&#39;</span>, u<span class="s1">&#39;zip_codes&#39;</span>, u<span class="s1">&#39;season1date&#39;</span>, u<span class="s1">&#39;season1time&#39;</span>, u<span class="s1">&#39;season2date&#39;</span>, u<span class="s1">&#39;season2date_codes&#39;</span>, u<span class="s1">&#39;season2time&#39;</span>, u<span class="s1">&#39;season3date&#39;</span>, u<span class="s1">&#39;season3time&#39;</span>, u<span class="s1">&#39;season4date&#39;</span>, u<span class="s1">&#39;season4time&#39;</span>, u<span class="s1">&#39;x&#39;</span>, u<span class="s1">&#39;y&#39;</span>, u<span class="s1">&#39;location&#39;</span>, u<span class="s1">&#39;credit&#39;</span>, u<span class="s1">&#39;wic&#39;</span>, u<span class="s1">&#39;wiccash&#39;</span>, u<span class="s1">&#39;sfmnp&#39;</span>, u<span class="s1">&#39;snap&#39;</span>, u<span class="s1">&#39;organic&#39;</span>, u<span class="s1">&#39;bakedgoods&#39;</span>, u<span class="s1">&#39;cheese&#39;</span>, u<span class="s1">&#39;crafts&#39;</span>, u<span class="s1">&#39;flowers&#39;</span>, u<span class="s1">&#39;eggs&#39;</span>, u<span class="s1">&#39;seafood&#39;</span>, u<span class="s1">&#39;herbs&#39;</span>, u<span class="s1">&#39;vegetables&#39;</span>, u<span class="s1">&#39;honey&#39;</span>, u<span class="s1">&#39;jams&#39;</span>, u<span class="s1">&#39;maple&#39;</span>, u<span class="s1">&#39;meat&#39;</span>, u<span class="s1">&#39;nursery&#39;</span>, u<span class="s1">&#39;nuts&#39;</span>, u<span class="s1">&#39;plants&#39;</span>, u<span class="s1">&#39;poultry&#39;</span>, u<span class="s1">&#39;prepared&#39;</span>, u<span class="s1">&#39;soap&#39;</span>, u<span class="s1">&#39;trees&#39;</span>, u<span class="s1">&#39;wine&#39;</span>, u<span class="s1">&#39;coffee&#39;</span>, u<span class="s1">&#39;beans&#39;</span>, u<span class="s1">&#39;fruits&#39;</span>, u<span class="s1">&#39;grains&#39;</span>, u<span class="s1">&#39;juices&#39;</span>, u<span class="s1">&#39;mushrooms&#39;</span>, u<span class="s1">&#39;petfood&#39;</span>, u<span class="s1">&#39;tofu&#39;</span>, u<span class="s1">&#39;wildharvested&#39;</span>, u<span class="s1">&#39;updatetime&#39;</span><span class="o">]</span>
+
+-------------------------------------
+
+Pipeline:
+Pipeline build
+source: ambry.etl.pipeline.SourceFileSourcePipe<span class="p">;</span> &lt;class <span class="s1">&#39;ambry.orm.source.DataSource&#39;</span>&gt; public.source.civicknowledge.com/usda.gov/farmers-markets.csv
+source_map: ambry.etl.pipeline.MapSourceHeaders: <span class="nv">map</span> <span class="o">=</span> <span class="o">{}</span>
+cast: ambry.etl.pipeline.CastColumns2 pipelines
+
+select_partition: ambry.etl.pipeline.SelectPartition <span class="nv">selector</span> <span class="o">=</span> default
+write: ambry.etl.pipeline.WriteToPartition
+
+final: <span class="o">[]</span>
+
+INFO dQH4kt5xlf001 build &lt; Failed in context with exception
+CRITICAL: Pipeline error: ambry.etl.pipeline.PipelineError<span class="p">;</span> Failed to cast column in table farmers_markets: Failed to cast column <span class="s1">&#39;fmid&#39;</span> <span class="nv">value</span><span class="o">=</span><span class="s1">&#39;FMID&#39;</span> to <span class="s1">&#39;&lt;type &#39;</span>int<span class="s1">&#39;&gt;&#39;</span>: Failed to cast to integer
+</pre></div>
+</div>
+<p>This sort of error is, unfortunately, very common. It is due to a faliure of one of the <cite>CastColumns</cite> pipe to cast a string value in the <cite>fmid</cite> to the declared types for that column, an integer.  It&#8217;s time to open up the <code class="file docutils literal"><span class="pre">schema.csv</span></code> file in a spreadsheet editor and fix the problem.</p>
+<p>When you open the file, most of it will seem sensible, by there are a few odd bits:</p>
+<ul class="simple">
+<li>The datatype for the <cite>zip</cite> column is <cite>types.IntOrCode</cite></li>
+<li>The next column, <cite>zip_codes</cite> has a <cite>transform</cite> value.</li>
+<li>A similar situation exists for the <cite>season2date</cite> column.</li>
+</ul>
+<p>The <cite>transform</cite> column is a transformation to apply to a value as it is loaded into the partition. The transformation has it&#8217;s own flow that is a lot like the pipeline, but for columns instead of entire rows. These transformation are handled by the CastColumns pipe and are run by a generate python file, which is stored in the bundle build directory. You can view this code at: <code class="file docutils literal"><span class="pre">$(bambry</span> <span class="pre">info</span> <span class="pre">-b)/code/casters/farmers_markets.py</span></code>.</p>
+<p>When we generated the source and destination schemas for the <cite>farmers_market</cite> file, Ambry notices that the <cite>zip</cite> and <cite>season2date</cite> columns are mostly one type, but have some strings too. So, while the other columns have a simple datatype, those two have an <cite>OrCode</cite> type. These are special data types that will try to parse a value to particular type, and if the parsing fails, will store the value as a string. This value can be retrieved later, in the <cite>code</cite> column.</p>
+<p>So, most of the time, <cite>zip</cite> is an integer. When it is not, the <cite>zip</cite> column will hold a NULL, but the <cite>code</cite> property will be set. Then, the transform for the <cite>zip_code</cite> column will pull out that code. The pipe character &#8216;|&#8217; seperates stages in the transform, with two of them meaning that the code is extracted after the first round of transforms has been run. The code value is set on the first stage, then it can be retrieved in the second round.</p>
+<p>This transform system allows for very sophisticated transformation of data, but can be very complicated, so lets simplify this one a bit. We&#8217;ll do three things to this schema:</p>
+<p># Fix the casting error with the <cite>fmid</cite> column.
+# Simplify the transform with the <cite>zip</cite> and <cite>season2date</cite> columns.</p>
+<div class="section" id="examining-the-file">
+<h3>2.1.5.1. Examining the file<a class="headerlink" href="#examining-the-file" title="Permalink to this headline">¶</a></h3>
+<p>To make our analysis easier, let&#8217;s dump the ingested file to see what the problems with the columns are. We&#8217;ll need to re-ingest it first, then extract it to a CSV file.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry ingest
+$ bambry view farmers_markets -c farmers_markets.csv
+</pre></div>
+</div>
+<p>Now you can open <code class="file docutils literal"><span class="pre">farmers_markets.csv</span></code></p>
+</div>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="example_bundles.html" class="btn btn-neutral float-right" title="2.2. Building the Example Bundles" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="index.html" class="btn btn-neutral" title="2. Tutorials" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Civic Knowledge.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.3.2049',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

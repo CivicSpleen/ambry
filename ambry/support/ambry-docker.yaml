@@ -1,5 +1,4 @@
 
 library:
-  filesystem_root: /var/ambry
-
-
+    filesystem_root: /var/ambry
+    database: 'sqlite:///{root}/library.db'

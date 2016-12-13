@@ -127,8 +127,11 @@ class IngestionError(PhaseError):
 
     """General error while ingesting sources."""
 
+class RemoteError(Exception):
 
-class AccessError(PhaseError):
+    """Could not access a remote resource"""
+
+class AccessError(RemoteError):
 
     """Could not access a remote resource"""
 

@@ -14,6 +14,7 @@ def clear_error(v):
         return None
     return v
 
+
 class CastingError(TypeError):
 
     def __init__(self, type_target, field_header, value, message, *args, **kwargs):
@@ -39,17 +40,18 @@ def try_except( try_f, except_f):
     except Exception as exception:
         return except_f(exception)
 
+nan_value = float('nan')
 
-def capture_code(v):
-    v.code = v
-    return None
+def nan_is_none(v):
+    import math
 
-def capture_error(v,  header_d,  errors):
-    errors[header_d] = v
-    return None
-
-def error_from(header, errors):
-    return errors.get(header)
+    try:
+        if math.isnan(v):
+            return None
+        else:
+            return v
+    except (ValueError, TypeError):
+        return v
 
 def ignore(v):
     return None

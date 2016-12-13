@@ -306,14 +306,23 @@ SELECT * FROM build.example.com-casters-simple;
         self.assertTrue('Alaska' in rows[1])
 
     def test_identifier_replacement(self):
+
         from ambry.bundle.asql_parser import substitute_vids
         library = self.library()
 
-        self.assertEquals('SELECT * FROM p00casters006003',
-                          substitute_vids(library, 'SELECT * FROM build.example.com-casters-simple;')[0])
+        print '!!!!!', type(library)
 
-        self.assertEquals('SELECT * FROM p00casters006003 LEFT JOIN pERJQxWUVb005001 ON foo = bar',
+        for b in library.bundles:
+            print b.identity.name
+
+        p1 = library.partition('build.example.com-casters-simple_stats')
+        p2 = library.partition('build.example.com-generators-demo')
+
+        self.assertEquals('SELECT * FROM {}'.format(p1.vid),
+                          substitute_vids(library,'SELECT * FROM {};'.format(p1.name))[0])
+
+        self.assertEquals('SELECT * FROM {} LEFT JOIN {} ON foo = bar'.format(p1.vid, p2.vid),
                           substitute_vids(library,
-                                          """SELECT * FROM build.example.com-casters-simple
-                                             LEFT JOIN build.example.com-generators-demo ON foo = bar
-                                          """)[0])
+                                          """SELECT * FROM {}
+                                             LEFT JOIN {} ON foo = bar
+                                          """.format(p1.name, p2.name))[0])

@@ -45,13 +45,17 @@ class AmbrySeries(Series):
 
 class AmbryDataFrame(DataFrame):
 
-    _metadata = ['partition']
+    _metadata = ['partition', 'plot_axes']
 
     def __init__(self, data=None, index=None, columns=None, dtype=None, copy=False, partition=None):
         from ambry.orm import Partition
 
         if partition:
             self.partition = partition
+        else:
+            self.partition = None
+
+        self.plot_axes = []
 
         super(AmbryDataFrame, self).__init__(data, index, columns, dtype, copy)
 

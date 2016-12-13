@@ -1,0 +1,371 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>1.2. Configuration &mdash; Ambry 0.3.2049 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Ambry 0.3.2049 documentation" href="../index.html"/>
+        <link rel="up" title="1. Installing Ambry" href="index.html"/>
+        <link rel="next" title="2. Tutorials" href="../tutorial/index.html"/>
+        <link rel="prev" title="1.1. Installing Ambry" href="install.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Ambry
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.2049
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">1. Install and Configure Ambry</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="install.html">1.1. Installing Ambry</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">1.2. Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#generating-a-config-file">1.2.1. Generating a Config File</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-main-configuration-file">1.2.2. The Main Configuration File</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#library-section">1.2.2.1. Library Section</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#filesystem-section">1.2.2.2. Filesystem Section</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#account-file">1.2.3. Account File</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#set-your-name-and-email">1.2.3.1. Set Your Name and Email</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#set-s3-account-credentials">1.2.3.2. Set S3 Account Credentials</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#synchronize-to-remotes">1.2.4. Synchronize to Remotes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#build-the-index">1.2.5. Build the Index</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorial/index.html">2. Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../process/index.html">3. Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cli/index.html">4. Command Line Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview.html">5. Concepts and Design Overview</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Ambry</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">1. Installing Ambry</a> &raquo;</li>
+      
+    <li>1.2. Configuration</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/install_config/configuration.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="configuration">
+<span id="id1"></span><h1>1.2. Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
+<p>Ambry uses two main configuration files, which can exist in a few different places.</p>
+<p>The first file is the the application configuration that specifies nearly everything. The configuration file will be placed in diffrent places depending on the environment in which the command is invoked:</p>
+<ul class="simple">
+<li>The path specified by the <code class="docutils literal"><span class="pre">AMBRY_CONFIG</span></code> environmental variable</li>
+<li>For root users, the configuration file is written to <code class="file docutils literal"><span class="pre">/etc/ambry.yaml</span></code></li>
+<li>For non root users, <code class="file docutils literal"><span class="pre">$HOME/.ambry.yaml</span></code></li>
+<li>In a python virtualenv, <code class="file docutils literal"><span class="pre">$VIRTUAL_ENV/.ambry.yaml</span></code></li>
+</ul>
+<p>The root directory for the ambry library also changes depending on the environment, although this can be changed in the coniguration file:</p>
+<ul class="simple">
+<li>Root user: <code class="file docutils literal"><span class="pre">/var/ambry</span></code></li>
+<li>Non root user: <code class="file docutils literal"><span class="pre">$HOME/ambry</span></code></li>
+<li>Virtualenv: <code class="file docutils literal"><span class="pre">$VIRTUAL_ENV/data</span></code></li>
+</ul>
+<p>( To set the root directory, alter the <cite>filesystem.root</cite> value )</p>
+<p>The second file holds account credentials. It is a user file, and is at <code class="docutils literal"><span class="pre">$HOME/.ambry-accounts.yaml</span></code></p>
+<div class="section" id="generating-a-config-file">
+<span id="configuration-generation"></span><h2>1.2.1. Generating a Config File<a class="headerlink" href="#generating-a-config-file" title="Permalink to this headline">¶</a></h2>
+<p>After installing Ambry and its dependencies, you may need to install a configuration file. Run <strong class="command">ambry info</strong> to see if a configuration file already exists. Install the default configuration file with:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ ambry config install
+</pre></div>
+</div>
+<p>Then, check that it worked with:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ ambry info
+Version:  0.3.420
+Root dir: /home/eric/ambry
+Source :  /home/eric/ambry/source
+Configs:  <span class="o">[</span><span class="s1">&#39;/home/eric/.ambry.yaml&#39;</span>, <span class="s1">&#39;/home/eric/.ambry-accounts.yaml&#39;</span><span class="o">]</span>
+
+$ ambry library info
+Library Info
+Name:     default
+Database: sqlite:////home/eric/ambry/library.db
+Cache:    FsCache: <span class="nv">dir</span><span class="o">=</span>/home/eric/ambry/library <span class="nv">upstream</span><span class="o">=(</span>None<span class="o">)</span>
+Remotes:  FsCompressionCache: <span class="nv">upstream</span><span class="o">=(</span>HttpCache: <span class="nv">url</span><span class="o">=</span>http://s3.sandiegodata.org/library/<span class="o">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-main-configuration-file">
+<h2>1.2.2. The Main Configuration File<a class="headerlink" href="#the-main-configuration-file" title="Permalink to this headline">¶</a></h2>
+<p>After installation, the main configuration file will be installed to a directory as described above. Run <strong class="command">ambry info</strong> to discover where it is.</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">library</span><span class="p p-Indicator">:</span>
+    <span class="l l-Scalar l-Scalar-Plain">default</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">filesystem</span><span class="p p-Indicator">:</span> <span class="s">&#39;{root}/library&#39;</span>
+        <span class="l l-Scalar l-Scalar-Plain">database</span><span class="p p-Indicator">:</span> <span class="s">&#39;sqlite://{root}/library.db&#39;</span>
+    <span class="l l-Scalar l-Scalar-Plain">remotes</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">public</span><span class="p p-Indicator">:</span> <span class="s">&#39;http://public.library.civicknowledge.com&#39;</span>
+        <span class="l l-Scalar l-Scalar-Plain">system</span><span class="p p-Indicator">:</span> <span class="s">&#39;http://system.library.civicknowledge.com&#39;</span>
+
+<span class="l l-Scalar l-Scalar-Plain">filesystem</span><span class="p p-Indicator">:</span>
+    <span class="l l-Scalar l-Scalar-Plain">root</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">/var/ambry</span>
+    <span class="l l-Scalar l-Scalar-Plain">downloads</span><span class="p p-Indicator">:</span> <span class="s">&#39;{root}/cache/downloads&#39;</span>
+    <span class="l l-Scalar l-Scalar-Plain">extracts</span><span class="p p-Indicator">:</span> <span class="s">&#39;{root}/cache/extracts&#39;</span>
+    <span class="l l-Scalar l-Scalar-Plain">documentation</span><span class="p p-Indicator">:</span> <span class="s">&#39;{root}/cache/documentation&#39;</span>
+    <span class="l l-Scalar l-Scalar-Plain">python</span><span class="p p-Indicator">:</span> <span class="s">&#39;{root}/cache/python&#39;</span>
+    <span class="l l-Scalar l-Scalar-Plain">source</span><span class="p p-Indicator">:</span> <span class="s">&#39;{root}/source&#39;</span>
+    <span class="l l-Scalar l-Scalar-Plain">warehouses</span><span class="p p-Indicator">:</span> <span class="s">&#39;{root}/warehouses&#39;</span>
+
+<span class="l l-Scalar l-Scalar-Plain">services</span><span class="p p-Indicator">:</span>
+    <span class="l l-Scalar l-Scalar-Plain">numbers</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">host</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">numbers.ambry.io</span>
+        <span class="l l-Scalar l-Scalar-Plain">key</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">fe78d179-8e61-4cc5-ba7b-263d8d3602b9</span>
+        <span class="l l-Scalar l-Scalar-Plain">port</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">80</span>
+</pre></div>
+</div>
+<p>The file is composed of sections, each with a top level dictionary key. The keys are:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">library</span></code>: Defines one or more library locations. Most files will only have &#8216;default&#8217;.</li>
+<li><code class="docutils literal"><span class="pre">filesystem</span></code>: Defines directories for various purposes, execpt for the <code class="docutils literal"><span class="pre">root</span></code> key, which is substituted into other paths.</li>
+<li><code class="docutils literal"><span class="pre">services</span></code>: Defines connection information for remote services.</li>
+</ul>
+<div class="section" id="library-section">
+<h3>1.2.2.1. Library Section<a class="headerlink" href="#library-section" title="Permalink to this headline">¶</a></h3>
+<p>The Library section declares the database, fielsystem and remote for your library.</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">database</span></code>: A connection URL for the library database.</li>
+<li><code class="docutils literal"><span class="pre">filesystem</span></code>: A path to the directory where buildes and partitions will be stored.</li>
+<li><code class="docutils literal"><span class="pre">remotes</span></code>: A list of cache strings, referencing a remote library where bundles will be synchronized from with <strong class="command">ambry sync</strong></li>
+</ul>
+<p>Since the Library filesystem is where the sqlite files for bundles and partitions is stored, you may want to put it on a fast disk.</p>
+</div>
+<div class="section" id="filesystem-section">
+<h3>1.2.2.2. Filesystem Section<a class="headerlink" href="#filesystem-section" title="Permalink to this headline">¶</a></h3>
+<p>You can change any of the paths in this section, but the most common one to change is <code class="docutils literal"><span class="pre">root</span></code>, which will move the entire library to another directory.</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">root</span></code>: A substitution variable for other paths.</li>
+<li><code class="docutils literal"><span class="pre">downloads</span></code>: Data files are downloaded to this directory</li>
+<li><code class="docutils literal"><span class="pre">extracts</span></code>: Where compressed data files are uncompressed.</li>
+<li><code class="docutils literal"><span class="pre">documentation</span></code>: Location for generaed HTML documentation.</li>
+<li><code class="docutils literal"><span class="pre">source</span></code>: Location for source bundles.</li>
+<li><code class="docutils literal"><span class="pre">build</span></code>: If it exists, bundles are built here, rather than in the bundle&#8217;s source directory.</li>
+<li><code class="docutils literal"><span class="pre">python</span></code>: Install location for python packages that are referenced as dependencies in a bundle.</li>
+<li><code class="docutils literal"><span class="pre">warehouses</span></code>: Location for storing sqlite warehouses databases.</li>
+</ul>
+<p>For light use, you won&#8217;t have to change any of these values. However, for heavy use, you may want to move some of the directories to disks that are larger or faster. The directories that take up the most space are: <code class="docutils literal"><span class="pre">build</span></code>, <code class="docutils literal"><span class="pre">downloads</span></code> and <code class="docutils literal"><span class="pre">extracts</span></code>.</p>
+</div>
+</div>
+<div class="section" id="account-file">
+<h2>1.2.3. Account File<a class="headerlink" href="#account-file" title="Permalink to this headline">¶</a></h2>
+<p>All credentials for access to restricted servers, websites and other resources are stored in the accounts file.  While there are a lot of services that can use this file, there are two sections that are most important: your name and email, for creating bundles, and S3 credentials for uploading to libraries.</p>
+<div class="section" id="set-your-name-and-email">
+<h3>1.2.3.1. Set Your Name and Email<a class="headerlink" href="#set-your-name-and-email" title="Permalink to this headline">¶</a></h3>
+<p>Immediately after installation, your <code class="docutils literal"><span class="pre">~/.ambry-accounts.yaml</span></code> file will have:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">accounts</span><span class="p p-Indicator">:</span>
+    <span class="l l-Scalar l-Scalar-Plain">ambry</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">email</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">null</span>
+        <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">null</span>
+</pre></div>
+</div>
+<p>You will need to edit your name and email to be able to create bundles.</p>
+</div>
+<div class="section" id="set-s3-account-credentials">
+<h3>1.2.3.2. Set S3 Account Credentials<a class="headerlink" href="#set-s3-account-credentials" title="Permalink to this headline">¶</a></h3>
+<p>The format for each section in the account file is dependent on the account type. The most common type you will have to deal with is S3. S# account credentials are most important if you will be getting source files or bundles from a restricted repository. Here is a template for an S3 entry:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">bucket.example.org</span><span class="p p-Indicator">:</span>
+    <span class="l l-Scalar l-Scalar-Plain">service</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">s3</span>
+    <span class="l l-Scalar l-Scalar-Plain">user</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">test</span>
+    <span class="l l-Scalar l-Scalar-Plain">access</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">AKIANOTAREALKEY45SFSF3E</span>
+    <span class="l l-Scalar l-Scalar-Plain">secret</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">EIcAj7P0MHDBv/TR63tsdgSgHjhg/g8vcK+</span>
+</pre></div>
+</div>
+<p>The key ( <code class="docutils literal"><span class="pre">devtest.sandiegodata.org</span></code> in this example ) is the bucket name.</p>
+</div>
+</div>
+<div class="section" id="synchronize-to-remotes">
+<h2>1.2.4. Synchronize to Remotes<a class="headerlink" href="#synchronize-to-remotes" title="Permalink to this headline">¶</a></h2>
+<p>After setting up configuration files, you&#8217;ll need to get some data bundles. The public library has some undles you can play with, and the system library has bundles that are required for some Ambry features. To build a local library from configured remotes:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ ambry sync
+</pre></div>
+</div>
+<p>That command may run for about 10 minutes as it downloads bundles ( but not partitions ) and installs them in the local library. After it completes, you should be able to run <strong class="command">ambry list</strong> to get a list of the installed files.</p>
+</div>
+<div class="section" id="build-the-index">
+<h2>1.2.5. Build the Index<a class="headerlink" href="#build-the-index" title="Permalink to this headline">¶</a></h2>
+<p>When a bundle is installed, it is automatically added to the full text search index, but the place identifiers are not. The place index  is used for converting place names, primarily US states and counties, into geoids. To build all of the indexes, including the place identifiers:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ ambry search -R
+</pre></div>
+</div>
+<p>When that completes, running <strong class="command">ambry search -i california</strong> should return results, for the places index, and <strong class="command">ambry search proto</strong> should return results for the dataset index.</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../tutorial/index.html" class="btn btn-neutral float-right" title="2. Tutorials" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="install.html" class="btn btn-neutral" title="1.1. Installing Ambry" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Civic Knowledge.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.3.2049',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

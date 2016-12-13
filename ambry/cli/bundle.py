@@ -556,9 +556,12 @@ def get_bundle_ref(args, l, use_history=False):
         if os.path.exists(cwd_bundle):
 
             with open(cwd_bundle) as f:
+                from ambry.identity import Identity
+
                 config = yaml.load(f)
                 try:
-                    return (config['names']['vid'], 'directory')
+                    ident = Identity.from_dict(config['identity'])
+                    return (ident.vid, 'directory')
                 except KeyError:
                     pass
 
@@ -1250,7 +1253,6 @@ def bundle_dump(args, l, rc):
 
         records = []
 
-
         for i, row in enumerate(b.sources):
 
             if not records:
@@ -1283,7 +1285,6 @@ def bundle_dump(args, l, rc):
             records = list(record_gen())
 
             records = drop_empty(records)
-
 
 
         else:
@@ -1344,16 +1345,25 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'pipes':
         terms = args.ref
-
         b.import_lib()
 
+        headers = 'Source Pipe'.split()
+        records = []
 
+        for i, source in enumerate(b.sources):
 
-        pl = b.pipeline(terms)
+            if source.is_processable:
+                pipe_name, pipe_config = b._find_pipeline(source, 'build')
 
-        print(pl)
+                records.append([source.name, pipe_name])
 
-        records = None
+        #records = drop_empty(records)
+
+        records = sorted(records, key=lambda row: (row[0]))
+
+        #pl = b.pipeline(terms)
+        #print(pl)
+
 
     elif args.table == 'ingested':
         from fs.errors import ResourceNotFoundError
@@ -1793,7 +1803,7 @@ def bundle_notebook(args, l, rc):
     try:
         import ambry_ui
     except ImportError:
-        fatal("ambry-ui package note installed, or not importable")
+        fatal("ambry-ui package not installed, or not importable")
 
     try:
         from notebook.notebookapp import NotebookApp
@@ -1837,6 +1847,7 @@ def bundle_ui(args, l, rc):
         l.root.config.library.ui.url = app.connection_url = "http://{}:{}".format(host, args.port)
         l.commit()
         app.run(host=host, port=int(args.port), debug=args.debug)
+
     except socket.error as e:
         warn("Failed to start ui: {}".format(e))
 

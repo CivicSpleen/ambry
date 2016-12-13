@@ -31,9 +31,9 @@ class Test(TestBase):
     def test_casters(self):
         b = self.import_single_bundle('build.example.com/casters')
         try:
-            b.ingest()
-            b.source_schema()
-            b.schema()
+            #b.ingest()
+            #b.source_schema()
+            #b.schema()
             b.build()
         finally:
             b.clean_all()

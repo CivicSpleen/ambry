@@ -74,6 +74,12 @@ def cst_exception(v, i_d, header_d, row, errors, pipe, exception):
 def cst_reraise_value(exception):
     raise ValueError(exception.value)
 
+def star_is_none(v):
+    if v == '*':
+        return None
+    else:
+        return v
+
 
 class Bundle(Bundle):
 

@@ -28,7 +28,7 @@ all_args = var_args + const_args
 # Full lambda definition for a column, including variable parts
 col_code_def = 'lambda {}:'.format(','.join(all_args))
 
-# lambda definition for the who;e row. Includes only the arguments
+# lambda definition for the whole row. Includes only the arguments
 # that are the same for every column
 code_def = 'lambda {}:'.format(','.join(const_args))
 
@@ -127,13 +127,13 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
             exception = (exception if exception else
                                   ('raise ValueError("Failed to cast column \'{}\', in '
-                                   'function {}, value \'{}\': {}".format(header_d,"') + f_name + '", v, exc) ) ')
+                                   'function {}, value \'{}\': {}".format(header_d,"') + f_name +
+                                  '", v.encode(\'ascii\', \'replace\'), exc) ) ')
 
             try:
                 i_s = source_headers.index(column.name)
                 header_s = column.name
                 v = 'row[{}]'.format(i_s)
-
 
             except ValueError as e:
 
@@ -186,9 +186,7 @@ def make_row_processors(bundle, source_headers, dest_table, env):
 
     # Add the final datatype cast, which is done seperately to avoid an unecessary function call.
 
-    stack = '\n'.join("{}cast_{}(row[{}], '{}', {}, errors), # {}"
-                      .format(indent, c.datatype, i, c.name,
-                              "True" if c.valuetype and c.valuetype.endswith('?') else "False", c.name)
+    stack = '\n'.join("{}cast_{}(row[{}], '{}', errors),".format(indent, c.datatype, i, c.name)
                       for i, c in enumerate(dest_table.columns) )
 
     out.append(row_template.format(
@@ -239,7 +237,6 @@ def make_stack(env, stage, segment):
 
     import string
     import random
-    from ambry.util import qualified_name, qualified_name_import
     from ambry.valuetype import ValueType
 
     column = segment['column']
@@ -264,7 +261,7 @@ def make_stack(env, stage, segment):
         elif callable(env.get(t)):  # Transform function
             cc, fl = calling_code(env.get(t), t), file_loc()
 
-        else: # A transform generator, or python code.
+        else:  # A transform generator, or python code.
 
             rnd = (''.join(random.choice(string.ascii_lowercase) for _ in range(6)))
 
@@ -301,6 +298,9 @@ def make_stack(env, stage, segment):
     exception = None
     if segment['exception']:
         exception, col_preamble = make_line(column, segment['exception'])
+
+    if len(try_lines) == 0:
+        try_lines.append('pass # Empty pipe segment')
 
     assert len(try_lines) > 0, column.name
 

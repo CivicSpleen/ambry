@@ -1,0 +1,45 @@
+about:
+    access: restricted
+    footnote: nll
+    grain: ''
+    groups:
+    - null
+    license: ckdbl
+    processed: ''
+    remote: ''
+    rights: public
+    source: ''
+    space: ''
+    subject: ''
+    summary: Tests of creating partition extracts for plots.
+    tags: []
+    time: ''
+    title: Plot Test
+contacts:
+    wrangler:
+        email: eric@civicknowledge.com
+        name: Eric Busboom
+        org: Civic Knowledge
+        url: http://civicknowledge.com
+external_documentation:
+    dataset:
+        description: Web page the links to the dataset description
+        source: null
+        title: Dataset Page
+        url: http://example.com
+    download:
+        description: Web page that links to the source files.
+        source: null
+        title: Download Page
+        url: http://example.com
+identity:
+    dataset: plot
+    id: d5Ep2KYUtC
+    revision: 1
+    source: build.example.com
+    version: 0.0.1
+names:
+    fqname: build.example.com-plot-0.0.1~d5Ep2KYUtC001
+    name: build.example.com-plot
+    vid: d5Ep2KYUtC001
+    vname: build.example.com-plot-0.0.1

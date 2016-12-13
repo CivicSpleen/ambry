@@ -12,5 +12,5 @@
 "rpeople","rpeople",,1,101,0,"People's names and a random number",,,"b8dbba8243d03d58b1862f1bac6d2756",,"http://public.source.civicknowledge.com/example.com/sources/random-names.csv"
 "sf_zip","simple",,1,10001,0,"Single-file zipfile",,,"e4732aa75d0e3f712653e718851f64b8",,"http://public.source.civicknowledge.com/example.com/sources/simple-example.csv.zip"
 "simple","simple",,1,10001,0,"Simple Random Data",,,"e4732aa75d0e3f712653e718851f64b8",,"http://public.source.civicknowledge.com/example.com/sources/simple-example.csv"
-"simple_fixed","simple",,1,10001,0,"Simple Random Data, fixed width format",,,"e3a6062a0c8888287a448eaa01aa36ad",,"http://public.source.civicknowledge.com/example.com/sources/simple-example.txt"
+"simple_fixed","simple",,0,10001,,"Simple Random Data, fixed width format",,,"e3a6062a0c8888287a448eaa01aa36ad",,"http://public.source.civicknowledge.com/example.com/sources/simple-example.txt"
 "mz_no_zip","simple",,1,10001,0,"Multi-file Zipfile without zip extension",,,"e4732aa75d0e3f712653e718851f64b8","zip","http://public.source.civicknowledge.com/example.com/sources/test_data.foo#simple-example.csv"

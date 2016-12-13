@@ -17,11 +17,15 @@ from geo import *
 from dimensions import *
 from measures import *
 from errors import *
+from other import *
 
 value_types = {
-    "int": IntValue,
-    "str": TextValue,
-    "float": FloatValue
+    "int": IntMeasure,
+    "long": LongMeasure,
+    "float": FloatMeasure,
+    "text": TextDimension,
+    "str": StrDimension,
+    "unicode": TextDimension
 }
 
 value_types.update(geo_value_types)
@@ -29,6 +33,7 @@ value_types.update(times_value_types)
 value_types.update(dimension_value_types)
 value_types.update(error_value_types)
 value_types.update(measure_value_types)
+value_types.update(other_value_types)
 
 @memoize
 def resolve_value_type(vt_code):
@@ -48,6 +53,7 @@ def resolve_value_type(vt_code):
         parts = vt_code.split('/')
         args = []
         while len(parts):
+
             args.append(parts.pop())
 
             try:

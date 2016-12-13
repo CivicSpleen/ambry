@@ -15,9 +15,10 @@ class Test(TestBase):
         a = Account(major_type='ambry')
         a.secret_password = 'secret'
         a.encrypt_secret('foobar')
+        self.assertIsNotNone(a.decrypt_secret())
 
-        self.assertIsNone(a.decrypt_secret())
-        self.assertTrue(a.test('foobar'))
+        a.encrypt_password('foobaz')
+        self.assertTrue(a.test('foobaz'))
         self.assertFalse(a.test('baz'))
 
     def test_accounts(self):

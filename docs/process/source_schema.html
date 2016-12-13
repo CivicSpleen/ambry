@@ -1,0 +1,312 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>3.3. Source Schemas &mdash; Ambry 0.3.2049 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Ambry 0.3.2049 documentation" href="../index.html"/>
+        <link rel="up" title="3. Process Reference" href="index.html"/>
+        <link rel="next" title="3.4. Destination Schema" href="dest_schema.html"/>
+        <link rel="prev" title="3.2. Configuring Sources" href="sourceconfig.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Ambry
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3.2049
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../install_config/index.html">1. Install and Configure Ambry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorial/index.html">2. Tutorial</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">3. Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="bundle.html">3.1. The Bundle Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sourceconfig.html">3.2. Configuring Sources</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">3.3. Source Schemas</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">3.3.1. Source Schemas</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#column-maps">3.3.1.1. Column Maps</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#destination-schemas">3.3.2. Destination Schemas</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="dest_schema.html">3.4. Destination Schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pipelines.html">3.5. Row Pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="transforms.html">3.6. Column Transforms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="library.html">3.7. The Library</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remotes.html">3.8. Remote Libraries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="webui.html">3.9. Web User Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">3.10. Web API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="docker.html">3.11. Running With Docker</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tips.html">3.12. Tips</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../cli/index.html">4. Command Line Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview.html">5. Concepts and Design Overview</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Ambry</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="index.html">3. Process Reference</a> &raquo;</li>
+      
+    <li>3.3. Source Schemas</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../_sources/process/source_schema.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="source-schemas">
+<h1>3.3. Source Schemas<a class="headerlink" href="#source-schemas" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="id1">
+<h2>3.3.1. Source Schemas<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="column-maps">
+<h3>3.3.1.1. Column Maps<a class="headerlink" href="#column-maps" title="Permalink to this headline">¶</a></h3>
+<p>Generally, colmap editing has these steps:</p>
+<ul class="simple">
+<li>Ingest, to setup the source tables</li>
+<li>bambry colmap -c, to create the table colmaps</li>
+<li>edit the table colmaps</li>
+<li>bambry colmap -b, to create the combined column map</li>
+<li>Review the combined column map</li>
+<li>bambry colmap -l, to load the combined colman into the source schema.</li>
+<li>bambry sync -r, to sync from the source schema records back out to files.</li>
+</ul>
+<p>Start by importing the headerstypes bundle from <cite>ambry/test/bundle_tests/ingest.example.com/headerstypes</cite>.  This bundle
+has one file, header4, that has an extra header line, so the column names are a bit off.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ ambry import -d ambry/test/bundle_tests/ingest.example.com/headerstypes
+$ bambrycd d00headers003
+$ mv schema.csv schema-orig.csv
+$ mv source-schema.csv source-schema-orig.csv
+</pre></div>
+</div>
+<div class="section" id="creating-the-column-map">
+<h4>3.3.1.1.1. Creating the Column Map<a class="headerlink" href="#creating-the-column-map" title="Permalink to this headline">¶</a></h4>
+<p>Ingest the header files. Then create a column map file and open it in a spreadsheet program.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry ingest -t headers
+$ bambry colmap -c
+$ open colmap_header.csv.
+</pre></div>
+</div>
+<p>[ TO make these descriptions easier, &#8216;column&#8217; referrs to a colum in the spreadsheet, while a column in a source or
+destination table will be called a &#8216;field&#8217; ]</p>
+<p>In the colmap file, the first column is the names of the fields of the destination table, and the rest of the
+columns are for the field names in an ingested source. In the <code class="file docutils literal"><span class="pre">colmap_header.csv</span></code> file, you&#8217;ll notice that
+most of the files have the same field names in the same rows, but <cite>headers4</cite> is off in its own.</p>
+<p>The file can be a bit hard to understand, so think of it like this: Find a column, column 2 or larger, where the first
+line is the name of a source. Then, go down that column to find a particular field name in the source. Then, look at the
+name in the first column to find the field name that the source field will be mapped to in the destination.</p>
+<p>When the column map is first created, the soruce and destination field names are all the same. In this case, The
+<cite>renter_cost_gt_30</cite> field in the <cite>headers1</cite> source table maps to the <cite>renter_cost_gt_30</cite> field in the destination
+table. However, in the <cite>headers4</cite> source table, the <cite>gvid</cite> field is <cite>gvid_a</cite>, and the
+<cite>title_right_in_the_middle_cost_gt_30_cv_b</cite> is too long.</p>
+<dl class="docutils">
+<dt>To fix these, move the <cite>gvid_a</cite> field name up to the row where <cite>gvid</cite> is in the first column, under <cite>headers</cite>. This</dt>
+<dd>will cause the <cite>gvid_a</cite> source field to be mapped to the <cite>gvid</cite> output column.</dd>
+</dl>
+<p>For this example, just move all of the <cite>headers4</cite> fields up, then delete the corresponding field names in the first
+column. Refer to <code class="file docutils literal"><span class="pre">source-schema-orig.csv</span></code> to see the final version.</p>
+<p><strong>Only edit field names in the first column. Outside of the first column, only move field names. Never edit the first
+row.</strong></p>
+</div>
+<div class="section" id="id2">
+<h4>3.3.1.1.2. Creating the Column Map<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h4>
+<p>After editing one or more table column maps, you can combine them with</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry colmap -b
+</pre></div>
+</div>
+<p>This command will create the <code class="file docutils literal"><span class="pre">colmap.csv</span></code> file, which will hold the source and destination field names for only the fields that changed.</p>
+</div>
+<div class="section" id="load-the-column-map">
+<h4>3.3.1.1.3. Load the Column Map<a class="headerlink" href="#load-the-column-map" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry colmap -b
+</pre></div>
+</div>
+<p>Load the column map into records in the bundle, altering the existing source table records with the changed from the
+<code class="file docutils literal"><span class="pre">colmap.csv</span></code>  file.</p>
+</div>
+<div class="section" id="export-the-final-source-schema">
+<h4>3.3.1.1.4. Export the final source schema.<a class="headerlink" href="#export-the-final-source-schema" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ bambry sync -o
+</pre></div>
+</div>
+<p>Sync out to create the new <code class="file docutils literal"><span class="pre">source_schema.csv</span></code> file, which has the changes you made to the <cite>headers4</cite> table.</p>
+</div>
+</div>
+</div>
+<div class="section" id="destination-schemas">
+<h2>3.3.2. Destination Schemas<a class="headerlink" href="#destination-schemas" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="dest_schema.html" class="btn btn-neutral float-right" title="3.4. Destination Schema" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="sourceconfig.html" class="btn btn-neutral" title="3.2. Configuring Sources" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Civic Knowledge.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.3.2049',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

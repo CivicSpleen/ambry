@@ -6,34 +6,32 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
-
 import six
 from six import string_types
-
 from geoid.util import isimplify
 from geoid.civick import GVid
-
+from geoid import parse_to_gvid
 from dateutil import parser
-
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import relationship, object_session, backref
-
 from ambry.identity import ObjectNumber, PartialPartitionName, PartitionIdentity
 from ambry.orm.columnstat import ColumnStat
 from ambry.orm.dataset import Dataset
 from ambry.util import Constant
-
 import logging
 from ambry.util import get_logger
+
 logger = get_logger(__name__)
-#logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
 
+
 class PartitionDisplay(object):
     """Helper object to select what to display for titles and descriptions"""
+
     def __init__(self, p):
 
         self._p = p
@@ -52,30 +50,27 @@ class PartitionDisplay(object):
         if not desc_used:
             self.description = self._p.description.strip('.') + '.' if self._p.description else ''
 
-
-
         self.notes = self._p.notes
 
     @property
     def geo_description(self):
         """Return a description of the geographic extents, using the largest scale
         space and grain coverages"""
-        from geoid.civick import GVid
 
         sc = self._p.space_coverage
         gc = self._p.grain_coverage
 
         if sc and gc:
-            if GVid.parse(gc[0]).level == 'state' and GVid.parse(sc[0]).level == 'state':
-                return GVid.parse(sc[0]).geo_name
+            if parse_to_gvid(gc[0]).level == 'state' and parse_to_gvid(sc[0]).level == 'state':
+                return parse_to_gvid(sc[0]).geo_name
             else:
                 return ("{} in {}".format(
-                    GVid.parse(gc[0]).level_plural.title(),
-                    GVid.parse(sc[0]).geo_name))
+                    parse_to_gvid(gc[0]).level_plural.title(),
+                    parse_to_gvid(sc[0]).geo_name))
         elif sc:
-            return GVid.parse(sc[0]).geo_name.title()
+            return parse_to_gvid(sc[0]).geo_name.title()
         elif sc:
-            return GVid.parse(gc[0]).level_plural.title()
+            return parse_to_gvid(gc[0]).level_plural.title()
         else:
             return ''
 
@@ -245,8 +240,6 @@ class Partition(Base):
     def is_segment(self):
         return self.type == self.TYPE.SEGMENT
 
-
-
     @property
     def headers(self):
         return [c.name for c in self.table.columns]
@@ -272,19 +265,19 @@ class Partition(Base):
 
     def parse_gvid_or_place(self, gvid_or_place):
         try:
-            return GVid.parse(gvid_or_place)
+            return parse_to_gvid(gvid_or_place)
         except KeyError:
 
             places = list(self._bundle._library.search.search_identifiers(gvid_or_place))
 
             if not places:
-                err_msg = "Failed to find space identifier '{}' in full "\
-                    "text identifier search  for partition '{}'"\
+                err_msg = "Failed to find space identifier '{}' in full " \
+                          "text identifier search  for partition '{}'" \
                     .format(gvid_or_place, str(self.identity))
                 self._bundle.error(err_msg)
                 return None
 
-            return GVid.parse(places[0].vid)
+            return parse_to_gvid(places[0].vid)
 
     def set_coverage(self, stats):
         """"Extract time space and grain coverage from the stats and store them in the partition"""
@@ -296,7 +289,7 @@ class Partition(Base):
 
         def summarize_maybe(gvid):
             try:
-                return GVid.parse(gvid).summarize()
+                return parse_to_gvid(gvid).summarize()
             except:
                 return None
 
@@ -309,10 +302,11 @@ class Partition(Base):
                 if gvid is None or gvid == 'None':
                     continue
                 try:
-                    parsed.append(GVid.parse(gvid))
+                    parsed.append(parse_to_gvid(gvid))
                 except ValueError as e:
                     if self._bundle:
-                        self._bundle.error("Failed to parse gvid '{}' in {}.{}: {}"
+                        self._bundle.warn("While analyzing geo coverage in final partition stage, " +
+                                           "Failed to parse gvid '{}' in {}.{}: {}"
                                            .format(str(gvid), column.table.name, column.name, e))
 
             try:
@@ -332,7 +326,7 @@ class Partition(Base):
                 continue
 
             try:
-                if stats[c.name].is_gvid:
+                if stats[c.name].is_gvid or stats[c.name].is_geoid:
                     scov |= set(x for x in simplifiy_maybe(stats[c.name].uniques, c))
                     grains |= set(summarize_maybe(gvid) for gvid in stats[c.name].uniques)
 
@@ -341,7 +335,11 @@ class Partition(Base):
 
                 elif stats[c.name].is_date:
                     # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
-                    tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, string_types) else x.year for x in stats[c.name].uniques)
+                    try:
+                        tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, string_types) else x.year for x in
+                                    stats[c.name].uniques)
+                    except ValueError:
+                        pass
 
             except Exception as e:
                 self._bundle.error("Failed to set coverage for column '{}', partition '{}': {}"
@@ -353,10 +351,14 @@ class Partition(Base):
         if 'source_data' in self.data:
 
             for source_name, source in list(self.data['source_data'].items()):
-                    scov.add(self.parse_gvid_or_place(source['space']))
+                scov.add(self.parse_gvid_or_place(source['space']))
 
         if self.identity.space:  # And from the partition name
-            scov.add(self.parse_gvid_or_place(self.identity.space))
+            try:
+                scov.add(self.parse_gvid_or_place(self.identity.space))
+            except ValueError:
+                # Couldn't parse the space as a GVid
+                pass
 
         # For geo_coverage, only includes the higher level summary levels, counties, states,
         # places and urban areas.
@@ -394,7 +396,6 @@ class Partition(Base):
 
         self.grain_coverage = sorted(str(g) for g in grains if g)
 
-
     @property
     def dict(self):
         """A dict that holds key/values for all of the properties in the
@@ -403,6 +404,7 @@ class Partition(Base):
         :return:
 
         """
+
         d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs
              if p.key not in ('table', 'dataset', '_codes', 'stats', 'data', 'process_records')}
 
@@ -415,10 +417,28 @@ class Partition(Base):
         return d
 
     @property
+    def detail_dict(self):
+        """A more detailed dict that includes the descriptions, sub descriptions, table
+        and columns."""
+
+        d = self.dict
+
+        def aug_col(c):
+            d = c.dict
+            d['stats'] = [s.dict for s in c.stats]
+            return d
+
+        d['table'] = self.table.dict
+        d['table']['columns'] = [aug_col(c) for c in self.table.columns]
+
+        return d
+
+    @property
     def stats_dict(self):
 
         class Bunch(object):
             """Dict and object access to properties"""
+
             def __init__(self, o):
                 self.__dict__.update(o)
 
@@ -518,6 +538,7 @@ class Partition(Base):
         if self.type == self.TYPE.UNION:
             ps.update('Running stats ', state='running')
             stats = self.datafile.run_stats()
+
             self.set_stats(stats)
             self.set_coverage(stats)
 
@@ -525,7 +546,6 @@ class Partition(Base):
 
         self.title = PartitionDisplay(self).title
         self.description = PartitionDisplay(self).description
-
 
         self.state = self.STATES.FINALIZED
 
@@ -560,7 +580,6 @@ class Partition(Base):
     def datafile(self):
         from ambry.exc import NotFoundError
 
-
         if self.is_local:
             # Use the local version, if it exists
             logger.debug('datafile: Using local datafile {}'.format(self.vname))
@@ -574,8 +593,6 @@ class Partition(Base):
                 # If the remote doesnt exist, return the local, so the caller can call  exists() on it,
                 # get its path, etc.
                 return self.local_datafile
-
-
 
     @property
     def local_datafile(self):
@@ -592,6 +609,23 @@ class Partition(Base):
                 'Could not locate data file for partition {} (local)'.format(self.identity.fqname))
 
     @property
+    def remote(self):
+        """
+        Return the remote for this partition
+
+        :return:
+
+        """
+        from ambry.exc import NotFoundError
+
+        ds = self.dataset
+
+        if 'remote_name' not in ds.data:
+            raise NotFoundError('Could not determine remote for partition: {}'.format(self.identity.fqname))
+
+        return self._bundle.library.remote(ds.data['remote_name'])
+
+    @property
     def remote_datafile(self):
 
         from fs.errors import ResourceNotFoundError
@@ -602,21 +636,14 @@ class Partition(Base):
 
             from ambry_sources import MPRowsFile
 
-            ds = self.dataset
-
-            if 'remote_name' not in ds.data:
-
-                raise NotFoundError('Failed to find both local and remote file for partition: {}'
-                                    .format(self.identity.fqname))
-
-            remote = self._bundle.library.remote(ds.data['remote_name'])
+            remote = self.remote
 
             datafile = MPRowsFile(remote.fs, self.cache_key)
 
             if not datafile.exists:
                 raise NotFoundError(
                     'Could not locate data file for partition {} from remote {} : file does not exist'
-                    .format(self.identity.fqname, remote))
+                        .format(self.identity.fqname, remote))
 
         except ResourceNotFoundError as e:
             raise NotFoundError('Could not locate data file for partition {} (remote): {}'
@@ -699,8 +726,8 @@ class Partition(Base):
                 return self
 
             try:
-                with remote.fs.open(self.cache_key+MPRowsFile.EXTENSION, 'rb') as f:
-                    event = local.setcontents_async(self.cache_key+MPRowsFile.EXTENSION,
+                with remote.fs.open(self.cache_key + MPRowsFile.EXTENSION, 'rb') as f:
+                    event = local.setcontents_async(self.cache_key + MPRowsFile.EXTENSION,
                                                     f,
                                                     progress_callback=progress,
                                                     error_callback=exception_cb)
@@ -711,7 +738,6 @@ class Partition(Base):
                 from ambry.orm.exc import NotFoundError
                 raise NotFoundError("Failed to get MPRfile '{}' from {}: {} "
                                     .format(self.cache_key, remote.fs, e))
-
 
         return self
 
@@ -760,16 +786,14 @@ class Partition(Base):
             for row in r:
                 yield row
 
-
     @property
     def analysis(self):
-        """Return an AnalysisPartition prox, which wraps this partition to provide acess to
+        """Return an AnalysisPartition proxy, which wraps this partition to provide acess to
         dataframes, shapely shapes and other analysis services"""
         if isinstance(self, PartitionProxy):
             return AnalysisPartition(self._obj)
         else:
             return AnalysisPartition(self)
-
 
     @property
     def measuredim(self):
@@ -780,7 +804,6 @@ class Partition(Base):
             return MeasureDimensionPartition(self._obj)
         else:
             return MeasureDimensionPartition(self)
-
 
     # ============================
 
@@ -804,7 +827,6 @@ class Partition(Base):
             raise DatabaseError('Sequence ID must be set before insertion')
 
         if not self.vid or force:
-
             assert bool(self.d_vid)
             assert bool(self.sequence_id)
             don = ObjectNumber.parse(self.d_vid)
@@ -853,14 +875,15 @@ class Partition(Base):
     def before_update(mapper, conn, target):
         target._update_names()
 
-
     @staticmethod
     def before_delete(mapper, conn, target):
         pass
 
+
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
 event.listen(Partition, 'before_delete', Partition.before_delete)
+
 
 class PartitionProxy(object):
     __slots__ = ["_obj", "__weakref__"]
@@ -884,42 +907,58 @@ class PartitionProxy(object):
         return bool(object.__getattribute__(self, "_obj"))
 
     def __str__(self):
-        return str(object.__getattribute__(self, "_obj"))
+        return "<{}: {}>".format(type(self), str(object.__getattribute__(self, "_obj")))
 
     def __repr__(self):
-        return repr(object.__getattribute__(self, "_obj"))
+        return "<{}: {}>".format(type(self), repr(object.__getattribute__(self, "_obj")))
 
     def __iter__(self):
         return iter(object.__getattribute__(self, "_obj"))
-
 
 
 class AnalysisPartition(PartitionProxy):
     """A subclass of Partition with methods designed for analysis with Pandas. It is produced from
     the partitions analysis property"""
 
-
-    def dataframe(self, predicate=None, columns=None):
+    def dataframe(self, predicate=None, filtered_columns=None, columns=None, df_class=None):
         """Return the partition as a Pandas dataframe
 
 
         :param predicate: If defined, a callable that is called for each row, and if it returns true, the
         row is included in the output.
+        :param filtered_columns: If defined, the value is a dict of column names and
+        associated values. Only rows where all of the named columms have the given values will be returned.
+        Setting the argument will overwrite any value set for the predicate
         :param columns: A list or tuple of column names to return
 
         :return: Pandas dataframe
 
-
         """
 
-        from ambry.pands import AmbryDataFrame
         from operator import itemgetter
+        from ambry.pands import AmbryDataFrame
+
+        df_class = df_class or AmbryDataFrame
 
         if columns:
             ig = itemgetter(*columns)
         else:
             ig = None
             columns = self.table.header
+
+        if filtered_columns:
+
+            def maybe_quote(v):
+                from six import string_types
+                if isinstance(v, string_types):
+                    return '"{}"'.format(v)
+                else:
+                    return v
+
+            code = ' and '.join("row.{} == {}".format(k, maybe_quote(v))
+                                for k, v in filtered_columns.items())
+
+            predicate = eval('lambda row: {}'.format(code))
 
         if predicate:
             def yielder():
@@ -930,7 +969,9 @@ class AnalysisPartition(PartitionProxy):
                         else:
                             yield row.dict
 
-            return AmbryDataFrame(yielder(), columns=columns, partition=self.measuredim)
+            df = df_class(yielder(), columns=columns, partition=self.measuredim)
+
+            return df
 
         else:
 
@@ -938,7 +979,10 @@ class AnalysisPartition(PartitionProxy):
                 for row in self.reader:
                     yield row.values()
 
-            return AmbryDataFrame(yielder(), columns=columns, partition=self.measuredim)
+            # Put column names in header order
+            columns = [c for c in self.table.header if c in columns]
+
+            return df_class(yielder(), columns=columns, partition=self.measuredim)
 
     def geoframe(self, simplify=None, predicate=None, crs=None, epsg=None):
         """
@@ -1042,9 +1086,16 @@ class AnalysisPartition(PartitionProxy):
         return [patch for row in self if predicate(row)
                 for patch in yield_patches(row)]
 
+
 class MeasureDimensionPartition(PartitionProxy):
     """A partition proxy for accessing measure and dimensions. When returning a column, it returns
     a PartitionColumn, which proxies the table column while adding partition specific functions. """
+
+    def __init__(self, obj):
+
+        super(MeasureDimensionPartition, self).__init__(obj)
+
+        self.filters = {}
 
     def column(self, c_name):
 
@@ -1075,7 +1126,8 @@ class MeasureDimensionPartition(PartitionProxy):
         cardinality greater than 1"""
         from ambry.valuetype.core import ROLE
 
-        return [ c for c in self.columns if not c.parent and c.role == ROLE.DIMENSION and c.pstats.nuniques > 1 ]
+        return [c for c in self.columns
+                if not c.parent and c.role == ROLE.DIMENSION and c.pstats.nuniques > 1]
 
     @property
     def measures(self):
@@ -1084,27 +1136,95 @@ class MeasureDimensionPartition(PartitionProxy):
 
         return [c for c in self.columns if c.role == ROLE.MEASURE]
 
+    def measure(self, vid):
+        """Return a measure, given its vid or another reference"""
+
+        from ambry.orm import Column
+
+        if isinstance(vid, PartitionColumn):
+            return vid
+        elif isinstance(vid, Column):
+            return PartitionColumn(vid)
+        else:
+            return PartitionColumn(self.table.column(vid), self)
+
+    def dimension(self, vid):
+        """Return a dimention, given its vid or another reference"""
+        from ambry.orm import Column
+
+        if isinstance(vid, PartitionColumn):
+            return vid
+        elif isinstance(vid, Column):
+            return PartitionColumn(vid)
+        else:
+            return PartitionColumn(self.table.column(vid), self)
+
     @property
     def primary_measures(self):
         """Iterate over the primary measures, columns which do not have a parent"""
 
-        return [ c for c in self.measures if not c.parent ]
+        return [c for c in self.measures if not c.parent]
+
+    @property
+    def dict(self):
+
+        d = self.detail_dict
 
 
-    def md_frame(self, measure, p_dim, s_dim=None, filtered_dims={}, unstack=True ):
+        d['dimension_sets'] = self.enumerate_dimension_sets()
+
+        return d
+
+    def dataframe(self, measure, p_dim, s_dim=None, filters={}, df_class=None):
         """
-        Yield rows in a reduced format, with one dimension as an index, one measure column per secondary dimension,
-        and all other dimensions filtered.
+        Return a dataframe with a sumse of the columns of the partition, including a measure and one
+        or two dimensions. FOr dimensions that have labels, the labels are included
+
+        The returned dataframe will have extra properties to describe the conversion:
+
+        * plot_axes: List of dimension names for the first and second axis
+        * labels: THe names of the label columns for the axes
+        * filtered: The `filters` dict
+        * floating: The names of primary dimensions that are not axes nor filtered
+
+        THere is also an iterator, `rows`, which returns the header and then all of the rows.
 
         :param measure: The column names of one or more measures
         :param p_dim: The primary dimension. This will be the index of the dataframe.
         :param s_dim: a secondary dimension. The returned frame will be unstacked on this dimension
-        :param filtered_dims: A dict of dimension columns names that are filtered, mapped to the dimension value
-        to select.
-        :return:
+        :param filters: A dict of column names, mapped to a column value, indicating rows to select. a
+        row that passes the filter must have the values for all given rows; the entries are ANDED
+        :param df_class:
+        :return: a Dataframe, with extra properties
         """
 
-        from six import text_type
+        import numpy as np
+
+        measure = self.measure(measure)
+
+        p_dim = self.dimension(p_dim)
+
+        assert p_dim
+
+        if s_dim:
+            s_dim = self.dimension(s_dim)
+
+        columns = set([measure.name, p_dim.name])
+
+        if p_dim.label:
+
+            # For geographic datasets, also need the gvid
+            if p_dim.geoid:
+                columns.add(p_dim.geoid.name)
+
+            columns.add(p_dim.label.name)
+
+        if s_dim:
+
+            columns.add(s_dim.name)
+
+            if s_dim.label:
+                columns.add(s_dim.label.name)
 
         def maybe_quote(v):
             from six import string_types
@@ -1113,75 +1233,194 @@ class MeasureDimensionPartition(PartitionProxy):
             else:
                 return v
 
-        all_dims = [p_dim]+filtered_dims.keys()
-
-        if s_dim:
-            all_dims.append(s_dim)
-
-        all_dims = [text_type(c) for c in all_dims]
-
-        primary_dims = [text_type(c.name) for c in self.primary_dimensions]
-
-        if set(all_dims) != set(primary_dims):
-            raise ValueError("The primary secondary and filtered dimensions must cover all primary dimensions"+
-                             " {} != {}".format(sorted(all_dims), sorted(primary_dims)))
-
-        # Use dimension labels, if they exist
-        try:
-            p_dim = self.column(p_dim).label.name
-        except ValueError:
-            pass
-
-        if s_dim:
-
-            try:
-                s_dim = self.column(s_dim).label.name
-
-            except ValueError:
-                pass
-
-            columns = [p_dim, s_dim, measure]
-
-        else:
-            columns = [p_dim, measure]
-
         # Create the predicate to filter out the filtered dimensions
-        code = ' and '.join("row.{} == {}".format(k,maybe_quote(v)) for k, v in filtered_dims.items())
+        if filters:
 
-        predicate = eval('lambda row: {}'.format(code))
+            selected_filters = []
 
-        df = self.analysis.dataframe(predicate, columns=columns)
+            for k, v in filters.items():
+                if isinstance(v, dict):
+                    # The filter is actually the whole set of possible options, so
+                    # just select the first one
+                    v = v.keys()[0]
+
+                selected_filters.append("row.{} == {}".format(k, maybe_quote(v)))
+
+            code = ' and '.join(selected_filters)
+
+            predicate = eval('lambda row: {}'.format(code))
+        else:
+            code = None
+
+            def predicate(row):
+                return True
+
+
+        df = self.analysis.dataframe(predicate, columns=columns, df_class=df_class)
+
+        if df is None or df.empty or len(df) == 0:
+            return None
+
+        # So we can track how many records were aggregated into each output row
+        df['_count'] = 1
+
+        def aggregate_string(x):
+            return ', '.join(set(str(e) for e in x))
+
+        agg = {
+            '_count': 'count',
+
+        }
+
+        for col_name in columns:
+            c = self.column(col_name)
+
+            # The primary and secondary dimensions are put into the index by groupby
+            if c.name == p_dim.name or (s_dim and c.name == s_dim.name):
+                continue
+
+            # FIXME! This will only work if the child is only level from the parent. Should
+            # have an acessor for the top level.
+            if c.parent and (c.parent == p_dim.name or (s_dim and c.parent == s_dim.name)):
+                continue
+
+            if c.is_measure:
+                agg[c.name] = np.mean
+
+            if c.is_dimension:
+                agg[c.name] = aggregate_string
+
+        plot_axes = [p_dim.name]
 
         if s_dim:
-            df = df.set_index([p_dim, s_dim])
+            plot_axes.append(s_dim.name)
 
-            if unstack:
-                df = df.unstack()
+        df = df.groupby(list(columns - set([measure.name]))).agg(agg).reset_index()
 
-                df.columns = df.columns.get_level_values(1)  # [' '.join(col).strip() for col in df.columns.values]
+        df._metadata = ['plot_axes', 'filtered', 'floating', 'labels', 'dimension_set', 'measure']
 
-        else:
-            df = df.set_index(p_dim)
+        df.plot_axes = [c for c in plot_axes]
+        df.filtered = filters
 
-        if 'plot_meta' not in df._metadata:
-            df._metadata.append('plot_meta')
+        # Dimensions that are not specified as axes nor filtered
+        df.floating = list(set(c.name for c in self.primary_dimensions) -
+                           set(df.filtered.keys()) -
+                           set(df.plot_axes))
 
-        df.plot_meta = {
-            'primary_dim': p_dim.name,
-            'secondary_dim': s_dim.name,
-            'filtered_dims': filtered_dims,
-            'measure': measure
-        }
+        df.labels = [self.column(c).label.name if self.column(c).label else c for c in df.plot_axes]
+
+        df.dimension_set = self.dimension_set(p_dim, s_dim=s_dim)
+
+        df.measure = measure.name
+
+        def rows(self):
+            yield ['id'] + list(df.columns)
+
+            for t in df.itertuples():
+                yield list(t)
+
+        # Really should not do this, but I don't want to re-build the dataframe with another
+        # class
+        df.__class__.rows = property(rows)
+
+
 
         return df
 
+    def dimension_set(self, p_dim, s_dim=None, dimensions=None, extant=set()):
+        """
+        Return a dict that describes the combination of one or two dimensions, for a plot
+
+        :param p_dim:
+        :param s_dim:
+        :param dimensions:
+        :param extant:
+        :return:
+        """
+
+        if not dimensions:
+            dimensions = self.primary_dimensions
+
+        key = p_dim.name
+
+        if s_dim:
+            key += '/' + s_dim.name
+
+        # Ignore if the key already exists or the primary and secondary dims are the same
+        if key in extant or p_dim == s_dim:
+            return
+
+        # Don't allow geography to be a secondary dimension. It must either be a primary dimension
+        # ( to make a map ) or a filter, or a small-multiple
+        if s_dim and s_dim.valuetype_class.is_geo():
+            return
+
+        extant.add(key)
+
+        filtered = {}
+
+        for d in dimensions:
+            if d != p_dim and d != s_dim:
+                filtered[d.name] = d.pstats.uvalues.keys()
+
+        if p_dim.valuetype_class.is_time():
+            value_type = 'time'
+            chart_type = 'line'
+        elif p_dim.valuetype_class.is_geo():
+            value_type = 'geo'
+            chart_type = 'map'
+        else:
+            value_type = 'general'
+            chart_type = 'bar'
+
+        return dict(
+            key=key,
+            p_dim=p_dim.name,
+            p_dim_type=value_type,
+            p_label=p_dim.label_or_self.name,
+            s_dim=s_dim.name if s_dim else None,
+            s_label=s_dim.label_or_self.name if s_dim else None,
+            filters=filtered,
+            chart_type=chart_type
+        )
+
+    def enumerate_dimension_sets(self):
+
+        dimension_sets = {}
+
+        dimensions = self.primary_dimensions
+
+        extant = set()
+
+        for d1 in dimensions:
+
+            ds = self.dimension_set(d1, None, dimensions, extant)
+
+            if ds:
+                dimension_sets[ds['key']] = ds
+
+        for d1 in dimensions:
+            for d2 in dimensions:
+
+                if d2.cardinality >= d1.cardinality:
+                    d1, d2 = d2, d1
+
+                ds = self.dimension_set(d1, d2, dimensions, extant)
+
+                if ds:
+                    dimension_sets[ds['key']] = ds
+
+        return dimension_sets
 
 
 class ColumnProxy(PartitionProxy):
-
     def __init__(self, obj, partition):
         object.__setattr__(self, "_obj", obj)
         object.__setattr__(self, "_partition", partition)
+
+
+MAX_LABELS = 75  # Maximum number of uniques records before it's assume that the values aren't valid labels
+
 
 class PartitionColumn(ColumnProxy):
     """A proxy on the Column that links a Column to a Partition, for direct access to the stats
@@ -1197,19 +1436,21 @@ class PartitionColumn(ColumnProxy):
         for child in self.children:
             yield PartitionColumn(child, self._partition)
 
-
     @property
     def label(self):
         """"Return first child that of the column that is marked as a label"""
         for c in self.table.columns:
-            if c.parent == self.name and '/label' in c.valuetype:
+            if c.parent == self.name and 'label' in c.valuetype:
                 return PartitionColumn(c, self._partition)
 
     @property
-    def labels(self):
+    def value_labels(self):
         """Return a map of column code values mapped to labels, for columns that have a label column
 
         If the column is not assocaited with a label column, it returns an identity map.
+
+        WARNING! This reads the whole partition, so it is really slow
+
         """
 
         from operator import itemgetter
@@ -1218,8 +1459,10 @@ class PartitionColumn(ColumnProxy):
 
         if self.label:
             ig = itemgetter(self.name, self.label.name)
-        else:
+        elif self.pstats.nuniques < MAX_LABELS:
             ig = itemgetter(self.name, self.name)
+        else:
+            return {}
 
         label_set = set()
         for row in self._partition:
@@ -1234,5 +1477,11 @@ class PartitionColumn(ColumnProxy):
 
         return d
 
+    @property
+    def cardinality(self):
+        """Returns the bymber of unique elements"""
 
+        return self.pstats.nuniques
 
+    def __repr__(self):
+        return "<{} {}>".format(self.__class__.__name__, self.name)

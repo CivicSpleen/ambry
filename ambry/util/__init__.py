@@ -664,6 +664,7 @@ def make_acro(past, prefix, s):  # pragma: no cover
     """
 
     def _make_acro(s, t=0):
+        """Make an acronym of s for trial t"""
 
         # Really should cache these ...
         v = ['a', 'e', 'i', 'o', 'u', 'y']
@@ -701,6 +702,9 @@ def make_acro(past, prefix, s):  # pragma: no cover
             return cx[0] + vx[0] + vx[1]
         if t < 6:
             return cx[0] + cx[1] + cx[-1]
+
+        # These are punts; just take a substring
+
         if t < 7:
             return s[0:3]
         if t < 8:
@@ -712,7 +716,7 @@ def make_acro(past, prefix, s):  # pragma: no cover
 
         return None
 
-    for t in six_xrange(11):
+    for t in six_xrange(11): # Try multiple forms until one isn't in the past acronyms
 
         try:
             a = _make_acro(s, t)
@@ -1340,5 +1344,53 @@ class Proxy(object):
         return ins
 
 
+def delete_module(modname, paranoid=None):
+    """ Delete a module.http://stackoverflow.com/a/1668289
+    :param modname:
+    :param paranoid:
+    :return:
+    """
+    from sys import modules
+    try:
+        thismod = modules[modname]
+    except KeyError:
+        raise ValueError(modname)
+    these_symbols = dir(thismod)
+    if paranoid:
+        try:
+            paranoid[:]  # sequence support
+        except:
+            raise ValueError('must supply a finite list for paranoid')
+        else:
+            these_symbols = paranoid[:]
+    del modules[modname]
+    for mod in modules.values():
+        try:
+            delattr(mod, modname)
+        except AttributeError:
+            pass
+        if paranoid:
+            for symbol in these_symbols:
+                if symbol[:2] == '__':  # ignore special symbols
+                    continue
+                try:
+                    delattr(mod, symbol)
+                except AttributeError:
+                    pass
 
 
+def flatten(d, sep=None):
+    """Flatten a datastructure composed of dicts, sequences and scalars. If sep is None,
+    the key is a tuple of key path comonents. """
+    def _flatten(e, parent_key):
+        import collections
+
+        if isinstance(e, collections.MutableMapping):
+            return tuple((parent_key + k2, v2) for k, v in e.items() for k2, v2 in _flatten(v, (k,)))
+        elif isinstance(e, collections.MutableSequence):
+            return tuple((parent_key + k2, v2) for i, v in enumerate(e) for k2, v2 in _flatten(v, (i,)))
+        else:
+            return (parent_key, (e,)),
+
+    return tuple((k if sep is None else sep.join(str(e) for e in k), v[0])
+                 for k, v in _flatten(d, tuple()))

@@ -21,10 +21,12 @@ class ColumnStat(Base):
     """Table for per column, per partition stats."""
     __tablename__ = 'colstats'
 
-    p_vid = SAColumn('cs_p_vid', String(20), ForeignKey('partitions.p_vid'), primary_key=True, nullable=False, index=True)
+    p_vid = SAColumn('cs_p_vid', String(20), ForeignKey('partitions.p_vid'), primary_key=True,
+                     nullable=False, index=True)
     #partition = relationship('Partition', backref='stats')
 
-    c_vid = SAColumn('cs_c_vid', String(20), ForeignKey('columns.c_vid'), primary_key=True, nullable=False, index=True)
+    c_vid = SAColumn('cs_c_vid', String(20), ForeignKey('columns.c_vid'), primary_key=True,
+                     nullable=False, index=True)
     column = relationship('Column', backref='stats')
 
     d_vid = SAColumn('cs_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
@@ -40,6 +42,8 @@ class ColumnStat(Base):
     p75 = SAColumn('cs_p75', Float)
     max = SAColumn('cs_max', Float)
     nuniques = SAColumn('cs_nuniques', BigIntegerType)
+
+    width = SAColumn('cs_width', Integer)
 
     skewness = SAColumn('cs_skewness', Float)
     kurtosis = SAColumn('cs_kurtosis', Float)
