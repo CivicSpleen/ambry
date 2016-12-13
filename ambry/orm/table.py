@@ -288,8 +288,8 @@ class Table(Base, DictableMixin):
     def transforms(self):
         """Return an array of arrays of column transforms.
 
-        The return value is an list of list, with each list being a segment of column transformations, and
-        each segment having one entry per column.
+        #The return value is an list of list, with each list being a segment of column transformations, and
+        #each segment having one entry per column.
 
         """
 

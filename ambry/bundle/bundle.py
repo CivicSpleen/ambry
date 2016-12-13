@@ -1209,7 +1209,9 @@ Caster Code
                 cache_fs.setcontents(cache_path, self.source_fs.getcontents(syspath))
 
         elif url_type not in ('gs', 'socrata'):  # FIXME. Need to clean up the logic for gs types.
+
             try:
+
                 cache_path, download_time = do_download()
                 spec.download_time = download_time
             except Exception as e:

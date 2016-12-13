@@ -28,7 +28,7 @@ all_args = var_args + const_args
 # Full lambda definition for a column, including variable parts
 col_code_def = 'lambda {}:'.format(','.join(all_args))
 
-# lambda definition for the who;e row. Includes only the arguments
+# lambda definition for the whole row. Includes only the arguments
 # that are the same for every column
 code_def = 'lambda {}:'.format(','.join(const_args))
 
